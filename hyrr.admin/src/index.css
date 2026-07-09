@@ -1,0 +1,158 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #6C63FF;
+  --color-primary-hover: #5B52F5;
+  --color-primary-light: #F2F1FF;
+  --color-primary-border: #D8D5FF;
+  
+  --color-bg-primary: #F6F7FB;
+  --color-bg-secondary: #FFFFFF;
+  --color-bg-sidebar: #FBFBFD;
+  --color-bg-card: #FFFFFF;
+  --color-bg-hover: #F0F1F7;
+  --color-bg-border: #E8EAF1;
+  
+  --color-sec-blue: #3B7FF5;
+  --color-sec-green: #1B9E3C;
+  --color-sec-orange: #C47F00;
+  --color-sec-red: #D93030;
+  --color-sec-gray: #6B7485;
+  
+  --color-txt-title: #17181C;
+  --color-txt-heading: #23262F;
+  --color-txt-body: #505668;
+  --color-txt-caption: #7C8494;
+  --color-txt-disabled: #C3C7D2;
+  
+  --shadow-card: 0 10px 40px rgba(15,23,42,0.06);
+  --shadow-card-hover: 0 20px 60px rgba(15,23,42,0.12);
+  --shadow-floating: 0 30px 80px rgba(15,23,42,0.16);
+  --shadow-button: 0 8px 30px rgba(108,99,255,0.22);
+  
+  --radius-window: 32px;
+  --radius-card: 24px;
+  --radius-button: 18px;
+  --radius-input: 18px;
+  
+  --font-sans: "SF Pro Text", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  /* ── Badge color tokens (light mode) ── */
+  --badge-primary-bg: #ECEAFF;
+  --badge-primary-border: #C8C3FF;
+  --badge-primary-text: #4B44CC;
+
+  --badge-success-bg: #E0F5E9;
+  --badge-success-border: #B6E8C8;
+  --badge-success-text: #1B7A38;
+
+  --badge-info-bg: #E3EDFD;
+  --badge-info-border: #BAD2FB;
+  --badge-info-text: #1A5FCC;
+
+  --badge-warning-bg: #FFF4D6;
+  --badge-warning-border: #FFE199;
+  --badge-warning-text: #9A6200;
+
+  --badge-destructive-bg: #FDEAEA;
+  --badge-destructive-border: #F8C4C4;
+  --badge-destructive-text: #B82020;
+
+  --badge-secondary-bg: #EDEEF3;
+  --badge-secondary-border: #D8DAE5;
+  --badge-secondary-text: #505668;
+}
+
+/* ── Dark mode overrides ── */
+.dark {
+  --color-bg-primary: #0A0B0D;
+  --color-bg-secondary: #111217;
+  --color-bg-sidebar: #0D0E11;
+  --color-bg-card: #111217;
+  --color-bg-hover: #181921;
+  --color-bg-border: #1E2028;
+  
+  --color-txt-title: #F5F6F8;
+  --color-txt-heading: #E4E6EB;
+  --color-txt-body: #9BA2AE;
+  --color-txt-caption: #636C78;
+  --color-txt-disabled: #373E47;
+  
+  --color-primary-light: #1D1A3F;
+  --color-primary-border: #2D2A5E;
+
+  --color-sec-blue: #5B9CFF;
+  --color-sec-green: #3DD67A;
+  --color-sec-orange: #FFB547;
+  --color-sec-red: #FF6B6B;
+  --color-sec-gray: #9BA2AE;
+  
+  --shadow-card: 0 10px 40px rgba(0, 0, 0, 0.25);
+  --shadow-card-hover: 0 20px 60px rgba(0, 0, 0, 0.35);
+
+  /* ── Badge color tokens (dark mode) ── */
+  --badge-primary-bg: #1D1A3F;
+  --badge-primary-border: #2D2A5E;
+  --badge-primary-text: #A89DFF;
+
+  --badge-success-bg: #0E2A18;
+  --badge-success-border: #1A4A2A;
+  --badge-success-text: #3DD67A;
+
+  --badge-info-bg: #0D1E3A;
+  --badge-info-border: #1A3460;
+  --badge-info-text: #5B9CFF;
+
+  --badge-warning-bg: #2A1F00;
+  --badge-warning-border: #503900;
+  --badge-warning-text: #FFB547;
+
+  --badge-destructive-bg: #2A0F0F;
+  --badge-destructive-border: #4A1A1A;
+  --badge-destructive-text: #FF6B6B;
+
+  --badge-secondary-bg: #181921;
+  --badge-secondary-border: #1E2028;
+  --badge-secondary-text: #9BA2AE;
+}
+
+@layer base {
+  html {
+    font-size: 14px;
+  }
+  body {
+    background-color: var(--color-bg-primary);
+    color: var(--color-txt-body);
+    font-family: var(--font-sans);
+    font-size: 13.5px;
+    margin: 0;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  /* Custom premium scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(108, 99, 255, 0.15);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(108, 99, 255, 0.3);
+  }
+}
+
+.custom-scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.custom-scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

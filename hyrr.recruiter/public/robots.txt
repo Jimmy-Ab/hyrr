@@ -1,0 +1,66 @@
+# robots.txt — HYRR Recruitment Platform
+# https://hyrr.app/robots.txt
+# Last updated: 2026-07-01
+
+# ─── Standard crawlers ───────────────────────────────────────
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+Disallow: /_internal/
+Disallow: /private/
+Crawl-delay: 1
+
+# ─── Google ──────────────────────────────────────────────────
+User-agent: Googlebot
+Allow: /
+Crawl-delay: 0
+
+User-agent: Googlebot-Image
+Allow: /
+
+# ─── Bing ────────────────────────────────────────────────────
+User-agent: Bingbot
+Allow: /
+Crawl-delay: 1
+
+# ─── AI ENGINE CRAWLERS (AEO) ────────────────────────────────
+# Allow all major AI indexers so HYRR appears in
+# LLM-based search results (Perplexity, ChatGPT, etc.)
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: Googlebot-Extended
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: cohere-ai
+Allow: /
+
+User-agent: YouBot
+Allow: /
+
+User-agent: ia_archiver
+Allow: /
+
+# ─── Sitemaps ────────────────────────────────────────────────
+Sitemap: https://hyrr.app/sitemap.xml
+Sitemap: https://hyrr.app/sitemap-images.xml

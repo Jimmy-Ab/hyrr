@@ -1,0 +1,129 @@
+import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { PrismaService } from '../prisma/prisma.service';
+import { RegisterDto } from './dtos/register.dto';
+import { LoginDto } from './dtos/login.dto';
+import * as bcrypt from 'bcrypt';
+
+@Injectable()
+export class AuthService {
+  constructor(
+    private prisma: PrismaService,
+    private jwtService: JwtService,
+  ) {}
+
+  async register(dto: RegisterDto) {
+    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    if (existing) throw new ConflictException('Email already registered');
+
+    const passwordHash = await bcrypt.hash(dto.password, 12);
+    const user = await this.prisma.user.create({
+      data: {
+        name: dto.name,
+        email: dto.email,
+        passwordHash,
+        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(dto.name)}&background=6C63FF&color=fff`,
+        role: dto.role as any,
+      },
+    });
+
+    if (dto.role === 'SEEKER') {
+      await this.prisma.seekerProfile.create({
+        data: {
+          userId: user.id,
+          title: '',
+          location: '',
+        },
+      });
+    }
+
+    return this.generateTokens(user);
+  }
+
+  async login(dto: LoginDto) {
+    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    if (!user || !user.passwordHash) throw new UnauthorizedException('Invalid credentials');
+
+    const valid = await bcrypt.compare(dto.password, user.passwordHash);
+    if (!valid) throw new UnauthorizedException('Invalid credentials');
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastLogin: new Date() },
+    });
+
+    return this.generateTokens(user);
+  }
+
+  async refreshTokens(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.status !== 'ACTIVE') throw new UnauthorizedException('Access denied');
+    return this.generateTokens(user);
+  }
+
+  async upsertOAuthUser(profile: {
+    provider: 'google' | 'github' | 'linkedin';
+    id: string;
+    email: string;
+    name: string;
+    avatar: string;
+  }) {
+    const providerField = `${profile.provider}Id`;
+    let user = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { [providerField]: profile.id },
+          { email: profile.email },
+        ],
+      },
+    });
+
+    if (!user) {
+      user = await this.prisma.user.create({
+        data: {
+          name: profile.name,
+          email: profile.email,
+          avatar: profile.avatar,
+          [providerField]: profile.id,
+          role: 'SEEKER',
+        },
+      });
+      await this.prisma.seekerProfile.create({
+        data: { userId: user.id, title: '', location: '' },
+      });
+    } else if (!(user as any)[providerField]) {
+      user = await this.prisma.user.update({
+        where: { id: user.id },
+        data: { [providerField]: profile.id },
+      });
+    }
+
+    return this.generateTokens(user);
+  }
+
+  async getMe(userId: string) {
+    return this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        avatar: true,
+        role: true,
+        status: true,
+        joinedAt: true,
+        companyId: true,
+      },
+    });
+  }
+
+  private generateTokens(user: { id: string; role: string; email: string }) {
+    const payload = { sub: user.id, role: user.role, email: user.email };
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
+    const refreshToken = this.jwtService.sign(
+      { sub: user.id, type: 'refresh' },
+      { expiresIn: '7d' },
+    );
+    return { accessToken, refreshToken, userId: user.id, role: user.role };
+  }
+}

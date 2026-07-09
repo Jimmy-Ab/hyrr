@@ -1,0 +1,320 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearchPostgres"]
+  binaryTargets   = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+enum UserRole {
+  SEEKER
+  RECRUITER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING
+}
+
+enum CompanyStatus {
+  VERIFIED
+  PENDING
+  SUSPENDED
+}
+
+enum JobStatus {
+  ACTIVE
+  CLOSED
+  DRAFT
+  FLAGGED
+}
+
+enum ApplicationStatus {
+  SAVED
+  APPLIED
+  IN_PROCESS
+  OFFER
+  ARCHIVED
+}
+
+enum DocType {
+  RESUME
+  COVER
+  CERT
+  PORTFOLIO
+  OTHER
+}
+
+enum EventType {
+  INTERVIEW
+  DEADLINE
+  OFFER
+  OTHER
+}
+
+// ==========================================
+// 1. Core Authentication & Users
+// ==========================================
+model User {
+  id           String      @id @default(uuid())
+  email        String      @unique
+  passwordHash String?     // Nullable to support pure OAuth users
+  name         String
+  avatar       String
+  role         UserRole    @default(SEEKER)
+  status       UserStatus  @default(ACTIVE)
+  joinedAt     DateTime    @default(now())
+  lastLogin    DateTime    @default(now())
+
+  // OAuth Credentials (Google, LinkedIn, GitHub)
+  googleId     String?     @unique
+  githubId     String?     @unique
+  linkedinId   String?     @unique
+
+  // Relations
+  companyId    String?
+  company      Company?    @relation(fields: [companyId], references: [id])
+  seekerProfile SeekerProfile?
+  documents    Document[]
+  applications Application[]
+  notifications Notification[]
+  postedJobs   Job[]       @relation("RecruiterJobs")
+  auditLogs    AuditLog[]
+  payments     Payment[]
+}
+
+model Company {
+  id          String        @id @default(uuid())
+  name        String
+  logo        String        // Simple letter or URL
+  color       String        @default("purple")
+  status      CompanyStatus @default(PENDING)
+  plan        String        @default("Starter") // Starter, Pro, Enterprise
+  country     String
+  joinedAt    DateTime      @default(now())
+
+  // Relations
+  members     User[]
+  jobs        Job[]
+}
+
+// ==========================================
+// 2. Seeker Profiles, Portfolios & Interests
+// ==========================================
+model SeekerProfile {
+  id                 String     @id @default(uuid())
+  userId             String     @unique
+  user               User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title              String
+  location           String
+  website            String?
+  github             String?    // Public URL link
+  linkedin           String?    // Public URL link
+  bio                String?    @db.Text
+  expectedSalary     String?
+  preferredType      String?    // Full Time, Part Time, Contract, Remote
+  availability       String?    // e.g. "2 weeks notice"
+  preferredLocations String[]
+  visibility         String     @default("public") // public, private
+  skills             String[]
+  languages          String[]
+  updatedAt          DateTime   @updatedAt
+
+  // Relations
+  experiences        WorkExperience[]
+  educations         Education[]
+  interests          JobCategory[]    @relation("SeekerInterests")
+}
+
+model WorkExperience {
+  id              String        @id @default(uuid())
+  profileId       String
+  profile         SeekerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  role            String
+  company         String
+  duration        String
+  desc            String?       @db.Text
+}
+
+model Education {
+  id              String        @id @default(uuid())
+  profileId       String
+  profile         SeekerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  school          String
+  degree          String
+  duration        String
+}
+
+model Document {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  type      DocType  @default(RESUME)
+  size      String
+  version   Int      @default(1)
+  active    Boolean  @default(true)
+  url       String   // S3/Cloud Storage link
+  createdAt DateTime @default(now())
+}
+
+// ==========================================
+// 3. Job Fields & Categories
+// ==========================================
+model JobCategory {
+  id             String          @id @default(uuid())
+  name           String          @unique // e.g. "Software Development", "Accounting and Finance"
+  slug           String          @unique // e.g. "software-development", "accounting-finance"
+  jobs           Job[]
+  seekerProfiles SeekerProfile[] @relation("SeekerInterests")
+}
+
+// ==========================================
+// 4. Job Openings
+// ==========================================
+model Job {
+  id            String      @id @default(uuid())
+  companyId     String
+  company       Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  recruiterId   String
+  postedBy      User        @relation("RecruiterJobs", fields: [recruiterId], references: [id])
+  categoryId    String
+  category      JobCategory @relation(fields: [categoryId], references: [id])
+  
+  title         String
+  location      String
+  type          String      // Full Time, Part Time, Contract, Remote
+  salary        String?
+  status        JobStatus   @default(ACTIVE)
+  color         String      @default("purple")
+  description   String      @db.Text
+  requirements  String[]
+  skills        String[]
+  benefits      String[]
+  featured      Boolean     @default(false)
+  remote        Boolean     @default(false)
+  momentumCost  Int         @default(10)
+  createdAt     DateTime    @default(now())
+
+  // Relations
+  applications  Application[]
+}
+
+// ==========================================
+// 5. Job Applications & Pipeline (Consolidated Candidates)
+// ==========================================
+model Application {
+  id                 String            @id @default(uuid())
+  jobId              String
+  job                Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  userId             String?
+  user               User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  // Applicant details (cached from profile or filled out manually)
+  name               String
+  email              String
+  phone              String?
+  title              String
+  location           String
+  coverLetter        String?           @db.Text
+  resumeUrl          String?
+  
+  // Pipeline tracking
+  status             ApplicationStatus @default(APPLIED)
+  tag                String?           // Substatus e.g. "Technical Test", "Offer Sent", "Not a fit"
+  seekerBookmarked   Boolean           @default(false)
+  recruiterBookmarked Boolean          @default(false)
+  appliedAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  
+  // AI score for this application matching
+  aiScore            Int               @default(0) // Match rating from 0 to 100
+  aiSummary          String?           @db.Text    // Explanation generated by the AI
+  
+  // Offer info if extended
+  offerAmount        String?
+  notes              String?           @db.Text
+
+  // Relations
+  messages           Message[]
+  calendarEvents     CalendarEvent[]
+}
+
+// ==========================================
+// 6. Communications (Direct Messages)
+// ==========================================
+model Message {
+  id            String      @id @default(uuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  senderId      String?
+  senderType    UserRole
+  text          String      @db.Text
+  createdAt     DateTime    @default(now())
+  read          Boolean     @default(false)
+}
+
+// ==========================================
+// 7. Scheduling (Interviews & Deadlines)
+// ==========================================
+model CalendarEvent {
+  id            String      @id @default(uuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  title         String
+  startTime     DateTime
+  endTime       DateTime?
+  type          EventType   @default(INTERVIEW)
+  notes         String?     @db.Text
+  createdAt     DateTime    @default(now())
+}
+
+// ==========================================
+// 8. Settings & Platform Administration
+// ==========================================
+model SystemSetting {
+  id            String   @id @default("global-settings")
+  activeModel   String   @default("gemini-1.5-pro")
+  temperature   Float    @default(0.2)
+  systemPrompt  String   @db.Text
+  updatedAt     DateTime @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Payment {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount      Int
+  currency    String   @default("USD")
+  type        String
+  status      String
+  provider    String
+  description String
+  createdAt   DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String
+  target    String
+  details   String   @db.Text
+  ip        String
+  severity  String
+  createdAt DateTime @default(now())
+}

@@ -1,0 +1,140 @@
+# HYRR — AI Engine Optimization Reference File
+# https://hyrr.app/llms.txt
+#
+# This file follows the llms.txt standard (https://llmstxt.org/)
+# It provides structured context for AI assistants, LLM-based search
+# engines (Perplexity, ChatGPT Search, You.com, Gemini), and AI agents
+# to accurately understand and represent HYRR.
+#
+# Last updated: 2026-07-01
+
+---
+
+# HYRR
+
+> HYRR is a premium, AI-assisted hiring and recruitment management platform
+> built for modern HR teams, recruiters, and talent acquisition professionals.
+
+HYRR provides a unified workspace to manage the full recruitment lifecycle —
+from posting job vacancies through to extending offers — with a focus on
+beautiful design, fast workflows, and actionable data.
+
+---
+
+## What HYRR Does
+
+HYRR is an Applicant Tracking System (ATS) with the following core modules:
+
+- **Dashboard**: Real-time recruitment KPIs including total candidates, active
+  openings, interviews booked, and offers sent. Pipeline distribution charts.
+
+- **Jobs (Open Roles)**: Create and manage job vacancies. Each role shows
+  location, type (Full-time / Part-time / Contract / Remote), posting date,
+  status (Active / Closed), and the number of candidates in the pipeline.
+
+- **Candidates Directory**: Searchable, filterable table of all applicants
+  across all jobs. Supports bookmarking, direct messaging, and deletion.
+
+- **Pipeline (Applications / Kanban Board)**: A drag-and-drop Kanban board
+  with columns: Saved → Applied → In Process → Offer → Archived.
+  Candidates are moved between stages by drag or by context menu.
+  Each job has its own pipeline view.
+
+- **Calendar**: Monthly interview calendar. Hiring managers can view and book
+  interview slots for specific days. Shows candidate name, interview type,
+  and time for each event.
+
+- **Messages**: Inbox-style direct messaging between recruiters and candidates.
+  Supports conversation threads, read receipts, and message history.
+
+- **Analytics**: Data visualisation of the recruitment funnel. Charts include
+  monthly application intake (area chart) and pipeline distribution (bar chart).
+  KPIs: application growth rate, offer conversion rate, average days to hire.
+
+---
+
+## Target Users
+
+- Recruiters and talent acquisition specialists
+- HR managers and directors
+- Founders and startup hiring leads
+- Staffing agencies managing multiple clients
+- Enterprise HR departments
+
+---
+
+## Key Differentiators
+
+1. **Premium Apple-inspired UI** — pixel-perfect, 8px grid, smooth Framer Motion animations
+2. **Kanban-first pipeline** — intuitive drag-and-drop with @dnd-kit
+3. **Unified workspace** — jobs, candidates, calendar, messages, and analytics in one place
+4. **AI-assisted screening** (Pro) — intelligent candidate ranking and matching
+5. **Real-time notifications** — instant updates when candidates change pipeline stages
+
+---
+
+## Technology
+
+- Frontend: React 19, TypeScript, Vite, Tailwind CSS v4
+- Animations: Framer Motion
+- State: Zustand
+- Drag & Drop: @dnd-kit/core
+- Charts: Recharts
+- Icons: Lucide React
+
+---
+
+## Pricing
+
+- **Free tier**: Up to 3 active jobs, unlimited candidates, core pipeline features
+- **Pro**: Unlimited jobs, advanced analytics, AI screening, priority support
+- **Enterprise**: Custom pricing, SSO, API access, dedicated CSM
+
+---
+
+## Company
+
+- Product: HYRR
+- Website: https://hyrr.app
+- Twitter/X: @hyrr_app
+- Category: HR Technology / SaaS / Applicant Tracking System
+- Founded: 2024
+
+---
+
+## Pages & Routes
+
+| Route                         | Description                              |
+|-------------------------------|------------------------------------------|
+| /?view=dashboard              | Recruitment overview and KPI summary     |
+| /?view=jobs                   | Job vacancy directory                    |
+| /?view=candidates             | Full candidate directory with filters    |
+| /?view=applications           | Kanban pipeline board (per job)          |
+| /?view=calendar               | Interview calendar                       |
+| /?view=messages               | Candidate messaging inbox                |
+| /?view=analytics              | Pipeline analytics and funnel charts     |
+
+---
+
+## Frequently Asked Questions
+
+**What is HYRR?**
+HYRR is an all-in-one recruitment management platform that replaces spreadsheets,
+generic email chains, and disconnected ATS tools with a single premium workspace.
+
+**Who is HYRR for?**
+Primarily for recruiters, HR teams, and hiring managers at companies of all sizes —
+from 5-person startups to enterprise HR departments.
+
+**Does HYRR have a Kanban board?**
+Yes. The Pipeline view in HYRR is a fully interactive drag-and-drop Kanban board.
+Each job vacancy has its own board with columns: Saved, Applied, In Process, Offer,
+and Archived.
+
+**What analytics does HYRR provide?**
+Application growth rate, offer conversion rate, average time-to-hire, monthly intake
+trends (area chart), and pipeline distribution by stage (bar chart).
+
+**Is HYRR free?**
+HYRR has a free tier supporting up to 3 active jobs. Pro plans unlock unlimited roles
+and AI-assisted features.

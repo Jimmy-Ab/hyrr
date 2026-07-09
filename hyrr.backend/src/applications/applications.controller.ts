@@ -1,0 +1,124 @@
+import {
+  Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Req, Optional,
+} from '@nestjs/common';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import { ApplicationsService } from './applications.service';
+import { AiService } from '../ai/ai.service';
+import { CreateApplicationDto } from './dtos/create-application.dto';
+import { UpdateApplicationDto } from './dtos/update-application.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+
+@ApiTags('Applications')
+@Controller('applications')
+export class ApplicationsController {
+  constructor(
+    private readonly applicationsService: ApplicationsService,
+    private readonly aiService: AiService,
+  ) {}
+
+  // ─── Public: tracker by email (no auth required) ──────────────────
+  @Get('tracker')
+  @ApiOperation({ summary: 'Track application status by email (public tracker page)' })
+  @ApiQuery({ name: 'email', required: true, description: 'Email used when applying' })
+  @ApiResponse({ status: 200, description: 'Returns applications matching the email' })
+  getByEmail(@Query('email') email: string) {
+    return this.applicationsService.getApplicationsByEmail(email);
+  }
+
+  // ─── Public: apply to a job (career site or unauthenticated) ──────
+  @Post('jobs/:jobId/apply')
+  @ApiOperation({ summary: 'Submit a job application (public career site or logged-in seeker)' })
+  @ApiResponse({ status: 201, description: 'Application submitted successfully' })
+  async applyToJob(
+    @Param('jobId') jobId: string,
+    @Body() dto: CreateApplicationDto,
+    @Req() req: any,
+  ) {
+    const userId = req.user?.userId;
+    const application = await this.applicationsService.applyToJob(jobId, dto, userId);
+    // Trigger AI scoring asynchronously (fire-and-forget)
+    this.aiService.scoreApplication(application.id).catch(() => {});
+    return application;
+  }
+
+  // ─── Seeker: save a job ───────────────────────────────────────────
+  @Post('jobs/:jobId/save')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SEEKER')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Save (bookmark) a job without applying (Seeker only)' })
+  @ApiResponse({ status: 201, description: 'Job saved to applications board' })
+  saveJob(@Param('jobId') jobId: string, @Body() dto: CreateApplicationDto, @Req() req: any) {
+    return this.applicationsService.saveJob(jobId, dto, req.user.userId);
+  }
+
+  // ─── Seeker: get my applications ─────────────────────────────────
+  @Get('my')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SEEKER')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all applications for the logged-in seeker' })
+  @ApiResponse({ status: 200, description: 'Returns seeker application board' })
+  getMyApplications(@Req() req: any) {
+    return this.applicationsService.getSeekerApplications(req.user.userId);
+  }
+
+  // ─── Recruiter: get Kanban board for a specific job ───────────────
+  @Get('jobs/:jobId/candidates')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('RECRUITER', 'ADMIN')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all candidates in Kanban pipeline for a job (Recruiter only)' })
+  @ApiResponse({ status: 200, description: 'Returns candidate pipeline columns' })
+  getCandidatesForJob(@Param('jobId') jobId: string) {
+    return this.applicationsService.getCandidatesForJob(jobId);
+  }
+
+  // ─── Recruiter: get all company candidates ────────────────────────
+  @Get('candidates')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('RECRUITER', 'ADMIN')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all candidates across the company (Recruiter only)' })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiResponse({ status: 200, description: 'Returns all company candidates' })
+  getAllCandidates(@Req() req: any, @Query('search') search?: string) {
+    return this.applicationsService.getAllCompanyCandidates(req.user.companyId, search);
+  }
+
+  // ─── Shared: update application status / move Kanban ─────────────
+  @Put(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update application (move pipeline column, bookmark, add notes)' })
+  @ApiResponse({ status: 200, description: 'Application updated' })
+  async updateApplication(@Param('id') id: string, @Body() dto: UpdateApplicationDto, @Req() req: any) {
+    const updated = await this.applicationsService.updateApplication(id, dto);
+    // Re-score on significant status changes
+    if (dto.status && dto.status !== 'SAVED') {
+      this.aiService.scoreApplication(id).catch(() => {});
+    }
+    return updated;
+  }
+
+  // ─── Recruiter: delete candidate ─────────────────────────────────
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('RECRUITER', 'ADMIN')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete a candidate application (Recruiter only)' })
+  @ApiResponse({ status: 200, description: 'Application deleted' })
+  deleteApplication(@Param('id') id: string) {
+    return this.applicationsService.deleteApplication(id);
+  }
+
+  @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get a single application by ID' })
+  getApplication(@Param('id') id: string) {
+    return this.applicationsService.getApplicationById(id);
+  }
+}

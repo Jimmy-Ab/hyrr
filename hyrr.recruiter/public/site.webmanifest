@@ -1,0 +1,60 @@
+{
+  "name": "HYRR — Recruitment Platform",
+  "short_name": "HYRR",
+  "description": "Premium AI-assisted hiring and recruitment management platform. Manage jobs, track candidates, schedule interviews, and analyse your pipeline.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "landscape-primary",
+  "background_color": "#F6F7FB",
+  "theme_color": "#6C63FF",
+  "lang": "en",
+  "dir": "ltr",
+  "scope": "/",
+  "categories": ["business", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon-16x16.png",
+      "sizes": "16x16",
+      "type": "image/png"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/og-image.png",
+      "sizes": "1200x630",
+      "type": "image/png",
+      "label": "HYRR Kanban pipeline dashboard"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Open Dashboard",
+      "short_name": "Dashboard",
+      "description": "Go to recruitment overview",
+      "url": "/?view=dashboard"
+    },
+    {
+      "name": "View Pipeline",
+      "short_name": "Pipeline",
+      "description": "Open candidate Kanban board",
+      "url": "/?view=applications"
+    },
+    {
+      "name": "Browse Jobs",
+      "short_name": "Jobs",
+      "description": "View all open roles",
+      "url": "/?view=jobs"
+    }
+  ]
+}

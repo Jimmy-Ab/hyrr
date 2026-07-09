@@ -1,0 +1,24 @@
+{
+  "name": "hyrr.shared",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "echo 'hyrr.shared: source-only package, no build step needed'"
+  },
+  "dependencies": {
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "zustand": "^5.0.14",
+    "lucide-react": "^1.22.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.6.0",
+    "class-variance-authority": "^0.7.1",
+    "framer-motion": "^12.42.2"
+  }
+}
