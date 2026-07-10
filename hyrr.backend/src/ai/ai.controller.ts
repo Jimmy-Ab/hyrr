@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Body, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Put, Post, Body, Req, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AiService } from './ai.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -36,5 +36,18 @@ export class AiController {
   @ApiResponse({ status: 200, description: 'Returns ranked list of featured job matches' })
   getFeaturedJobs(@Req() req: any) {
     return this.aiService.getFeaturedJobsForSeeker(req.user.userId);
+  }
+
+  @Post('chat')
+  @Roles('SEEKER', 'RECRUITER', 'ADMIN')
+  @ApiOperation({ summary: 'Send a message to the Hyrr AI assistant' })
+  @ApiResponse({ status: 200, description: 'Returns AI assistant response' })
+  async chat(
+    @Req() req: any,
+    @Body() body: { message: string; history?: { role: 'user' | 'assistant'; content: string }[] },
+  ) {
+    const role = req.user.role as 'SEEKER' | 'RECRUITER';
+    const reply = await this.aiService.chat(body.message, body.history || [], role);
+    return { reply };
   }
 }

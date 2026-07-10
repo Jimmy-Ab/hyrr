@@ -3,18 +3,18 @@ import { Card } from "../components/ui/card"
 import { useJobStore } from "../store/useJobStore"
 
 export function Dashboard() {
-  const { candidates, jobs, notifications, setActiveView } = useJobStore()
+  const { candidates, jobs, notifications, setActiveView, events } = useJobStore()
 
   // Calculate statistics
   const totalCandidates = candidates.length
   const activeJobs = jobs.filter((j) => j.status === "Active").length
   const offersSent = candidates.filter((c) => c.status === "Offer").length
-  const interviewsCount = 8 // static mock
+  const interviewsCount = events.filter((e) => e.type === "interview").length
 
   const stats = [
     { title: "Total Candidates", value: totalCandidates, icon: Users, change: "+12% vs last month", trend: "up" },
     { title: "Active Openings", value: activeJobs, icon: Briefcase, change: "2 new this week", trend: "neutral" },
-    { title: "Interviews Booked", value: interviewsCount, icon: Calendar, change: "8 upcoming sessions", trend: "neutral" },
+    { title: "Interviews Booked", value: interviewsCount, icon: Calendar, change: `${interviewsCount} upcoming sessions`, trend: "neutral" },
     { title: "Offers Sent", value: offersSent, icon: CheckSquare, change: "+25% vs last month", trend: "up" },
   ]
 
@@ -33,17 +33,18 @@ export function Dashboard() {
         {stats.map((stat, idx) => {
           const Icon = stat.icon
           return (
-            <Card key={idx} hoverEffect className="p-6 flex flex-col justify-between h-36">
-              <div className="flex items-start justify-between">
-                <span className="text-[14px] font-bold tracking-wider text-txt-caption uppercase">
+            <Card key={idx} hoverEffect className="p-6 flex flex-col justify-between h-36 relative overflow-hidden group">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+              <div className="flex items-start justify-between relative z-10">
+                <span className="text-[11.5px] font-bold tracking-wider text-txt-caption uppercase">
                   {stat.title}
                 </span>
-                <div className="w-10 h-10 rounded-xl bg-primary-light border border-primary-border/40 flex items-center justify-center text-primary">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-light to-primary-light/60 border border-primary-border/40 flex items-center justify-center text-primary shadow-[0_0_12px_rgba(108,99,255,0.08)] group-hover:shadow-[0_0_18px_rgba(108,99,255,0.2)] transition-shadow">
                   <Icon className="w-5 h-5" />
                 </div>
               </div>
-              <div className="mt-4 flex items-baseline gap-2">
-                <span className="text-[28px] font-extrabold text-txt-title leading-none">
+              <div className="mt-4 flex items-baseline gap-2 relative z-10">
+                <span className="text-[30px] font-extrabold text-txt-title leading-none tabular-nums">
                   {stat.value}
                 </span>
                 <span className="text-[12px] text-txt-caption font-semibold">
@@ -82,10 +83,10 @@ export function Dashboard() {
               {notifications.slice(0, 4).map((notif) => (
                 <div
                   key={notif.id}
-                  className="flex items-center justify-between p-3.5 rounded-[16px] bg-bg-primary/50 border border-bg-border/30 hover:border-bg-border/60 transition-colors"
+                  className="flex items-center justify-between p-3.5 rounded-[16px] bg-bg-primary/50 border border-bg-border/30 hover:border-primary/20 hover:bg-bg-primary/80 hover:shadow-[0_2px_12px_rgba(108,99,255,0.06)] transition-all duration-200 cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-2.5 h-2.5 rounded-full bg-primary" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_6px_rgba(108,99,255,0.5)]" />
                     <span className="text-[14px] font-medium text-txt-heading">
                       {notif.title}
                     </span>

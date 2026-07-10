@@ -10,7 +10,7 @@ export class MessagesService {
     const where =
       role === 'SEEKER'
         ? { userId }
-        : { job: { postedBy: { some: { id: userId } } } };
+        : { job: { recruiterId: userId } };
 
     return this.prisma.application.findMany({
       where: where as any,

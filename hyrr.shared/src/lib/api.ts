@@ -39,12 +39,8 @@ export async function apiFetch(path: string, options: RequestOptions = {}): Prom
   const finalOptions: RequestInit = {
     ...options,
     headers,
+    credentials: 'include',
   };
-
-  if (!options.skipAuth) {
-    // Crucial for silent HTTP-only refresh cookie
-    finalOptions.credentials = 'include';
-  }
 
   try {
     const response = await fetch(url, finalOptions);

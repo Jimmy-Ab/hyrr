@@ -1,5 +1,5 @@
 import { useDraggable } from "@dnd-kit/core"
-import { Bookmark, MapPin, MoreHorizontal, Trash2 } from "lucide-react"
+import { Bookmark, MapPin, MoreHorizontal, Trash2, Sparkles } from "lucide-react"
 import { Card } from "../ui/card"
 import { Badge } from "../ui/badge"
 import { useJobStore, type Candidate } from "../../store/useJobStore"
@@ -18,7 +18,7 @@ interface ApplicationCardProps {
 }
 
 export function ApplicationCard({ candidate, isOverlay = false }: ApplicationCardProps) {
-  const { toggleBookmark, deleteCandidate } = useJobStore()
+  const { toggleBookmark, deleteCandidate, setSelectedCandidateId } = useJobStore()
   
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: candidate.id,
@@ -75,6 +75,7 @@ export function ApplicationCard({ candidate, isOverlay = false }: ApplicationCar
       }`}
     >
       <Card
+        onDoubleClick={() => setSelectedCandidateId(candidate.id)}
         className={`p-5 relative border border-bg-border/60 bg-bg-secondary transition-all ${
           isOverlay
             ? "shadow-floating scale-[1.03] rotate-[1deg] border-primary-border ring-2 ring-primary/10"
@@ -91,7 +92,10 @@ export function ApplicationCard({ candidate, isOverlay = false }: ApplicationCar
             />
             {/* Candidate Info */}
             <div className="min-w-0">
-              <h4 className="text-body font-semibold text-txt-heading truncate">
+              <h4
+                onClick={() => setSelectedCandidateId(candidate.id)}
+                className="text-body font-semibold text-txt-heading truncate hover:text-primary cursor-pointer hover:underline"
+              >
                 {candidate.name}
               </h4>
               <p className="text-caption text-txt-body mt-0.5 truncate font-medium">
@@ -138,9 +142,17 @@ export function ApplicationCard({ candidate, isOverlay = false }: ApplicationCar
 
         {/* Card Footer: Tag & Bookmark Ribbon */}
         <div className="flex items-center justify-between mt-5 pt-3 border-t border-bg-border/30">
-          <Badge variant={tagDetails.variant}>
-            {tagDetails.text}
-          </Badge>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Badge variant={tagDetails.variant}>
+              {tagDetails.text}
+            </Badge>
+            {candidate.aiScore != null && (
+              <Badge variant="success" className="bg-[#34C759] text-white flex items-center gap-1 shrink-0 py-0.5 px-2 text-[10.5px] border-none shadow-[0_0_8px_rgba(52,199,89,0.2)]">
+                <Sparkles className="w-3 h-3 fill-current animate-pulse" />
+                {candidate.aiScore}%
+              </Badge>
+            )}
+          </div>
           
           <button
             onClick={(e) => {

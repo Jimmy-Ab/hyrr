@@ -48,15 +48,21 @@ export function CandidateDashboard() {
         {stats.map((stat, idx) => {
           const Icon = stat.icon
           return (
-            <Card key={idx} hoverEffect className="p-6 flex flex-col justify-between h-36">
-              <div className="flex items-start justify-between">
-                <span className="text-[14px] font-bold tracking-wider text-txt-caption uppercase">{stat.title}</span>
-                <div className="w-10 h-10 rounded-xl bg-primary-light border border-primary-border/40 flex items-center justify-center text-primary">
+            <Card
+              key={idx}
+              hoverEffect
+              className="p-6 flex flex-col justify-between h-36 relative overflow-hidden group"
+            >
+              {/* Subtle gradient shimmer on hover */}
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none rounded-inherit" />
+              <div className="flex items-start justify-between relative z-10">
+                <span className="text-[11.5px] font-bold tracking-wider text-txt-caption uppercase">{stat.title}</span>
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-light to-primary-light/60 border border-primary-border/40 flex items-center justify-center text-primary shadow-[0_0_12px_rgba(108,99,255,0.08)] group-hover:shadow-[0_0_18px_rgba(108,99,255,0.2)] transition-shadow">
                   <Icon className="w-5 h-5" />
                 </div>
               </div>
-              <div className="mt-4 flex items-baseline gap-2">
-                <span className="text-[28px] font-extrabold text-txt-title leading-none">{stat.value}</span>
+              <div className="mt-4 flex items-baseline gap-2 relative z-10">
+                <span className="text-[30px] font-extrabold text-txt-title leading-none tabular-nums">{stat.value}</span>
                 <span className="text-[12px] text-txt-caption font-semibold">{stat.change}</span>
               </div>
             </Card>
@@ -84,9 +90,9 @@ export function CandidateDashboard() {
           </div>
           <div className="flex flex-col gap-3">
             {recentActivity.map((app) => (
-              <div key={app.id} className="flex items-center justify-between p-3.5 rounded-[16px] bg-bg-primary/50 border border-bg-border/30 hover:border-bg-border/60 transition-colors">
+              <div key={app.id} className="flex items-center justify-between p-3.5 rounded-[16px] bg-bg-primary/50 border border-bg-border/30 hover:border-primary/20 hover:bg-bg-primary/80 hover:shadow-[0_2px_12px_rgba(108,99,255,0.06)] transition-all duration-200 cursor-pointer">
                 <div className="flex items-center gap-3">
-                  <div className={`w-2.5 h-2.5 rounded-full ${colorDot[app.companyColor] ?? "bg-primary"}`} />
+                  <div className={`w-2.5 h-2.5 rounded-full ${colorDot[app.companyColor] ?? "bg-primary"} shadow-[0_0_6px_currentColor]`} />
                   <div>
                     <span className="text-[14px] font-medium text-txt-heading">{app.title}</span>
                     <span className="text-[12px] text-txt-caption ml-2">at {app.company}</span>
@@ -107,7 +113,8 @@ export function CandidateDashboard() {
         <div className="flex flex-col gap-6">
           {/* Upcoming interview */}
           {upcomingInterview && (
-            <Card className="p-5 border-l-4 border-l-primary">
+            <Card className="p-5 border-l-4 border-l-primary relative overflow-hidden group">
+              <div className="absolute -right-6 -top-6 w-20 h-20 rounded-full bg-primary/5 blur-2xl pointer-events-none group-hover:bg-primary/10 transition-colors" />
               <div className="flex items-center gap-2 mb-3">
                 <Calendar className="w-4 h-4 text-primary" />
                 <span className="text-[13px] font-bold text-primary uppercase tracking-wider">Upcoming Interview</span>

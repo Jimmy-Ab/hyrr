@@ -9,16 +9,18 @@ import { DocumentsModule } from './documents/documents.module';
 import { CalendarModule } from './calendar/calendar.module';
 import { AiModule } from './ai/ai.module';
 import { ProfileModule } from './profile/profile.module';
+import { CacheModule } from './cache/cache.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: [
-        `${__dirname}/../.env`,       // dist/ → hyrr.backend/.env
-        `${__dirname}/../../.env`,    // fallback: monorepo root .env
+        `${__dirname}/../.env`,
+        `${__dirname}/../../.env`,
       ],
     }),
+    CacheModule,
     PrismaModule,
     AuthModule,
     JobsModule,

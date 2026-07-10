@@ -1,7 +1,7 @@
 import * as React from "react"
 import { Header } from "./components/layout/header"
 import { Sidebar } from "./components/layout/sidebar"
-import { ToastProvider, AuthPage, OAuthCallback, apiFetch } from "hyrr.shared"
+import { ToastProvider, AuthPage, OAuthCallback, apiFetch, AiChatWidget } from "hyrr.shared"
 import { useJobStore } from "hyrr.shared"
 
 // Pages
@@ -103,6 +103,9 @@ function AppContent() {
           </div>
         </main>
       </div>
+
+      {/* Floating AI Assistant bubble */}
+      <AiChatWidget role="SEEKER" />
     </div>
   )
 }

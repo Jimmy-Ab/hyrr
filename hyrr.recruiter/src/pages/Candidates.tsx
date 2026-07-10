@@ -7,7 +7,7 @@ import { Card } from "../components/ui/card"
 import { useToast } from "../components/ui/toast"
 
 export function Candidates() {
-  const { candidates, toggleBookmark, deleteCandidate, searchQuery, setSearchQuery } = useJobStore()
+  const { candidates, toggleBookmark, deleteCandidate, searchQuery, setSearchQuery, setSelectedCandidateId } = useJobStore()
   const { toast } = useToast()
   const [statusFilter, setStatusFilter] = useState<string>("All")
 
@@ -99,9 +99,15 @@ export function Candidates() {
                     <img
                       src={c.avatar}
                       alt={c.name}
-                      className="w-10 h-10 rounded-full object-cover border border-bg-border/40"
+                      onClick={() => setSelectedCandidateId(c.id)}
+                      className="w-10 h-10 rounded-full object-cover border border-bg-border/40 cursor-pointer hover:opacity-85 transition-opacity"
                     />
-                    <span className="font-semibold text-txt-heading text-[15px]">{c.name}</span>
+                    <span
+                      onClick={() => setSelectedCandidateId(c.id)}
+                      className="font-semibold text-txt-heading text-[15px] hover:text-primary cursor-pointer hover:underline"
+                    >
+                      {c.name}
+                    </span>
                   </div>
                 </TableCell>
                 <TableCell className="py-4 font-semibold text-txt-body">{c.title}</TableCell>

@@ -157,7 +157,7 @@ export function ProfilePage() {
               className="w-full p-3 rounded-[12px] border border-bg-border bg-bg-primary text-[12px] text-txt-body placeholder:text-txt-caption resize-none focus:outline-none focus:border-primary/20 transition-colors"
               rows={4}
               value={profile.bio}
-              onChange={(e) => setProfile((p) => ({ ...p, bio: e.target.value }))}
+              onChange={(e) => setProfile((p: any) => ({ ...p, bio: e.target.value }))}
               placeholder="Write a short professional summary…"
             />
             <Button
@@ -193,7 +193,7 @@ export function ProfilePage() {
               ].map(({ icon: Icon, key }) => (
                 <div key={key} className="flex items-center gap-3">
                   <Icon className="w-4 h-4 text-txt-caption shrink-0" />
-                  <Input value={profile[key]} onChange={(e) => setProfile((p) => ({ ...p, [key]: e.target.value }))} className="h-8 py-1 text-[12px]" />
+                  <Input value={profile[key]} onChange={(e) => setProfile((p: any) => ({ ...p, [key]: e.target.value }))} className="h-8 py-1 text-[12px]" />
                 </div>
               ))}
             </div>
@@ -205,7 +205,7 @@ export function ProfilePage() {
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <DollarSign className="w-4 h-4 text-txt-caption shrink-0" />
-                <Input value={profile.expectedSalary} onChange={(e) => setProfile((p) => ({ ...p, expectedSalary: e.target.value }))} className="h-8 py-1 text-[12px]" />
+                <Input value={profile.expectedSalary} onChange={(e) => setProfile((p: any) => ({ ...p, expectedSalary: e.target.value }))} className="h-8 py-1 text-[12px]" />
               </div>
               <div>
                 <label className="text-[11px] font-bold text-txt-caption uppercase tracking-wider">Work Type</label>
@@ -213,7 +213,7 @@ export function ProfilePage() {
                   {["Full Time", "Part Time", "Contract", "Remote"].map((t) => (
                     <button
                       key={t}
-                      onClick={() => setProfile((p) => ({ ...p, preferredType: t }))}
+                      onClick={() => setProfile((p: any) => ({ ...p, preferredType: t }))}
                       className={`px-2.5 py-1 rounded-full text-[11.5px] font-semibold cursor-pointer border transition-all ${profile.preferredType === t ? "bg-primary text-white border-primary" : "bg-bg-primary text-txt-body border-bg-border hover:border-primary/30"}`}
                     >
                       {t}
@@ -223,7 +223,7 @@ export function ProfilePage() {
               </div>
               <div>
                 <label className="text-[11px] font-bold text-txt-caption uppercase tracking-wider">Availability</label>
-                <Input value={profile.availability} onChange={(e) => setProfile((p) => ({ ...p, availability: e.target.value }))} className="h-8 py-1 text-[12px] mt-2" />
+                <Input value={profile.availability} onChange={(e) => setProfile((p: any) => ({ ...p, availability: e.target.value }))} className="h-8 py-1 text-[12px] mt-2" />
               </div>
             </div>
           </Card>

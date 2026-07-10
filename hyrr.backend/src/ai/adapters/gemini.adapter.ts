@@ -17,6 +17,15 @@ export class GeminiAdapter implements LLMAdapter {
       apiKey: process.env.GOOGLE_AI_API_KEY,
     });
 
+    // If this is a plain chat invocation (message field set, no title)
+    if (candidateData.message && !jobData.title) {
+      const response = await model.invoke([
+        new SystemMessage(systemPrompt),
+        new HumanMessage(candidateData.message),
+      ]);
+      return { score: 0, summary: (response.content as string) || '' };
+    }
+
     const userContent = this.buildPrompt(candidateData, jobData);
     const response = await model.invoke([
       new SystemMessage(systemPrompt + '\n\nRespond ONLY with a JSON object: {"score": number, "summary": "string"}'),
@@ -50,7 +59,7 @@ Education: ${JSON.stringify(candidateData.educations || [])}
         summary: String(parsed.summary || ''),
       };
     } catch {
-      return { score: 0, summary: 'Failed to parse AI response.' };
+      return { score: 0, summary: raw || 'Failed to parse AI response.' };
     }
   }
 }

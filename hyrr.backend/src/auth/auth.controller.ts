@@ -1,6 +1,6 @@
 import {
   Controller, Post, Get, Body, Req, Res, UseGuards,
-  HttpCode, HttpStatus,
+  HttpCode, HttpStatus, UnauthorizedException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
@@ -44,7 +44,7 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Refresh token missing or expired' })
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const token = req.cookies?.['refreshToken'];
-    if (!token) return res.status(401).json({ message: 'No refresh token' });
+    if (!token) throw new UnauthorizedException('No refresh token');
 
     const { authService, setRefreshCookie } = this;
     const jwtService = (authService as any).jwtService;

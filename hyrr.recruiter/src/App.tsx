@@ -12,7 +12,8 @@ import { Messages } from "./pages/Messages"
 import { Analytics } from "./pages/Analytics"
 import { AddCandidateDialog } from "./components/layout/add-candidate-dialog"
 import { AddJobDialog } from "./components/layout/add-job-dialog"
-import { AuthPage, OAuthCallback, apiFetch } from "hyrr.shared"
+import { CandidateDetailDialog } from "./components/layout/candidate-detail-dialog"
+import { AuthPage, OAuthCallback, apiFetch, AiChatWidget } from "hyrr.shared"
 
 function AppContent() {
   const {
@@ -109,9 +110,11 @@ function AppContent() {
         </main>
       </div>
 
-      {/* Global Dialogs */}
+      {/* Global Dialogs & Widgets */}
       <AddCandidateDialog />
       <AddJobDialog />
+      <CandidateDetailDialog />
+      <AiChatWidget role="RECRUITER" />
     </div>
   )
 }

@@ -11,6 +11,7 @@ export * from "./components/ui/skeleton"
 export * from "./components/ui/empty-state"
 export * from "./components/ui/pagination"
 export * from "./components/ui/tooltip"
+export * from "./components/ui/ai-chat-widget"
 
 // Export Store
 export * from "./store/useJobStore"

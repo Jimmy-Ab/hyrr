@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { User, Shield, Bell, Palette, Globe, Lock, Smartphone, LogOut, Trash2, Eye, EyeOff } from "lucide-react"
+import { useState, useEffect } from "react"
+import { User, Shield, Bell, Palette, Globe, Lock, Smartphone, LogOut, Trash2, Eye, EyeOff, Loader2 } from "lucide-react"
 import { Card } from "hyrr.shared"
 import { Button } from "hyrr.shared"
 import { Input } from "hyrr.shared"
@@ -19,11 +19,27 @@ const tabs: { id: Tab; icon: typeof User }[] = [
 ]
 
 export function SettingsPage() {
-  const { theme, toggleTheme } = useJobStore()
+  const { theme, toggleTheme, user, profileUpdating, updateProfile } = useJobStore()
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState<Tab>("General")
   const [showPassword, setShowPassword] = useState(false)
   const [twoFA, setTwoFA] = useState(false)
+
+  // General tab form state
+  const [generalName, setGeneralName] = useState(user?.name || "")
+  const [generalTitle, setGeneralTitle] = useState("")
+  const [generalLocation, setGeneralLocation] = useState("")
+
+  useEffect(() => {
+    if (user?.name) setGeneralName(user.name)
+  }, [user?.name])
+
+  const handleSaveGeneral = async () => {
+    const ok = await updateProfile({ name: generalName, title: generalTitle || undefined, location: generalLocation || undefined })
+    if (ok) toast("Saved", "General settings updated successfully.", "success")
+    else toast("Error", "Could not save settings. Please try again.", "error")
+  }
+
   const [notifPrefs, setNotifPrefs] = useState({
     applicationUpdates: true, interviewReminders: true, offerNotifications: true,
     messageNotifications: true, jobRecommendations: true, weeklyDigest: false,
@@ -39,15 +55,30 @@ export function SettingsPage() {
           <div className="space-y-6">
             <div className="space-y-3">
               <label className="text-[12.5px] font-bold text-txt-heading block">Full Name</label>
-              <Input defaultValue="Emily Carter" className="max-w-sm" />
+              <Input
+                value={generalName}
+                onChange={(e) => setGeneralName(e.target.value)}
+                placeholder="Your display name"
+                className="max-w-sm"
+              />
             </div>
             <div className="space-y-3">
               <label className="text-[12.5px] font-bold text-txt-heading block">Professional Title</label>
-              <Input defaultValue="Senior Frontend Engineer" className="max-w-sm" />
+              <Input
+                value={generalTitle}
+                onChange={(e) => setGeneralTitle(e.target.value)}
+                placeholder={user?.name ? "e.g. Senior Frontend Engineer" : "Loading..."}
+                className="max-w-sm"
+              />
             </div>
             <div className="space-y-3">
               <label className="text-[12.5px] font-bold text-txt-heading block">Location</label>
-              <Input defaultValue="San Francisco, CA" className="max-w-sm" />
+              <Input
+                value={generalLocation}
+                onChange={(e) => setGeneralLocation(e.target.value)}
+                placeholder="City, Country"
+                className="max-w-sm"
+              />
             </div>
             <div className="space-y-3">
               <label className="text-[12.5px] font-bold text-txt-heading block">Language</label>
@@ -62,7 +93,10 @@ export function SettingsPage() {
                 ))}
               </div>
             </div>
-            <Button onClick={() => toast("Saved", "General settings updated.", "success")} className="cursor-pointer shadow-button">Save Changes</Button>
+            <Button onClick={handleSaveGeneral} disabled={profileUpdating} className="cursor-pointer shadow-button gap-2">
+              {profileUpdating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              Save Changes
+            </Button>
           </div>
         )
 
@@ -71,7 +105,8 @@ export function SettingsPage() {
           <div className="space-y-6">
             <div className="space-y-3">
               <label className="text-[12.5px] font-bold text-txt-heading block">Email Address</label>
-              <Input defaultValue="emily@example.com" type="email" className="max-w-sm" />
+              <Input defaultValue={user?.email || ""} type="email" className="max-w-sm" disabled />
+              <p className="text-[11px] text-txt-caption">Email cannot be changed. Contact support if needed.</p>
             </div>
             <div className="space-y-3">
               <label className="text-[12.5px] font-bold text-txt-heading block">Phone Number</label>
