@@ -7,12 +7,22 @@ import { Roles } from '../auth/decorators/roles.decorator';
 
 @ApiTags('Profile')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard)
 @Controller('profile')
 export class ProfileController {
-  constructor(private readonly profileService: ProfileService) {}
+  constructor(private readonly profileService: ProfileService) { }
 
+  // ─── Any authenticated role: get basic user + company info ──────────
+  @Get('me')
+  @ApiOperation({ summary: 'Get current user info + company (any role)' })
+  @ApiResponse({ status: 200, description: 'Returns user + company data' })
+  getMe(@Req() req: any) {
+    return this.profileService.getMe(req.user.userId);
+  }
+
+  // ─── Seeker-only endpoints ───────────────────────────────────────────
   @Get()
+  @UseGuards(RolesGuard)
   @Roles('SEEKER')
   @ApiOperation({ summary: 'Get current seeker profile details' })
   @ApiResponse({ status: 200, description: 'Returns seeker profile details' })
@@ -21,6 +31,7 @@ export class ProfileController {
   }
 
   @Put()
+  @UseGuards(RolesGuard)
   @Roles('SEEKER')
   @ApiOperation({ summary: 'Update seeker profile fields' })
   @ApiResponse({ status: 200, description: 'Profile updated successfully' })
@@ -29,6 +40,7 @@ export class ProfileController {
   }
 
   @Post('experience')
+  @UseGuards(RolesGuard)
   @Roles('SEEKER')
   @ApiOperation({ summary: 'Add work experience to seeker profile' })
   @ApiResponse({ status: 201, description: 'Experience added' })
@@ -40,6 +52,7 @@ export class ProfileController {
   }
 
   @Delete('experience/:id')
+  @UseGuards(RolesGuard)
   @Roles('SEEKER')
   @ApiOperation({ summary: 'Delete work experience from seeker profile' })
   @ApiResponse({ status: 200, description: 'Experience deleted' })
@@ -48,6 +61,7 @@ export class ProfileController {
   }
 
   @Post('education')
+  @UseGuards(RolesGuard)
   @Roles('SEEKER')
   @ApiOperation({ summary: 'Add education history to seeker profile' })
   @ApiResponse({ status: 201, description: 'Education history added' })
@@ -59,6 +73,7 @@ export class ProfileController {
   }
 
   @Delete('education/:id')
+  @UseGuards(RolesGuard)
   @Roles('SEEKER')
   @ApiOperation({ summary: 'Delete education history from seeker profile' })
   @ApiResponse({ status: 200, description: 'Education history deleted' })

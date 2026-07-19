@@ -65,17 +65,17 @@ export function Sidebar() {
                     selectJob(jobs[0].id)
                   }
                 }}
-                className={`flex items-center justify-between h-[42px] px-3.5 rounded-[13px] transition-all duration-150 group text-left cursor-pointer outline-none w-full ${
+                className={`flex items-center justify-between h-[42px] px-3.5 rounded-[13px] transition-all duration-200 group text-left cursor-pointer outline-none w-full ${
                   isActive
-                    ? "bg-primary-light text-primary font-semibold"
-                    : "text-txt-body hover:bg-bg-hover hover:text-txt-heading font-medium"
+                    ? "bg-gradient-to-r from-primary-light to-primary-light/40 text-primary font-bold shadow-[0_2px_8px_rgba(108,99,255,0.1)] border border-primary-border/40"
+                    : "text-txt-body hover:bg-bg-hover hover:text-txt-heading font-medium hover:-translate-y-px"
                 }`}
               >
                 <div className="flex items-center gap-3">
                   <Icon
                     className={`w-[18px] h-[18px] shrink-0 transition-colors ${
                       isActive
-                        ? "text-primary"
+                        ? "text-primary drop-shadow-[0_0_4px_rgba(108,99,255,0.5)]"
                         : "text-txt-caption group-hover:text-txt-heading"
                     }`}
                   />
@@ -83,7 +83,7 @@ export function Sidebar() {
                 </div>
 
                 {item.badge != null && (
-                  <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-white text-[10px] font-bold">
+                  <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-white text-[10px] font-bold shadow-[0_0_6px_rgba(108,99,255,0.4)]">
                     {item.badge}
                   </span>
                 )}
@@ -123,11 +123,11 @@ export function Sidebar() {
                   title={job.title}
                   className={`flex items-center gap-2.5 h-[38px] px-3.5 rounded-[13px] transition-all duration-150 text-left cursor-pointer outline-none w-full ${
                     isJobActive
-                      ? "bg-primary-light text-primary font-semibold"
+                      ? "bg-primary-light text-primary font-bold border border-primary-border/30"
                       : "text-txt-body hover:bg-bg-hover hover:text-txt-heading font-medium"
                   }`}
                 >
-                  <span className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${dotColor} ${isJobActive ? "shadow-[0_0_6px_currentColor]" : ""}`} />
                   <span className="text-[13px] truncate">{job.title}</span>
                 </button>
               )
@@ -148,12 +148,12 @@ export function Sidebar() {
       </button>
 
       {/* ─── Upgrade card ─── */}
-      <div className="bg-bg-secondary border border-bg-border/60 rounded-[20px] p-4 shadow-card flex flex-col gap-3 relative overflow-hidden group">
-        <div className="absolute top-0 right-0 w-20 h-20 bg-primary/5 rounded-full blur-xl group-hover:bg-primary/10 transition-colors pointer-events-none" />
+      <div className="rounded-[20px] p-4 flex flex-col gap-3 relative overflow-hidden" style={{ background: "linear-gradient(135deg, rgba(108,99,255,0.12) 0%, rgba(59,127,245,0.08) 100%)", border: "1px solid rgba(108,99,255,0.2)" }}>
+        <div className="absolute top-0 right-0 w-24 h-24 rounded-full blur-2xl pointer-events-none" style={{ background: "radial-gradient(circle, rgba(108,99,255,0.15) 0%, transparent 70%)" }} />
         <div className="flex flex-col gap-1 relative">
-          <div className="flex items-center gap-1.5 text-primary">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span className="text-[11px] font-bold uppercase tracking-wider">Upgrade to Pro</span>
+          <div className="flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-primary" />
+            <span className="text-[11px] font-extrabold uppercase tracking-wider premium-gradient-text">Upgrade to Pro</span>
           </div>
           <p className="text-[11.5px] text-txt-body leading-relaxed font-medium">
             Unlock unlimited roles, advanced analytics, and AI-assisted screening.
@@ -162,10 +162,10 @@ export function Sidebar() {
         <Button
           variant="primary"
           size="sm"
-          className="w-full font-bold rounded-button text-[12px] cursor-pointer shadow-button"
+          className="w-full font-bold rounded-button text-[12px] cursor-pointer premium-shimmer-btn text-white border-0"
           onClick={() => toast("Upgrade", "Redirecting to billing…", "info")}
         >
-          Upgrade Now
+          Upgrade Now ✨
         </Button>
       </div>
     </div>

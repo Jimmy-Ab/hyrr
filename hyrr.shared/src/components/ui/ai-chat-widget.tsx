@@ -60,7 +60,13 @@ export function AiChatWidget({ role = "SEEKER" }: AiChatWidgetProps) {
       <button
         id="ai-chat-trigger"
         onClick={() => setAiChatOpen(!aiChatOpen)}
-        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-primary text-white flex items-center justify-center shadow-[0_8px_32px_rgba(108,99,255,0.4)] hover:shadow-[0_12px_40px_rgba(108,99,255,0.5)] hover:scale-110 transition-all duration-200 cursor-pointer group"
+        style={{
+          position: "fixed",
+          bottom: "24px",
+          right: "24px",
+          zIndex: 50,
+        }}
+        className="w-14 h-14 rounded-full bg-primary text-white flex items-center justify-center shadow-[0_8px_32px_rgba(108,99,255,0.4)] hover:shadow-[0_12px_40px_rgba(108,99,255,0.5)] hover:scale-110 transition-all duration-200 cursor-pointer group"
         title="Ask Hyrr AI"
       >
         {aiChatOpen ? (
@@ -81,7 +87,13 @@ export function AiChatWidget({ role = "SEEKER" }: AiChatWidgetProps) {
       {aiChatOpen && (
         <div
           id="ai-chat-panel"
-          className="fixed bottom-24 right-6 z-50 w-[380px] h-[520px] bg-bg-secondary border border-bg-border/60 rounded-[20px] shadow-[0_20px_60px_rgba(0,0,0,0.15)] flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200"
+          style={{
+            position: "fixed",
+            bottom: "96px",
+            right: "24px",
+            zIndex: 50,
+          }}
+          className="w-[380px] h-[520px] bg-bg-secondary border border-bg-border/60 rounded-[20px] shadow-[0_20px_60px_rgba(0,0,0,0.15)] flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200"
         >
           {/* Header */}
           <div className="flex items-center gap-3 p-4 border-b border-bg-border/40 bg-gradient-to-r from-primary/10 to-purple-500/5 shrink-0">

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { Mail, Phone, MapPin, Link, FileText, Plus, X, Briefcase, GraduationCap, Globe, DollarSign } from "lucide-react"
-import { Card, Badge, Button, Input, useToast, apiFetch } from "hyrr.shared"
+import { Card, Badge, Button, Input, useToast, apiFetch, useJobStore } from "hyrr.shared"
 
 // Custom SVG components for social icons since some lucide-react versions don't export them
 function Github(props: React.SVGProps<SVGSVGElement>) {
@@ -23,6 +23,10 @@ function Linkedin(props: React.SVGProps<SVGSVGElement>) {
 
 export function ProfilePage() {
   const { toast } = useToast()
+  const { documents, setCandidateActiveView, fetchInitialData } = useJobStore()
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
   const [profile, setProfile] = useState<any>({
     name: "",
     email: "",
@@ -43,10 +47,10 @@ export function ProfilePage() {
 
   const [experience, setExperience] = useState<any[]>([])
   const [education, setEducation] = useState<any[]>([])
-  const [skills, setSkills]   = useState<string[]>([])
+  const [skills, setSkills] = useState<string[]>([])
   const [languages, setLanguages] = useState<string[]>([])
-  const [newSkill, setNewSkill]   = useState("")
-  const [newLang,  setNewLang]    = useState("")
+  const [newSkill, setNewSkill] = useState("")
+  const [newLang, setNewLang] = useState("")
 
   // Add forms
   const [expForm, setExpForm] = useState({ role: "", company: "", duration: "", desc: "" })
@@ -55,6 +59,7 @@ export function ProfilePage() {
   useEffect(() => {
     async function loadData() {
       try {
+        setLoading(true)
         const data = await apiFetch('/profile')
         setProfile({
           name: data.user?.name || "",
@@ -79,6 +84,8 @@ export function ProfilePage() {
         setLanguages(data.languages || [])
       } catch (err) {
         console.warn("Failed to load profile", err)
+      } finally {
+        setLoading(false)
       }
     }
     loadData()
@@ -96,37 +103,52 @@ export function ProfilePage() {
   ]
   const completionPct = Math.round((completionItems.filter((i) => i.done).length / completionItems.length) * 100)
 
+  if (loading) {
+    return (
+      <div className="min-h-[60vh] w-full flex flex-col items-center justify-center gap-4 py-20">
+        <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        <p className="text-[14px] text-txt-caption font-semibold">Loading profile details…</p>
+      </div>
+    )
+  }
+
   return (
-    <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div>
-        <h1 className="text-[36px] font-bold text-txt-title tracking-tight">My Profile</h1>
-        <p className="text-body text-txt-body mt-1 font-medium">Build your professional identity and let the right opportunities find you.</p>
+    <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative">
+      {/* Ambient glows */}
+      <div className="ambient-glow-1" />
+      <div className="ambient-glow-2" />
+
+      <div className="relative z-10">
+        <h1 className="text-[36px] font-extrabold tracking-tight">
+          <span className="premium-gradient-text text-glow">My Profile</span>
+        </h1>
+        <p className="text-body text-txt-body mt-1 font-semibold opacity-90">Build your professional identity and let the right opportunities find you.</p>
       </div>
 
-      {/* Profile Strength Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="p-5 flex flex-col justify-between h-28">
-          <div className="flex items-start justify-between">
-            <span className="text-[13px] font-bold tracking-wider text-txt-caption uppercase">Profile Strength</span>
-            <span className="text-[14px] font-extrabold text-primary">{completionPct}%</span>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
+        <Card hoverEffect className="p-5 flex flex-col justify-between h-28 relative overflow-hidden group accent-card-primary">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+          <div className="flex items-start justify-between relative z-10">
+            <span className="text-[11px] font-bold tracking-wider text-txt-caption uppercase">Profile Strength</span>
+            <span className="text-[14px] font-extrabold premium-gradient-text">{completionPct}%</span>
           </div>
-          <div className="mt-3">
-            <div className="w-full h-2 bg-bg-primary rounded-full overflow-hidden">
-              <div className="h-full bg-primary rounded-full transition-all duration-700" style={{ width: `${completionPct}%` }} />
+          <div className="mt-3 relative z-10">
+            <div className="w-full h-2.5 bg-bg-primary rounded-full overflow-hidden">
+              <div className="h-full rounded-full transition-all duration-700" style={{ width: `${completionPct}%`, background: "linear-gradient(90deg, #6C63FF, #3B7FF5)", boxShadow: `${completionPct > 0 ? "0 0 8px rgba(108,99,255,0.4)" : "none"}` }} />
             </div>
           </div>
         </Card>
-        <Card className="p-5 flex flex-col justify-between h-28">
-          <span className="text-[13px] font-bold tracking-wider text-txt-caption uppercase">Skills</span>
+        <Card hoverEffect className="p-5 flex flex-col justify-between h-28 accent-card-blue hover-lift">
+          <span className="text-[11px] font-bold tracking-wider text-txt-caption uppercase">Skills</span>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-[26px] font-extrabold text-txt-title leading-none">{skills.length}</span>
+            <span className="text-[26px] font-black text-txt-title leading-none tabular-nums">{skills.length}</span>
             <span className="text-[11px] text-txt-caption font-semibold">proficiencies listed</span>
           </div>
         </Card>
-        <Card className="p-5 flex flex-col justify-between h-28">
-          <span className="text-[13px] font-bold tracking-wider text-txt-caption uppercase">Experience</span>
+        <Card hoverEffect className="p-5 flex flex-col justify-between h-28 accent-card-green hover-lift">
+          <span className="text-[11px] font-bold tracking-wider text-txt-caption uppercase">Experience</span>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-[26px] font-extrabold text-txt-title leading-none">{experience.length}</span>
+            <span className="text-[26px] font-black text-txt-title leading-none tabular-nums">{experience.length}</span>
             <span className="text-[11px] text-txt-caption font-semibold">positions</span>
           </div>
         </Card>
@@ -164,19 +186,31 @@ export function ProfilePage() {
               variant="primary"
               size="sm"
               className="w-full cursor-pointer text-[12px]"
+              disabled={saving}
               onClick={async () => {
                 try {
+                  setSaving(true)
                   await apiFetch('/profile', {
                     method: 'PUT',
-                    body: JSON.stringify({ ...profile, skills, languages }),
+                    body: JSON.stringify({
+                      ...profile,
+                      skills,
+                      languages,
+                      experiences: experience,
+                      educations: education,
+                    }),
                   })
+                  await fetchInitialData() // refresh store user details, seekerProfile, dashboard stats
                   toast("Saved", "Profile updated successfully!", "success")
-                } catch {
+                } catch (err) {
+                  console.error(err)
                   toast("Error", "Failed to save profile.", "error")
+                } finally {
+                  setSaving(false)
                 }
               }}
             >
-              Save Profile
+              {saving ? "Saving…" : "Save Profile"}
             </Button>
           </Card>
 
@@ -390,19 +424,57 @@ export function ProfilePage() {
               <h3 className="text-[15px] font-bold text-txt-title">Active Resume</h3>
             </div>
             <div className="p-4 rounded-[14px] border border-bg-border/60 bg-bg-secondary flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-sec-red/10 flex items-center justify-center shrink-0">
-                  <FileText className="w-5 h-5 text-sec-red" />
-                </div>
-                <div>
-                  <h4 className="text-[12.5px] font-semibold text-txt-heading">Emily_Carter_Resume_2026.pdf</h4>
-                  <p className="text-[11px] text-txt-caption">1.4 MB · v3 · Updated 2 days ago</p>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="ghost" size="sm" className="text-[11.5px] cursor-pointer">Preview</Button>
-                <Button variant="secondary" size="sm" className="text-[11.5px] cursor-pointer" onClick={() => toast("Upload", "Resume upload coming soon.", "info")}>Replace</Button>
-              </div>
+              {(() => {
+                const activeResume = documents.find((d) => d.type === "resume" && d.active)
+                if (activeResume) {
+                  return (
+                    <>
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-sec-red/10 flex items-center justify-center shrink-0">
+                          <FileText className="w-5 h-5 text-sec-red" />
+                        </div>
+                        <div>
+                          <h4 className="text-[12.5px] font-semibold text-txt-heading truncate max-w-[200px]" title={activeResume.name}>
+                            {activeResume.name}
+                          </h4>
+                          <p className="text-[11px] text-txt-caption">
+                            {activeResume.size} · Updated {new Date(activeResume.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <a
+                          href={activeResume.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center h-8 px-3 rounded-[10px] bg-bg-hover hover:bg-bg-hover/80 text-[11.5px] font-bold text-txt-heading transition-colors"
+                        >
+                          Preview
+                        </a>
+                        <Button variant="secondary" size="sm" className="text-[11.5px] cursor-pointer" onClick={() => setCandidateActiveView("Documents")}>
+                          Manage
+                        </Button>
+                      </div>
+                    </>
+                  )
+                }
+                return (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-bg-primary flex items-center justify-center shrink-0 border border-dashed border-bg-border">
+                        <FileText className="w-5 h-5 text-txt-caption" />
+                      </div>
+                      <div>
+                        <h4 className="text-[12.5px] font-semibold text-txt-heading">No active resume</h4>
+                        <p className="text-[11px] text-txt-caption">Upload your resume to apply to jobs.</p>
+                      </div>
+                    </div>
+                    <Button variant="primary" size="sm" className="text-[11.5px] cursor-pointer" onClick={() => setCandidateActiveView("Documents")}>
+                      Upload
+                    </Button>
+                  </>
+                )
+              })()}
             </div>
           </Card>
         </div>

@@ -368,9 +368,14 @@ export function CareersPage() {
   }
 
   return (
-    <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+    <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative">
+      {/* Ambient glows */}
+      <div className="ambient-glow-1" />
+      <div className="ambient-glow-2" />
       <div>
-        <h1 className="text-[36px] font-bold text-txt-title tracking-tight">Explore Roles</h1>
+        <h1 className="text-[36px] font-extrabold tracking-tight">
+            <span className="premium-gradient-text text-glow">Explore Roles</span>
+          </h1>
         <p className="text-body text-txt-body mt-1 font-medium">
           Find your next challenge. Search open roles, filter by work types, and apply directly.
         </p>

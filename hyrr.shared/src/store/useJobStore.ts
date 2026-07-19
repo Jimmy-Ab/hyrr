@@ -71,6 +71,24 @@ export interface PublicJob {
   remote?: boolean
 }
 
+export interface SeekerProfileData {
+  title: string
+  location: string
+  bio?: string
+  skills: string[]
+  languages: string[]
+  expectedSalary?: string
+  preferredType?: string
+  availability?: string
+  preferredLocations: string[]
+  visibility: string
+  website?: string
+  github?: string
+  linkedin?: string
+  experiences: Array<{ id: string; role: string; company: string; duration: string; desc?: string }>
+  educations: Array<{ id: string; school: string; degree: string; duration: string }>
+}
+
 export interface JobApplication {
   id: string
   publicJobId: string
@@ -176,7 +194,19 @@ export interface JobState {
   selectJob: (jobId: string) => void
   moveCandidate: (candidateId: string, targetStatus: Candidate["status"]) => void
   addCandidate: (jobId: string, candidate: Omit<Candidate, "id" | "jobId">) => void
-  addJob: (job: Omit<Job, "id" | "color" | "status" | "posted">) => void
+  addJob: (job: {
+    title: string
+    location: string
+    type: string
+    salary?: string
+    description: string
+    requirements: string[]
+    skills: string[]
+    benefits?: string[]
+    categoryId: string
+    featured?: boolean
+    remote?: boolean
+  }) => void
   toggleBookmark: (candidateId: string) => void
   setSearchQuery: (query: string) => void
   toggleTheme: () => void
@@ -196,9 +226,11 @@ export interface JobState {
   // ── Seeker workspace ─────────────────────────────────────────────────────
   candidateActiveView: "Dashboard" | "Discover" | "Applications" | "Messages" | "Notifications" | "Calendar" | "Documents" | "Profile" | "Settings"
   publicJobs: PublicJob[]
+  publicJobsLoading: boolean
   jobApplications: JobApplication[]
   discoverSearch: string
   discoverTypeFilter: string
+  seekerProfile: SeekerProfileData | null
   setCandidateActiveView: (view: "Dashboard" | "Discover" | "Applications" | "Messages" | "Notifications" | "Calendar" | "Documents" | "Profile" | "Settings") => void
   moveJobApplication: (id: string, status: JobApplication["status"]) => void
   toggleJobBookmark: (id: string) => void
@@ -308,7 +340,7 @@ export const useJobStore = create<JobState>((set, get) => ({
   logout: async () => {
     try {
       await apiFetch("/auth/logout", { method: "POST" })
-    } catch {}
+    } catch { }
     const s = get().socket
     if (s) s.disconnect()
     set({
@@ -432,6 +464,8 @@ export const useJobStore = create<JobState>((set, get) => ({
   discoverSearch: "",
   discoverTypeFilter: "All",
   profileUpdating: false,
+  publicJobsLoading: false,
+  seekerProfile: null,
   setCandidateActiveView: (view) => set({ candidateActiveView: view }),
   setDiscoverSearch: (q) => set({ discoverSearch: q }),
   setDiscoverTypeFilter: (t) => set({ discoverTypeFilter: t }),
@@ -513,18 +547,20 @@ export const useJobStore = create<JobState>((set, get) => ({
 
   addJob: async (jobData) => {
     try {
-      const categories = await apiFetch("/jobs/categories")
-      const categoryId = categories[0]?.id
       const dbJob = await apiFetch("/jobs", {
         method: "POST",
         body: JSON.stringify({
           title: jobData.title,
           location: jobData.location,
           type: jobData.type,
-          description: "Job description placeholder...",
-          requirements: ["Requirements..."],
-          skills: [],
-          categoryId,
+          salary: jobData.salary,
+          description: jobData.description,
+          requirements: jobData.requirements,
+          skills: jobData.skills,
+          benefits: jobData.benefits ?? [],
+          categoryId: jobData.categoryId,
+          featured: jobData.featured ?? false,
+          remote: jobData.remote ?? false,
         }),
       })
       const newJob: Job = {
@@ -536,7 +572,7 @@ export const useJobStore = create<JobState>((set, get) => ({
         status: "Active",
         color: dbJob.color || "purple",
       }
-      set((state) => ({ jobs: [...state.jobs, newJob], selectedJobId: newJob.id, activeView: "Applications" }))
+      set((state) => ({ jobs: [...state.jobs, newJob], selectedJobId: newJob.id, activeView: "Jobs" }))
     } catch (e) {
       console.warn("Failed to persist new job in database.", e)
     }
@@ -643,14 +679,20 @@ export const useJobStore = create<JobState>((set, get) => ({
               user: state.user ? { ...state.user, name: profile.name || state.user.name, avatar: profile.avatar || state.user.avatar } : state.user,
             }))
           }
-        } catch {}
+        } catch { }
 
         get().fetchConversations()
         get().fetchUnreadCount()
         get().fetchEvents()
 
       } else if (role === "SEEKER") {
-        const dbApps = await apiFetch("/applications/my")
+        set({ publicJobsLoading: true })
+
+        const [dbApps, dbDiscover] = await Promise.all([
+          apiFetch("/applications/my"),
+          apiFetch("/jobs/public"),
+        ])
+
         const jobAppsList: JobApplication[] = dbApps.map((a: any) => ({
           id: a.id,
           publicJobId: a.jobId,
@@ -671,7 +713,6 @@ export const useJobStore = create<JobState>((set, get) => ({
           tag: a.tag,
         }))
 
-        const dbDiscover = await apiFetch("/jobs/public")
         const publicJobsList: PublicJob[] = dbDiscover.map((pj: any) => ({
           id: pj.id,
           title: pj.title,
@@ -689,22 +730,45 @@ export const useJobStore = create<JobState>((set, get) => ({
           remote: pj.remote,
         }))
 
-        if (jobAppsList.length > 0 || publicJobsList.length > 0) {
-          set({
-            jobApplications: jobAppsList,
-            publicJobs: publicJobsList,
-          })
-        }
+        set({
+          jobApplications: jobAppsList,
+          publicJobs: publicJobsList,
+          publicJobsLoading: false,
+        })
 
-        // Fetch user profile data
+        // Fetch user profile data and store seeker profile
         try {
-          const profile = await apiFetch("/profile/me")
-          if (profile) {
+          const [meData, profileData] = await Promise.all([
+            apiFetch("/profile/me"),
+            apiFetch("/profile"),
+          ])
+          if (meData) {
             set((state) => ({
-              user: state.user ? { ...state.user, name: profile.name || state.user.name, avatar: profile.avatar || state.user.avatar } : state.user,
+              user: state.user ? { ...state.user, name: meData.name || state.user.name, avatar: meData.avatar || state.user.avatar } : state.user,
             }))
           }
-        } catch {}
+          if (profileData) {
+            set({
+              seekerProfile: {
+                title: profileData.title || "",
+                location: profileData.location || "",
+                bio: profileData.bio || "",
+                skills: profileData.skills || [],
+                languages: profileData.languages || [],
+                expectedSalary: profileData.expectedSalary || "",
+                preferredType: profileData.preferredType || "Full Time",
+                availability: profileData.availability || "",
+                preferredLocations: profileData.preferredLocations || [],
+                visibility: profileData.visibility || "public",
+                website: profileData.website || "",
+                github: profileData.github || "",
+                linkedin: profileData.linkedin || "",
+                experiences: profileData.experiences || [],
+                educations: profileData.educations || [],
+              },
+            })
+          }
+        } catch { }
 
         get().fetchEvents()
         get().fetchDocuments()
@@ -751,11 +815,19 @@ export const useJobStore = create<JobState>((set, get) => ({
 
   applyFromDiscover: async (publicJobId) => {
     const seeker = get().user
+    const profile = get().seekerProfile
     if (!seeker) return
     try {
       await apiFetch(`/applications/jobs/${publicJobId}/apply`, {
         method: "POST",
-        body: JSON.stringify({ name: seeker.name || "Anonymous Seeker", email: seeker.email, title: "Software Developer", location: "Remote" }),
+        body: JSON.stringify({
+          name: seeker.name || "Anonymous Seeker",
+          email: seeker.email,
+          title: profile?.title || "Job Seeker",
+          location: profile?.location || "Remote",
+          phone: "",
+          coverLetter: "",
+        }),
       })
       get().fetchInitialData()
     } catch (e) {
@@ -765,11 +837,17 @@ export const useJobStore = create<JobState>((set, get) => ({
 
   saveJobFromDiscover: async (publicJobId) => {
     const seeker = get().user
+    const profile = get().seekerProfile
     if (!seeker) return
     try {
       await apiFetch(`/applications/jobs/${publicJobId}/save`, {
         method: "POST",
-        body: JSON.stringify({ name: seeker.name || "Anonymous Seeker", email: seeker.email, title: "Software Developer", location: "Remote" }),
+        body: JSON.stringify({
+          name: seeker.name || "Anonymous Seeker",
+          email: seeker.email,
+          title: profile?.title || "Job Seeker",
+          location: profile?.location || "Remote",
+        }),
       })
       get().fetchInitialData()
     } catch (e) {

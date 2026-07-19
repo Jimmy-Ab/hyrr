@@ -1,133 +1,160 @@
-import { Users, Briefcase, Calendar, CheckSquare, ArrowUpRight } from "lucide-react"
+import { Users, Briefcase, Calendar, CheckSquare, ArrowUpRight, TrendingUp } from "lucide-react"
 import { Card } from "../components/ui/card"
 import { useJobStore } from "../store/useJobStore"
 
-export function Dashboard() {
-  const { candidates, jobs, notifications, setActiveView, events } = useJobStore()
+const statsAccents = ["accent-card-primary", "accent-card-blue", "accent-card-orange", "accent-card-green"]
 
-  // Calculate statistics
+export function Dashboard() {
+  const { candidates, jobs, notifications, setActiveView, events, user } = useJobStore()
+
   const totalCandidates = candidates.length
   const activeJobs = jobs.filter((j) => j.status === "Active").length
   const offersSent = candidates.filter((c) => c.status === "Offer").length
   const interviewsCount = events.filter((e) => e.type === "interview").length
 
+  const greeting = (() => {
+    const h = new Date().getHours()
+    if (h < 12) return "Good morning"
+    if (h < 17) return "Good afternoon"
+    return "Good evening"
+  })()
+  const firstName = user?.name?.split(" ")[0] || "there"
+
   const stats = [
-    { title: "Total Candidates", value: totalCandidates, icon: Users, change: "+12% vs last month", trend: "up" },
-    { title: "Active Openings", value: activeJobs, icon: Briefcase, change: "2 new this week", trend: "neutral" },
-    { title: "Interviews Booked", value: interviewsCount, icon: Calendar, change: `${interviewsCount} upcoming sessions`, trend: "neutral" },
-    { title: "Offers Sent", value: offersSent, icon: CheckSquare, change: "+25% vs last month", trend: "up" },
+    { title: "Total Candidates", value: totalCandidates, icon: Users,       change: "+12% vs last month" },
+    { title: "Active Openings",  value: activeJobs,       icon: Briefcase,   change: "2 new this week" },
+    { title: "Interviews Booked",value: interviewsCount,  icon: Calendar,    change: `${interviewsCount} upcoming` },
+    { title: "Offers Sent",      value: offersSent,       icon: CheckSquare, change: "+25% vs last month" },
   ]
 
+  const pipeline = [
+    { label: "Applied",        count: candidates.filter(c => c.status === "Applied").length,    color: "bg-sec-blue",   glow: "rgba(59,127,245,0.3)" },
+    { label: "In Process",     count: candidates.filter(c => c.status === "In Process").length, color: "bg-sec-orange", glow: "rgba(196,127,0,0.3)" },
+    { label: "Offered",        count: candidates.filter(c => c.status === "Offer").length,      color: "bg-sec-green",  glow: "rgba(27,158,60,0.3)" },
+    { label: "Saved",          count: candidates.filter(c => c.status === "Saved").length,      color: "bg-primary",    glow: "rgba(108,99,255,0.3)" },
+    { label: "Archived",       count: candidates.filter(c => c.status === "Archived").length,   color: "bg-sec-gray",   glow: "rgba(107,116,133,0.3)" },
+  ]
+  const maxCount = totalCandidates || 1
+
   return (
-    <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      {/* Page Title */}
-      <div>
-        <h1 className="text-[36px] font-bold text-txt-title tracking-tight">Overview</h1>
-        <p className="text-body text-txt-body mt-1 font-medium">
-          Here is a quick summary of your recruitment pipeline activity.
+    <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative">
+      {/* Ambient glows */}
+      <div className="ambient-glow-1" />
+      <div className="ambient-glow-2" />
+
+      {/* Header */}
+      <div className="relative z-10">
+        <h1 className="text-[36px] font-extrabold tracking-tight">
+          <span className="premium-gradient-text text-glow">{greeting}, {firstName}</span> 👋
+        </h1>
+        <p className="text-body text-txt-body mt-1 font-semibold opacity-90">
+          {activeJobs} active opening{activeJobs !== 1 ? "s" : ""} · {totalCandidates} candidates in pipeline
         </p>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 relative z-10">
         {stats.map((stat, idx) => {
           const Icon = stat.icon
           return (
-            <Card key={idx} hoverEffect className="p-6 flex flex-col justify-between h-36 relative overflow-hidden group">
+            <Card
+              key={idx}
+              hoverEffect
+              className={`p-6 flex flex-col justify-between h-36 relative overflow-hidden group hover-lift ${statsAccents[idx]}`}
+            >
               <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
               <div className="flex items-start justify-between relative z-10">
-                <span className="text-[11.5px] font-bold tracking-wider text-txt-caption uppercase">
-                  {stat.title}
-                </span>
+                <span className="text-[11px] font-bold tracking-wider text-txt-caption uppercase">{stat.title}</span>
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-light to-primary-light/60 border border-primary-border/40 flex items-center justify-center text-primary shadow-[0_0_12px_rgba(108,99,255,0.08)] group-hover:shadow-[0_0_18px_rgba(108,99,255,0.2)] transition-shadow">
                   <Icon className="w-5 h-5" />
                 </div>
               </div>
               <div className="mt-4 flex items-baseline gap-2 relative z-10">
-                <span className="text-[30px] font-extrabold text-txt-title leading-none tabular-nums">
-                  {stat.value}
-                </span>
-                <span className="text-[12px] text-txt-caption font-semibold">
-                  {stat.change}
-                </span>
+                <span className="text-[30px] font-black text-txt-title leading-none tabular-nums">{stat.value}</span>
+                <span className="text-[11.5px] text-txt-caption font-semibold">{stat.change}</span>
               </div>
             </Card>
           )
         })}
       </div>
 
-      {/* Main Grid split: Recent Applicants & Upcoming Schedule */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Recent Pipeline Actions */}
-        <Card className="xl:col-span-2 p-6 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <h3 className="text-card-title font-semibold text-txt-heading">
-                  Recent Activities
-                </h3>
-                <p className="text-caption text-txt-caption mt-0.5">
-                  Latest status updates across jobs
-                </p>
-              </div>
-              <button
-                onClick={() => setActiveView("Analytics")}
-                className="flex items-center gap-1 text-[13px] text-primary hover:text-primary-hover font-semibold transition-colors cursor-pointer"
-              >
-                <span>View Analytics</span>
-                <ArrowUpRight className="w-4 h-4" />
-              </button>
-            </div>
+      {/* Main Grid */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 relative z-10">
 
-            <div className="flex flex-col gap-4">
-              {notifications.slice(0, 4).map((notif) => (
-                <div
-                  key={notif.id}
-                  className="flex items-center justify-between p-3.5 rounded-[16px] bg-bg-primary/50 border border-bg-border/30 hover:border-primary/20 hover:bg-bg-primary/80 hover:shadow-[0_2px_12px_rgba(108,99,255,0.06)] transition-all duration-200 cursor-pointer"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_6px_rgba(108,99,255,0.5)]" />
-                    <span className="text-[14px] font-medium text-txt-heading">
-                      {notif.title}
-                    </span>
-                  </div>
-                  <span className="text-caption text-txt-caption font-semibold">
-                    {notif.time}
-                  </span>
-                </div>
-              ))}
+        {/* Recent Activities */}
+        <Card className="xl:col-span-2 p-6 flex flex-col gap-5 glass-panel hover-lift border-bg-border/60">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-card-title font-bold text-txt-heading text-glow">Recent Activities</h3>
+              <p className="text-caption text-txt-caption mt-0.5 font-medium">Latest status updates across jobs</p>
             </div>
+            <button
+              onClick={() => setActiveView("Analytics")}
+              className="flex items-center gap-1 text-[13px] text-primary hover:text-primary-hover font-bold transition-all cursor-pointer hover:translate-x-1"
+            >
+              <span>View Analytics</span>
+              <ArrowUpRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            {notifications.slice(0, 5).map((notif) => (
+              <div
+                key={notif.id}
+                className="flex items-center justify-between p-3.5 rounded-[16px] bg-bg-primary/40 border border-bg-border/30 hover:border-primary/30 hover:bg-bg-primary/80 hover:shadow-[0_2px_12px_rgba(108,99,255,0.06)] transition-all duration-200 cursor-pointer group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_8px_rgba(108,99,255,0.5)] group-hover:scale-125 transition-transform" />
+                  <span className="text-[13.5px] font-semibold text-txt-heading">{notif.title}</span>
+                </div>
+                <span className="text-caption text-txt-caption font-bold">{notif.time}</span>
+              </div>
+            ))}
+            {notifications.length === 0 && (
+              <div className="py-10 flex flex-col items-center gap-2 text-center">
+                <TrendingUp className="w-8 h-8 text-txt-disabled" />
+                <p className="text-[13px] text-txt-caption font-semibold">No recent activity yet</p>
+              </div>
+            )}
           </div>
         </Card>
 
-        {/* Pipeline Summary card */}
-        <Card className="p-6">
-          <h3 className="text-card-title font-semibold text-txt-heading mb-4">
-            Pipeline Distribution
-          </h3>
-          <div className="flex flex-col gap-3.5">
-            {[
-              { label: "Saved Listings", count: candidates.filter(c => c.status === "Saved").length, color: "bg-primary" },
-              { label: "Applied", count: candidates.filter(c => c.status === "Applied").length, color: "bg-sec-blue" },
-              { label: "In Technical Stage", count: candidates.filter(c => c.status === "In Process").length, color: "bg-sec-orange" },
-              { label: "Offered Candidates", count: candidates.filter(c => c.status === "Offer").length, color: "bg-sec-green" },
-              { label: "Archived Listings", count: candidates.filter(c => c.status === "Archived").length, color: "bg-sec-gray" },
-            ].map((col, idx) => {
-              const max = totalCandidates || 1
-              const percentage = Math.round((col.count / max) * 100)
-              
+        {/* Pipeline Distribution */}
+        <Card className="p-6 glass-panel hover-lift border-bg-border/60">
+          <div className="flex items-center justify-between mb-5">
+            <h3 className="text-card-title font-bold text-txt-heading text-glow">Pipeline</h3>
+            <button
+              onClick={() => setActiveView("Candidates")}
+              className="flex items-center gap-1 text-[12px] text-primary hover:text-primary-hover font-bold transition-all cursor-pointer hover:translate-x-1"
+            >
+              <span>View All</span>
+              <ArrowUpRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="flex flex-col gap-4">
+            {pipeline.map((col, idx) => {
+              const pct = Math.round((col.count / maxCount) * 100)
               return (
                 <div key={idx} className="flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between text-[13px] font-medium">
+                  <div className="flex items-center justify-between text-[12.5px] font-semibold">
                     <span className="text-txt-body">{col.label}</span>
-                    <span className="text-txt-heading font-semibold">{col.count} ({percentage}%)</span>
+                    <span className="text-txt-heading font-bold">{col.count} <span className="text-txt-caption font-medium">({pct}%)</span></span>
                   </div>
-                  <div className="w-full h-2 rounded-full bg-bg-primary overflow-hidden">
-                    <div className={`h-full rounded-full ${col.color}`} style={{ width: `${percentage}%` }} />
+                  <div className="w-full h-2.5 rounded-full bg-bg-primary overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-700 ${col.color}`}
+                      style={{ width: `${pct}%`, boxShadow: pct > 0 ? `0 0 8px ${col.glow}` : "none" }}
+                    />
                   </div>
                 </div>
               )
             })}
+          </div>
+
+          {/* Mini total callout */}
+          <div className="mt-5 pt-4 border-t border-bg-border/40 flex items-center justify-between">
+            <span className="text-[11.5px] text-txt-caption font-semibold uppercase tracking-wider">Total in Pipeline</span>
+            <span className="text-[18px] font-black text-txt-title tabular-nums">{totalCandidates}</span>
           </div>
         </Card>
       </div>

@@ -170,11 +170,16 @@ export function CalendarPage() {
   }
 
   return (
-    <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300 select-none">
+    <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300 select-none relative">
+      {/* Ambient glows */}
+      <div className="ambient-glow-1" />
+      <div className="ambient-glow-2" />
       {/* Header */}
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-[36px] font-bold text-txt-title tracking-tight">Interview Calendar</h1>
+          <h1 className="text-[36px] font-extrabold tracking-tight">
+            <span className="premium-gradient-text text-glow">Interview Calendar</span>
+          </h1>
           <p className="text-body text-txt-body mt-1 font-medium">
             Schedule and track interview panel discussions.
           </p>

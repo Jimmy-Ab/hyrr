@@ -20,7 +20,10 @@ export function Applications() {
   }
 
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300 select-none">
+    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300 select-none relative">
+      {/* Ambient glows */}
+      <div className="ambient-glow-1" />
+      <div className="ambient-glow-2" />
       {/* Job Title & Sub-header */}
       <div className="flex items-center justify-between border-b border-bg-border/30 pb-4 shrink-0">
         <div>

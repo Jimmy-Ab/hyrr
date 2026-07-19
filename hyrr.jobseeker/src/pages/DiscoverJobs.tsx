@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Search, Bookmark, CheckCircle2, MapPin, DollarSign, Clock, Star, Briefcase, Globe } from "lucide-react"
+import { Search, Bookmark, CheckCircle2, MapPin, DollarSign, Clock, Star, Briefcase, Globe, Loader2 } from "lucide-react"
 import { useJobStore, type PublicJob } from "hyrr.shared"
 import { Card } from "hyrr.shared"
 import { Badge } from "hyrr.shared"
@@ -8,16 +8,34 @@ import { useToast } from "hyrr.shared"
 
 const colorBg: Record<string, string> = {
   purple: "bg-primary text-white",
-  blue:   "bg-sec-blue text-white",
-  green:  "bg-sec-green text-white",
+  blue: "bg-sec-blue text-white",
+  green: "bg-sec-green text-white",
   orange: "bg-sec-orange text-white",
 }
 
 const types = ["All", "Full Time", "Part Time", "Contract", "Remote"]
 
+function JobSkeleton() {
+  return (
+    <div className="p-4 rounded-card border border-bg-border/40 bg-bg-secondary/60 animate-pulse">
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-[12px] bg-bg-border/60 shrink-0" />
+        <div className="flex-1 space-y-2">
+          <div className="h-3.5 bg-bg-border/60 rounded w-3/4" />
+          <div className="h-3 bg-bg-border/40 rounded w-1/2" />
+          <div className="flex gap-2 mt-2">
+            <div className="h-3 bg-bg-border/40 rounded w-16" />
+            <div className="h-3 bg-bg-border/40 rounded w-12" />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function DiscoverJobs() {
   const {
-    publicJobs, jobApplications,
+    publicJobs, publicJobsLoading, jobApplications,
     discoverSearch, discoverTypeFilter,
     setDiscoverSearch, setDiscoverTypeFilter,
     applyFromDiscover, saveJobFromDiscover,
@@ -35,7 +53,7 @@ export function DiscoverJobs() {
   })
 
   const isApplied = (id: string) => jobApplications.some((a) => a.publicJobId === id && a.status !== "Saved")
-  const isSaved   = (id: string) => jobApplications.some((a) => a.publicJobId === id)
+  const isSaved = (id: string) => jobApplications.some((a) => a.publicJobId === id)
 
   const handleApply = (job: PublicJob) => {
     if (isApplied(job.id)) return
@@ -50,16 +68,22 @@ export function DiscoverJobs() {
   }
 
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div>
-        <h1 className="text-[36px] font-bold text-txt-title tracking-tight">Discover Jobs</h1>
-        <p className="text-body text-txt-body mt-1 font-medium">
+    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300 relative">
+      {/* Ambient glows */}
+      <div className="ambient-glow-1" />
+      <div className="ambient-glow-2" />
+
+      <div className="relative z-10">
+        <h1 className="text-[36px] font-extrabold tracking-tight">
+          <span className="premium-gradient-text text-glow">Discover Jobs</span>
+        </h1>
+        <p className="text-body text-txt-body mt-1 font-semibold opacity-90">
           Find your next opportunity from {publicJobs.length} open roles across top companies.
         </p>
       </div>
 
       {/* Search + Filter Bar */}
-      <Card className="p-4">
+      <Card className="p-4 glass-panel border-bg-border/60 relative z-10">
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-txt-caption pointer-events-none" />
@@ -68,7 +92,7 @@ export function DiscoverJobs() {
               placeholder="Search roles, companies, skills…"
               value={discoverSearch}
               onChange={(e) => setDiscoverSearch(e.target.value)}
-              className="w-full h-10 pl-10 pr-4 rounded-input border border-bg-border bg-bg-primary text-[13px] text-txt-heading placeholder:text-txt-caption focus:outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/10 transition-all"
+              className="w-full h-10 pl-10 pr-4 rounded-input border border-bg-border bg-bg-primary text-[13px] text-txt-heading placeholder:text-txt-caption focus:outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/15 transition-all"
             />
           </div>
           <div className="flex gap-1 bg-bg-primary p-1 border border-bg-border rounded-[13px] shrink-0">
@@ -76,11 +100,10 @@ export function DiscoverJobs() {
               <button
                 key={t}
                 onClick={() => setDiscoverTypeFilter(t)}
-                className={`px-3 py-1.5 rounded-[10px] text-[12px] font-semibold cursor-pointer transition-all ${
-                  discoverTypeFilter === t
-                    ? "bg-primary text-white"
-                    : "text-txt-body hover:bg-bg-hover hover:text-txt-heading"
-                }`}
+                className={`px-3 py-1.5 rounded-[10px] text-[12px] font-bold cursor-pointer transition-all ${discoverTypeFilter === t
+                    ? "bg-primary text-white shadow-[0_2px_8px_rgba(108,99,255,0.35)]"
+                    : "text-txt-body hover:bg-bg-hover hover:text-txt-heading font-semibold"
+                  }`}
               >
                 {t}
               </button>
@@ -93,25 +116,27 @@ export function DiscoverJobs() {
       <div className="flex gap-5 flex-1">
         {/* Job List */}
         <div className="w-[360px] shrink-0 flex flex-col gap-3">
-          {filtered.length === 0 ? (
+          {publicJobsLoading ? (
+            Array.from({ length: 5 }).map((_, i) => <JobSkeleton key={i} />)
+          ) : filtered.length === 0 ? (
             <Card className="p-10 flex flex-col items-center gap-3 text-center">
               <Briefcase className="w-10 h-10 text-txt-disabled" />
               <p className="text-[14px] font-semibold text-txt-heading">No roles found</p>
               <p className="text-caption text-txt-caption">Try adjusting your search or filters.</p>
             </Card>
           ) : filtered.map((job) => {
+
             const active = selectedJob?.id === job.id
             const applied = isApplied(job.id)
-            const saved   = isSaved(job.id)
+            const saved = isSaved(job.id)
             return (
               <button
                 key={job.id}
                 onClick={() => setSelectedJob(job)}
-                className={`w-full text-left p-4 rounded-card border transition-all cursor-pointer block ${
-                  active
+                className={`w-full text-left p-4 rounded-card border transition-all cursor-pointer block ${active
                     ? "border-primary bg-bg-secondary ring-2 ring-primary/10 shadow-card"
                     : "border-bg-border/60 bg-bg-secondary/60 hover:bg-bg-secondary hover:border-primary/20"
-                }`}
+                  }`}
               >
                 <div className="flex items-start gap-3">
                   <div className={`w-10 h-10 rounded-[12px] flex items-center justify-center text-white font-bold text-[14px] shrink-0 ${colorBg[job.companyColor] ?? "bg-primary"}`}>

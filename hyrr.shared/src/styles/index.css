@@ -156,3 +156,157 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* ─── Premium Glassmorphism & Gradient Effects ─── */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.dark .glass-panel {
+  background: rgba(17, 18, 23, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.premium-gradient-text {
+  background: linear-gradient(135deg, var(--color-primary) 0%, #8A84FF 50%, var(--color-sec-blue) 100%);
+  -webkit-bg-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-glow {
+  text-shadow: 0 0 20px rgba(108, 99, 255, 0.2);
+}
+
+/* ─── Glow blobs and decorations ─── */
+.ambient-glow-1 {
+  position: absolute;
+  top: -10%;
+  right: -5%;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(108, 99, 255, 0.08) 0%, rgba(59, 127, 245, 0.03) 50%, transparent 100%);
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ambient-glow-2 {
+  position: absolute;
+  bottom: -10%;
+  left: -5%;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(59, 127, 245, 0.06) 0%, rgba(108, 99, 255, 0.02) 60%, transparent 100%);
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ─── Card Interactive Lift ─── */
+.hover-lift {
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.25s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
+  border-color: rgba(108, 99, 255, 0.3) !important;
+}
+
+.dark .hover-lift:hover {
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  border-color: rgba(108, 99, 255, 0.4) !important;
+}
+
+/* ─── Premium Cards with top accent gradient line ─── */
+.accent-card-primary {
+  position: relative;
+  overflow: hidden;
+}
+.accent-card-primary::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--color-primary), #8A84FF, var(--color-sec-blue));
+  z-index: 10;
+}
+
+.accent-card-blue {
+  position: relative;
+  overflow: hidden;
+}
+.accent-card-blue::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--color-sec-blue), #81B3FF);
+  z-index: 10;
+}
+
+.accent-card-green {
+  position: relative;
+  overflow: hidden;
+}
+.accent-card-green::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--color-sec-green), #68D383);
+  z-index: 10;
+}
+
+.accent-card-orange {
+  position: relative;
+  overflow: hidden;
+}
+.accent-card-orange::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--color-sec-orange), #FFCD6B);
+  z-index: 10;
+}
+
+/* Shimmer Animation */
+@keyframes premium-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.premium-shimmer-btn {
+  background: linear-gradient(90deg, var(--color-primary), #8A84FF, var(--color-sec-blue), var(--color-primary));
+  background-size: 300% 100%;
+  animation: premium-shimmer 8s linear infinite;
+  transition: all 0.3s ease;
+}
+
+.premium-shimmer-btn:hover {
+  background-position: 100% 0;
+  box-shadow: 0 10px 25px rgba(108, 99, 255, 0.35);
+  transform: scale(1.02);
+}
+

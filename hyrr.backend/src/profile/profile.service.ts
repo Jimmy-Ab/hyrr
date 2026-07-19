@@ -3,12 +3,31 @@ import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class ProfileService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
+
+  // ─── Any role: get basic user info + company ──────────────────────
+  async getMe(userId: string) {
+    return this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        avatar: true,
+        role: true,
+        status: true,
+        joinedAt: true,
+        company: {
+          select: { id: true, name: true, logo: true, color: true, plan: true },
+        },
+      },
+    });
+  }
 
   async getProfile(userId: string) {
     let profile = await this.prisma.seekerProfile.findUnique({
       where: { userId },
-      include: { experiences: true, educations: true, interests: true },
+      include: { experiences: true, educations: true, interests: true, user: true },
     });
 
     if (!profile) {
@@ -19,7 +38,7 @@ export class ProfileService {
           title: '',
           location: '',
         },
-        include: { experiences: true, educations: true, interests: true },
+        include: { experiences: true, educations: true, interests: true, user: true },
       });
     }
 
@@ -30,7 +49,7 @@ export class ProfileService {
     const profile = await this.prisma.seekerProfile.findUnique({ where: { userId } });
     if (!profile) throw new NotFoundException('Profile not found');
 
-    const { experiences, educations, interests, ...profileFields } = data;
+    const { experiences, educations, interests, name, ...profileFields } = data;
 
     // Filter valid fields for profile update
     const updateData: any = {};
@@ -52,6 +71,14 @@ export class ProfileService {
 
     // Transaction to update profile and sync experiences/educations
     return this.prisma.$transaction(async (tx) => {
+      // Update user name if provided
+      if (name !== undefined) {
+        await tx.user.update({
+          where: { id: userId },
+          data: { name },
+        });
+      }
+
       // Sync experiences if provided
       if (Array.isArray(experiences)) {
         await tx.workExperience.deleteMany({ where: { profileId: profile.id } });
@@ -82,7 +109,7 @@ export class ProfileService {
       return tx.seekerProfile.update({
         where: { userId },
         data: updateData,
-        include: { experiences: true, educations: true, interests: true },
+        include: { experiences: true, educations: true, interests: true, user: true },
       });
     });
   }

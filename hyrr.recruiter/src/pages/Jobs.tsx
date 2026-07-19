@@ -31,12 +31,18 @@ export function Jobs() {
   }
 
   return (
-    <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300 select-none">
+    <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300 select-none relative">
+      {/* Ambient glows */}
+      <div className="ambient-glow-1" />
+      <div className="ambient-glow-2" />
+
       {/* Header */}
-      <div className="flex justify-between items-start">
+      <div className="flex justify-between items-start relative z-10">
         <div>
-          <h1 className="text-[36px] font-bold text-txt-title tracking-tight">Open Roles</h1>
-          <p className="text-body text-txt-body mt-1 font-medium">
+          <h1 className="text-[36px] font-extrabold tracking-tight">
+            <span className="premium-gradient-text text-glow">Open Roles</span>
+          </h1>
+          <p className="text-body text-txt-body mt-1 font-semibold opacity-90">
             Manage your hiring vacancies, view pipelines, and review applications.
           </p>
         </div>
@@ -51,7 +57,7 @@ export function Jobs() {
           </Button>
           <Button
             onClick={() => setAddJobOpen(true)}
-            className="cursor-pointer font-semibold shadow-button"
+            className="cursor-pointer font-bold shadow-button premium-shimmer-btn text-white border-0"
           >
             + Create Job Listing
           </Button>

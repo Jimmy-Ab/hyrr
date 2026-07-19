@@ -29,6 +29,8 @@ export function Header() {
     theme, toggleTheme,
     notifications, markNotificationsAsRead, markNotificationRead, clearNotifications,
     setCandidateActiveView,
+    user,
+    logout,
   } = useJobStore()
   const { toast } = useToast()
   const [searchFocused, setSearchFocused] = React.useState(false)
@@ -140,12 +142,12 @@ export function Header() {
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-2 hover:bg-bg-hover px-2.5 py-1.5 rounded-[10px] transition-all cursor-pointer outline-none">
               <img
-                src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150"
-                alt="Emily Carter"
+                src={user?.avatar || "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150"}
+                alt={user?.name || "User Avatar"}
                 className="w-7 h-7 rounded-full object-cover border border-bg-border/50"
               />
               <div className="flex flex-col items-start">
-                <span className="text-[12.5px] font-semibold text-txt-heading leading-tight">Emily Carter</span>
+                <span className="text-[12.5px] font-semibold text-txt-heading leading-tight">{user?.name || "Job Seeker"}</span>
                 <span className="text-[10.5px] text-txt-caption">Candidate</span>
               </div>
               <ChevronDown className="w-3 h-3 text-txt-caption ml-0.5" />
@@ -161,7 +163,7 @@ export function Header() {
               <Settings className="w-4 h-4 mr-2" /> Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => toast("Signed out", "See you next time!", "success")} className="text-sec-red focus:text-sec-red">
+            <DropdownMenuItem onClick={() => { logout(); toast("Signed out", "See you next time!", "success") }} className="text-sec-red focus:text-sec-red">
               <LogOut className="w-4 h-4 mr-2" /> Sign Out
             </DropdownMenuItem>
           </DropdownMenuContent>

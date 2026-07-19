@@ -128,7 +128,10 @@ export function CandidateCalendar() {
     .slice(0, 4)
 
   return (
-    <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300 select-none">
+    <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300 select-none relative">
+      {/* Ambient glows */}
+      <div className="ambient-glow-1" />
+      <div className="ambient-glow-2" />
       {addModalOpen && (
         <AddEventModal
           onClose={() => setAddModalOpen(false)}
@@ -141,7 +144,9 @@ export function CandidateCalendar() {
 
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-[36px] font-bold text-txt-title tracking-tight">Calendar</h1>
+          <h1 className="text-[36px] font-extrabold tracking-tight">
+            <span className="premium-gradient-text text-glow">Calendar</span>
+          </h1>
           <p className="text-body text-txt-body mt-1 font-medium">Interviews, deadlines, and important dates for your job search.</p>
         </div>
         <Button onClick={() => setAddModalOpen(true)} className="cursor-pointer font-semibold shadow-button">

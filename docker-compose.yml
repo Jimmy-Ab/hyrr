@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: hyrr_password
       POSTGRES_DB: hyrr_db
     ports:
-      - '5432:5432'
+      - '5433:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -24,7 +24,7 @@ services:
     image: redis:7-alpine
     container_name: hyrr_redis
     ports:
-      - '6379:6379'
+      - '6380:6379'
     volumes:
       - redis_data:/data
 
@@ -47,7 +47,7 @@ services:
       redis:
         condition: service_started
     command: >
-      sh -c "npx prisma migrate deploy && node dist/main"
+      sh -c "npx prisma migrate deploy && npx prisma db seed && node dist/main"
 
 volumes:
   postgres_data:
