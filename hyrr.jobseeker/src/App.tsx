@@ -1,7 +1,7 @@
 import * as React from "react"
 import { Header } from "./components/layout/header"
 import { Sidebar } from "./components/layout/sidebar"
-import { ToastProvider, AuthPage, OAuthCallback, apiFetch, AiChatWidget } from "hyrr.shared"
+import { ToastProvider, AuthPage, OAuthCallback, RoleMismatch, apiFetch, AiChatWidget } from "hyrr.shared"
 import { useJobStore } from "hyrr.shared"
 
 // Pages
@@ -18,7 +18,7 @@ import { SettingsPage } from "./pages/Settings"
 function AppContent() {
   const {
     candidateActiveView, theme, fetchInitialData,
-    isAuthenticated, setAccessToken, logout
+    isAuthenticated, user, setAccessToken, logout
   } = useJobStore()
 
   const [loading, setLoading] = React.useState(true)
@@ -41,10 +41,10 @@ function AppContent() {
   }, [setAccessToken, logout])
 
   React.useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && user?.role === "SEEKER") {
       fetchInitialData()
     }
-  }, [isAuthenticated, fetchInitialData])
+  }, [isAuthenticated, user?.role, fetchInitialData])
 
   React.useEffect(() => {
     if (theme === "dark") {
@@ -69,6 +69,10 @@ function AppContent() {
 
   if (!isAuthenticated) {
     return <AuthPage forcedRole="SEEKER" />
+  }
+
+  if (user?.role !== "SEEKER") {
+    return <RoleMismatch requiredRole="SEEKER" currentRole={user?.role || ""} />
   }
 
   const renderView = () => {

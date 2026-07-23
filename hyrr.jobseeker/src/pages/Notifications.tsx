@@ -1,10 +1,7 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Bell, Briefcase, Calendar, MessageSquare, Star, Archive, Trash2, Check } from "lucide-react"
 import { useJobStore } from "hyrr.shared"
-import { Card } from "hyrr.shared"
-import { Badge } from "hyrr.shared"
-import { Button } from "hyrr.shared"
-import { useToast } from "hyrr.shared"
+import { Card, Badge, Button, useToast } from "hyrr.shared"
 
 const notifIcons: Record<string, typeof Bell> = {
   application: Briefcase,
@@ -14,28 +11,23 @@ const notifIcons: Record<string, typeof Bell> = {
   system:      Bell,
 }
 
-const extraNotifs = [
-  { id: "n-e1", title: "Interview scheduled with Stripe for Jul 5 at 10 AM", time: "1 hour ago", read: false, type: "interview" },
-  { id: "n-e2", title: "Figma extended an offer: $185,000 + equity", time: "2 hours ago", read: false, type: "offer" },
-  { id: "n-e3", title: "Sarah Kim from Stripe sent you a message", time: "3 hours ago", read: false, type: "message" },
-  { id: "n-e4", title: "Your Vercel application was viewed by a recruiter", time: "Yesterday", read: true, type: "application" },
-  { id: "n-e5", title: "New job match: Senior React Engineer at Shopify — 95% match", time: "Yesterday", read: true, type: "application" },
-  { id: "n-e6", title: "Linear viewed your profile", time: "2 days ago", read: true, type: "system" },
-]
-
 type Filter = "All" | "Unread" | "Applications" | "Interviews" | "Messages"
 
 export function NotificationsPage() {
-  const { notifications, markNotificationsAsRead, markNotificationRead, clearNotifications } = useJobStore()
+  const { notifications, markNotificationsAsRead, markNotificationRead, clearNotifications, fetchNotifications } = useJobStore()
   const { toast } = useToast()
   const [filter, setFilter] = useState<Filter>("All")
 
-  const combined = [
-    ...extraNotifs,
-    ...notifications.map((n) => ({ ...n, type: "application" }))
-  ]
+  useEffect(() => {
+    fetchNotifications()
+  }, []) // eslint-disable-line
 
-  const filtered = combined.filter((n) => {
+  const formatted = notifications.map((n) => ({
+    ...n,
+    type: n.title.toLowerCase().includes("interview") ? "interview" : n.title.toLowerCase().includes("offer") ? "offer" : n.title.toLowerCase().includes("message") ? "message" : "application",
+  }))
+
+  const filtered = formatted.filter((n) => {
     if (filter === "Unread")       return !n.read
     if (filter === "Applications") return n.type === "application"
     if (filter === "Interviews")   return n.type === "interview"
@@ -43,7 +35,7 @@ export function NotificationsPage() {
     return true
   })
 
-  const unreadCount = combined.filter((n) => !n.read).length
+  const unreadCount = formatted.filter((n) => !n.read).length
   const filters: Filter[] = ["All", "Unread", "Applications", "Interviews", "Messages"]
 
   return (

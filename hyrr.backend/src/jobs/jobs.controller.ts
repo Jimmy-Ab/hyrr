@@ -47,6 +47,16 @@ export class JobsController {
   }
 
   // ─── Recruiter Protected Endpoints ────────────────────────────────
+  @Get('analytics')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('RECRUITER', 'ADMIN')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get real-time hiring funnel analytics for the recruiter' })
+  @ApiResponse({ status: 200, description: 'Returns pipeline statistics' })
+  getAnalytics(@Req() req: any) {
+    return this.jobsService.getAnalytics(req.user.userId);
+  }
+
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('RECRUITER', 'ADMIN')

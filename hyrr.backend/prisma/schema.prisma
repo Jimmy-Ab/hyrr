@@ -86,6 +86,7 @@ model User {
   postedJobs   Job[]       @relation("RecruiterJobs")
   auditLogs    AuditLog[]
   payments     Payment[]
+  setting      UserSetting?
 }
 
 model Company {
@@ -96,6 +97,10 @@ model Company {
   status      CompanyStatus @default(PENDING)
   plan        String        @default("Starter") // Starter, Pro, Enterprise
   country     String
+  city        String?
+  website     String?
+  description String?       @db.Text
+  industry    String?
   joinedAt    DateTime      @default(now())
 
   // Relations
@@ -123,6 +128,8 @@ model SeekerProfile {
   visibility         String     @default("public") // public, private
   skills             String[]
   languages          String[]
+  phone              String?
+  yearsOfExperience  String?
   updatedAt          DateTime   @updatedAt
 
   // Relations
@@ -270,6 +277,8 @@ model CalendarEvent {
   startTime     DateTime
   endTime       DateTime?
   type          EventType   @default(INTERVIEW)
+  meetingUrl    String?
+  location      String?
   notes         String?     @db.Text
   createdAt     DateTime    @default(now())
 }
@@ -277,6 +286,16 @@ model CalendarEvent {
 // ==========================================
 // 8. Settings & Platform Administration
 // ==========================================
+model UserSetting {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailNotifications Boolean  @default(true)
+  smsNotifications   Boolean  @default(false)
+  marketingEmails    Boolean  @default(false)
+  theme              String   @default("light")
+  updatedAt          DateTime @updatedAt
+}
 model SystemSetting {
   id            String   @id @default("global-settings")
   activeModel   String   @default("gemini-1.5-pro")

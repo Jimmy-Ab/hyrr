@@ -19,6 +19,8 @@ function AddEventModal({ onClose, onAdd, candidates, preselectedDate }: { onClos
   const [date, setDate] = useState(preselectedDate || "")
   const [time, setTime] = useState("10:00")
   const [type, setType] = useState<CalendarEvent["type"]>("interview")
+  const [meetingUrl, setMeetingUrl] = useState("")
+  const [location, setLocation] = useState("")
   const [notes, setNotes] = useState("")
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -29,6 +31,8 @@ function AddEventModal({ onClose, onAdd, candidates, preselectedDate }: { onClos
       startTime: `${date}T${time}:00`,
       type,
       applicationId: candidateId || undefined,
+      meetingUrl: meetingUrl || undefined,
+      location: location || undefined,
       notes: notes || undefined,
     })
     onClose()
@@ -102,11 +106,29 @@ function AddEventModal({ onClose, onAdd, candidates, preselectedDate }: { onClos
             </select>
           </div>
           <div>
+            <label className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">Meeting Link (Optional)</label>
+            <input
+              value={meetingUrl}
+              onChange={e => setMeetingUrl(e.target.value)}
+              placeholder="https://zoom.us/j/..."
+              className="w-full h-9 px-3 rounded-[10px] border border-bg-border bg-bg-primary text-[13px] focus:outline-none focus:border-primary/30 transition-all font-medium"
+            />
+          </div>
+          <div>
+            <label className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">Location (Optional)</label>
+            <input
+              value={location}
+              onChange={e => setLocation(e.target.value)}
+              placeholder="e.g. Office Room 4B or Virtual"
+              className="w-full h-9 px-3 rounded-[10px] border border-bg-border bg-bg-primary text-[13px] focus:outline-none focus:border-primary/30 transition-all font-medium"
+            />
+          </div>
+          <div>
             <label className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">Notes</label>
             <textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
-              placeholder="Meeting link, details, etc."
+              placeholder="Additional details or instructions"
               rows={2}
               className="w-full p-2.5 rounded-[10px] border border-bg-border bg-bg-primary text-[13px] focus:outline-none focus:border-primary/30 transition-all resize-none font-medium"
             />
@@ -340,6 +362,14 @@ export function CalendarPage() {
                       <Clock className="w-3.5 h-3.5" />
                       <span>{new Date(e.startTime).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
                     </div>
+                    {e.location && (
+                      <p className="text-[11px] opacity-70 mt-1 font-medium">📍 {e.location}</p>
+                    )}
+                    {e.meetingUrl && (
+                      <a href={e.meetingUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold underline opacity-80 hover:opacity-100 mt-0.5 block truncate">
+                        🔗 Join Meeting
+                      </a>
+                    )}
                     <button
                       onClick={() => deleteEvent(e.id)}
                       className="absolute top-2 right-2 p-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:text-sec-red"

@@ -13,8 +13,15 @@ import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser = require('cookie-parser');
 
+import { AllExceptionsFilter } from './core/filters/all-exceptions.filter';
+import { LoggingInterceptor } from './core/interceptors/logging.interceptor';
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Global Centralized Error Filter & Logging Interceptor
+  app.useGlobalFilters(new AllExceptionsFilter());
+  app.useGlobalInterceptors(new LoggingInterceptor());
 
   // Enable validation globally for DTOs
   app.useGlobalPipes(new ValidationPipe({
@@ -24,6 +31,10 @@ async function bootstrap() {
 
   // Cookie parser for reading secure refresh token cookies
   app.use(cookieParser());
+
+  // Static file serving for uploads directory
+  const express = require('express');
+  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
   // Enable CORS with support for credentials
   app.enableCors({

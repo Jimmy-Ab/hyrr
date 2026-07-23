@@ -28,6 +28,8 @@ export class CalendarController {
       startTime: string;
       endTime?: string;
       type: string;
+      meetingUrl?: string;
+      location?: string;
       notes?: string;
     },
   ) {

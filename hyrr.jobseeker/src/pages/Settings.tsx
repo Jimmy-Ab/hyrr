@@ -1,11 +1,6 @@
 import { useState, useEffect } from "react"
 import { User, Shield, Bell, Palette, Globe, Lock, Smartphone, LogOut, Trash2, Eye, EyeOff, Loader2 } from "lucide-react"
-import { Card } from "hyrr.shared"
-import { Button } from "hyrr.shared"
-import { Input } from "hyrr.shared"
-import { Badge } from "hyrr.shared"
-import { useJobStore } from "hyrr.shared"
-import { useToast } from "hyrr.shared"
+import { Card, Button, Input, Badge, useJobStore, useToast, apiFetch } from "hyrr.shared"
 
 type Tab = "General" | "Account" | "Security" | "Notifications" | "Appearance" | "Privacy"
 
@@ -23,7 +18,10 @@ export function SettingsPage() {
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState<Tab>("General")
   const [showPassword, setShowPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
   const [twoFA, setTwoFA] = useState(false)
+  const [pwForm, setPwForm] = useState({ current: "", newPw: "", confirm: "" })
+  const [pwLoading, setPwLoading] = useState(false)
 
   // General tab form state
   const [generalName, setGeneralName] = useState(user?.name || "")
@@ -143,7 +141,7 @@ export function SettingsPage() {
             <div className="space-y-3">
               <label className="text-[12.5px] font-bold text-txt-heading block">Current Password</label>
               <div className="relative max-w-sm">
-                <Input type={showPassword ? "text" : "password"} placeholder="••••••••" />
+                <Input type={showPassword ? "text" : "password"} placeholder="••••••••" value={pwForm.current} onChange={e => setPwForm(p => ({ ...p, current: e.target.value }))} />
                 <button onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-txt-caption hover:text-txt-heading cursor-pointer">
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -151,9 +149,42 @@ export function SettingsPage() {
             </div>
             <div className="space-y-3">
               <label className="text-[12.5px] font-bold text-txt-heading block">New Password</label>
-              <Input type="password" placeholder="Minimum 8 characters" className="max-w-sm" />
+              <div className="relative max-w-sm">
+                <Input type={showNewPassword ? "text" : "password"} placeholder="Minimum 8 characters" value={pwForm.newPw} onChange={e => setPwForm(p => ({ ...p, newPw: e.target.value }))} />
+                <button onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-txt-caption hover:text-txt-heading cursor-pointer">
+                  {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
-            <Button onClick={() => toast("Updated", "Password changed successfully.", "success")} className="cursor-pointer shadow-button">Update Password</Button>
+            <div className="space-y-3">
+              <label className="text-[12.5px] font-bold text-txt-heading block">Confirm New Password</label>
+              <Input type="password" placeholder="Re-enter new password" className="max-w-sm" value={pwForm.confirm} onChange={e => setPwForm(p => ({ ...p, confirm: e.target.value }))} />
+            </div>
+            <Button
+              onClick={async () => {
+                if (!pwForm.current || !pwForm.newPw) return toast("Error", "Please fill in all password fields.", "error")
+                if (pwForm.newPw.length < 8) return toast("Error", "New password must be at least 8 characters.", "error")
+                if (pwForm.newPw !== pwForm.confirm) return toast("Error", "Passwords do not match.", "error")
+                setPwLoading(true)
+                try {
+                  await apiFetch("/auth/change-password", {
+                    method: "POST",
+                    body: JSON.stringify({ currentPassword: pwForm.current, newPassword: pwForm.newPw }),
+                  })
+                  toast("Updated", "Password changed successfully.", "success")
+                  setPwForm({ current: "", newPw: "", confirm: "" })
+                } catch (err: any) {
+                  toast("Error", err?.message || "Could not change password.", "error")
+                } finally {
+                  setPwLoading(false)
+                }
+              }}
+              disabled={pwLoading}
+              className="cursor-pointer shadow-button gap-2"
+            >
+              {pwLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              Update Password
+            </Button>
 
             <div className="pt-4 border-t border-bg-border/40">
               <div className="flex items-center justify-between">

@@ -22,10 +22,9 @@ export function Sidebar() {
     selectJob,
     activeView,
     setActiveView,
+    unreadMessageCount,
   } = useJobStore()
   const { toast } = useToast()
-
-  const unreadMessagesCount = 3
 
   type ViewId = typeof activeView
 
@@ -35,7 +34,7 @@ export function Sidebar() {
     { id: "Candidates",  label: "Candidates",   icon: Users },
     { id: "Applications", label: "Applications", icon: CheckSquare },
     { id: "Calendar",    label: "Calendar",     icon: Calendar },
-    { id: "Messages",    label: "Messages",     icon: MessageSquare, badge: unreadMessagesCount },
+    { id: "Messages",    label: "Messages",     icon: MessageSquare, badge: unreadMessageCount > 0 ? unreadMessageCount : undefined },
     { id: "Analytics",   label: "Analytics",    icon: BarChart2 },
   ]
 

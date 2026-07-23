@@ -58,7 +58,12 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Logout and clear refresh token cookie' })
   logout(@Res({ passthrough: true }) res: Response) {
-    res.clearCookie('refreshToken');
+    res.clearCookie('refreshToken', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/api/auth/refresh',
+    });
     return { message: 'Logged out successfully' };
   }
 
@@ -69,6 +74,19 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Returns user profile' })
   async getMe(@Req() req: any) {
     return this.authService.getMe(req.user.userId);
+  }
+
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Change authenticated user password' })
+  @ApiResponse({ status: 200, description: 'Password changed successfully' })
+  async changePassword(
+    @Req() req: any,
+    @Body() body: { currentPassword: string; newPassword: string },
+  ) {
+    return this.authService.changePassword(req.user.userId, body.currentPassword, body.newPassword);
   }
 
   // ─── Google OAuth ──────────────────────────────────────────────────

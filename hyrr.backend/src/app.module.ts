@@ -11,6 +11,10 @@ import { AiModule } from './ai/ai.module';
 import { ProfileModule } from './profile/profile.module';
 import { CacheModule } from './cache/cache.module';
 
+import { CoreModule } from './core/core.module';
+import { UploadsModule } from './uploads/uploads.module';
+import { NotificationsModule } from './notifications/notifications.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -20,6 +24,9 @@ import { CacheModule } from './cache/cache.module';
         `${__dirname}/../../.env`,
       ],
     }),
+    CoreModule,
+    UploadsModule,
+    NotificationsModule,
     CacheModule,
     PrismaModule,
     AuthModule,

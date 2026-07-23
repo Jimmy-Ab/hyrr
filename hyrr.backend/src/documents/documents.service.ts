@@ -13,8 +13,11 @@ export class DocumentsService {
   }
 
   async createDocument(userId: string, data: { name: string; type: string; size: string; url: string }) {
+    // Normalize type to uppercase to match Prisma DocType enum
+    const docType = (data.type || 'OTHER').toUpperCase() as any;
+
     // If uploading a new active resume, deactivate existing ones first
-    if (data.type === 'RESUME') {
+    if (docType === 'RESUME') {
       await this.prisma.document.updateMany({
         where: { userId, type: 'RESUME', active: true },
         data: { active: false },
@@ -25,7 +28,7 @@ export class DocumentsService {
       data: {
         userId,
         name: data.name,
-        type: data.type as any,
+        type: docType,
         size: data.size,
         url: data.url,
         active: true,

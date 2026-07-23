@@ -1,10 +1,7 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Search, Bookmark, CheckCircle2, MapPin, DollarSign, Clock, Star, Briefcase, Globe, Loader2 } from "lucide-react"
 import { useJobStore, type PublicJob } from "hyrr.shared"
-import { Card } from "hyrr.shared"
-import { Badge } from "hyrr.shared"
-import { Button } from "hyrr.shared"
-import { useToast } from "hyrr.shared"
+import { Card, Badge, Button, useToast, RichTextRenderer } from "hyrr.shared"
 
 const colorBg: Record<string, string> = {
   purple: "bg-primary text-white",
@@ -39,11 +36,21 @@ export function DiscoverJobs() {
     discoverSearch, discoverTypeFilter,
     setDiscoverSearch, setDiscoverTypeFilter,
     applyFromDiscover, saveJobFromDiscover,
-    setCandidateActiveView,
+    setCandidateActiveView, fetchInitialData,
   } = useJobStore()
   const { toast } = useToast()
 
-  const [selectedJob, setSelectedJob] = useState<PublicJob>(publicJobs[0])
+  const [selectedJob, setSelectedJob] = useState<PublicJob | null>(null)
+
+  useEffect(() => {
+    fetchInitialData()
+  }, []) // eslint-disable-line
+
+  useEffect(() => {
+    if (publicJobs.length > 0 && !selectedJob) {
+      setSelectedJob(publicJobs[0])
+    }
+  }, [publicJobs, selectedJob])
 
   const filtered = publicJobs.filter((j) => {
     const matchType = discoverTypeFilter === "All" || j.type === discoverTypeFilter
@@ -202,7 +209,7 @@ export function DiscoverJobs() {
               {/* Description */}
               <div className="py-5 border-b border-bg-border/40">
                 <h3 className="text-[14px] font-bold text-txt-heading mb-2">About the Role</h3>
-                <p className="text-[13.5px] text-txt-body leading-relaxed">{selectedJob.description}</p>
+                <RichTextRenderer content={selectedJob.description} />
               </div>
 
               {/* Requirements */}

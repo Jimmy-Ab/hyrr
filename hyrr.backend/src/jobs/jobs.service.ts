@@ -29,6 +29,24 @@ export class JobsService {
     const count = await this.prisma.job.count({ where: { recruiterId } });
     const color = JOB_COLORS[count % JOB_COLORS.length];
 
+    let companyId = user?.companyId;
+    if (!companyId) {
+      const company = await this.prisma.company.create({
+        data: {
+          name: user?.name ? `${user.name}'s Company` : 'Hyrr Hiring Co',
+          logo: user?.name ? user.name.charAt(0).toUpperCase() : 'H',
+          country: 'United States',
+        },
+      });
+      companyId = company.id;
+      if (user) {
+        await this.prisma.user.update({
+          where: { id: recruiterId },
+          data: { companyId: company.id },
+        });
+      }
+    }
+
     const job = await this.prisma.job.create({
       data: {
         title: dto.title,
@@ -42,7 +60,7 @@ export class JobsService {
         featured: dto.featured ?? false,
         remote: dto.remote ?? false,
         color,
-        companyId: user!.companyId!,
+        companyId,
         recruiterId,
         categoryId: dto.categoryId,
       },
@@ -116,5 +134,55 @@ export class JobsService {
   // ─── Shared: get all categories ──────────────────────────────────
   async getCategories() {
     return this.prisma.jobCategory.findMany({ orderBy: { name: 'asc' } });
+  }
+
+  // ─── Recruiter: hiring funnel analytics ──────────────────────────
+  async getAnalytics(recruiterId: string) {
+    const jobs = await this.prisma.job.findMany({
+      where: { recruiterId },
+      include: { _count: { select: { applications: true } } },
+    });
+
+    const applications = await this.prisma.application.findMany({
+      where: { job: { recruiterId } },
+      select: { status: true, appliedAt: true, aiScore: true },
+    });
+
+    const total = applications.length;
+    const pipeline = {
+      Saved: applications.filter(a => a.status === 'SAVED').length,
+      Applied: applications.filter(a => a.status === 'APPLIED').length,
+      InProcess: applications.filter(a => a.status === 'IN_PROCESS').length,
+      Offer: applications.filter(a => a.status === 'OFFER').length,
+      Archived: applications.filter(a => a.status === 'ARCHIVED').length,
+    };
+
+    const offerRate = total > 0 ? ((pipeline.Offer / total) * 100).toFixed(1) : '0.0';
+    const avgAiScore =
+      applications.length > 0
+        ? Math.round(applications.reduce((acc, a) => acc + (a.aiScore || 0), 0) / applications.length)
+        : 0;
+
+    // Monthly breakdown (last 7 months)
+    const monthly: Record<string, number> = {};
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - i);
+      const key = d.toLocaleString('default', { month: 'short' });
+      monthly[key] = 0;
+    }
+    applications.forEach(a => {
+      const key = new Date(a.appliedAt).toLocaleString('default', { month: 'short' });
+      if (key in monthly) monthly[key]++;
+    });
+
+    return {
+      totalJobs: jobs.length,
+      totalApplications: total,
+      pipeline,
+      offerConversionRate: offerRate,
+      avgAiMatchScore: avgAiScore,
+      monthlyApplications: Object.entries(monthly).map(([month, count]) => ({ month, applications: count })),
+    };
   }
 }

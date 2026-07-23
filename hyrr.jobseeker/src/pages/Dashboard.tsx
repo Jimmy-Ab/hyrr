@@ -1,8 +1,6 @@
+import { useEffect } from "react"
 import { Briefcase, ArrowUpRight, Star, Calendar, Bookmark, CheckCircle2, TrendingUp } from "lucide-react"
-import { Card } from "hyrr.shared"
-import { Badge } from "hyrr.shared"
-import { Button } from "hyrr.shared"
-import { useJobStore } from "hyrr.shared"
+import { Card, Badge, Button, useJobStore } from "hyrr.shared"
 
 const colorDot: Record<string, string> = {
   purple: "bg-primary",
@@ -12,7 +10,11 @@ const colorDot: Record<string, string> = {
 }
 
 export function CandidateDashboard() {
-  const { jobApplications, publicJobs, setCandidateActiveView, notifications, user, seekerProfile } = useJobStore()
+  const { jobApplications, publicJobs, setCandidateActiveView, notifications, user, seekerProfile, fetchInitialData } = useJobStore()
+
+  useEffect(() => {
+    fetchInitialData()
+  }, []) // eslint-disable-line
 
   const applied = jobApplications.filter((a) => a.status === "Applied").length
   const inProcess = jobApplications.filter((a) => a.status === "In Process").length
@@ -59,6 +61,8 @@ export function CandidateDashboard() {
   const offerApps = jobApplications.filter((a) => a.status === "Offer")
   const recentActivity = jobApplications.slice().reverse().slice(0, 4)
   const recommended = publicJobs.filter((j) => j.featured).slice(0, 3)
+  const hasRecentActivity = recentActivity.length > 0
+  const hasRecommended = recommended.length > 0
 
   const statsAccents = ["accent-card-blue", "accent-card-primary", "accent-card-orange", "accent-card-green"]
 
@@ -126,7 +130,7 @@ export function CandidateDashboard() {
             </button>
           </div>
           <div className="flex flex-col gap-3">
-            {recentActivity.map((app) => (
+            {hasRecentActivity ? recentActivity.map((app) => (
               <div key={app.id} className="flex items-center justify-between p-3.5 rounded-[16px] bg-bg-primary/40 dark:bg-bg-primary/20 border border-bg-border/30 hover:border-primary/30 hover:bg-bg-primary/80 dark:hover:bg-bg-primary/40 hover:shadow-[0_2px_12px_rgba(108,99,255,0.06)] transition-all duration-200 cursor-pointer">
                 <div className="flex items-center gap-3">
                   <div className={`w-2.5 h-2.5 rounded-full ${colorDot[app.companyColor] ?? "bg-primary"} shadow-[0_0_8px_currentColor]`} />
@@ -142,7 +146,23 @@ export function CandidateDashboard() {
                   <span className="text-caption text-txt-caption font-bold">{app.appliedDate}</span>
                 </div>
               </div>
-            ))}
+            )) : (
+              <div className="flex flex-col items-center justify-center py-10 gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-primary-light flex items-center justify-center">
+                  <Briefcase className="w-6 h-6 text-primary" />
+                </div>
+                <div className="text-center">
+                  <p className="text-[14px] font-semibold text-txt-heading">No activity yet</p>
+                  <p className="text-[12px] text-txt-caption mt-1">Start applying to jobs and your activity will appear here.</p>
+                </div>
+                <button
+                  onClick={() => setCandidateActiveView("Discover")}
+                  className="text-[12.5px] font-bold text-primary hover:text-primary-hover transition-colors cursor-pointer"
+                >
+                  Browse open positions →
+                </button>
+              </div>
+            )}
           </div>
         </Card>
 
@@ -238,7 +258,7 @@ export function CandidateDashboard() {
           </button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {recommended.map((job) => (
+          {hasRecommended ? recommended.map((job) => (
             <div
               key={job.id}
               onClick={() => setCandidateActiveView("Discover")}
@@ -257,7 +277,23 @@ export function CandidateDashboard() {
                 <span className="text-[12px] font-bold text-primary">{job.salary}</span>
               </div>
             </div>
-          ))}
+          )) : (
+            <div className="col-span-3 flex flex-col items-center justify-center py-10 gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-primary-light flex items-center justify-center">
+                <Star className="w-6 h-6 text-primary" />
+              </div>
+              <div className="text-center">
+                <p className="text-[14px] font-semibold text-txt-heading">No featured jobs yet</p>
+                <p className="text-[12px] text-txt-caption mt-1">Browse all open positions to find opportunities that match your profile.</p>
+              </div>
+              <button
+                onClick={() => setCandidateActiveView("Discover")}
+                className="text-[12.5px] font-bold text-primary hover:text-primary-hover transition-colors cursor-pointer"
+              >
+                Browse all jobs →
+              </button>
+            </div>
+          )}
         </div>
       </Card>
 

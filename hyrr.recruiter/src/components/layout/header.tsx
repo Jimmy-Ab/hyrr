@@ -52,6 +52,8 @@ export function Header() {
     setWorkspaceName,
     setAddCandidateOpen,
     setAddJobOpen,
+    user,
+    logout,
   } = useJobStore()
   const { toast } = useToast()
   const [searchFocused, setSearchFocused] = useState(false)
@@ -289,16 +291,16 @@ export function Header() {
           <DropdownMenuTrigger asChild>
             <button id="profile-btn" className="outline-none cursor-pointer">
               <img
-                src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100"
-                alt="User Profile"
+                src={user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || user?.email || "Recruiter")}&background=6C63FF&color=fff`}
+                alt={user?.name || "User Profile"}
                 className="w-8 h-8 rounded-full object-cover border border-bg-border/60 hover:ring-2 hover:ring-primary/20 transition-all"
               />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-52" align="end">
             <DropdownMenuLabel>
-              <p className="text-txt-heading font-semibold text-[13px]">Sarah Martinez</p>
-              <p className="text-txt-caption text-[11px] font-normal">Staff HR · {workspaceName}</p>
+              <p className="text-txt-heading font-semibold text-[13px] truncate">{user?.name || "Recruiter Account"}</p>
+              <p className="text-txt-caption text-[11px] font-normal truncate">{user?.email || workspaceName}</p>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => {
@@ -315,10 +317,10 @@ export function Header() {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => {
-                toast("Sign Out", "Mock: Logging out user sessions...", "info")
-                setTimeout(() => window.location.reload(), 1000)
+                logout()
+                toast("Signed Out", "You have been logged out successfully.", "success")
               }}
-              className="text-sec-red hover:bg-red-50 focus:text-sec-red"
+              className="text-sec-red hover:bg-red-50 focus:text-sec-red cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5 mr-2" />
               Sign Out

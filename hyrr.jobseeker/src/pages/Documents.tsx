@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react"
-import { FileText, Upload, Trash2, Eye, Download, History, CheckCircle2, Plus, Loader2 } from "lucide-react"
-import { Card, Badge, Button, useToast, useJobStore } from "hyrr.shared"
+import { useState, useRef, useEffect } from "react"
+import { FileText, Upload, Trash2, Eye, Download, History, CheckCircle2, Plus, Loader2, X } from "lucide-react"
+import { Card, Badge, Button, useToast, useJobStore, apiFetch } from "hyrr.shared"
 
 type DocType = "resume" | "cover" | "cert" | "portfolio" | "other"
 
@@ -20,10 +20,127 @@ const typeColor: Record<DocType, string> = {
   other: "text-txt-caption bg-bg-primary border-bg-border",
 }
 
+// ─── Upload Modal ──────────────────────────────────────────────────────
+function UploadModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const { toast } = useToast()
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [file, setFile] = useState<File | null>(null)
+  const [docType, setDocType] = useState<DocType>("resume")
+  const [uploading, setUploading] = useState(false)
+  const { uploadDocument } = useJobStore()
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    if (f) setFile(f)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    const f = e.dataTransfer.files?.[0]
+    if (f) setFile(f)
+  }
+
+  const handleUpload = async () => {
+    if (!file) return
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+
+      const result = await apiFetch("/uploads", {
+        method: "POST",
+        body: formData,
+      })
+
+      await uploadDocument({
+        name: file.name,
+        type: docType,
+        size: result.size,
+        url: result.url,
+      })
+
+      toast("Upload Successful", `${file.name} has been uploaded.`, "success")
+      onSuccess()
+      onClose()
+    } catch (err: any) {
+      toast("Upload Failed", err?.message || "Could not upload the file. Please try again.", "error")
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-bg-primary rounded-card border border-bg-border shadow-modal w-full max-w-md p-6 flex flex-col gap-5" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-[16px] font-bold text-txt-heading">Upload Document</h2>
+          <button onClick={onClose} className="p-1.5 rounded-[8px] hover:bg-bg-hover text-txt-caption hover:text-txt-heading transition-colors cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Document type selector */}
+        <div>
+          <label className="text-[12px] font-bold text-txt-heading uppercase tracking-wider block mb-2">Document Type</label>
+          <div className="flex flex-wrap gap-2">
+            {(["resume", "cover", "cert", "portfolio", "other"] as DocType[]).map(t => (
+              <button
+                key={t}
+                onClick={() => setDocType(t)}
+                className={`px-3 py-1.5 rounded-[10px] text-[12px] font-semibold border transition-all cursor-pointer capitalize ${
+                  docType === t ? "bg-primary text-white border-primary" : "border-bg-border text-txt-body hover:border-primary/30"
+                }`}
+              >
+                {typeLabel[t]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Drop zone */}
+        <div
+          onDrop={handleDrop}
+          onDragOver={e => e.preventDefault()}
+          onClick={() => fileRef.current?.click()}
+          className={`border-2 border-dashed rounded-[14px] p-8 flex flex-col items-center gap-3 cursor-pointer transition-all ${
+            file ? "border-primary bg-primary-light/40" : "border-bg-border hover:border-primary/40 hover:bg-primary-light/20"
+          }`}
+        >
+          <div className="w-12 h-12 rounded-[14px] bg-primary-light flex items-center justify-center">
+            {file ? <CheckCircle2 className="w-6 h-6 text-primary" /> : <Upload className="w-6 h-6 text-primary" />}
+          </div>
+          {file ? (
+            <div className="text-center">
+              <p className="text-[13px] font-bold text-txt-heading">{file.name}</p>
+              <p className="text-[11px] text-txt-caption mt-1">{(file.size / (1024 * 1024)).toFixed(2)} MB</p>
+            </div>
+          ) : (
+            <div className="text-center">
+              <p className="text-[13px] font-semibold text-txt-body">Drop file here or click to browse</p>
+              <p className="text-[11px] text-txt-disabled mt-1">PDF, DOCX, images up to 10MB</p>
+            </div>
+          )}
+          <input ref={fileRef} type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={handleFileChange} />
+        </div>
+
+        <div className="flex gap-3 justify-end">
+          <Button variant="secondary" onClick={onClose} className="cursor-pointer">Cancel</Button>
+          <Button onClick={handleUpload} disabled={!file || uploading} className="cursor-pointer shadow-button gap-2">
+            {uploading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            Upload File
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main Documents Page ────────────────────────────────────────────────
 export function Documents() {
   const { toast } = useToast()
   const { documents, documentsLoading, fetchDocuments, deleteDocument, toggleDocumentActive } = useJobStore()
   const [activeType, setActiveType] = useState<DocType | "all">("all")
+  const [showUpload, setShowUpload] = useState(false)
 
   useEffect(() => {
     fetchDocuments()
@@ -42,12 +159,10 @@ export function Documents() {
     toast("Updated", "Document status changed.", "success")
   }
 
-  const handleUpload = () => {
-    toast("Upload", "File upload UI coming soon. Use the API to upload documents directly.", "info")
-  }
-
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300 relative">
+      {showUpload && <UploadModal onClose={() => setShowUpload(false)} onSuccess={fetchDocuments} />}
+
       {/* Ambient glows */}
       <div className="ambient-glow-1" />
       <div className="ambient-glow-2" />
@@ -58,7 +173,7 @@ export function Documents() {
           </h1>
           <p className="text-body text-txt-body mt-1 font-medium">Manage your resumes, cover letters, certificates, and portfolio files.</p>
         </div>
-        <Button onClick={handleUpload} className="gap-2 cursor-pointer shadow-button font-semibold">
+        <Button onClick={() => setShowUpload(true)} className="gap-2 cursor-pointer shadow-button font-semibold">
           <Upload className="w-4 h-4" /> Upload File
         </Button>
       </div>
@@ -113,7 +228,7 @@ export function Documents() {
                 <p className="text-[15px] font-bold text-txt-heading">No documents yet</p>
                 <p className="text-[12.5px] text-txt-caption mt-1">Upload your resume, cover letters, or certificates to get started.</p>
               </div>
-              <Button onClick={handleUpload} className="gap-2 cursor-pointer shadow-button">
+              <Button onClick={() => setShowUpload(true)} className="gap-2 cursor-pointer shadow-button">
                 <Upload className="w-4 h-4" /> Upload Your First File
               </Button>
             </div>
@@ -178,7 +293,7 @@ export function Documents() {
 
               {/* Upload CTA */}
               <button
-                onClick={handleUpload}
+                onClick={() => setShowUpload(true)}
                 className="p-5 rounded-card border-2 border-dashed border-bg-border/60 hover:border-primary/40 hover:bg-primary-light/30 transition-all cursor-pointer flex flex-col items-center justify-center gap-3 min-h-[160px] group"
               >
                 <div className="w-12 h-12 rounded-[14px] bg-primary-light flex items-center justify-center group-hover:scale-110 transition-transform">

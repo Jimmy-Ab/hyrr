@@ -5,6 +5,7 @@ import { Card } from "../components/ui/card"
 import { Badge } from "../components/ui/badge"
 import { Button } from "../components/ui/button"
 import { useToast } from "../components/ui/toast"
+import { RichTextRenderer } from "hyrr.shared"
 
 export function Jobs() {
   const { jobs, candidates, selectJob, setActiveView, setAddJobOpen, searchQuery, setSearchQuery } = useJobStore()
@@ -181,11 +182,9 @@ export function Jobs() {
               <div className="flex flex-col gap-4 text-body text-txt-body leading-relaxed">
                 <div>
                   <h4 className="text-[13px] font-bold text-txt-heading uppercase tracking-wider mb-1">
-                    Role Summary
+                    Role Description
                   </h4>
-                  <p className="font-medium text-txt-body">
-                    We are looking for a dedicated {selectedJob.title} to join our engineering and product design squads. You will help build scalable features, focus on premium micro-animations, and deliver high-performance user interfaces.
-                  </p>
+                  <RichTextRenderer content={selectedJob.description} />
                 </div>
 
                 <div>

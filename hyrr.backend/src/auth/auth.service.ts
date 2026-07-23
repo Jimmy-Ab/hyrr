@@ -35,6 +35,18 @@ export class AuthService {
           location: '',
         },
       });
+    } else if (dto.role === 'RECRUITER') {
+      const company = await this.prisma.company.create({
+        data: {
+          name: `${dto.name}'s Company`,
+          logo: dto.name.charAt(0).toUpperCase(),
+          country: 'United States',
+        },
+      });
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { companyId: company.id },
+      });
     }
 
     return this.generateTokens(user);
@@ -115,6 +127,19 @@ export class AuthService {
         companyId: true,
       },
     });
+  }
+
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !user.passwordHash) {
+      throw new UnauthorizedException('Cannot change password for OAuth accounts');
+    }
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!valid) throw new UnauthorizedException('Current password is incorrect');
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+    return { message: 'Password changed successfully' };
   }
 
   private generateTokens(user: { id: string; role: string; email: string }) {

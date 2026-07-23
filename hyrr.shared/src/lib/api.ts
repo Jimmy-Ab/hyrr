@@ -96,7 +96,7 @@ export async function apiFetch(path: string, options: RequestOptions = {}): Prom
 
 async function handleResponse(response: Response): Promise<any> {
   const contentType = response.headers.get('content-type');
-  let data = null;
+  let data: any = null;
   if (contentType && contentType.includes('application/json')) {
     data = await response.json();
   } else {
@@ -104,10 +104,14 @@ async function handleResponse(response: Response): Promise<any> {
   }
 
   if (!response.ok) {
-    throw {
+    const errorObj = {
       status: response.status,
-      message: (data && data.message) || response.statusText || 'Request failed',
+      errorCode: data?.errorCode || 'HTTP_ERROR',
+      message: data?.message || (typeof data === 'string' ? data : response.statusText) || 'Request failed',
+      details: data?.details || null,
+      timestamp: data?.timestamp || new Date().toISOString(),
     };
+    throw errorObj;
   }
 
   return data;

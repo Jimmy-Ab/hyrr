@@ -2,10 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateApplicationDto } from './dtos/create-application.dto';
 import { UpdateApplicationDto } from './dtos/update-application.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ApplicationsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) {}
 
   // ─── Seeker: apply to a job ───────────────────────────────────────
   async applyToJob(jobId: string, dto: CreateApplicationDto, userId?: string) {
@@ -17,7 +21,7 @@ export class ApplicationsService {
       if (existing) return existing;
     }
 
-    return this.prisma.application.create({
+    const app = await this.prisma.application.create({
       data: {
         jobId,
         userId: userId || null,
@@ -31,6 +35,15 @@ export class ApplicationsService {
       },
       include: { job: { include: { company: true } } },
     });
+
+    if (app.job?.recruiterId) {
+      await this.notificationsService.createNotification(
+        app.job.recruiterId,
+        `New applicant ${dto.name} applied for ${app.job.title}`,
+      );
+    }
+
+    return app;
   }
 
   // ─── Seeker: save a job without applying ─────────────────────────
@@ -118,11 +131,21 @@ export class ApplicationsService {
       else if (dto.status === 'SAVED' || dto.status === 'APPLIED') tag = undefined;
     }
 
-    return this.prisma.application.update({
+    const app = await this.prisma.application.update({
       where: { id },
       data: { ...dto, tag, status: dto.status as any },
       include: { job: { include: { company: true } } },
     });
+
+    if (app.userId && dto.status) {
+      const statusLabel = dto.status === 'IN_PROCESS' ? 'In Process' : dto.status === 'OFFER' ? 'Offer Extended' : dto.status;
+      await this.notificationsService.createNotification(
+        app.userId,
+        `Your application for ${app.job.title} status updated to: ${statusLabel}`,
+      );
+    }
+
+    return app;
   }
 
   // ─── Recruiter: delete candidate ─────────────────────────────────

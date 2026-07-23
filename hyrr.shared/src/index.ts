@@ -12,6 +12,8 @@ export * from "./components/ui/empty-state"
 export * from "./components/ui/pagination"
 export * from "./components/ui/tooltip"
 export * from "./components/ui/ai-chat-widget"
+export * from "./components/ui/rich-text-editor"
+export * from "./components/ui/rich-text-renderer"
 
 // Export Store
 export * from "./store/useJobStore"
@@ -23,3 +25,5 @@ export * from "./lib/api"
 // Export Auth Views
 export * from "./components/auth/AuthPage"
 export * from "./components/auth/OAuthCallback"
+export * from "./components/auth/RoleMismatch"
+

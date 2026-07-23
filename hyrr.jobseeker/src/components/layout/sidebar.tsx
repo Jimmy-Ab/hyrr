@@ -6,9 +6,8 @@ import {
 import { useJobStore } from "hyrr.shared"
 
 export function Sidebar() {
-  const { candidateActiveView, setCandidateActiveView, notifications, jobApplications, user, seekerProfile } = useJobStore()
+  const { candidateActiveView, setCandidateActiveView, notifications, jobApplications, user, seekerProfile, unreadMessageCount } = useJobStore()
 
-  const unreadMessages = 2
   const unreadNotifs = notifications.filter((n) => !n.read).length
   const offerCount = jobApplications.filter((a) => a.status === "Offer").length
 
@@ -18,7 +17,7 @@ export function Sidebar() {
     { id: "Dashboard",     label: "Dashboard",      icon: Home },
     { id: "Discover",      label: "Discover Jobs",  icon: Compass },
     { id: "Applications",  label: "Applications",   icon: LayoutList, badge: offerCount > 0 ? offerCount : undefined },
-    { id: "Messages",      label: "Messages",       icon: MessageSquare, badge: unreadMessages },
+    { id: "Messages",      label: "Messages",       icon: MessageSquare, badge: unreadMessageCount > 0 ? unreadMessageCount : undefined },
     { id: "Notifications", label: "Notifications",  icon: Bell, badge: unreadNotifs > 0 ? unreadNotifs : undefined },
     { id: "Calendar",      label: "Calendar",       icon: Calendar },
     { id: "Documents",     label: "Documents",      icon: FileText },

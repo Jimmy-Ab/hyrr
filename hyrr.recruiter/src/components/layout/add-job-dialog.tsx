@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from "../ui/input"
 import { Button } from "../ui/button"
 import { useToast } from "../ui/toast"
-import { apiFetch } from "hyrr.shared"
+import { apiFetch, RichTextEditor } from "hyrr.shared"
 import { Plus, X, ChevronRight, ChevronLeft, Briefcase, FileText, Sparkles } from "lucide-react"
 
 interface Category { id: string; name: string; slug: string }
@@ -305,16 +305,16 @@ export function AddJobDialog() {
           {step === 1 && (
             <div className="space-y-4">
               <div>
-                <label className={labelCls}>Job Description *</label>
-                <p className="text-[11.5px] text-txt-caption mb-2">Describe the role, team, and what makes this opportunity exciting. Min 20 characters.</p>
-                <textarea
+                <label className={labelCls}>Job Description (Rich Text) *</label>
+                <p className="text-[11.5px] text-txt-caption mb-2.5">
+                  Use formatting tools below to add section headings, bullet lists, bold text, or click <strong className="text-primary font-bold">✨ AI Template</strong> to generate a structured job layout.
+                </p>
+                <RichTextEditor
                   value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={10}
-                  placeholder="We are looking for a passionate [role] to join our [team]. You will be responsible for…"
-                  className="w-full px-3.5 py-3 rounded-input border border-bg-border bg-bg-secondary text-[13px] text-txt-heading placeholder:text-txt-disabled focus:outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/10 transition-all duration-200 resize-none leading-relaxed"
+                  onChange={setDescription}
+                  placeholder="We are seeking an experienced Senior Software Developer to design, develop, and maintain..."
+                  minHeight="240px"
                 />
-                <p className="text-[11px] text-txt-disabled mt-1 text-right">{description.length} chars</p>
               </div>
             </div>
           )}

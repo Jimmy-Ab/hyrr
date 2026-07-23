@@ -56,7 +56,8 @@ export class ProfileService {
     const allowedFields = [
       'title', 'location', 'website', 'github', 'linkedin',
       'bio', 'expectedSalary', 'preferredType', 'availability',
-      'visibility', 'skills', 'languages', 'preferredLocations'
+      'visibility', 'skills', 'languages', 'preferredLocations',
+      'phone', 'yearsOfExperience'
     ];
     for (const key of allowedFields) {
       if (data[key] !== undefined) updateData[key] = data[key];

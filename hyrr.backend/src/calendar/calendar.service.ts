@@ -30,6 +30,8 @@ export class CalendarService {
     startTime: string;
     endTime?: string;
     type: string;
+    meetingUrl?: string;
+    location?: string;
     notes?: string;
   }) {
     return this.prisma.calendarEvent.create({
@@ -39,6 +41,8 @@ export class CalendarService {
         startTime: new Date(data.startTime),
         endTime: data.endTime ? new Date(data.endTime) : null,
         type: data.type as any,
+        meetingUrl: data.meetingUrl || null,
+        location: data.location || null,
         notes: data.notes || '',
       },
       include: {

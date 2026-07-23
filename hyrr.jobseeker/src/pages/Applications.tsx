@@ -1,14 +1,11 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   DndContext, DragOverlay, useSensor, useSensors, PointerSensor,
   type DragEndEvent, type DragStartEvent, defaultDropAnimationSideEffects,
 } from "@dnd-kit/core"
 import { useDroppable, useDraggable } from "@dnd-kit/core"
 import { useJobStore, type JobApplication } from "hyrr.shared"
-import { Card } from "hyrr.shared"
-import { Badge } from "hyrr.shared"
-import { Button } from "hyrr.shared"
-import { useToast } from "hyrr.shared"
+import { Card, Badge, Button, useToast } from "hyrr.shared"
 import {
   Bookmark, MoreHorizontal, MapPin, DollarSign, Calendar, User, LayoutList
 } from "lucide-react"
@@ -207,9 +204,13 @@ function JobCard({ application, isOverlay = false }: { application: JobApplicati
 
 // ─── Kanban Board ─────────────────────────────────────────────────────────────
 export function ApplicationsBoard() {
-  const { jobApplications, moveJobApplication } = useJobStore()
+  const { jobApplications, moveJobApplication, fetchInitialData } = useJobStore()
   const { toast } = useToast()
   const [activeId, setActiveId] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetchInitialData()
+  }, []) // eslint-disable-line
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
   const activeApp = jobApplications.find((a) => a.id === activeId)

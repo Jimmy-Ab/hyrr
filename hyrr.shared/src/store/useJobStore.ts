@@ -26,6 +26,7 @@ export interface Job {
   posted: string
   status: "Active" | "Closed"
   color: "purple" | "blue" | "green" | "orange"
+  description: string
 }
 
 export interface Candidate {
@@ -116,6 +117,8 @@ export interface CalendarEvent {
   endTime?: string
   type: "interview" | "deadline" | "offer" | "other"
   applicationId?: string
+  meetingUrl?: string
+  location?: string
   notes?: string
 }
 
@@ -210,6 +213,7 @@ export interface JobState {
   toggleBookmark: (candidateId: string) => void
   setSearchQuery: (query: string) => void
   toggleTheme: () => void
+  fetchNotifications: () => Promise<void>
   markNotificationsAsRead: () => void
   markNotificationRead: (id: string) => void
   clearNotifications: () => void
@@ -444,6 +448,20 @@ export const useJobStore = create<JobState>((set, get) => ({
       }))
     })
 
+    socket.on("notification", (data: any) => {
+      set((state) => ({
+        notifications: [
+          {
+            id: data.id || String(Date.now()),
+            title: data.title || data.message || "New Notification",
+            time: "Just now",
+            read: false,
+          },
+          ...state.notifications,
+        ],
+      }))
+    })
+
     set({ socket })
   },
 
@@ -571,6 +589,7 @@ export const useJobStore = create<JobState>((set, get) => ({
         posted: "Just now",
         status: "Active",
         color: dbJob.color || "purple",
+        description: dbJob.description || jobData.description || "",
       }
       set((state) => ({ jobs: [...state.jobs, newJob], selectedJobId: newJob.id, activeView: "Jobs" }))
     } catch (e) {
@@ -597,11 +616,40 @@ export const useJobStore = create<JobState>((set, get) => ({
 
   setSearchQuery: (query) => set({ searchQuery: query }),
   toggleTheme: () => set((state) => ({ theme: state.theme === "light" ? "dark" : "light" })),
-  markNotificationsAsRead: () =>
-    set((state) => ({ notifications: state.notifications.map((n) => ({ ...n, read: true })) })),
-  markNotificationRead: (id) =>
-    set((state) => ({ notifications: state.notifications.map((n) => n.id === id ? { ...n, read: true } : n) })),
-  clearNotifications: () => set({ notifications: [] }),
+
+  fetchNotifications: async () => {
+    try {
+      const data = await apiFetch("/notifications")
+      const mapped: NotificationItem[] = (data || []).map((n: any) => ({
+        id: n.id,
+        title: n.title,
+        time: new Date(n.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        read: n.read,
+      }))
+      set({ notifications: mapped })
+    } catch { }
+  },
+
+  markNotificationsAsRead: async () => {
+    set((state) => ({ notifications: state.notifications.map((n) => ({ ...n, read: true })) }))
+    try {
+      await apiFetch("/notifications/read-all", { method: "PATCH" })
+    } catch { }
+  },
+
+  markNotificationRead: async (id) => {
+    set((state) => ({ notifications: state.notifications.map((n) => n.id === id ? { ...n, read: true } : n) }))
+    try {
+      await apiFetch(`/notifications/${id}/read`, { method: "PATCH" })
+    } catch { }
+  },
+
+  clearNotifications: async () => {
+    set({ notifications: [] })
+    try {
+      await apiFetch("/notifications", { method: "DELETE" })
+    } catch { }
+  },
 
   deleteCandidate: async (candidateId) => {
     set((state) => ({ candidates: state.candidates.filter((c) => c.id !== candidateId) }))
@@ -640,6 +688,7 @@ export const useJobStore = create<JobState>((set, get) => ({
           posted: "Posted " + new Date(j.createdAt).toLocaleDateString(),
           status: j.status === "ACTIVE" ? "Active" : "Closed",
           color: j.color || "purple",
+          description: j.description || "",
         }))
 
         const dbCandidates = await apiFetch("/applications/candidates")
@@ -684,6 +733,7 @@ export const useJobStore = create<JobState>((set, get) => ({
         get().fetchConversations()
         get().fetchUnreadCount()
         get().fetchEvents()
+        get().fetchNotifications()
 
       } else if (role === "SEEKER") {
         set({ publicJobsLoading: true })
@@ -774,6 +824,7 @@ export const useJobStore = create<JobState>((set, get) => ({
         get().fetchDocuments()
         get().fetchConversations()
         get().fetchUnreadCount()
+        get().fetchNotifications()
       }
     } catch (e) {
       console.warn("Failed to load workspace data from backend API.", e)
@@ -891,6 +942,8 @@ export const useJobStore = create<JobState>((set, get) => ({
           endTime: data.endTime,
           type: data.type?.toUpperCase(),
           applicationId: data.applicationId,
+          meetingUrl: data.meetingUrl,
+          location: data.location,
           notes: data.notes,
         }),
       })
@@ -902,6 +955,8 @@ export const useJobStore = create<JobState>((set, get) => ({
           endTime: created.endTime,
           type: (created.type || "other").toLowerCase() as CalendarEvent["type"],
           applicationId: created.applicationId,
+          meetingUrl: created.meetingUrl,
+          location: created.location,
           notes: created.notes,
         }],
       }))
@@ -937,7 +992,7 @@ export const useJobStore = create<JobState>((set, get) => ({
         active: d.active ?? true,
         createdAt: d.createdAt,
       }))
-      if (mapped.length > 0) set({ documents: mapped })
+      set({ documents: mapped })
     } catch {
       // keep empty
     } finally {

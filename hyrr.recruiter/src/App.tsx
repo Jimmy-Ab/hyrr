@@ -13,12 +13,12 @@ import { Analytics } from "./pages/Analytics"
 import { AddCandidateDialog } from "./components/layout/add-candidate-dialog"
 import { AddJobDialog } from "./components/layout/add-job-dialog"
 import { CandidateDetailDialog } from "./components/layout/candidate-detail-dialog"
-import { AuthPage, OAuthCallback, apiFetch, AiChatWidget } from "hyrr.shared"
+import { AuthPage, OAuthCallback, RoleMismatch, apiFetch, AiChatWidget } from "hyrr.shared"
 
 function AppContent() {
   const {
     activeView, theme, fetchInitialData,
-    isAuthenticated, setAccessToken, logout
+    isAuthenticated, user, setAccessToken, logout
   } = useJobStore()
 
   const [loading, setLoading] = React.useState(true)
@@ -41,10 +41,10 @@ function AppContent() {
   }, [setAccessToken, logout])
 
   React.useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && user?.role === "RECRUITER") {
       fetchInitialData()
     }
-  }, [isAuthenticated, fetchInitialData])
+  }, [isAuthenticated, user?.role, fetchInitialData])
 
   React.useEffect(() => {
     if (theme === "dark") {
@@ -69,6 +69,10 @@ function AppContent() {
 
   if (!isAuthenticated) {
     return <AuthPage forcedRole="RECRUITER" />
+  }
+
+  if (user?.role !== "RECRUITER") {
+    return <RoleMismatch requiredRole="RECRUITER" currentRole={user?.role || ""} />
   }
 
   const renderView = () => {
