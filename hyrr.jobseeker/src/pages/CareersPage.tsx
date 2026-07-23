@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react"
 import {
   MapPin, Clock, Briefcase, Search, ChevronRight, ArrowLeft,
   Building2, Users, Globe, Star, CheckCircle2, X, Upload,
-  ExternalLink
+  ExternalLink, Bookmark
 } from "lucide-react"
 import { useJobStore, type Job, Badge, Button, Input, useToast, Card } from "hyrr.shared"
 
@@ -224,8 +224,10 @@ function ApplyModal({ job, onClose }: { job: Job; onClose: () => void }) {
 
 /* ─── Job Detail Panel ─── */
 function JobDetail({ job, onApply }: { job: Job; onApply: () => void }) {
-  const { candidates } = useJobStore()
+  const { candidates, jobApplications, saveJobFromDiscover } = useJobStore()
   const applicantCount = candidates.filter((c) => c.jobId === job.id).length
+  const isApplied = jobApplications.some((a) => a.publicJobId === job.id && a.status !== "Saved")
+  const isSaved = jobApplications.some((a) => a.publicJobId === job.id && a.status === "Saved")
 
   const requirements: Record<string, string[]> = {
     "senior-frontend-developer": [
@@ -292,9 +294,27 @@ function JobDetail({ job, onApply }: { job: Job; onApply: () => void }) {
           </div>
           <Badge variant={typeBadge(job.type) as "primary" | "info" | "warning" | "secondary"}>{job.type}</Badge>
         </div>
-        <Button variant="primary" onClick={onApply} className="w-full cursor-pointer font-bold text-[14px] h-11 shadow-button">
-          Apply Now →
-        </Button>
+        <div className="flex gap-3">
+          <Button
+            variant={isApplied ? "secondary" : "primary"}
+            onClick={onApply}
+            disabled={isApplied}
+            className={`flex-1 font-bold text-[14px] h-11 ${isApplied ? "" : "shadow-button cursor-pointer"}`}
+          >
+            {isApplied ? "✓ Applied" : "Apply Now →"}
+          </Button>
+          {!isApplied && (
+            <Button
+              variant="secondary"
+              onClick={() => saveJobFromDiscover(job.id)}
+              disabled={isSaved}
+              className="h-11 px-4 cursor-pointer"
+              title={isSaved ? "Saved in Applications" : "Save Job"}
+            >
+              <Bookmark className={`w-4.5 h-4.5 ${isSaved ? "fill-current text-primary" : ""}`} />
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Body */}

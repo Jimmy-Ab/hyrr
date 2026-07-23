@@ -17,7 +17,8 @@ export function CandidateDashboard() {
   }, []) // eslint-disable-line
 
   const applied = jobApplications.filter((a) => a.status === "Applied").length
-  const inProcess = jobApplications.filter((a) => a.status === "In Process").length
+  const inProcess = jobApplications.filter((a) => a.status === "In Process" || a.status === "Interviewing").length
+  const interviewing = jobApplications.filter((a) => a.status === "Interviewing").length
   const offers = jobApplications.filter((a) => a.status === "Offer").length
   const saved = jobApplications.filter((a) => a.status === "Saved").length
 
@@ -51,10 +52,10 @@ export function CandidateDashboard() {
   const firstName = user?.name?.split(" ")[0] || "there"
 
   const stats = [
-    { title: "Saved Jobs", value: saved, icon: Bookmark, change: "Ready to apply", trend: "neutral" },
-    { title: "Applied", value: applied, icon: Briefcase, change: `${applied} submissions`, trend: "up" },
-    { title: "In Process", value: inProcess, icon: TrendingUp, change: "Active pipelines", trend: "up" },
-    { title: "Offers Received", value: offers, icon: CheckCircle2, change: offers > 0 ? "🎉 Congrats!" : "Keep pushing!", trend: offers > 0 ? "up" : "neutral" },
+    { title: "Applied",       value: applied,      icon: Briefcase,    change: `${applied} submissions`,                                   trend: "up" },
+    { title: "In Process",    value: inProcess,    icon: TrendingUp,   change: "Active pipelines",                                        trend: "up" },
+    { title: "Interviewing",  value: interviewing, icon: CheckCircle2, change: interviewing > 0 ? "🎯 Keep it up!" : "No interviews yet",   trend: interviewing > 0 ? "up" : "neutral" },
+    { title: "Offers",        value: offers,       icon: CheckCircle2, change: offers > 0 ? "🎉 Congrats!" : "Keep pushing!",              trend: offers > 0 ? "up" : "neutral" },
   ]
 
   const upcomingInterview = jobApplications.find((a) => a.interviewDate)
@@ -140,7 +141,7 @@ export function CandidateDashboard() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Badge variant={app.status === "Offer" ? "success" : app.status === "Archived" ? "secondary" : app.status === "In Process" ? "warning" : "primary"}>
+                  <Badge variant={app.status === "Offer" ? "success" : app.status === "Archived" ? "secondary" : app.status === "Interviewing" ? "primary" : app.status === "In Process" ? "warning" : "info"}>
                     {app.tag ?? app.status}
                   </Badge>
                   <span className="text-caption text-txt-caption font-bold">{app.appliedDate}</span>

@@ -19,12 +19,12 @@ export function KanbanColumn({ id, title, candidates, onAddCandidate }: KanbanCo
   // Determine header icon
   const getHeaderIcon = () => {
     switch (id) {
-      case "Saved":
-        return <Briefcase className="w-5 h-5 text-primary" />
       case "Applied":
         return <Send className="w-5 h-5 text-sec-blue" />
       case "In Process":
         return <Clock className="w-5 h-5 text-sec-orange" />
+      case "Interviewing":
+        return <Briefcase className="w-5 h-5 text-primary" />
       case "Offer":
         return <CheckCircle2 className="w-5 h-5 text-sec-green" />
       case "Archived":

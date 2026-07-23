@@ -8,7 +8,7 @@ interface TrackerApplication {
   jobTitle: string
   company: string
   location: string
-  status: "Saved" | "Applied" | "In Process" | "Offer" | "Archived"
+  status: "Saved" | "Applied" | "In Process" | "Interviewing" | "Offer" | "Archived"
   appliedAt: string
   tag?: string
 }
@@ -23,21 +23,24 @@ const STATUS_MAP: Record<string, TrackerApplication["status"]> = {
   SAVED: "Saved",
   APPLIED: "Applied",
   IN_PROCESS: "In Process",
+  INTERVIEWING: "Interviewing",
   OFFER: "Offer",
   ARCHIVED: "Archived",
 }
 
 const steps = [
-  { name: "Applied", label: "Application Received" },
-  { name: "In Process", label: "Interviewing Phase" },
-  { name: "Offer", label: "Offer Details Sent" },
+  { name: "Applied",      label: "Application Received" },
+  { name: "In Process",   label: "Under Review" },
+  { name: "Interviewing", label: "Interviewing Phase" },
+  { name: "Offer",        label: "Offer Details Sent" },
 ]
 
 function getStepIndex(status: TrackerApplication["status"]) {
   if (status === "Archived") return -1
   if (status === "Saved" || status === "Applied") return 0
   if (status === "In Process") return 1
-  if (status === "Offer") return 2
+  if (status === "Interviewing") return 2
+  if (status === "Offer") return 3
   return 0
 }
 

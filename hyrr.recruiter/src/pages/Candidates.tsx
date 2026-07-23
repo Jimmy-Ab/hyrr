@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Search, MapPin, Bookmark, Trash2, Mail } from "lucide-react"
+import { Search, MapPin, Bookmark, Trash2, MessageSquare } from "lucide-react"
 import { useJobStore, type Candidate } from "../store/useJobStore"
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../components/ui/table"
 import { Badge } from "../components/ui/badge"
@@ -7,7 +7,7 @@ import { Card } from "../components/ui/card"
 import { useToast } from "../components/ui/toast"
 
 export function Candidates() {
-  const { candidates, toggleBookmark, deleteCandidate, searchQuery, setSearchQuery, setSelectedCandidateId } = useJobStore()
+  const { candidates, toggleBookmark, deleteCandidate, searchQuery, setSearchQuery, setSelectedCandidateId, setActiveConversation, setActiveView } = useJobStore()
   const { toast } = useToast()
   const [statusFilter, setStatusFilter] = useState<string>("All")
 
@@ -20,7 +20,7 @@ export function Candidates() {
   })
 
   // List of statuses for selection filter
-  const statuses = ["All", "Saved", "Applied", "In Process", "Offer", "Archived"]
+  const statuses = ["All", "Applied", "In Process", "Interviewing", "Offer", "Archived"]
 
   const getStatusBadgeVariant = (status: Candidate["status"]) => {
     switch (status) {
@@ -30,6 +30,8 @@ export function Candidates() {
         return "info"
       case "In Process":
         return "warning"
+      case "Interviewing":
+        return "primary"
       case "Offer":
         return "success"
       case "Archived":
@@ -138,11 +140,13 @@ export function Candidates() {
                     </button>
                     <button
                       onClick={() => {
-                        toast("Direct Mail", `Opening message portal for ${c.name}`, "info")
+                        setActiveConversation(c.id)
+                        setActiveView("Messages")
                       }}
-                      className="cursor-pointer p-1.5 rounded-full text-txt-caption hover:text-txt-heading hover:bg-bg-hover transition-colors"
+                      title="Send Message"
+                      className="cursor-pointer p-1.5 rounded-full text-txt-caption hover:text-primary hover:bg-bg-hover transition-colors"
                     >
-                      <Mail className="w-4 h-4" />
+                      <MessageSquare className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => deleteCandidate(c.id)}

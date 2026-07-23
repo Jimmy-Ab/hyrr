@@ -72,11 +72,14 @@ export class ProfileService {
 
     // Transaction to update profile and sync experiences/educations
     return this.prisma.$transaction(async (tx) => {
-      // Update user name if provided
-      if (name !== undefined) {
+      // Update user name or avatar if provided
+      if (name !== undefined || data.avatar !== undefined) {
+        const userData: any = {};
+        if (name !== undefined) userData.name = name;
+        if (data.avatar !== undefined) userData.avatar = data.avatar;
         await tx.user.update({
           where: { id: userId },
-          data: { name },
+          data: userData,
         });
       }
 

@@ -12,7 +12,7 @@ export class GeminiAdapter implements LLMAdapter {
     jobData: Record<string, any>,
   ): Promise<AIMatchResult> {
     const model = new ChatGoogleGenerativeAI({
-      model: 'gemini-1.5-pro',
+      model: candidateData.activeModel || 'gemini-1.5-flash',
       temperature,
       apiKey: process.env.GOOGLE_AI_API_KEY,
     });

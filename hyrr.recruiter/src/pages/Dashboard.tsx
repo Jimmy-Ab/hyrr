@@ -31,7 +31,7 @@ export function Dashboard() {
     { label: "Applied",        count: candidates.filter(c => c.status === "Applied").length,    color: "bg-sec-blue",   glow: "rgba(59,127,245,0.3)" },
     { label: "In Process",     count: candidates.filter(c => c.status === "In Process").length, color: "bg-sec-orange", glow: "rgba(196,127,0,0.3)" },
     { label: "Offered",        count: candidates.filter(c => c.status === "Offer").length,      color: "bg-sec-green",  glow: "rgba(27,158,60,0.3)" },
-    { label: "Saved",          count: candidates.filter(c => c.status === "Saved").length,      color: "bg-primary",    glow: "rgba(108,99,255,0.3)" },
+    { label: "Interviewing",   count: candidates.filter(c => c.status === "Interviewing").length, color: "bg-primary", glow: "rgba(108,99,255,0.3)" },
     { label: "Archived",       count: candidates.filter(c => c.status === "Archived").length,   color: "bg-sec-gray",   glow: "rgba(107,116,133,0.3)" },
   ]
   const maxCount = totalCandidates || 1

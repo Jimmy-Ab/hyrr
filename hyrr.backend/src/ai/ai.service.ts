@@ -41,6 +41,7 @@ export class AiService {
     const adapter = this.factory.getAdapter(settings.activeModel);
 
     const candidateData = {
+      activeModel: settings.activeModel || 'gemini-1.5-flash',
       title: application.title,
       skills: application.user?.seekerProfile?.skills || [],
       bio: application.user?.seekerProfile?.bio || '',
@@ -193,10 +194,15 @@ export class AiService {
       settings = await this.prisma.systemSetting.create({
         data: {
           id: 'global-settings',
-          activeModel: 'gemini-1.5-pro',
+          activeModel: 'gemini-1.5-flash',
           temperature: 0.2,
           systemPrompt: DEFAULT_SYSTEM_PROMPT,
         },
+      });
+    } else if (settings.activeModel === 'gemini-1.5-pro') {
+      settings = await this.prisma.systemSetting.update({
+        where: { id: 'global-settings' },
+        data: { activeModel: 'gemini-1.5-flash' },
       });
     }
     return settings;
@@ -208,7 +214,7 @@ export class AiService {
       update: data,
       create: {
         id: 'global-settings',
-        activeModel: data.activeModel || 'gemini-1.5-pro',
+        activeModel: data.activeModel || 'gemini-1.5-flash',
         temperature: data.temperature || 0.2,
         systemPrompt: data.systemPrompt || DEFAULT_SYSTEM_PROMPT,
       },

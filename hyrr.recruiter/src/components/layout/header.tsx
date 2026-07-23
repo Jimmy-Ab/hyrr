@@ -149,7 +149,7 @@ export function Header() {
           <DropdownMenuContent className="w-48" align="end">
             <DropdownMenuLabel>Quick Add</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => setAddCandidateOpen(true, "Saved")}>
+            <DropdownMenuItem onClick={() => setAddCandidateOpen(true, "Applied")}>
               <User className="w-3.5 h-3.5 mr-1.5 text-txt-body" />
               Add Candidate
             </DropdownMenuItem>

@@ -150,11 +150,11 @@ export class JobsService {
 
     const total = applications.length;
     const pipeline = {
-      Saved: applications.filter(a => a.status === 'SAVED').length,
-      Applied: applications.filter(a => a.status === 'APPLIED').length,
-      InProcess: applications.filter(a => a.status === 'IN_PROCESS').length,
-      Offer: applications.filter(a => a.status === 'OFFER').length,
-      Archived: applications.filter(a => a.status === 'ARCHIVED').length,
+      Applied:      applications.filter(a => a.status === 'APPLIED').length,
+      InProcess:    applications.filter(a => a.status === 'IN_PROCESS').length,
+      Interviewing: applications.filter(a => a.status === 'INTERVIEWING').length,
+      Offer:        applications.filter(a => a.status === 'OFFER').length,
+      Archived:     applications.filter(a => a.status === 'ARCHIVED').length,
     };
 
     const offerRate = total > 0 ? ((pipeline.Offer / total) * 100).toFixed(1) : '0.0';

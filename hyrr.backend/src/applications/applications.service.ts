@@ -1,30 +1,42 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateApplicationDto } from './dtos/create-application.dto';
 import { UpdateApplicationDto } from './dtos/update-application.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { MessagesGateway } from '../messages/messages.gateway';
 
 @Injectable()
 export class ApplicationsService {
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
+    @Optional() private messagesGateway?: MessagesGateway,
   ) {}
 
   // ─── Seeker: apply to a job ───────────────────────────────────────
   async applyToJob(jobId: string, dto: CreateApplicationDto, userId?: string) {
-    // Prevent duplicate applications by the same user
-    if (userId) {
-      const existing = await this.prisma.application.findFirst({
-        where: { jobId, userId },
-      });
-      if (existing) return existing;
+    let resolvedUserId = userId || null;
+    if (!resolvedUserId && dto.email) {
+      const existingUser = await this.prisma.user.findUnique({ where: { email: dto.email } });
+      if (existingUser) resolvedUserId = existingUser.id;
     }
+
+    // Prevent duplicate applications by the same user or email
+    const existing = await this.prisma.application.findFirst({
+      where: {
+        jobId,
+        OR: [
+          ...(resolvedUserId ? [{ userId: resolvedUserId }] : []),
+          { email: dto.email },
+        ],
+      },
+    });
+    if (existing) return existing;
 
     const app = await this.prisma.application.create({
       data: {
         jobId,
-        userId: userId || null,
+        userId: resolvedUserId,
         name: dto.name,
         email: dto.email,
         phone: dto.phone,
@@ -68,15 +80,48 @@ export class ApplicationsService {
 
   // ─── Seeker: get my applications ─────────────────────────────────
   async getSeekerApplications(userId: string) {
-    return this.prisma.application.findMany({
-      where: { userId },
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return [];
+
+    // Retroactively link any applications submitted with user's email that don't have userId
+    await this.prisma.application.updateMany({
+      where: { email: user.email, userId: null },
+      data: { userId: user.id },
+    });
+
+    const all = await this.prisma.application.findMany({
+      where: {
+        OR: [{ userId }, { email: user.email }],
+      },
       include: {
-        job: { include: { company: true, category: true } },
+        job: { include: { company: true, category: true, postedBy: { select: { name: true, avatar: true } } } },
         calendarEvents: { orderBy: { startTime: 'asc' }, take: 1 },
         messages: { orderBy: { createdAt: 'desc' }, take: 1 },
       },
       orderBy: { appliedAt: 'desc' },
     });
+
+    // Deduplicate by jobId: if a job has both a SAVED record and an actual applied
+    // record, suppress the SAVED one — the real application takes priority.
+    const byJob = new Map<string, typeof all[number]>();
+    for (const app of all) {
+      const existing = byJob.get(app.jobId);
+      if (!existing) {
+        byJob.set(app.jobId, app);
+      } else {
+        // Keep whichever is NOT SAVED; if both are SAVED keep the newer one
+        const existingSaved = existing.status === 'SAVED';
+        const currentSaved = app.status === 'SAVED';
+        if (existingSaved && !currentSaved) {
+          // Replace SAVED with the real application
+          byJob.set(app.jobId, app);
+        }
+        // If existing is real and current is SAVED — keep existing (do nothing)
+        // If both are real — keep the most recent (already first due to desc order)
+      }
+    }
+
+    return Array.from(byJob.values());
   }
 
   // ─── Seeker: tracker lookup by email ─────────────────────────────
@@ -104,8 +149,13 @@ export class ApplicationsService {
   }
 
   // ─── Recruiter: get all candidates across company jobs ────────────
-  async getAllCompanyCandidates(companyId: string, search?: string) {
-    const where: any = { job: { companyId } };
+  async getAllCompanyCandidates(companyId?: string | null, userId?: string, search?: string) {
+    const where: any = companyId
+      ? { job: { companyId } }
+      : userId
+      ? { job: { recruiterId: userId } }
+      : {};
+
     if (search) {
       where.OR = [
         { name: { contains: search, mode: 'insensitive' } },
@@ -115,7 +165,7 @@ export class ApplicationsService {
     }
     return this.prisma.application.findMany({
       where,
-      include: { job: { include: { company: true } } },
+      include: { job: { include: { company: true } }, user: { select: { id: true, name: true, avatar: true } } },
       orderBy: { appliedAt: 'desc' },
     });
   }
@@ -125,7 +175,8 @@ export class ApplicationsService {
     // Auto-set tags when moving pipeline stages
     let tag = dto.tag;
     if (!tag && dto.status) {
-      if (dto.status === 'IN_PROCESS') tag = 'Interview';
+      if (dto.status === 'IN_PROCESS') tag = 'In Review';
+      else if (dto.status === 'INTERVIEWING') tag = 'Interview Stage';
       else if (dto.status === 'OFFER') tag = 'Offer Sent';
       else if (dto.status === 'ARCHIVED') tag = 'Not a fit';
       else if (dto.status === 'SAVED' || dto.status === 'APPLIED') tag = undefined;
@@ -138,11 +189,25 @@ export class ApplicationsService {
     });
 
     if (app.userId && dto.status) {
-      const statusLabel = dto.status === 'IN_PROCESS' ? 'In Process' : dto.status === 'OFFER' ? 'Offer Extended' : dto.status;
+      const statusLabel =
+        dto.status === 'IN_PROCESS' ? 'In Process' :
+        dto.status === 'INTERVIEWING' ? 'Interviewing' :
+        dto.status === 'OFFER' ? 'Offer Extended' :
+        dto.status === 'ARCHIVED' ? 'Archived' :
+        dto.status;
+      // DB notification
       await this.notificationsService.createNotification(
         app.userId,
         `Your application for ${app.job.title} status updated to: ${statusLabel}`,
       );
+      // Real-time WebSocket update so seeker's Kanban board updates live
+      if (this.messagesGateway) {
+        this.messagesGateway.emitApplicationUpdate(app.userId, {
+          applicationId: id,
+          status: dto.status,
+          tag,
+        });
+      }
     }
 
     return app;

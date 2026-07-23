@@ -80,13 +80,16 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
       data.text,
     );
 
-    // Broadcast to everyone in the chat room (including sender for confirmation)
-    this.server.to(`chat_${data.applicationId}`).emit('new_message', message);
+    // Broadcast to all OTHER clients in the chat room (exclude sender to avoid duplicate)
+    client.to(`chat_${data.applicationId}`).emit('new_message', message);
 
-    // Also notify via private room for sidebar badge update
-    this.server.to(`chat_${data.applicationId}`).emit('unread_update', {
-      applicationId: data.applicationId,
-    });
+    // Notify the receiver's private room for badge update (in case they're not in this chat)
+    if ((message as any).receiverId) {
+      this.server.to(`user_${(message as any).receiverId}`).emit('new_message', message);
+      this.server.to(`user_${(message as any).receiverId}`).emit('unread_update', {
+        applicationId: data.applicationId,
+      });
+    }
 
     return message;
   }

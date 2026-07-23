@@ -21,9 +21,10 @@ export class CalendarController {
   @ApiOperation({ summary: 'Schedule a new calendar event / interview slot' })
   @ApiResponse({ status: 201, description: 'Event scheduled successfully' })
   createEvent(
+    @Req() req: any,
     @Body()
     body: {
-      applicationId: string;
+      applicationId?: string;
       title: string;
       startTime: string;
       endTime?: string;
@@ -33,7 +34,10 @@ export class CalendarController {
       notes?: string;
     },
   ) {
-    return this.calendarService.createEvent(body);
+    return this.calendarService.createEvent({
+      ...body,
+      userId: req.user.userId,
+    });
   }
 
   @Delete(':id')

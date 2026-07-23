@@ -142,8 +142,8 @@ export class AuthService {
     return { message: 'Password changed successfully' };
   }
 
-  private generateTokens(user: { id: string; role: string; email: string }) {
-    const payload = { sub: user.id, role: user.role, email: user.email };
+  private generateTokens(user: { id: string; role: string; email: string; companyId?: string | null }) {
+    const payload = { sub: user.id, role: user.role, email: user.email, companyId: user.companyId || null };
     const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
     const refreshToken = this.jwtService.sign(
       { sub: user.id, type: 'refresh' },

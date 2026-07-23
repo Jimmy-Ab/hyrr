@@ -14,11 +14,11 @@ interface AnalyticsData {
 }
 
 const PIPELINE_COLORS: Record<string, string> = {
-  Saved: "#8A94A6",
-  Applied: "#4F8EF7",
+  Applied:      "#4F8EF7",
   "In Process": "#FFB547",
-  Offer: "#34C759",
-  Archived: "#98A2B3",
+  Interviewing: "#6C63FF",
+  Offer:        "#34C759",
+  Archived:     "#98A2B3",
 }
 
 export function Analytics() {
@@ -34,11 +34,11 @@ export function Analytics() {
 
   const pipelineData = data
     ? [
-        { name: "Saved",      count: data.pipeline.Saved,     fill: PIPELINE_COLORS["Saved"] },
-        { name: "Applied",    count: data.pipeline.Applied,   fill: PIPELINE_COLORS["Applied"] },
-        { name: "In Process", count: data.pipeline.InProcess, fill: PIPELINE_COLORS["In Process"] },
-        { name: "Offer",      count: data.pipeline.Offer,     fill: PIPELINE_COLORS["Offer"] },
-        { name: "Archived",   count: data.pipeline.Archived,  fill: PIPELINE_COLORS["Archived"] },
+        { name: "Applied",      count: data.pipeline.Applied,      fill: PIPELINE_COLORS["Applied"] },
+        { name: "In Process",   count: data.pipeline.InProcess,    fill: PIPELINE_COLORS["In Process"] },
+        { name: "Interviewing", count: data.pipeline.Interviewing ?? 0, fill: PIPELINE_COLORS["Interviewing"] },
+        { name: "Offer",        count: data.pipeline.Offer,        fill: PIPELINE_COLORS["Offer"] },
+        { name: "Archived",     count: data.pipeline.Archived,     fill: PIPELINE_COLORS["Archived"] },
       ]
     : []
 

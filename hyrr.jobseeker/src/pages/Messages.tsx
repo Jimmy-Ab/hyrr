@@ -1,15 +1,17 @@
 import * as React from "react"
-import { Search, Send, CheckCheck, Pin, Loader2, MessageSquare } from "lucide-react"
-import { Card, Badge, useJobStore } from "hyrr.shared"
+import { Search, Send, CheckCheck, Pin, Loader2, MessageSquare, Trash2 } from "lucide-react"
+import { Card, Badge, useJobStore, useToast } from "hyrr.shared"
 
 export function CandidateMessages() {
   const {
     conversations, conversationsLoading,
     conversationMessages, messagesLoading,
     activeConversationId,
-    fetchConversations, fetchMessages, sendMessage, setActiveConversation,
+    fetchConversations, fetchMessages, sendMessage, setActiveConversation, deleteConversation,
     user,
   } = useJobStore()
+
+  const { toast } = useToast()
 
   const [input, setInput] = React.useState("")
   const [search, setSearch] = React.useState("")
@@ -19,6 +21,14 @@ export function CandidateMessages() {
   React.useEffect(() => {
     fetchConversations()
   }, []) // eslint-disable-line
+
+  // Auto-load messages when arriving with a pre-selected conversation
+  // (e.g., clicking "Message Recruiter" from the Applications board)
+  React.useEffect(() => {
+    if (activeConversationId) {
+      fetchMessages(activeConversationId)
+    }
+  }, [activeConversationId]) // eslint-disable-line
 
   React.useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -90,10 +100,10 @@ export function CandidateMessages() {
               </div>
             ) : (
               filtered.map((c) => (
-                <button
+                <div
                   key={c.applicationId}
                   onClick={() => handleSelectConversation(c.applicationId)}
-                  className={`w-full text-left p-4 flex items-start gap-3 border-b border-bg-border/20 transition-colors cursor-pointer ${
+                  className={`w-full text-left p-4 flex items-start gap-3 border-b border-bg-border/20 transition-colors cursor-pointer group relative ${
                     activeConv?.applicationId === c.applicationId ? "bg-primary-light" : "hover:bg-bg-hover"
                   }`}
                 >
@@ -109,8 +119,19 @@ export function CandidateMessages() {
                     <p className="text-[11.5px] text-txt-caption mt-0.5">{c.company} · {c.jobTitle}</p>
                     <p className="text-[12px] text-txt-body mt-0.5 truncate">{c.lastMessage}</p>
                   </div>
-                  {c.unreadCount > 0 && <div className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1" />}
-                </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      deleteConversation(c.applicationId)
+                      toast("Conversation Deleted", "Deleted for your account.", "success")
+                    }}
+                    title="Delete Conversation"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full text-txt-caption hover:text-sec-red hover:bg-sec-red/10 cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                  {c.unreadCount > 0 && <div className="w-2 h-2 rounded-full bg-primary shrink-0" />}
+                </div>
               ))
             )}
           </div>
@@ -136,7 +157,19 @@ export function CandidateMessages() {
                     {activeConv.company} · {activeConv.jobTitle}
                   </p>
                 </div>
-                {activeConv.online && <Badge variant="success" className="ml-auto text-[10.5px]">Online</Badge>}
+                <div className="ml-auto flex items-center gap-2">
+                  {activeConv.online && <Badge variant="success" className="text-[10.5px]">Online</Badge>}
+                  <button
+                    onClick={() => {
+                      deleteConversation(activeConv.applicationId)
+                      toast("Conversation Deleted", "Deleted for your account.", "success")
+                    }}
+                    title="Delete Conversation"
+                    className="p-2 rounded-full text-txt-caption hover:text-sec-red hover:bg-sec-red/10 transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               <div className="flex-1 overflow-y-auto p-5 space-y-4">

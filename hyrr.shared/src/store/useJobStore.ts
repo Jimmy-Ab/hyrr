@@ -40,7 +40,7 @@ export interface Candidate {
   coverLetter?: string
   resumeUrl?: string
   dateText: string
-  status: "Saved" | "Applied" | "In Process" | "Offer" | "Archived"
+  status: "Saved" | "Applied" | "In Process" | "Interviewing" | "Offer" | "Archived"
   tag?: string
   avatar: string
   bookmarked: boolean
@@ -100,7 +100,7 @@ export interface JobApplication {
   type: string
   salary: string
   appliedDate: string
-  status: "Saved" | "Applied" | "In Process" | "Offer" | "Archived"
+  status: "Saved" | "Applied" | "In Process" | "Interviewing" | "Offer" | "Archived"
   bookmarked: boolean
   recruiterName: string
   recruiterAvatar: string
@@ -268,6 +268,7 @@ export interface JobState {
   fetchMessages: (applicationId: string) => Promise<void>
   sendMessage: (applicationId: string, text: string) => Promise<void>
   setActiveConversation: (id: string | null) => void
+  deleteConversation: (applicationId: string) => Promise<void>
   unreadMessageCount: number
   fetchUnreadCount: () => Promise<void>
 
@@ -393,12 +394,29 @@ export const useJobStore = create<JobState>((set, get) => ({
   },
 
   initializeSocket: () => {
-    const token = get().accessToken
+    let token = get().accessToken
+    if (!token && typeof window !== "undefined") {
+      token = localStorage.getItem("accessToken") || localStorage.getItem("token") || ""
+    }
     if (!token) return
 
-    if (get().socket) get().socket.disconnect()
+    if (get().socket) {
+      if (get().socket.connected) return
+      get().socket.disconnect()
+    }
 
-    const socket = io("http://localhost:3000", { auth: { token } })
+    const socket = io("http://localhost:3000", {
+      auth: { token },
+      withCredentials: true,
+      transports: ["websocket", "polling"],
+    })
+
+    socket.on("connect", () => {
+      const activeAppId = get().activeConversationId
+      if (activeAppId) {
+        socket.emit("join_chat", { applicationId: activeAppId })
+      }
+    })
 
     socket.on("application_status_updated", (data: any) => {
       set((state) => ({
@@ -419,11 +437,17 @@ export const useJobStore = create<JobState>((set, get) => ({
     })
 
     socket.on("new_message", (data: any) => {
-      // Append to active conversation if it matches
-      if (get().activeConversationId === data.applicationId) {
-        set((state) => ({
+      const state = get()
+      const isActiveConv = state.activeConversationId === data.applicationId
+      const isDuplicate = state.conversationMessages.some(
+        (m) => m.id === data.id || (m.id.startsWith("temp-") && m.text === data.text && m.applicationId === data.applicationId)
+      )
+
+      // Only append to message list if viewing this conversation and not a duplicate
+      if (isActiveConv && !isDuplicate) {
+        set((s) => ({
           conversationMessages: [
-            ...state.conversationMessages,
+            ...s.conversationMessages.filter((m) => !m.id.startsWith("temp-")),
             {
               id: data.id || String(Date.now()),
               applicationId: data.applicationId,
@@ -431,18 +455,23 @@ export const useJobStore = create<JobState>((set, get) => ({
               senderType: data.senderType,
               text: data.text,
               read: false,
-              createdAt: new Date().toISOString(),
+              createdAt: data.createdAt || new Date().toISOString(),
             },
           ],
         }))
       }
-      // Refresh unread count
+
+      // Always update sidebar conversation preview and unread count
       get().fetchUnreadCount()
-      // Update last message in conversations list
-      set((state) => ({
-        conversations: state.conversations.map((c) =>
+      set((s) => ({
+        conversations: s.conversations.map((c) =>
           c.applicationId === data.applicationId
-            ? { ...c, lastMessage: data.text, lastMessageTime: "Just now", unreadCount: c.unreadCount + 1 }
+            ? {
+                ...c,
+                lastMessage: data.text,
+                lastMessageTime: "Just now",
+                unreadCount: isActiveConv ? c.unreadCount : (c.unreadCount || 0) + 1,
+              }
             : c
         ),
       }))
@@ -462,6 +491,11 @@ export const useJobStore = create<JobState>((set, get) => ({
       }))
     })
 
+    socket.on("unread_update", () => {
+      get().fetchUnreadCount()
+      get().fetchConversations()
+    })
+
     set({ socket })
   },
 
@@ -472,7 +506,7 @@ export const useJobStore = create<JobState>((set, get) => ({
   setCareerSelectedJobId: (jobId) => set({ careerSelectedJobId: jobId }),
   workspaceName: "Acme Careers",
   isAddCandidateOpen: false,
-  addCandidateColumn: "Saved",
+  addCandidateColumn: "Applied",
   isAddJobOpen: false,
   selectedCandidateId: null,
   setSelectedCandidateId: (id) => set({ selectedCandidateId: id }),
@@ -491,7 +525,7 @@ export const useJobStore = create<JobState>((set, get) => ({
   updateProfile: async (data) => {
     set({ profileUpdating: true })
     try {
-      const updated = await apiFetch("/profile", { method: "PATCH", body: JSON.stringify(data) })
+      const updated = await apiFetch("/profile", { method: "PUT", body: JSON.stringify(data) })
       const prev = get().user
       if (prev) {
         set({ user: { ...prev, name: updated.name ?? prev.name } })
@@ -661,7 +695,7 @@ export const useJobStore = create<JobState>((set, get) => ({
   },
 
   setWorkspaceName: (name) => set({ workspaceName: name }),
-  setAddCandidateOpen: (open, col = "Saved") => set({ isAddCandidateOpen: open, addCandidateColumn: col }),
+  setAddCandidateOpen: (open, col = "Applied") => set({ isAddCandidateOpen: open, addCandidateColumn: col }),
   setAddJobOpen: (open) => set({ isAddJobOpen: open }),
 
   applyToJob: async (jobId, applicant) => {
@@ -703,7 +737,7 @@ export const useJobStore = create<JobState>((set, get) => ({
           coverLetter: c.coverLetter,
           resumeUrl: c.resumeUrl,
           dateText: new Date(c.appliedAt).toLocaleDateString(),
-          status: c.status === "IN_PROCESS" ? "In Process" : c.status === "OFFER" ? "Offer" : c.status === "ARCHIVED" ? "Archived" : c.status === "SAVED" ? "Saved" : "Applied",
+          status: c.status === "IN_PROCESS" ? "In Process" : c.status === "INTERVIEWING" ? "Interviewing" : c.status === "OFFER" ? "Offer" : c.status === "ARCHIVED" ? "Archived" : c.status === "SAVED" ? "Saved" : "Applied",
           bookmarked: c.recruiterBookmarked,
           avatar: c.user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(c.name)}`,
           aiScore: c.aiScore,
@@ -753,7 +787,7 @@ export const useJobStore = create<JobState>((set, get) => ({
           type: a.job.type,
           salary: a.job.salary || "Competitive",
           appliedDate: new Date(a.appliedAt).toLocaleDateString(),
-          status: a.status === "IN_PROCESS" ? "In Process" : a.status === "OFFER" ? "Offer" : a.status === "ARCHIVED" ? "Archived" : a.status === "SAVED" ? "Saved" : "Applied",
+          status: a.status === "IN_PROCESS" ? "In Process" : a.status === "INTERVIEWING" ? "Interviewing" : a.status === "OFFER" ? "Offer" : a.status === "ARCHIVED" ? "Archived" : a.status === "SAVED" ? "Saved" : "Applied",
           bookmarked: a.seekerBookmarked,
           recruiterName: a.job.postedBy?.name || "Hiring Team",
           recruiterAvatar: a.job.postedBy?.avatar || `https://ui-avatars.com/api/?name=Hiring+Team`,
@@ -1081,6 +1115,11 @@ export const useJobStore = create<JobState>((set, get) => ({
 
   fetchMessages: async (applicationId) => {
     set({ messagesLoading: true, activeConversationId: applicationId })
+    // Join the socket chat room so real-time new_message events are received
+    const sock = get().socket
+    if (sock?.connected) {
+      sock.emit("join_chat", { applicationId })
+    }
     try {
       const data = await apiFetch(`/messages/${applicationId}`)
       const mapped: ChatMessage[] = (data || []).map((m: any) => ({
@@ -1103,10 +1142,11 @@ export const useJobStore = create<JobState>((set, get) => ({
   sendMessage: async (applicationId, text) => {
     const userId = get().user?.id || null
     const senderType = get().user?.role === "RECRUITER" ? "RECRUITER" : "SEEKER"
+    const tempId = `temp-${Date.now()}`
 
-    // Optimistic update
+    // Optimistic update — shown immediately, replaced when server acks
     const optimistic: ChatMessage = {
-      id: `temp-${Date.now()}`,
+      id: tempId,
       applicationId,
       senderId: userId,
       senderType: senderType as any,
@@ -1116,25 +1156,66 @@ export const useJobStore = create<JobState>((set, get) => ({
     }
     set((state) => ({ conversationMessages: [...state.conversationMessages, optimistic] }))
 
-    try {
-      await apiFetch(`/messages/${applicationId}`, {
-        method: "POST",
-        body: JSON.stringify({ text }),
+    const sock = get().socket
+    if (sock?.connected) {
+      // Use WebSocket — gateway uses client.to() so sender won't get a duplicate new_message
+      sock.emit("send_message", { applicationId, text }, (ack: any) => {
+        if (ack?.id) {
+          // Replace optimistic entry with real message from server ack
+          set((state) => ({
+            conversationMessages: state.conversationMessages.map((m) =>
+              m.id === tempId ? { ...m, id: ack.id, createdAt: ack.createdAt || m.createdAt } : m
+            ),
+          }))
+        }
       })
-      // Update conversation last message
-      set((state) => ({
-        conversations: state.conversations.map((c) =>
-          c.applicationId === applicationId
-            ? { ...c, lastMessage: text, lastMessageTime: "Just now" }
-            : c
-        ),
-      }))
-    } catch (e) {
-      console.warn("Failed to send message.", e)
+    } else {
+      // WebSocket not available — fall back to REST
+      try {
+        const saved = await apiFetch(`/messages/${applicationId}`, {
+          method: "POST",
+          body: JSON.stringify({ text }),
+        })
+        if (saved?.id) {
+          set((state) => ({
+            conversationMessages: state.conversationMessages.map((m) =>
+              m.id === tempId ? { ...m, id: saved.id, createdAt: saved.createdAt || m.createdAt } : m
+            ),
+          }))
+        }
+      } catch (e) {
+        console.warn("Failed to send message via REST fallback.", e)
+        // Remove failed optimistic message
+        set((state) => ({
+          conversationMessages: state.conversationMessages.filter((m) => m.id !== tempId),
+        }))
+      }
     }
+
+    // Update sidebar last message optimistically
+    set((state) => ({
+      conversations: state.conversations.map((c) =>
+        c.applicationId === applicationId
+          ? { ...c, lastMessage: text, lastMessageTime: "Just now" }
+          : c
+      ),
+    }))
   },
 
   setActiveConversation: (id) => set({ activeConversationId: id }),
+
+  deleteConversation: async (applicationId) => {
+    set((state) => ({
+      conversations: state.conversations.filter((c) => c.applicationId !== applicationId),
+      activeConversationId: state.activeConversationId === applicationId ? null : state.activeConversationId,
+      conversationMessages: state.activeConversationId === applicationId ? [] : state.conversationMessages,
+    }))
+    try {
+      await apiFetch(`/messages/conversations/${applicationId}`, { method: "DELETE" })
+    } catch (e) {
+      console.warn("Failed to delete conversation.", e)
+    }
+  },
 
   fetchUnreadCount: async () => {
     try {

@@ -245,14 +245,17 @@ export function DiscoverJobs() {
                 >
                   {isApplied(selectedJob.id) ? "✓ Applied" : "Apply Now"}
                 </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => handleSave(selectedJob)}
-                  disabled={isSaved(selectedJob.id) && !isApplied(selectedJob.id)}
-                  className="h-11 px-4 cursor-pointer"
-                >
-                  <Bookmark className={`w-4.5 h-4.5 ${isSaved(selectedJob.id) ? "fill-current text-primary" : ""}`} />
-                </Button>
+                {!isApplied(selectedJob.id) && (
+                  <Button
+                    variant="secondary"
+                    onClick={() => handleSave(selectedJob)}
+                    disabled={isSaved(selectedJob.id)}
+                    className="h-11 px-4 cursor-pointer"
+                    title={isSaved(selectedJob.id) ? "Saved in Applications" : "Save Job"}
+                  >
+                    <Bookmark className={`w-4.5 h-4.5 ${isSaved(selectedJob.id) ? "fill-current text-primary" : ""}`} />
+                  </Button>
+                )}
               </div>
             </Card>
           </div>

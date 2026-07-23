@@ -7,6 +7,7 @@ import { AiService } from '../ai/ai.service';
 import { CreateApplicationDto } from './dtos/create-application.dto';
 import { UpdateApplicationDto } from './dtos/update-application.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 
@@ -27,8 +28,9 @@ export class ApplicationsController {
     return this.applicationsService.getApplicationsByEmail(email);
   }
 
-  // ─── Public: apply to a job (career site or unauthenticated) ──────
+  // ─── Public/Logged-in: apply to a job (career site or logged-in seeker) ──────
   @Post('jobs/:jobId/apply')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Submit a job application (public career site or logged-in seeker)' })
   @ApiResponse({ status: 201, description: 'Application submitted successfully' })
   async applyToJob(
@@ -85,7 +87,7 @@ export class ApplicationsController {
   @ApiQuery({ name: 'search', required: false })
   @ApiResponse({ status: 200, description: 'Returns all company candidates' })
   getAllCandidates(@Req() req: any, @Query('search') search?: string) {
-    return this.applicationsService.getAllCompanyCandidates(req.user.companyId, search);
+    return this.applicationsService.getAllCompanyCandidates(req.user.companyId, req.user.userId, search);
   }
 
   // ─── Shared: update application status / move Kanban ─────────────

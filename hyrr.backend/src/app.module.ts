@@ -10,6 +10,7 @@ import { CalendarModule } from './calendar/calendar.module';
 import { AiModule } from './ai/ai.module';
 import { ProfileModule } from './profile/profile.module';
 import { CacheModule } from './cache/cache.module';
+import { SettingsModule } from './settings/settings.module';
 
 import { CoreModule } from './core/core.module';
 import { UploadsModule } from './uploads/uploads.module';
@@ -37,6 +38,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     CalendarModule,
     AiModule,
     ProfileModule,
+    SettingsModule,
   ],
 })
 export class AppModule {}

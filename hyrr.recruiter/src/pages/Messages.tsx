@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Search, Send, CheckCheck, Loader2, MessageSquare } from "lucide-react"
+import { Search, Send, CheckCheck, Loader2, MessageSquare, Trash2 } from "lucide-react"
 import { Card } from "../components/ui/card"
 import { Badge } from "../components/ui/badge"
 import { useJobStore } from "../store/useJobStore"
@@ -16,6 +16,7 @@ export function Messages() {
     fetchMessages,
     sendMessage,
     setActiveConversation,
+    deleteConversation,
     user,
   } = useJobStore()
 
@@ -28,6 +29,14 @@ export function Messages() {
   React.useEffect(() => {
     fetchConversations()
   }, []) // eslint-disable-line
+
+  // Auto-load messages if we arrive with a pre-selected conversation
+  // (e.g., when the recruiter clicks "Send Message" from the Candidates page)
+  React.useEffect(() => {
+    if (activeConversationId) {
+      fetchMessages(activeConversationId)
+    }
+  }, [activeConversationId]) // eslint-disable-line
 
   React.useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -93,10 +102,10 @@ export function Messages() {
             filtered.map((contact) => {
               const isSelected = activeConv?.applicationId === contact.applicationId
               return (
-                <button
+                <div
                   key={contact.applicationId}
                   onClick={() => handleSelectConversation(contact.applicationId)}
-                  className={`w-full p-4 flex gap-3 text-left border-b border-bg-border/10 transition-colors cursor-pointer outline-none ${
+                  className={`w-full p-4 flex items-center gap-3 text-left border-b border-bg-border/10 transition-colors cursor-pointer outline-none group relative ${
                     isSelected ? "bg-primary-light/50" : "hover:bg-bg-hover"
                   }`}
                 >
@@ -121,8 +130,19 @@ export function Messages() {
                       {contact.lastMessage}
                     </p>
                   </div>
-                  {contact.unreadCount > 0 && <div className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1" />}
-                </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      deleteConversation(contact.applicationId)
+                      toast("Conversation Deleted", "Deleted for your account.", "success")
+                    }}
+                    title="Delete Conversation"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full text-txt-caption hover:text-sec-red hover:bg-sec-red/10 cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                  {contact.unreadCount > 0 && <div className="w-2 h-2 rounded-full bg-primary shrink-0" />}
+                </div>
               )
             })
           )}
@@ -155,6 +175,16 @@ export function Messages() {
                   </span>
                 </div>
               </div>
+              <button
+                onClick={() => {
+                  deleteConversation(activeConv.applicationId)
+                  toast("Conversation Deleted", "Deleted for your account.", "success")
+                }}
+                title="Delete Conversation"
+                className="p-2 rounded-full text-txt-caption hover:text-sec-red hover:bg-sec-red/10 transition-colors cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
             </div>
 
             {/* Messages Body */}

@@ -1,15 +1,39 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class CalendarService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) {}
 
   async getEvents(userId: string, role: string) {
-    const where =
-      role === 'SEEKER'
-        ? { application: { userId } }
-        : { application: { job: { recruiterId: userId } } };
+    let where: any;
+
+    if (role === 'SEEKER') {
+      // Fetch the user so we can also match by email on the application
+      const user = await this.prisma.user.findUnique({ where: { id: userId } });
+      where = {
+        OR: [
+          // Events linked to an application that belongs to this seeker (by userId)
+          { application: { userId } },
+          // Events linked to an application that belongs to this seeker (by email, for un-linked apps)
+          ...(user ? [{ application: { email: user.email } }] : []),
+          // Events created directly for this seeker user
+          { userId },
+        ],
+      };
+    } else {
+      // Recruiters: events for their jobs or events they created
+      where = {
+        OR: [
+          { application: { job: { recruiterId: userId } } },
+          { userId },
+        ],
+      };
+    }
 
     return this.prisma.calendarEvent.findMany({
       where,
@@ -17,6 +41,7 @@ export class CalendarService {
         application: {
           include: {
             job: { include: { company: true } },
+            user: { select: { id: true, name: true, avatar: true, email: true } },
           },
         },
       },
@@ -25,7 +50,8 @@ export class CalendarService {
   }
 
   async createEvent(data: {
-    applicationId: string;
+    userId?: string;
+    applicationId?: string;
     title: string;
     startTime: string;
     endTime?: string;
@@ -34,13 +60,14 @@ export class CalendarService {
     location?: string;
     notes?: string;
   }) {
-    return this.prisma.calendarEvent.create({
+    const event = await this.prisma.calendarEvent.create({
       data: {
-        applicationId: data.applicationId,
+        userId: data.userId || null,
+        applicationId: data.applicationId || null,
         title: data.title,
         startTime: new Date(data.startTime),
         endTime: data.endTime ? new Date(data.endTime) : null,
-        type: data.type as any,
+        type: (data.type || 'INTERVIEW').toUpperCase() as any,
         meetingUrl: data.meetingUrl || null,
         location: data.location || null,
         notes: data.notes || '',
@@ -49,10 +76,25 @@ export class CalendarService {
         application: {
           include: {
             job: { include: { company: true } },
+            user: { select: { id: true, name: true, avatar: true } },
           },
         },
       },
     });
+
+    // Notify the seeker if this event is linked to their application
+    if (event.application?.user?.id) {
+      const seekerUserId = event.application.user.id;
+      const dateStr = new Date(event.startTime).toLocaleDateString('en-US', {
+        weekday: 'short', month: 'short', day: 'numeric',
+      });
+      await this.notificationsService.createNotification(
+        seekerUserId,
+        `📅 Interview scheduled: "${event.title}" on ${dateStr}`,
+      );
+    }
+
+    return event;
   }
 
   async deleteEvent(id: string) {

@@ -7,7 +7,7 @@ import { useDroppable, useDraggable } from "@dnd-kit/core"
 import { useJobStore, type JobApplication } from "hyrr.shared"
 import { Card, Badge, Button, useToast } from "hyrr.shared"
 import {
-  Bookmark, MoreHorizontal, MapPin, DollarSign, Calendar, User, LayoutList
+  Bookmark, MoreHorizontal, MapPin, DollarSign, Calendar, User, LayoutList, MessageSquare
 } from "lucide-react"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -16,11 +16,12 @@ import {
 
 // ─── Kanban Column ─────────────────────────────────────────────────────────────
 const columnColors: Record<string, string> = {
-  Saved:      "text-primary bg-primary-light border-primary-border/40",
-  Applied:    "text-sec-blue bg-sec-blue/10 border-sec-blue/20",
+  Saved:        "text-primary bg-primary-light border-primary-border/40",
+  Applied:      "text-sec-blue bg-sec-blue/10 border-sec-blue/20",
   "In Process": "text-sec-orange bg-sec-orange/10 border-sec-orange/20",
-  Offer:      "text-sec-green bg-sec-green/10 border-sec-green/20",
-  Archived:   "text-txt-caption bg-bg-primary border-bg-border/40",
+  Interviewing: "text-primary bg-primary-light border-primary-border/40",
+  Offer:        "text-sec-green bg-sec-green/10 border-sec-green/20",
+  Archived:     "text-txt-caption bg-bg-primary border-bg-border/40",
 }
 
 function JobColumn({
@@ -74,13 +75,14 @@ const companyDotColors: Record<string, string> = {
 const badgeVariant = (status: JobApplication["status"]) => {
   if (status === "Offer")      return "success" as const
   if (status === "Archived")   return "secondary" as const
+  if (status === "Interviewing") return "primary" as const
   if (status === "In Process") return "warning" as const
   if (status === "Applied")    return "info" as const
   return "primary" as const
 }
 
 function JobCard({ application, isOverlay = false }: { application: JobApplication; isOverlay?: boolean }) {
-  const { toggleJobBookmark, moveJobApplication } = useJobStore()
+  const { toggleJobBookmark, moveJobApplication, setCandidateActiveView, setActiveConversation } = useJobStore()
 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: application.id,
@@ -184,11 +186,24 @@ function JobCard({ application, isOverlay = false }: { application: JobApplicati
           <span className="text-[11px] text-txt-caption font-medium flex items-center gap-1">
             <User className="w-3 h-3" /> {application.recruiterName}
           </span>
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ml-auto flex items-center gap-1.5">
             {tag && <Badge variant={tagVariant}>{tag}</Badge>}
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setActiveConversation(application.id)
+                setCandidateActiveView("Messages")
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              title="Message Recruiter"
+              className="cursor-pointer transition-colors p-1 -m-1 rounded-full text-txt-caption hover:text-primary hover:bg-bg-hover"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+            </button>
             <button
               onClick={(e) => { e.stopPropagation(); toggleJobBookmark(application.id) }}
               onPointerDown={(e) => e.stopPropagation()}
+              title={application.bookmarked ? "Remove Bookmark" : "Bookmark"}
               className={`cursor-pointer transition-colors p-1 -m-1 rounded-full hover:bg-bg-hover ${
                 application.bookmarked ? "text-primary" : "text-txt-caption hover:text-txt-heading"
               }`}
@@ -216,11 +231,12 @@ export function ApplicationsBoard() {
   const activeApp = jobApplications.find((a) => a.id === activeId)
 
   const columns: { id: JobApplication["status"]; title: string }[] = [
-    { id: "Saved",      title: "Saved" },
-    { id: "Applied",    title: "Applied" },
-    { id: "In Process", title: "In Process" },
-    { id: "Offer",      title: "Offer" },
-    { id: "Archived",   title: "Archived" },
+    { id: "Saved",        title: "Saved" },
+    { id: "Applied",      title: "Applied" },
+    { id: "In Process",   title: "In Process" },
+    { id: "Interviewing", title: "Interviewing" },
+    { id: "Offer",        title: "Offer" },
+    { id: "Archived",     title: "Archived" },
   ]
 
   const handleDragStart = (e: DragStartEvent) => setActiveId(e.active.id as string)
@@ -251,7 +267,7 @@ export function ApplicationsBoard() {
       </div>
 
       {/* Stats strip */}
-      <div className="grid grid-cols-5 gap-4">
+      <div className="grid grid-cols-6 gap-4">
         {columns.map((col) => {
           const count = jobApplications.filter((a) => a.status === col.id).length
           return (

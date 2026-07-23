@@ -3,7 +3,7 @@ import { useJobStore, type Candidate } from "../../store/useJobStore"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../ui/dialog"
 import { Button } from "../ui/button"
 import { useToast } from "../ui/toast"
-import { MapPin, Mail, Phone, Calendar, X, Bookmark, Sparkles, FileText, Loader2 } from "lucide-react"
+import { MapPin, Mail, Phone, Calendar, X, Bookmark, Sparkles, FileText, Loader2, MessageSquare } from "lucide-react"
 import { Card } from "../ui/card"
 
 export function CandidateDetailDialog() {
@@ -14,6 +14,8 @@ export function CandidateDetailDialog() {
     moveCandidate,
     toggleBookmark,
     createEvent,
+    setActiveConversation,
+    setActiveView,
   } = useJobStore()
   const { toast } = useToast()
 
@@ -114,15 +116,28 @@ export function CandidateDetailDialog() {
             >
               <X className="w-4 h-4" />
             </button>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (!candidate) return
+                  setSelectedCandidateId(null)
+                  setActiveConversation(candidate.id)
+                  setActiveView("Messages")
+                }}
+                className="gap-1.5 text-[12.5px] cursor-pointer shadow-button"
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                Send Message
+              </Button>
               <select
                 value={candidate.status}
                 onChange={(e) => handleStatusChange(e.target.value as Candidate["status"])}
                 className="h-9 px-3.5 rounded-[12px] border border-bg-border bg-bg-secondary text-[12.5px] font-bold text-txt-heading focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer shadow-button"
               >
-                <option value="Saved">Saved</option>
                 <option value="Applied">Applied</option>
                 <option value="In Process">In Process</option>
+                <option value="Interviewing">Interviewing</option>
                 <option value="Offer">Offer</option>
                 <option value="Archived">Archived</option>
               </select>

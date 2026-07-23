@@ -28,16 +28,7 @@ export function SettingsPage() {
   const [generalTitle, setGeneralTitle] = useState("")
   const [generalLocation, setGeneralLocation] = useState("")
 
-  useEffect(() => {
-    if (user?.name) setGeneralName(user.name)
-  }, [user?.name])
-
-  const handleSaveGeneral = async () => {
-    const ok = await updateProfile({ name: generalName, title: generalTitle || undefined, location: generalLocation || undefined })
-    if (ok) toast("Saved", "General settings updated successfully.", "success")
-    else toast("Error", "Could not save settings. Please try again.", "error")
-  }
-
+  // Notification & privacy prefs (persisted via /settings)
   const [notifPrefs, setNotifPrefs] = useState({
     applicationUpdates: true, interviewReminders: true, offerNotifications: true,
     messageNotifications: true, jobRecommendations: true, weeklyDigest: false,
@@ -45,6 +36,66 @@ export function SettingsPage() {
   const [privacyPrefs, setPrivacyPrefs] = useState({
     profilePublic: true, resumeVisible: true, showActivity: false,
   })
+  const [prefsLoading, setPrefsLoading] = useState(false)
+  const [settingsSaving, setSettingsSaving] = useState(false)
+
+  useEffect(() => {
+    if (user?.name) setGeneralName(user.name)
+  }, [user?.name])
+
+  // Load settings from backend on mount
+  useEffect(() => {
+    setPrefsLoading(true)
+    apiFetch("/settings")
+      .then((s) => {
+        if (!s) return
+        setNotifPrefs({
+          applicationUpdates: s.applicationUpdates ?? true,
+          interviewReminders:  s.interviewReminders  ?? true,
+          offerNotifications:  s.offerNotifications  ?? true,
+          messageNotifications: s.messageNotifications ?? true,
+          jobRecommendations:  s.jobRecommendations  ?? true,
+          weeklyDigest:        s.weeklyDigest         ?? false,
+        })
+        setPrivacyPrefs({
+          profilePublic:  s.profilePublic  ?? true,
+          resumeVisible:  s.resumeVisible  ?? true,
+          showActivity:   s.showActivity   ?? false,
+        })
+      })
+      .catch(() => {/* silently ignore – defaults stay */})
+      .finally(() => setPrefsLoading(false))
+  }, [])
+
+  const handleSaveGeneral = async () => {
+    const ok = await updateProfile({ name: generalName, title: generalTitle || undefined, location: generalLocation || undefined })
+    if (ok) toast("Saved", "General settings updated successfully.", "success")
+    else toast("Error", "Could not save settings. Please try again.", "error")
+  }
+
+  const handleSaveNotifications = async () => {
+    setSettingsSaving(true)
+    try {
+      await apiFetch("/settings", { method: "PUT", body: JSON.stringify(notifPrefs) })
+      toast("Saved", "Notification preferences updated.", "success")
+    } catch {
+      toast("Error", "Could not save preferences.", "error")
+    } finally {
+      setSettingsSaving(false)
+    }
+  }
+
+  const handleSavePrivacy = async () => {
+    setSettingsSaving(true)
+    try {
+      await apiFetch("/settings", { method: "PUT", body: JSON.stringify(privacyPrefs) })
+      toast("Saved", "Privacy settings updated.", "success")
+    } catch {
+      toast("Error", "Could not save preferences.", "error")
+    } finally {
+      setSettingsSaving(false)
+    }
+  }
 
   const renderTab = () => {
     switch (activeTab) {
@@ -232,29 +283,41 @@ export function SettingsPage() {
       case "Notifications":
         return (
           <div className="space-y-4">
-            {Object.entries(notifPrefs).map(([key, val]) => {
-              const labels: Record<string, string> = {
-                applicationUpdates: "Application Status Updates",
-                interviewReminders: "Interview Reminders",
-                offerNotifications: "Offer Notifications",
-                messageNotifications: "Recruiter Messages",
-                jobRecommendations: "Job Recommendations",
-                weeklyDigest: "Weekly Job Digest",
-              }
-              return (
-                <div key={key} className="flex items-center justify-between p-4 rounded-[14px] border border-bg-border/60 bg-bg-secondary">
-                  <div>
-                    <p className="text-[13px] font-semibold text-txt-heading">{labels[key]}</p>
-                  </div>
-                  <button
-                    onClick={() => setNotifPrefs((p) => ({ ...p, [key]: !val }))}
-                    className={`relative w-12 h-6 rounded-full transition-colors cursor-pointer ${val ? "bg-primary" : "bg-bg-border"}`}
-                  >
-                    <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${val ? "translate-x-6" : "translate-x-0.5"}`} />
-                  </button>
-                </div>
-              )
-            })}
+            {prefsLoading ? (
+              <div className="flex items-center gap-2 text-txt-caption text-[13px]">
+                <Loader2 className="w-4 h-4 animate-spin" /> Loading preferences…
+              </div>
+            ) : (
+              <>
+                {Object.entries(notifPrefs).map(([key, val]) => {
+                  const labels: Record<string, string> = {
+                    applicationUpdates: "Application Status Updates",
+                    interviewReminders: "Interview Reminders",
+                    offerNotifications: "Offer Notifications",
+                    messageNotifications: "Recruiter Messages",
+                    jobRecommendations: "Job Recommendations",
+                    weeklyDigest: "Weekly Job Digest",
+                  }
+                  return (
+                    <div key={key} className="flex items-center justify-between p-4 rounded-[14px] border border-bg-border/60 bg-bg-secondary">
+                      <div>
+                        <p className="text-[13px] font-semibold text-txt-heading">{labels[key]}</p>
+                      </div>
+                      <button
+                        onClick={() => setNotifPrefs((p) => ({ ...p, [key]: !val }))}
+                        className={`relative w-12 h-6 rounded-full transition-colors cursor-pointer ${val ? "bg-primary" : "bg-bg-border"}`}
+                      >
+                        <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${val ? "translate-x-6" : "translate-x-0.5"}`} />
+                      </button>
+                    </div>
+                  )
+                })}
+                <Button onClick={handleSaveNotifications} disabled={settingsSaving} className="cursor-pointer shadow-button gap-2">
+                  {settingsSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  Save Preferences
+                </Button>
+              </>
+            )}
           </div>
         )
 
@@ -286,27 +349,39 @@ export function SettingsPage() {
       case "Privacy":
         return (
           <div className="space-y-6">
-            {Object.entries(privacyPrefs).map(([key, val]) => {
-              const labels: Record<string, { title: string; desc: string }> = {
-                profilePublic: { title: "Public Profile", desc: "Allow recruiters to discover your profile" },
-                resumeVisible: { title: "Resume Visibility", desc: "Make resume visible to verified recruiters" },
-                showActivity: { title: "Show Activity Status", desc: "Let recruiters see when you were last active" },
-              }
-              return (
-                <div key={key} className="flex items-center justify-between p-4 rounded-[14px] border border-bg-border/60 bg-bg-secondary">
-                  <div>
-                    <p className="text-[13px] font-semibold text-txt-heading">{labels[key].title}</p>
-                    <p className="text-[11.5px] text-txt-caption mt-0.5">{labels[key].desc}</p>
-                  </div>
-                  <button
-                    onClick={() => setPrivacyPrefs((p) => ({ ...p, [key]: !val }))}
-                    className={`relative w-12 h-6 rounded-full transition-colors cursor-pointer ${val ? "bg-primary" : "bg-bg-border"}`}
-                  >
-                    <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${val ? "translate-x-6" : "translate-x-0.5"}`} />
-                  </button>
-                </div>
-              )
-            })}
+            {prefsLoading ? (
+              <div className="flex items-center gap-2 text-txt-caption text-[13px]">
+                <Loader2 className="w-4 h-4 animate-spin" /> Loading preferences…
+              </div>
+            ) : (
+              <>
+                {Object.entries(privacyPrefs).map(([key, val]) => {
+                  const labels: Record<string, { title: string; desc: string }> = {
+                    profilePublic: { title: "Public Profile", desc: "Allow recruiters to discover your profile" },
+                    resumeVisible: { title: "Resume Visibility", desc: "Make resume visible to verified recruiters" },
+                    showActivity: { title: "Show Activity Status", desc: "Let recruiters see when you were last active" },
+                  }
+                  return (
+                    <div key={key} className="flex items-center justify-between p-4 rounded-[14px] border border-bg-border/60 bg-bg-secondary">
+                      <div>
+                        <p className="text-[13px] font-semibold text-txt-heading">{labels[key].title}</p>
+                        <p className="text-[11.5px] text-txt-caption mt-0.5">{labels[key].desc}</p>
+                      </div>
+                      <button
+                        onClick={() => setPrivacyPrefs((p) => ({ ...p, [key]: !val }))}
+                        className={`relative w-12 h-6 rounded-full transition-colors cursor-pointer ${val ? "bg-primary" : "bg-bg-border"}`}
+                      >
+                        <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${val ? "translate-x-6" : "translate-x-0.5"}`} />
+                      </button>
+                    </div>
+                  )
+                })}
+                <Button onClick={handleSavePrivacy} disabled={settingsSaving} className="cursor-pointer shadow-button gap-2">
+                  {settingsSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  Save Privacy Settings
+                </Button>
+              </>
+            )}
 
             <div className="pt-4 border-t border-bg-border/40">
               <h3 className="text-[13px] font-bold text-sec-red mb-2">Danger Zone</h3>
