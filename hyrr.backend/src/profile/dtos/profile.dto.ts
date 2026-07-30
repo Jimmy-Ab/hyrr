@@ -1,4 +1,4 @@
-import { Type } from "class-transformer"
+import { Transform, Type } from "class-transformer"
 import {
   IsArray,
   IsIn,
@@ -8,6 +8,15 @@ import {
   MaxLength,
   ValidateNested,
 } from "class-validator"
+
+const sanitizeUrl = ({ value }: { value: any }) => {
+  if (typeof value !== "string" || !value.trim()) return undefined
+  const trimmed = value.trim()
+  if (!/^https?:\/\//i.test(trimmed)) {
+    return `https://${trimmed}`
+  }
+  return trimmed
+}
 
 export class ExperienceDto {
   @IsString() @MaxLength(120) role: string
@@ -26,10 +35,27 @@ export class UpdateProfileDto {
   @IsOptional() @IsString() @MaxLength(120) name?: string
   @IsOptional() @IsString() @MaxLength(120) title?: string
   @IsOptional() @IsString() @MaxLength(160) location?: string
-  @IsOptional() @IsUrl({ require_tld: false }) website?: string
-  @IsOptional() @IsUrl({ require_tld: false }) github?: string
-  @IsOptional() @IsUrl({ require_tld: false }) linkedin?: string
-  @IsOptional() @IsUrl({ require_tld: false }) avatar?: string
+
+  @IsOptional()
+  @Transform(sanitizeUrl)
+  @IsUrl({ require_tld: false })
+  website?: string
+
+  @IsOptional()
+  @Transform(sanitizeUrl)
+  @IsUrl({ require_tld: false })
+  github?: string
+
+  @IsOptional()
+  @Transform(sanitizeUrl)
+  @IsUrl({ require_tld: false })
+  linkedin?: string
+
+  @IsOptional()
+  @Transform(sanitizeUrl)
+  @IsUrl({ require_tld: false })
+  avatar?: string
+
   @IsOptional() @IsString() @MaxLength(4000) bio?: string
   @IsOptional() @IsString() @MaxLength(100) expectedSalary?: string
   @IsOptional() @IsString() @MaxLength(60) preferredType?: string
@@ -64,3 +90,4 @@ export class UpdateProfileDto {
   @Type(() => EducationDto)
   educations?: EducationDto[]
 }
+

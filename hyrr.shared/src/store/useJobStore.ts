@@ -351,7 +351,27 @@ export interface JobState {
 
   // ── Profile ──────────────────────────────────────────────────────────────
   profileUpdating: boolean
-  updateProfile: (data: { name?: string; title?: string; location?: string }) => Promise<boolean>
+  updateProfile: (data: {
+    name?: string
+    title?: string
+    location?: string
+    phone?: string
+    website?: string
+    github?: string
+    linkedin?: string
+    bio?: string
+    avatar?: string
+    expectedSalary?: string
+    preferredType?: string
+    availability?: string
+    yearsOfExperience?: string
+    visibility?: string
+    skills?: string[]
+    languages?: string[]
+    preferredLocations?: string[]
+    experiences?: { role: string; company: string; duration: string; desc?: string }[]
+    educations?: { school: string; degree: string; duration: string }[]
+  }) => Promise<boolean>
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -606,7 +626,13 @@ export const useJobStore = create<JobState>((set, get) => ({
       const updated = await apiFetch("/profile", { method: "PUT", body: JSON.stringify(data) })
       const prev = get().user
       if (prev) {
-        set({ user: { ...prev, name: updated.name ?? prev.name } })
+        set({
+          user: {
+            ...prev,
+            name: updated.user?.name ?? updated.name ?? prev.name,
+            avatar: updated.user?.avatar ?? updated.avatar ?? prev.avatar,
+          },
+        })
       }
       return true
     } catch {
