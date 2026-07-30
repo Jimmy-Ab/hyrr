@@ -1,9 +1,6 @@
-import { useState } from "react";
-import { Zap, Plus, Gift } from "lucide-react";
-import { Card } from "hyrr.shared";
-import { Button } from "hyrr.shared";
-import { Input } from "hyrr.shared";
-import { useToast } from "hyrr.shared";
+import { Button, Card, Input, useToast } from "hyrr.shared"
+import { Gift, Plus, Zap } from "lucide-react"
+import { useState } from "react"
 
 const packages = [
   { id: "p1", name: "Starter Bundle", credits: 100, price: 19.99, bonus: 0 },
@@ -21,29 +18,24 @@ const packages = [
     price: 149.99,
     bonus: 200,
   },
-];
+]
 
 export function MomentumPage() {
-  const { toast } = useToast();
-  const [basePrice, setBasePrice] = useState("0.20");
-  const [aiPricingEnabled, setAiPricingEnabled] = useState(true);
+  const { toast } = useToast()
+  const [basePrice, setBasePrice] = useState("0.20")
+  const [aiPricingEnabled, setAiPricingEnabled] = useState(true)
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-[36px] font-bold text-txt-title tracking-tight">
-            Momentum Credits
-          </h1>
+          <h1 className="text-[36px] font-bold text-txt-title tracking-tight">Momentum Credits</h1>
           <p className="text-body text-txt-body mt-1 font-medium">
-            Manage virtual job listing credits, package parameters, and dynamic
-            AI costing.
+            Manage virtual job listing credits, package parameters, and dynamic AI costing.
           </p>
         </div>
         <Button
-          onClick={() =>
-            toast("Added Package", "Create package wizard coming soon.", "info")
-          }
+          onClick={() => toast("Added Package", "Create package wizard coming soon.", "info")}
           className="gap-1.5 cursor-pointer text-[12px]"
         >
           <Plus className="w-4 h-4" /> Add Package
@@ -78,9 +70,7 @@ export function MomentumPage() {
                 AI Dynamic Costing
               </label>
               <div className="flex items-center justify-between p-2 rounded-[10px] bg-bg-secondary border border-bg-border/60">
-                <span className="text-[12.5px] text-txt-body">
-                  Auto-price list cost
-                </span>
+                <span className="text-[12.5px] text-txt-body">Auto-price list cost</span>
                 <button
                   onClick={() => setAiPricingEnabled(!aiPricingEnabled)}
                   className={`relative w-12 h-6 rounded-full transition-colors cursor-pointer ${aiPricingEnabled ? "bg-primary" : "bg-bg-border"}`}
@@ -91,16 +81,13 @@ export function MomentumPage() {
                 </button>
               </div>
               <p className="text-[11px] text-txt-caption">
-                Calculates cost dynamically based on competition, salary, and
-                candidate volume.
+                Calculates cost dynamically based on competition, salary, and candidate volume.
               </p>
             </div>
           </div>
 
           <div className="space-y-3 pt-3 border-t border-bg-border/30">
-            <h3 className="text-[13px] font-bold text-txt-heading">
-              Costing Weights (AI Matrix)
-            </h3>
+            <h3 className="text-[13px] font-bold text-txt-heading">Costing Weights (AI Matrix)</h3>
             <div className="space-y-2.5">
               {[
                 { factor: "Expected Salary Weight", value: "High (x1.5)" },
@@ -122,9 +109,7 @@ export function MomentumPage() {
                   className="flex justify-between text-[12.5px] p-2 bg-bg-primary rounded-[8px] border border-bg-border/40"
                 >
                   <span className="text-txt-body">{f.factor}</span>
-                  <span className="font-semibold text-txt-heading">
-                    {f.value}
-                  </span>
+                  <span className="font-semibold text-txt-heading">{f.value}</span>
                 </div>
               ))}
             </div>
@@ -134,9 +119,7 @@ export function MomentumPage() {
         {/* Quick Packages */}
         <div className="space-y-4">
           <Card className="p-5">
-            <h3 className="text-[14px] font-bold text-txt-heading mb-3">
-              Package Schemes
-            </h3>
+            <h3 className="text-[14px] font-bold text-txt-heading mb-3">Package Schemes</h3>
             <div className="space-y-3">
               {packages.map((p) => (
                 <div
@@ -144,29 +127,19 @@ export function MomentumPage() {
                   className="p-3 bg-bg-primary rounded-[12px] border border-bg-border/60 flex items-center justify-between"
                 >
                   <div>
-                    <p className="text-[13px] font-bold text-txt-heading">
-                      {p.name}
-                    </p>
+                    <p className="text-[13px] font-bold text-txt-heading">{p.name}</p>
                     <p className="text-[11.5px] text-txt-caption">
                       {p.credits} Credits{" "}
                       {p.bonus > 0 && (
-                        <span className="text-sec-green font-bold">
-                          +{p.bonus} Bonus
-                        </span>
+                        <span className="text-sec-green font-bold">+{p.bonus} Bonus</span>
                       )}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[14px] font-extrabold text-txt-heading">
-                      ${p.price}
-                    </p>
+                    <p className="text-[14px] font-extrabold text-txt-heading">${p.price}</p>
                     <button
                       onClick={() =>
-                        toast(
-                          "Package updated",
-                          `${p.name} properties modified.`,
-                          "success",
-                        )
+                        toast("Package updated", `${p.name} properties modified.`, "success")
                       }
                       className="text-[11px] text-primary hover:underline cursor-pointer"
                     >
@@ -179,9 +152,7 @@ export function MomentumPage() {
           </Card>
 
           <Card className="p-5">
-            <h3 className="text-[14px] font-bold text-txt-heading mb-3">
-              Referrals & Campaigns
-            </h3>
+            <h3 className="text-[14px] font-bold text-txt-heading mb-3">Referrals & Campaigns</h3>
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-[12.5px] text-txt-body">
                 <Gift className="w-4 h-4 text-sec-orange" />
@@ -200,5 +171,5 @@ export function MomentumPage() {
         </div>
       </div>
     </div>
-  );
+  )
 }

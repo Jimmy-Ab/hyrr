@@ -1,29 +1,38 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { UploadsService } from '../uploads/uploads.service';
+import { Injectable, NotFoundException } from "@nestjs/common"
+import { PrismaService } from "../prisma/prisma.service"
+import { UploadsService } from "../uploads/uploads.service"
 
 @Injectable()
 export class DocumentsService {
-  constructor(private prisma: PrismaService, private uploads: UploadsService) {}
+  constructor(
+    private prisma: PrismaService,
+    private uploads: UploadsService
+  ) {}
 
   async getMyDocuments(userId: string) {
     const documents = await this.prisma.document.findMany({
       where: { userId },
-      orderBy: { createdAt: 'desc' },
-    });
-    return documents.map((document) => ({ ...document, url: this.uploads.formatFileUrl(this.uploads.getFilename(document.url)) }));
+      orderBy: { createdAt: "desc" },
+    })
+    return documents.map((document) => ({
+      ...document,
+      url: this.uploads.formatFileUrl(this.uploads.getFilename(document.url)),
+    }))
   }
 
-  async createDocument(userId: string, data: { name: string; type: string; size: string; url: string }) {
+  async createDocument(
+    userId: string,
+    data: { name: string; type: string; size: string; url: string }
+  ) {
     // Normalize type to uppercase to match Prisma DocType enum
-    const docType = (data.type || 'OTHER').toUpperCase() as any;
+    const docType = (data.type || "OTHER").toUpperCase() as any
 
     // If uploading a new active resume, deactivate existing ones first
-    if (docType === 'RESUME') {
+    if (docType === "RESUME") {
       await this.prisma.document.updateMany({
-        where: { userId, type: 'RESUME', active: true },
+        where: { userId, type: "RESUME", active: true },
         data: { active: false },
-      });
+      })
     }
 
     const document = await this.prisma.document.create({
@@ -35,32 +44,32 @@ export class DocumentsService {
         url: this.uploads.getFilename(data.url),
         active: true,
       },
-    });
-    return { ...document, url: this.uploads.formatFileUrl(this.uploads.getFilename(document.url)) };
+    })
+    return { ...document, url: this.uploads.formatFileUrl(this.uploads.getFilename(document.url)) }
   }
 
   async toggleActive(id: string, userId: string) {
-    const document = await this.prisma.document.findUnique({ where: { id } });
-    if (!document || document.userId !== userId) throw new NotFoundException('Document not found');
+    const document = await this.prisma.document.findUnique({ where: { id } })
+    if (!document || document.userId !== userId) throw new NotFoundException("Document not found")
 
-    if (document.type === 'RESUME' && !document.active) {
+    if (document.type === "RESUME" && !document.active) {
       // Deactivate others
       await this.prisma.document.updateMany({
-        where: { userId, type: 'RESUME', active: true },
+        where: { userId, type: "RESUME", active: true },
         data: { active: false },
-      });
+      })
     }
 
     return this.prisma.document.update({
       where: { id },
       data: { active: !document.active },
-    });
+    })
   }
 
   async deleteDocument(id: string, userId: string) {
-    const document = await this.prisma.document.findUnique({ where: { id } });
-    if (!document || document.userId !== userId) throw new NotFoundException('Document not found');
+    const document = await this.prisma.document.findUnique({ where: { id } })
+    if (!document || document.userId !== userId) throw new NotFoundException("Document not found")
 
-    return this.prisma.document.delete({ where: { id } });
+    return this.prisma.document.delete({ where: { id } })
   }
 }

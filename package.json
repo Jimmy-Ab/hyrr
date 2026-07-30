@@ -19,6 +19,9 @@
     "build:all": "npm run build --workspaces",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "format": "oxlint --fix && prettier --write .",
+    "format:check": "npx prettier --check .",
     "preview": "vite preview",
     "docker:up": "docker-compose up --build -d",
     "docker:down": "docker-compose down",
@@ -57,6 +60,8 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
     "oxlint": "^1.71.0",
+    "prettier": "^3.5.0",
+    "prettier-plugin-organize-imports": "^4.1.0",
     "typescript": "~6.0.2",
     "vite": "^8.1.1"
   }

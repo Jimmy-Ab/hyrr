@@ -1,7 +1,7 @@
-import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { motion } from "framer-motion"
 import { X } from "lucide-react"
+import * as React from "react"
 import { cn } from "../../lib/utils"
 
 const Dialog = DialogPrimitive.Root
@@ -30,11 +30,7 @@ const DialogContent = React.forwardRef<
   <DialogPortal>
     <DialogOverlay />
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <DialogPrimitive.Content
-        asChild
-        ref={ref}
-        {...props}
-      >
+      <DialogPrimitive.Content asChild ref={ref} {...props}>
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 12 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -57,24 +53,12 @@ const DialogContent = React.forwardRef<
 ))
 DialogContent.displayName = DialogPrimitive.Content.displayName
 
-const DialogHeader = ({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) => (
-  <div
-    className={cn(
-      "flex flex-col space-y-1.5 text-left",
-      className
-    )}
-    {...props}
-  />
+const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+  <div className={cn("flex flex-col space-y-1.5 text-left", className)} {...props} />
 )
 DialogHeader.displayName = "DialogHeader"
 
-const DialogFooter = ({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) => (
+const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
       "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 border-t border-bg-border/30 pt-4 mt-6 gap-2 sm:gap-0",
@@ -114,10 +98,10 @@ DialogDescription.displayName = DialogPrimitive.Description.displayName
 
 export {
   Dialog,
-  DialogTrigger,
   DialogContent,
-  DialogHeader,
-  DialogFooter,
-  DialogTitle,
   DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
 }

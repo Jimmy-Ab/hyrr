@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { Injectable } from "@nestjs/common"
+import { PrismaService } from "../prisma/prisma.service"
 
 @Injectable()
 export class SettingsService {
@@ -8,7 +8,7 @@ export class SettingsService {
   async getSettings(userId: string) {
     let setting = await this.prisma.userSetting.findUnique({
       where: { userId },
-    });
+    })
 
     if (!setting) {
       setting = await this.prisma.userSetting.create({
@@ -26,16 +26,16 @@ export class SettingsService {
           profilePublic: true,
           resumeVisible: true,
           showActivity: false,
-          theme: 'light',
+          theme: "light",
         },
-      });
+      })
     }
 
-    return setting;
+    return setting
   }
 
   async updateSettings(userId: string, data: any) {
-    const { id, userId: _, updatedAt: __, user: ___, ...updateData } = data;
+    const { id: _, userId: __, updatedAt: ___, user: ____, ...updateData } = data
 
     return this.prisma.userSetting.upsert({
       where: { userId },
@@ -44,6 +44,6 @@ export class SettingsService {
         userId,
         ...updateData,
       },
-    });
+    })
   }
 }

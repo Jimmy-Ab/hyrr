@@ -1,4 +1,4 @@
-version: '3.9'
+version: "3.9"
 
 services:
   # ─── PostgreSQL Database ─────────────────────────────────────────────────────
@@ -10,11 +10,11 @@ services:
       POSTGRES_PASSWORD: hyrr_password
       POSTGRES_DB: hyrr_db
     ports:
-      - '5433:5432'
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U hyrr_user -d hyrr_db']
+      test: ["CMD-SHELL", "pg_isready -U hyrr_user -d hyrr_db"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -24,7 +24,7 @@ services:
     image: redis:7-alpine
     container_name: hyrr_redis
     ports:
-      - '6380:6379'
+      - "6380:6379"
     volumes:
       - redis_data:/data
 
@@ -40,7 +40,7 @@ services:
       DATABASE_URL: postgresql://hyrr_user:hyrr_password@postgres:5432/hyrr_db?schema=public
       NODE_ENV: production
     ports:
-      - '3000:3000'
+      - "3000:3000"
     depends_on:
       postgres:
         condition: service_healthy

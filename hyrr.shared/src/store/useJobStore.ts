@@ -1,14 +1,22 @@
+import { io } from "socket.io-client"
 import { create } from "zustand"
 import { apiFetch } from "../lib/api"
-import { io } from "socket.io-client"
-import { APPLICATION_STATUS, type ApplicationStatusCode, type ApplicationStatusLabel, type CalendarEventType, type DocumentType, type JobType } from "../lib/contracts"
+import {
+  APPLICATION_STATUS,
+  type ApplicationStatusCode,
+  type ApplicationStatusLabel,
+  type CalendarEventType,
+  type DocumentType,
+  type JobType,
+} from "../lib/contracts"
 
 function decodeJwt(token: string) {
   try {
     const base64Url = token.split(".")[1]
     const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/")
     const jsonPayload = decodeURIComponent(
-      window.atob(base64)
+      window
+        .atob(base64)
         .split("")
         .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
         .join("")
@@ -168,7 +176,15 @@ export interface JobState {
   jobs: Job[]
   candidates: Candidate[]
   selectedJobId: string
-  activeView: "Dashboard" | "Jobs" | "Candidates" | "Applications" | "Calendar" | "Messages" | "Analytics" | "Careers"
+  activeView:
+    | "Dashboard"
+    | "Jobs"
+    | "Candidates"
+    | "Applications"
+    | "Calendar"
+    | "Messages"
+    | "Analytics"
+    | "Careers"
   careerSelectedJobId: string
   workspaceName: string
   isAddCandidateOpen: boolean
@@ -180,7 +196,13 @@ export interface JobState {
   selectedCandidateId: string | null
 
   // ── Auth ─────────────────────────────────────────────────────────────────
-  user: { id: string; email: string; name: string; avatar: string; role: "SEEKER" | "RECRUITER" | "ADMIN" } | null
+  user: {
+    id: string
+    email: string
+    name: string
+    avatar: string
+    role: "SEEKER" | "RECRUITER" | "ADMIN"
+  } | null
   accessToken: string | null
   isAuthenticated: boolean
   authLoading: boolean
@@ -189,7 +211,12 @@ export interface JobState {
 
   // ── Auth actions ─────────────────────────────────────────────────────────
   loginUser: (email: string, password: string) => Promise<boolean>
-  registerUser: (name: string, email: string, password: string, role: "SEEKER" | "RECRUITER") => Promise<boolean>
+  registerUser: (
+    name: string,
+    email: string,
+    password: string,
+    role: "SEEKER" | "RECRUITER"
+  ) => Promise<boolean>
   logout: () => void
   setAccessToken: (token: string | null) => void
   initializeSocket: () => void
@@ -219,9 +246,30 @@ export interface JobState {
   markNotificationRead: (id: string) => void
   clearNotifications: () => void
   deleteCandidate: (candidateId: string) => void
-  setActiveView: (view: "Dashboard" | "Jobs" | "Candidates" | "Applications" | "Calendar" | "Messages" | "Analytics" | "Careers") => void
+  setActiveView: (
+    view:
+      | "Dashboard"
+      | "Jobs"
+      | "Candidates"
+      | "Applications"
+      | "Calendar"
+      | "Messages"
+      | "Analytics"
+      | "Careers"
+  ) => void
   setCareerSelectedJobId: (jobId: string) => void
-  applyToJob: (jobId: string, applicant: { name: string; email: string; phone: string; title: string; location: string; linkedin?: string; coverLetter?: string }) => void
+  applyToJob: (
+    jobId: string,
+    applicant: {
+      name: string
+      email: string
+      phone: string
+      title: string
+      location: string
+      linkedin?: string
+      coverLetter?: string
+    }
+  ) => void
   setWorkspaceName: (name: string) => void
   setAddCandidateOpen: (open: boolean, col?: Candidate["status"]) => void
   setAddJobOpen: (open: boolean) => void
@@ -229,7 +277,16 @@ export interface JobState {
   fetchInitialData: () => Promise<void>
 
   // ── Seeker workspace ─────────────────────────────────────────────────────
-  candidateActiveView: "Dashboard" | "Discover" | "Applications" | "Messages" | "Notifications" | "Calendar" | "Documents" | "Profile" | "Settings"
+  candidateActiveView:
+    | "Dashboard"
+    | "Discover"
+    | "Applications"
+    | "Messages"
+    | "Notifications"
+    | "Calendar"
+    | "Documents"
+    | "Profile"
+    | "Settings"
   publicJobs: PublicJob[]
   recommendedJobs: PublicJob[]
   publicJobsLoading: boolean
@@ -237,7 +294,18 @@ export interface JobState {
   discoverSearch: string
   discoverTypeFilter: string
   seekerProfile: SeekerProfileData | null
-  setCandidateActiveView: (view: "Dashboard" | "Discover" | "Applications" | "Messages" | "Notifications" | "Calendar" | "Documents" | "Profile" | "Settings") => void
+  setCandidateActiveView: (
+    view:
+      | "Dashboard"
+      | "Discover"
+      | "Applications"
+      | "Messages"
+      | "Notifications"
+      | "Calendar"
+      | "Documents"
+      | "Profile"
+      | "Settings"
+  ) => void
   toggleJobBookmark: (id: string) => Promise<boolean>
   applyFromDiscover: (publicJobId: string) => Promise<boolean>
   saveJobFromDiscover: (publicJobId: string) => Promise<boolean>
@@ -346,7 +414,7 @@ export const useJobStore = create<JobState>((set, get) => ({
   logout: async () => {
     try {
       await apiFetch("/auth/logout", { method: "POST" })
-    } catch { }
+    } catch {}
     const s = get().socket
     if (s) s.disconnect()
     set({
@@ -421,7 +489,7 @@ export const useJobStore = create<JobState>((set, get) => ({
 
     socket.on("application_status_updated", (data: any) => {
       const status = Object.values(APPLICATION_STATUS).includes(data.status)
-        ? data.status as ApplicationStatusCode
+        ? (data.status as ApplicationStatusCode)
         : null
       if (!status) return
       set((state) => ({
@@ -445,7 +513,11 @@ export const useJobStore = create<JobState>((set, get) => ({
       const state = get()
       const isActiveConv = state.activeConversationId === data.applicationId
       const isDuplicate = state.conversationMessages.some(
-        (m) => m.id === data.id || (m.id.startsWith("temp-") && m.text === data.text && m.applicationId === data.applicationId)
+        (m) =>
+          m.id === data.id ||
+          (m.id.startsWith("temp-") &&
+            m.text === data.text &&
+            m.applicationId === data.applicationId)
       )
 
       // Only append to message list if viewing this conversation and not a duplicate
@@ -562,7 +634,9 @@ export const useJobStore = create<JobState>((set, get) => ({
 
   moveCandidate: async (candidateId, targetStatus) => {
     set((state) => ({
-      candidates: state.candidates.map((c) => c.id === candidateId ? { ...c, status: targetStatus } : c),
+      candidates: state.candidates.map((c) =>
+        c.id === candidateId ? { ...c, status: targetStatus } : c
+      ),
     }))
     try {
       await apiFetch(`/applications/${candidateId}`, {
@@ -580,7 +654,9 @@ export const useJobStore = create<JobState>((set, get) => ({
         method: "POST",
         body: JSON.stringify({
           name: candidateData.name,
-          email: candidateData.email || `${candidateData.name.toLowerCase().replace(/\s+/g, "")}@example.com`,
+          email:
+            candidateData.email ||
+            `${candidateData.name.toLowerCase().replace(/\s+/g, "")}@example.com`,
           phone: candidateData.phone,
           title: candidateData.title,
           location: candidateData.location,
@@ -588,15 +664,20 @@ export const useJobStore = create<JobState>((set, get) => ({
         }),
       })
       set((state) => ({
-        candidates: [...state.candidates, {
-          ...candidateData,
-          id: dbCandidate.id,
-          jobId,
-          status: "Applied",
-          bookmarked: false,
-          dateText: "Just now",
-          avatar: dbCandidate.user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(candidateData.name)}`,
-        }],
+        candidates: [
+          ...state.candidates,
+          {
+            ...candidateData,
+            id: dbCandidate.id,
+            jobId,
+            status: "Applied",
+            bookmarked: false,
+            dateText: "Just now",
+            avatar:
+              dbCandidate.user?.avatar ||
+              `https://ui-avatars.com/api/?name=${encodeURIComponent(candidateData.name)}`,
+          },
+        ],
       }))
     } catch (e) {
       console.warn("Failed to persist new candidate in database.", e)
@@ -631,7 +712,11 @@ export const useJobStore = create<JobState>((set, get) => ({
         color: dbJob.color || "purple",
         description: dbJob.description || jobData.description || "",
       }
-      set((state) => ({ jobs: [...state.jobs, newJob], selectedJobId: newJob.id, activeView: "Jobs" }))
+      set((state) => ({
+        jobs: [...state.jobs, newJob],
+        selectedJobId: newJob.id,
+        activeView: "Jobs",
+      }))
     } catch (e) {
       console.warn("Failed to persist new job in database.", e)
     }
@@ -642,7 +727,9 @@ export const useJobStore = create<JobState>((set, get) => ({
     if (!candidate) return
     const isBookmarked = !candidate.bookmarked
     set((state) => ({
-      candidates: state.candidates.map((c) => c.id === candidateId ? { ...c, bookmarked: isBookmarked } : c),
+      candidates: state.candidates.map((c) =>
+        c.id === candidateId ? { ...c, bookmarked: isBookmarked } : c
+      ),
     }))
     try {
       await apiFetch(`/applications/${candidateId}`, {
@@ -667,28 +754,30 @@ export const useJobStore = create<JobState>((set, get) => ({
         read: n.read,
       }))
       set({ notifications: mapped })
-    } catch { }
+    } catch {}
   },
 
   markNotificationsAsRead: async () => {
     set((state) => ({ notifications: state.notifications.map((n) => ({ ...n, read: true })) }))
     try {
       await apiFetch("/notifications/read-all", { method: "PATCH" })
-    } catch { }
+    } catch {}
   },
 
   markNotificationRead: async (id) => {
-    set((state) => ({ notifications: state.notifications.map((n) => n.id === id ? { ...n, read: true } : n) }))
+    set((state) => ({
+      notifications: state.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
+    }))
     try {
       await apiFetch(`/notifications/${id}/read`, { method: "PATCH" })
-    } catch { }
+    } catch {}
   },
 
   clearNotifications: async () => {
     set({ notifications: [] })
     try {
       await apiFetch("/notifications", { method: "DELETE" })
-    } catch { }
+    } catch {}
   },
 
   deleteCandidate: async (candidateId) => {
@@ -701,12 +790,16 @@ export const useJobStore = create<JobState>((set, get) => ({
   },
 
   setWorkspaceName: (name) => set({ workspaceName: name }),
-  setAddCandidateOpen: (open, col = "Applied") => set({ isAddCandidateOpen: open, addCandidateColumn: col }),
+  setAddCandidateOpen: (open, col = "Applied") =>
+    set({ isAddCandidateOpen: open, addCandidateColumn: col }),
   setAddJobOpen: (open) => set({ isAddJobOpen: open }),
 
   applyToJob: async (jobId, applicant) => {
     try {
-      await apiFetch(`/applications/jobs/${jobId}/apply`, { method: "POST", body: JSON.stringify(applicant) })
+      await apiFetch(`/applications/jobs/${jobId}/apply`, {
+        method: "POST",
+        body: JSON.stringify(applicant),
+      })
       get().fetchInitialData()
     } catch (e) {
       console.warn("Failed to submit applicant data to database.", e)
@@ -743,9 +836,21 @@ export const useJobStore = create<JobState>((set, get) => ({
           coverLetter: c.coverLetter,
           resumeUrl: c.resumeUrl,
           dateText: new Date(c.appliedAt).toLocaleDateString(),
-          status: c.status === "IN_PROCESS" ? "In Process" : c.status === "INTERVIEWING" ? "Interviewing" : c.status === "OFFER" ? "Offer" : c.status === "ARCHIVED" ? "Archived" : c.status === "SAVED" ? "Saved" : "Applied",
+          status:
+            c.status === "IN_PROCESS"
+              ? "In Process"
+              : c.status === "INTERVIEWING"
+                ? "Interviewing"
+                : c.status === "OFFER"
+                  ? "Offer"
+                  : c.status === "ARCHIVED"
+                    ? "Archived"
+                    : c.status === "SAVED"
+                      ? "Saved"
+                      : "Applied",
           bookmarked: c.recruiterBookmarked,
-          avatar: c.user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(c.name)}`,
+          avatar:
+            c.user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(c.name)}`,
           aiScore: c.aiScore,
           aiSummary: c.aiSummary,
           tag: c.tag,
@@ -765,16 +870,21 @@ export const useJobStore = create<JobState>((set, get) => ({
           if (profile?.company?.name) set({ workspaceName: profile.company.name })
           if (profile) {
             set((state) => ({
-              user: state.user ? { ...state.user, name: profile.name || state.user.name, avatar: profile.avatar || state.user.avatar } : state.user,
+              user: state.user
+                ? {
+                    ...state.user,
+                    name: profile.name || state.user.name,
+                    avatar: profile.avatar || state.user.avatar,
+                  }
+                : state.user,
             }))
           }
-        } catch { }
+        } catch {}
 
         get().fetchConversations()
         get().fetchUnreadCount()
         get().fetchEvents()
         get().fetchNotifications()
-
       } else if (role === "SEEKER") {
         set({ publicJobsLoading: true })
 
@@ -793,11 +903,15 @@ export const useJobStore = create<JobState>((set, get) => ({
           type: a.job.type,
           salary: a.job.salary || "Competitive",
           appliedDate: new Date(a.appliedAt).toLocaleDateString(),
-          status: (Object.values(APPLICATION_STATUS).includes(a.status) ? a.status : APPLICATION_STATUS.APPLIED) as ApplicationStatusCode,
+          status: (Object.values(APPLICATION_STATUS).includes(a.status)
+            ? a.status
+            : APPLICATION_STATUS.APPLIED) as ApplicationStatusCode,
           bookmarked: a.seekerBookmarked,
           recruiterName: a.job.postedBy?.name || "Hiring Team",
           recruiterAvatar: a.job.postedBy?.avatar || `https://ui-avatars.com/api/?name=Hiring+Team`,
-          interviewDate: a.calendarEvents?.[0]?.startTime ? new Date(a.calendarEvents[0].startTime).toLocaleDateString() : undefined,
+          interviewDate: a.calendarEvents?.[0]?.startTime
+            ? new Date(a.calendarEvents[0].startTime).toLocaleDateString()
+            : undefined,
           offerAmount: a.offerAmount,
           notes: a.notes,
           tag: a.tag,
@@ -860,7 +974,13 @@ export const useJobStore = create<JobState>((set, get) => ({
           ])
           if (meData) {
             set((state) => ({
-              user: state.user ? { ...state.user, name: meData.name || state.user.name, avatar: meData.avatar || state.user.avatar } : state.user,
+              user: state.user
+                ? {
+                    ...state.user,
+                    name: meData.name || state.user.name,
+                    avatar: meData.avatar || state.user.avatar,
+                  }
+                : state.user,
             }))
           }
           if (profileData) {
@@ -884,7 +1004,7 @@ export const useJobStore = create<JobState>((set, get) => ({
               },
             })
           }
-        } catch { }
+        } catch {}
 
         get().fetchEvents()
         get().fetchDocuments()
@@ -905,7 +1025,9 @@ export const useJobStore = create<JobState>((set, get) => ({
     if (!app) return false
     const isBookmarked = !app.bookmarked
     set((state) => ({
-      jobApplications: state.jobApplications.map((a) => a.id === id ? { ...a, bookmarked: isBookmarked } : a),
+      jobApplications: state.jobApplications.map((a) =>
+        a.id === id ? { ...a, bookmarked: isBookmarked } : a
+      ),
     }))
     try {
       await apiFetch(`/applications/${id}`, {
@@ -915,7 +1037,9 @@ export const useJobStore = create<JobState>((set, get) => ({
       return true
     } catch (e) {
       set((state) => ({
-        jobApplications: state.jobApplications.map((a) => a.id === id ? { ...a, bookmarked: app.bookmarked } : a),
+        jobApplications: state.jobApplications.map((a) =>
+          a.id === id ? { ...a, bookmarked: app.bookmarked } : a
+        ),
       }))
       console.warn("Failed to update bookmark status in database.", e)
       return false
@@ -1010,17 +1134,20 @@ export const useJobStore = create<JobState>((set, get) => ({
         }),
       })
       set((state) => ({
-        events: [...state.events, {
-          id: created.id,
-          title: created.title,
-          startTime: created.startTime,
-          endTime: created.endTime,
-          type: (created.type || "other").toLowerCase() as CalendarEvent["type"],
-          applicationId: created.applicationId,
-          meetingUrl: created.meetingUrl,
-          location: created.location,
-          notes: created.notes,
-        }],
+        events: [
+          ...state.events,
+          {
+            id: created.id,
+            title: created.title,
+            startTime: created.startTime,
+            endTime: created.endTime,
+            type: (created.type || "other").toLowerCase() as CalendarEvent["type"],
+            applicationId: created.applicationId,
+            meetingUrl: created.meetingUrl,
+            location: created.location,
+            notes: created.notes,
+          },
+        ],
       }))
     } catch (e) {
       console.warn("Failed to create calendar event.", e)
@@ -1069,15 +1196,18 @@ export const useJobStore = create<JobState>((set, get) => ({
         body: JSON.stringify(meta),
       })
       set((state) => ({
-        documents: [...state.documents, {
-          id: created.id,
-          name: created.name,
-          type: (created.type || "other").toLowerCase() as Document["type"],
-          size: created.size || meta.size,
-          url: created.url || meta.url,
-          active: created.active ?? true,
-          createdAt: created.createdAt || new Date().toISOString(),
-        }],
+        documents: [
+          ...state.documents,
+          {
+            id: created.id,
+            name: created.name,
+            type: (created.type || "other").toLowerCase() as Document["type"],
+            size: created.size || meta.size,
+            url: created.url || meta.url,
+            active: created.active ?? true,
+            createdAt: created.createdAt || new Date().toISOString(),
+          },
+        ],
       }))
     } catch (e) {
       console.warn("Failed to upload document.", e)
@@ -1086,7 +1216,7 @@ export const useJobStore = create<JobState>((set, get) => ({
 
   toggleDocumentActive: async (id) => {
     set((state) => ({
-      documents: state.documents.map((d) => d.id === id ? { ...d, active: !d.active } : d),
+      documents: state.documents.map((d) => (d.id === id ? { ...d, active: !d.active } : d)),
     }))
     try {
       await apiFetch(`/documents/${id}/toggle`, { method: "PUT" })
@@ -1123,12 +1253,19 @@ export const useJobStore = create<JobState>((set, get) => ({
         const isSeeker = role === "SEEKER"
         return {
           applicationId: app.id,
-          candidateName: isSeeker ? (app.job?.postedBy?.name || "Hiring Team") : (app.user?.name || "Candidate"),
-          candidateAvatar: isSeeker ? (app.job?.postedBy?.avatar || `https://ui-avatars.com/api/?name=Hiring+Team`) : (app.user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(app.user?.name || "C")}`),
+          candidateName: isSeeker
+            ? app.job?.postedBy?.name || "Hiring Team"
+            : app.user?.name || "Candidate",
+          candidateAvatar: isSeeker
+            ? app.job?.postedBy?.avatar || `https://ui-avatars.com/api/?name=Hiring+Team`
+            : app.user?.avatar ||
+              `https://ui-avatars.com/api/?name=${encodeURIComponent(app.user?.name || "C")}`,
           jobTitle: app.job?.title || "Position",
           company: app.job?.company?.name || "Company",
           lastMessage: lastMsg?.text || "No messages yet",
-          lastMessageTime: lastMsg?.createdAt ? new Date(lastMsg.createdAt).toLocaleDateString() : "",
+          lastMessageTime: lastMsg?.createdAt
+            ? new Date(lastMsg.createdAt).toLocaleDateString()
+            : "",
           unreadCount: app._unreadCount || 0,
           online: false,
         }
@@ -1207,7 +1344,9 @@ export const useJobStore = create<JobState>((set, get) => ({
         if (saved?.id) {
           set((state) => ({
             conversationMessages: state.conversationMessages.map((m) =>
-              m.id === tempId ? { ...m, id: saved.id, createdAt: saved.createdAt || m.createdAt } : m
+              m.id === tempId
+                ? { ...m, id: saved.id, createdAt: saved.createdAt || m.createdAt }
+                : m
             ),
           }))
         }
@@ -1235,8 +1374,10 @@ export const useJobStore = create<JobState>((set, get) => ({
   deleteConversation: async (applicationId) => {
     set((state) => ({
       conversations: state.conversations.filter((c) => c.applicationId !== applicationId),
-      activeConversationId: state.activeConversationId === applicationId ? null : state.activeConversationId,
-      conversationMessages: state.activeConversationId === applicationId ? [] : state.conversationMessages,
+      activeConversationId:
+        state.activeConversationId === applicationId ? null : state.activeConversationId,
+      conversationMessages:
+        state.activeConversationId === applicationId ? [] : state.conversationMessages,
     }))
     try {
       await apiFetch(`/messages/conversations/${applicationId}`, { method: "DELETE" })
@@ -1249,7 +1390,9 @@ export const useJobStore = create<JobState>((set, get) => ({
     try {
       const data = await apiFetch("/messages/unread-count")
       set({ unreadMessageCount: data?.count || 0 })
-    } catch { /* swallow */ }
+    } catch {
+      /* swallow */
+    }
   },
 
   // ── AI Chat ────────────────────────────────────────────────────────────────
@@ -1259,7 +1402,9 @@ export const useJobStore = create<JobState>((set, get) => ({
   aiChatOpen: false,
 
   sendAiChat: async (message) => {
-    const history = get().aiChatMessages.slice(-10).map((m) => ({ role: m.role, content: m.content }))
+    const history = get()
+      .aiChatMessages.slice(-10)
+      .map((m) => ({ role: m.role, content: m.content }))
     const userMsg: AiChatMessage = { role: "user", content: message, timestamp: Date.now() }
 
     set((state) => ({
@@ -1287,7 +1432,10 @@ export const useJobStore = create<JobState>((set, get) => ({
         content: "I'm currently offline. Please check your connection and try again.",
         timestamp: Date.now(),
       }
-      set((state) => ({ aiChatMessages: [...state.aiChatMessages, fallback], aiChatLoading: false }))
+      set((state) => ({
+        aiChatMessages: [...state.aiChatMessages, fallback],
+        aiChatLoading: false,
+      }))
     }
   },
 

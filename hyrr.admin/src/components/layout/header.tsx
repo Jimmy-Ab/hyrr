@@ -1,18 +1,25 @@
-import * as React from "react"
-import { useState, useEffect } from "react"
 import {
-  Search, Bell, Sun, Moon, Command, HelpCircle, ChevronsLeft
-} from "lucide-react"
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  useToast,
 } from "hyrr.shared"
+import { Bell, ChevronsLeft, HelpCircle, Moon, Search, Sun } from "lucide-react"
+import { useEffect, useState } from "react"
 import { useAdminStore } from "../../store/useAdminStore"
-import { useToast } from "hyrr.shared"
 
 function HyrrIcon({ size = 32 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 36 36"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
       <rect width="36" height="36" rx="10" fill="#6C63FF" />
       <rect x="8" y="9" width="4" height="18" rx="2" fill="white" />
       <rect x="24" y="9" width="4" height="18" rx="2" fill="white" />
@@ -47,7 +54,9 @@ export function AdminHeader() {
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2.5">
           <HyrrIcon size={32} />
-          <span className="font-extrabold text-[18px] text-txt-title tracking-tight font-sans">HYRR</span>
+          <span className="font-extrabold text-[18px] text-txt-title tracking-tight font-sans">
+            HYRR
+          </span>
         </div>
         <button className="p-1 rounded-lg text-txt-caption hover:text-txt-heading hover:bg-bg-hover cursor-pointer transition-colors outline-none">
           <ChevronsLeft className="w-4 h-4" />
@@ -55,7 +64,9 @@ export function AdminHeader() {
       </div>
 
       {/* Center: Search anything input */}
-      <div className={`relative transition-all duration-200 ${searchFocused ? "w-[540px]" : "w-[440px]"}`}>
+      <div
+        className={`relative transition-all duration-200 ${searchFocused ? "w-[540px]" : "w-[440px]"}`}
+      >
         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-txt-caption pointer-events-none" />
         <input
           id="admin-search"
@@ -89,14 +100,26 @@ export function AdminHeader() {
           <DropdownMenuContent className="w-80" align="end">
             <DropdownMenuLabel className="flex items-center justify-between">
               <span>Notifications</span>
-              <button onClick={() => { markAllRead(); toast("Done", "All marked read", "success") }} className="text-[10px] text-primary font-semibold cursor-pointer hover:underline">Mark all read</button>
+              <button
+                onClick={() => {
+                  markAllRead()
+                  toast("Done", "All marked read", "success")
+                }}
+                className="text-[10px] text-primary font-semibold cursor-pointer hover:underline"
+              >
+                Mark all read
+              </button>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             {notifications.slice(0, 5).map((n) => (
               <DropdownMenuItem key={n.id} className="flex items-start gap-2 p-3">
-                <div className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${n.read ? "bg-bg-border" : "bg-sec-red"}`} />
+                <div
+                  className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${n.read ? "bg-bg-border" : "bg-sec-red"}`}
+                />
                 <div>
-                  <p className="text-[12.5px] text-txt-heading font-medium leading-snug">{n.title}</p>
+                  <p className="text-[12.5px] text-txt-heading font-medium leading-snug">
+                    {n.title}
+                  </p>
                   <p className="text-[11px] text-txt-caption mt-0.5">{n.time}</p>
                 </div>
               </DropdownMenuItem>
@@ -105,12 +128,18 @@ export function AdminHeader() {
         </DropdownMenu>
 
         {/* Help */}
-        <button onClick={() => toast("Help", "Documentation opening...", "info")} className="w-9 h-9 rounded-full flex items-center justify-center text-txt-caption hover:text-txt-heading hover:bg-bg-hover transition-all cursor-pointer">
+        <button
+          onClick={() => toast("Help", "Documentation opening...", "info")}
+          className="w-9 h-9 rounded-full flex items-center justify-center text-txt-caption hover:text-txt-heading hover:bg-bg-hover transition-all cursor-pointer"
+        >
           <HelpCircle className="w-4.5 h-4.5" />
         </button>
 
         {/* Dark/Light mode theme */}
-        <button onClick={toggleTheme} className="w-9 h-9 rounded-full flex items-center justify-center text-txt-caption hover:text-txt-heading hover:bg-bg-hover transition-all cursor-pointer">
+        <button
+          onClick={toggleTheme}
+          className="w-9 h-9 rounded-full flex items-center justify-center text-txt-caption hover:text-txt-heading hover:bg-bg-hover transition-all cursor-pointer"
+        >
           {theme === "dark" ? <Sun className="w-4.5 h-4.5" /> : <Moon className="w-4.5 h-4.5" />}
         </button>
 

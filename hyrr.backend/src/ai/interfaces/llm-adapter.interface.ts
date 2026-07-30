@@ -1,6 +1,6 @@
 export interface AIMatchResult {
-  score: number;   // 0-100
-  summary: string; // Bullet point analysis
+  score: number // 0-100
+  summary: string // Bullet point analysis
 }
 
 export interface LLMAdapter {
@@ -8,6 +8,6 @@ export interface LLMAdapter {
     systemPrompt: string,
     temperature: number,
     candidateData: Record<string, any>,
-    jobData: Record<string, any>,
-  ): Promise<AIMatchResult>;
+    jobData: Record<string, any>
+  ): Promise<AIMatchResult>
 }

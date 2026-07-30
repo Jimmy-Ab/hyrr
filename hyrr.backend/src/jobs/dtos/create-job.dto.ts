@@ -1,48 +1,57 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsOptional, IsArray, IsBoolean, IsNumber } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger"
+import { IsArray, IsBoolean, IsNotEmpty, IsOptional, IsString } from "class-validator"
 
 export class CreateJobDto {
-  @ApiProperty({ example: 'Senior Frontend Developer', description: 'Job title' })
-  @IsString() @IsNotEmpty()
-  title: string;
+  @ApiProperty({ example: "Senior Frontend Developer", description: "Job title" })
+  @IsString()
+  @IsNotEmpty()
+  title: string
 
-  @ApiProperty({ example: 'San Francisco, CA', description: 'Job location' })
-  @IsString() @IsNotEmpty()
-  location: string;
+  @ApiProperty({ example: "San Francisco, CA", description: "Job location" })
+  @IsString()
+  @IsNotEmpty()
+  location: string
 
-  @ApiProperty({ example: 'Full Time', enum: ['Full Time', 'Part Time', 'Contract', 'Remote'] })
-  @IsString() @IsNotEmpty()
-  type: string;
+  @ApiProperty({ example: "Full Time", enum: ["Full Time", "Part Time", "Contract", "Remote"] })
+  @IsString()
+  @IsNotEmpty()
+  type: string
 
-  @ApiPropertyOptional({ example: '$120k – $180k', description: 'Salary range' })
-  @IsOptional() @IsString()
-  salary?: string;
+  @ApiPropertyOptional({ example: "$120k – $180k", description: "Salary range" })
+  @IsOptional()
+  @IsString()
+  salary?: string
 
-  @ApiProperty({ example: 'We are looking for a...', description: 'Full job description' })
-  @IsString() @IsNotEmpty()
-  description: string;
+  @ApiProperty({ example: "We are looking for a...", description: "Full job description" })
+  @IsString()
+  @IsNotEmpty()
+  description: string
 
-  @ApiProperty({ example: ['5+ years React experience', 'TypeScript proficiency'], type: [String] })
+  @ApiProperty({ example: ["5+ years React experience", "TypeScript proficiency"], type: [String] })
   @IsArray()
-  requirements: string[];
+  requirements: string[]
 
-  @ApiProperty({ example: ['React', 'TypeScript', 'Next.js'], type: [String] })
+  @ApiProperty({ example: ["React", "TypeScript", "Next.js"], type: [String] })
   @IsArray()
-  skills: string[];
+  skills: string[]
 
-  @ApiPropertyOptional({ example: ['Unlimited PTO', 'Equity'], type: [String] })
-  @IsOptional() @IsArray()
-  benefits?: string[];
+  @ApiPropertyOptional({ example: ["Unlimited PTO", "Equity"], type: [String] })
+  @IsOptional()
+  @IsArray()
+  benefits?: string[]
 
-  @ApiProperty({ example: 'cat-uuid-123', description: 'Category ID from /categories' })
-  @IsString() @IsNotEmpty()
-  categoryId: string;
+  @ApiProperty({ example: "cat-uuid-123", description: "Category ID from /categories" })
+  @IsString()
+  @IsNotEmpty()
+  categoryId: string
 
   @ApiPropertyOptional({ example: false })
-  @IsOptional() @IsBoolean()
-  featured?: boolean;
+  @IsOptional()
+  @IsBoolean()
+  featured?: boolean
 
   @ApiPropertyOptional({ example: false })
-  @IsOptional() @IsBoolean()
-  remote?: boolean;
+  @IsOptional()
+  @IsBoolean()
+  remote?: boolean
 }

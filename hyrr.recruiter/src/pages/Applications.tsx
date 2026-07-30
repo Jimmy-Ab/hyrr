@@ -1,9 +1,8 @@
+import { BarChart3, Kanban, List, MoreHorizontal } from "lucide-react"
 import { KanbanBoard } from "../components/kanban/kanban-board"
-import { useJobStore } from "../store/useJobStore"
 import { Badge } from "../components/ui/badge"
-import { Button } from "../components/ui/button"
-import { Kanban, List, BarChart3, MoreHorizontal } from "lucide-react"
 import { useToast } from "../components/ui/toast"
+import { useJobStore } from "../store/useJobStore"
 
 export function Applications() {
   const { jobs, selectedJobId, setActiveView } = useJobStore()
@@ -28,21 +27,22 @@ export function Applications() {
             <h1 className="text-[22px] font-bold text-[#111827] tracking-tight leading-none">
               {currentJob.title}
             </h1>
-            <Badge variant="success" className="bg-[#E6F8ED] text-[#16A34A] hover:bg-[#E6F8ED] border-0 font-semibold px-2.5 py-0.5 rounded-md text-xs">
+            <Badge
+              variant="success"
+              className="bg-[#E6F8ED] text-[#16A34A] hover:bg-[#E6F8ED] border-0 font-semibold px-2.5 py-0.5 rounded-md text-xs"
+            >
               Active
             </Badge>
           </div>
           <p className="text-[13px] text-slate-400 mt-1.5 font-normal">
-            {currentJob.location}  •  {currentJob.type}  •  Posted 5 days ago
+            {currentJob.location} • {currentJob.type} • Posted 5 days ago
           </p>
         </div>
 
         {/* View Switchers & Dots */}
         <div className="flex items-center gap-2">
           <div className="flex gap-1 bg-white p-1 border border-slate-200 rounded-xl shadow-xs shrink-0">
-            <button
-              className="h-8 rounded-lg gap-1.5 font-semibold text-xs cursor-pointer px-3 flex items-center bg-primary-light text-primary border border-primary-border/40"
-            >
+            <button className="h-8 rounded-lg gap-1.5 font-semibold text-xs cursor-pointer px-3 flex items-center bg-primary-light text-primary border border-primary-border/40">
               <Kanban className="w-3.5 h-3.5 text-primary" />
               Board
             </button>

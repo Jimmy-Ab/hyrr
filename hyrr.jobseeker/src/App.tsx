@@ -1,24 +1,36 @@
+import {
+  AiChatWidget,
+  AuthPage,
+  OAuthCallback,
+  RoleMismatch,
+  ToastProvider,
+  apiFetch,
+  useJobStore,
+} from "hyrr.shared"
 import * as React from "react"
 import { Header } from "./components/layout/header"
 import { Sidebar } from "./components/layout/sidebar"
-import { ToastProvider, AuthPage, OAuthCallback, RoleMismatch, apiFetch, AiChatWidget } from "hyrr.shared"
-import { useJobStore } from "hyrr.shared"
 
 // Pages
+import { ApplicationsBoard } from "./pages/Applications"
+import { CandidateCalendar } from "./pages/CalendarPage"
 import { CandidateDashboard } from "./pages/Dashboard"
 import { DiscoverJobs } from "./pages/DiscoverJobs"
-import { ApplicationsBoard } from "./pages/Applications"
+import { Documents } from "./pages/Documents"
 import { CandidateMessages } from "./pages/Messages"
 import { NotificationsPage } from "./pages/Notifications"
-import { CandidateCalendar } from "./pages/CalendarPage"
-import { Documents } from "./pages/Documents"
 import { ProfilePage } from "./pages/ProfilePage"
 import { SettingsPage } from "./pages/Settings"
 
 function AppContent() {
   const {
-    candidateActiveView, theme, fetchInitialData,
-    isAuthenticated, user, setAccessToken, logout
+    candidateActiveView,
+    theme,
+    fetchInitialData,
+    isAuthenticated,
+    user,
+    setAccessToken,
+    logout,
   } = useJobStore()
 
   const [loading, setLoading] = React.useState(true)
@@ -27,7 +39,7 @@ function AppContent() {
   React.useEffect(() => {
     async function silentRefresh() {
       try {
-        const res = await apiFetch('/auth/refresh', { method: 'POST', skipAuth: true })
+        const res = await apiFetch("/auth/refresh", { method: "POST", skipAuth: true })
         if (res.accessToken) {
           setAccessToken(res.accessToken)
         }
@@ -77,16 +89,26 @@ function AppContent() {
 
   const renderView = () => {
     switch (candidateActiveView) {
-      case "Dashboard": return <CandidateDashboard />
-      case "Discover": return <DiscoverJobs />
-      case "Applications": return <ApplicationsBoard />
-      case "Messages": return <CandidateMessages />
-      case "Notifications": return <NotificationsPage />
-      case "Calendar": return <CandidateCalendar />
-      case "Documents": return <Documents />
-      case "Profile": return <ProfilePage />
-      case "Settings": return <SettingsPage />
-      default: return <CandidateDashboard />
+      case "Dashboard":
+        return <CandidateDashboard />
+      case "Discover":
+        return <DiscoverJobs />
+      case "Applications":
+        return <ApplicationsBoard />
+      case "Messages":
+        return <CandidateMessages />
+      case "Notifications":
+        return <NotificationsPage />
+      case "Calendar":
+        return <CandidateCalendar />
+      case "Documents":
+        return <Documents />
+      case "Profile":
+        return <ProfilePage />
+      case "Settings":
+        return <SettingsPage />
+      default:
+        return <CandidateDashboard />
     }
   }
 
@@ -102,9 +124,7 @@ function AppContent() {
 
         {/* Right Scrollable Content Area */}
         <main className="flex-1 overflow-y-auto p-8 bg-bg-primary">
-          <div className="max-w-[1440px] mx-auto w-full h-full">
-            {renderView()}
-          </div>
+          <div className="max-w-[1440px] mx-auto w-full h-full">{renderView()}</div>
         </main>
       </div>
 

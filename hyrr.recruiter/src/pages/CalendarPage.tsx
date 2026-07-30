@@ -1,27 +1,24 @@
-import { useEffect, useState } from "react";
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
   ChevronRight,
   Clock,
+  Loader2,
   Plus,
   X,
-  Loader2,
-} from "lucide-react";
-import { Card } from "../components/ui/card";
-import { Button } from "../components/ui/button";
-import { useToast } from "../components/ui/toast";
-import { useJobStore, type CalendarEvent } from "../store/useJobStore";
+} from "lucide-react"
+import { useEffect, useState } from "react"
+import { Button } from "../components/ui/button"
+import { Card } from "../components/ui/card"
+import { useToast } from "../components/ui/toast"
+import { useJobStore, type CalendarEvent } from "../store/useJobStore"
 
 const typeStyle = (type: string) => {
-  if (type === "interview")
-    return "bg-primary-light border-primary-border/30 text-primary";
-  if (type === "deadline")
-    return "bg-sec-orange/10 border-sec-orange/20 text-sec-orange";
-  if (type === "offer")
-    return "bg-sec-green/10 border-sec-green/20 text-sec-green";
-  return "bg-bg-primary border-bg-border text-txt-body";
-};
+  if (type === "interview") return "bg-primary-light border-primary-border/30 text-primary"
+  if (type === "deadline") return "bg-sec-orange/10 border-sec-orange/20 text-sec-orange"
+  if (type === "offer") return "bg-sec-green/10 border-sec-green/20 text-sec-green"
+  return "bg-bg-primary border-bg-border text-txt-body"
+}
 
 function AddEventModal({
   onClose,
@@ -29,23 +26,23 @@ function AddEventModal({
   candidates,
   preselectedDate,
 }: {
-  onClose: () => void;
-  onAdd: (e: Omit<CalendarEvent, "id">) => void;
-  candidates: any[];
-  preselectedDate?: string;
+  onClose: () => void
+  onAdd: (e: Omit<CalendarEvent, "id">) => void
+  candidates: any[]
+  preselectedDate?: string
 }) {
-  const [title, setTitle] = useState("");
-  const [candidateId, setCandidateId] = useState("");
-  const [date, setDate] = useState(preselectedDate || "");
-  const [time, setTime] = useState("10:00");
-  const [type, setType] = useState<CalendarEvent["type"]>("interview");
-  const [meetingUrl, setMeetingUrl] = useState("");
-  const [location, setLocation] = useState("");
-  const [notes, setNotes] = useState("");
+  const [title, setTitle] = useState("")
+  const [candidateId, setCandidateId] = useState("")
+  const [date, setDate] = useState(preselectedDate || "")
+  const [time, setTime] = useState("10:00")
+  const [type, setType] = useState<CalendarEvent["type"]>("interview")
+  const [meetingUrl, setMeetingUrl] = useState("")
+  const [location, setLocation] = useState("")
+  const [notes, setNotes] = useState("")
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title || !date) return;
+    e.preventDefault()
+    if (!title || !date) return
     onAdd({
       title: candidateId
         ? `${title} - ${candidates.find((c) => c.id === candidateId)?.name || ""}`
@@ -56,17 +53,15 @@ function AddEventModal({
       meetingUrl: meetingUrl || undefined,
       location: location || undefined,
       notes: notes || undefined,
-    });
-    onClose();
-  };
+    })
+    onClose()
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-bg-secondary border border-bg-border/60 rounded-[20px] shadow-[0_20px_60px_rgba(0,0,0,0.15)] w-full max-w-sm p-6 space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-[15px] font-bold text-txt-heading">
-            Schedule Interview Slot
-          </h3>
+          <h3 className="text-[15px] font-bold text-txt-heading">Schedule Interview Slot</h3>
           <button
             onClick={onClose}
             className="p-1 rounded-full hover:bg-bg-hover text-txt-caption cursor-pointer"
@@ -187,81 +182,66 @@ function AddEventModal({
             >
               Cancel
             </Button>
-            <Button
-              type="submit"
-              className="flex-1 cursor-pointer font-semibold shadow-button"
-            >
+            <Button type="submit" className="flex-1 cursor-pointer font-semibold shadow-button">
               Add Slot
             </Button>
           </div>
         </form>
       </div>
     </div>
-  );
+  )
 }
 
 export function CalendarPage() {
-  const { toast } = useToast();
-  const {
-    events,
-    eventsLoading,
-    fetchEvents,
-    createEvent,
-    deleteEvent,
-    candidates,
-  } = useJobStore();
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [addModalOpen, setAddModalOpen] = useState(false);
-  const [selectedDateStr, setSelectedDateStr] = useState("");
+  const { toast } = useToast()
+  const { events, eventsLoading, fetchEvents, createEvent, deleteEvent, candidates } = useJobStore()
+  const [currentDate, setCurrentDate] = useState(new Date())
+  const [addModalOpen, setAddModalOpen] = useState(false)
+  const [selectedDateStr, setSelectedDateStr] = useState("")
 
   useEffect(() => {
-    fetchEvents();
-  }, []); // eslint-disable-line
+    fetchEvents()
+  }, []) // eslint-disable-line
 
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
+  const year = currentDate.getFullYear()
+  const month = currentDate.getMonth()
   const monthName = currentDate.toLocaleString("default", {
     month: "long",
     year: "numeric",
-  });
+  })
 
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const startDayOffset = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const startDayOffset = new Date(year, month, 1).getDay()
 
-  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-  const emptyDaysBefore = Array.from({ length: startDayOffset }, () => null);
-  const calendarDays = [...emptyDaysBefore, ...days];
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+  const emptyDaysBefore = Array.from({ length: startDayOffset }, () => null)
+  const calendarDays = [...emptyDaysBefore, ...days]
 
-  const today = new Date();
-  const isCurrentMonth =
-    today.getMonth() === month && today.getFullYear() === year;
+  const today = new Date()
+  const isCurrentMonth = today.getMonth() === month && today.getFullYear() === year
 
   // Map events to days
-  const eventsByDay: Record<number, CalendarEvent[]> = {};
+  const eventsByDay: Record<number, CalendarEvent[]> = {}
   events.forEach((e) => {
-    const d = new Date(e.startTime);
+    const d = new Date(e.startTime)
     if (d.getMonth() === month && d.getFullYear() === year) {
-      const dateNum = d.getDate();
-      if (!eventsByDay[dateNum]) eventsByDay[dateNum] = [];
-      eventsByDay[dateNum].push(e);
+      const dateNum = d.getDate()
+      if (!eventsByDay[dateNum]) eventsByDay[dateNum] = []
+      eventsByDay[dateNum].push(e)
     }
-  });
+  })
 
   // Get upcoming events
-  const upcoming = events.filter((e) => new Date(e.startTime) >= new Date());
+  const upcoming = events.filter((e) => new Date(e.startTime) >= new Date())
 
   const handleAddSlot = async (data: Omit<CalendarEvent, "id">) => {
     try {
-      await createEvent(data);
-      toast(
-        "Interview Scheduled",
-        "Calendar event successfully created.",
-        "success",
-      );
+      await createEvent(data)
+      toast("Interview Scheduled", "Calendar event successfully created.", "success")
     } catch {
-      toast("Error", "Failed to schedule event. Please try again.", "error");
+      toast("Error", "Failed to schedule event. Please try again.", "error")
     }
-  };
+  }
 
   return (
     <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300 select-none relative">
@@ -272,9 +252,7 @@ export function CalendarPage() {
       <div className="flex justify-between items-start">
         <div>
           <h1 className="text-[36px] font-extrabold tracking-tight">
-            <span className="premium-gradient-text text-glow">
-              Interview Calendar
-            </span>
+            <span className="premium-gradient-text text-glow">Interview Calendar</span>
           </h1>
           <p className="text-body text-txt-body mt-1 font-medium">
             Schedule and track interview panel discussions.
@@ -292,12 +270,8 @@ export function CalendarPage() {
       <div className="flex justify-between items-center bg-bg-secondary p-4 rounded-card border border-bg-border/60 shadow-[0_1px_3px_rgba(0,0,0,0.02)] shrink-0">
         <div className="flex items-center gap-3">
           <CalendarIcon className="w-5 h-5 text-primary" />
-          <h2 className="text-[18px] font-bold text-txt-heading">
-            {monthName}
-          </h2>
-          {eventsLoading && (
-            <Loader2 className="w-4 h-4 animate-spin text-primary" />
-          )}
+          <h2 className="text-[18px] font-bold text-txt-heading">{monthName}</h2>
+          {eventsLoading && <Loader2 className="w-4 h-4 animate-spin text-primary" />}
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -339,10 +313,10 @@ export function CalendarPage() {
           {/* Days Grid */}
           <div className="grid grid-cols-7 gap-2 min-h-[480px]">
             {calendarDays.map((day, idx) => {
-              if (day === null) return <div key={`empty-${idx}`} />;
-              const dayEvts = eventsByDay[day] || [];
-              const isToday = isCurrentMonth && day === today.getDate();
-              const hasEvent = dayEvts.length > 0;
+              if (day === null) return <div key={`empty-${idx}`} />
+              const dayEvts = eventsByDay[day] || []
+              const isToday = isCurrentMonth && day === today.getDate()
+              const hasEvent = dayEvts.length > 0
 
               return (
                 <div
@@ -356,15 +330,11 @@ export function CalendarPage() {
                   }`}
                   onClick={() => {
                     if (hasEvent) {
-                      toast(
-                        "Events",
-                        dayEvts.map((e) => e.title).join(" | "),
-                        "info",
-                      );
+                      toast("Events", dayEvts.map((e) => e.title).join(" | "), "info")
                     } else {
-                      const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-                      setSelectedDateStr(dateStr);
-                      setAddModalOpen(true);
+                      const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+                      setSelectedDateStr(dateStr)
+                      setAddModalOpen(true)
                     }
                   }}
                 >
@@ -376,10 +346,10 @@ export function CalendarPage() {
                     </span>
                     <button
                       onClick={(e) => {
-                        e.stopPropagation();
-                        const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-                        setSelectedDateStr(dateStr);
-                        setAddModalOpen(true);
+                        e.stopPropagation()
+                        const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+                        setSelectedDateStr(dateStr)
+                        setAddModalOpen(true)
                       }}
                       className="text-txt-caption hover:text-primary opacity-0 group-hover:opacity-100 p-0.5 rounded-full hover:bg-bg-hover transition-all shrink-0 cursor-pointer"
                     >
@@ -390,38 +360,30 @@ export function CalendarPage() {
                   {/* Events list */}
                   <div className="flex-1 flex flex-col gap-1 mt-2 min-h-0 justify-end">
                     {dayEvts.slice(0, 2).map((evt, eIdx) => {
-                      const type = evt.type;
-                      const label = evt.title;
-                      const timeStr = new Date(
-                        evt.startTime,
-                      ).toLocaleTimeString([], {
+                      const type = evt.type
+                      const label = evt.title
+                      const timeStr = new Date(evt.startTime).toLocaleTimeString([], {
                         hour: "2-digit",
                         minute: "2-digit",
-                      });
+                      })
 
                       return (
                         <div
                           key={eIdx}
                           onClick={(e) => {
-                            e.stopPropagation();
-                            toast(
-                              "Interview Session",
-                              `${label} at ${timeStr}`,
-                              "success",
-                            );
+                            e.stopPropagation()
+                            toast("Interview Session", `${label} at ${timeStr}`, "success")
                           }}
                           className={`border text-[9px] p-1.5 rounded-[8px] font-bold flex flex-col gap-0.5 leading-none transition-shadow hover:shadow-[0_2px_8px_rgba(108,99,255,0.1)] truncate ${typeStyle(type)}`}
                         >
                           <span className="truncate">{timeStr}</span>
-                          <span className="truncate font-extrabold">
-                            {label}
-                          </span>
+                          <span className="truncate font-extrabold">{label}</span>
                         </div>
-                      );
+                      )
                     })}
                   </div>
                 </div>
-              );
+              )
             })}
           </div>
         </Card>
@@ -429,9 +391,7 @@ export function CalendarPage() {
         {/* Legend + Upcoming */}
         <div className="flex flex-col gap-4">
           <Card className="p-5 border border-bg-border/60 bg-bg-secondary shadow-card">
-            <h3 className="text-[14px] font-bold text-txt-heading mb-3">
-              Legend
-            </h3>
+            <h3 className="text-[14px] font-bold text-txt-heading mb-3">Legend</h3>
             <div className="space-y-2.5">
               {[
                 { color: "bg-primary", label: "Interview Slot" },
@@ -450,14 +410,10 @@ export function CalendarPage() {
           </Card>
 
           <Card className="p-5 border border-bg-border/60 bg-bg-secondary shadow-card">
-            <h3 className="text-[14px] font-bold text-txt-heading mb-4">
-              Upcoming Schedule
-            </h3>
+            <h3 className="text-[14px] font-bold text-txt-heading mb-4">Upcoming Schedule</h3>
             <div className="space-y-3">
               {upcoming.length === 0 ? (
-                <p className="text-caption text-txt-caption text-center py-4">
-                  No upcoming events
-                </p>
+                <p className="text-caption text-txt-caption text-center py-4">No upcoming events</p>
               ) : (
                 upcoming.map((e, i) => {
                   return (
@@ -465,9 +421,7 @@ export function CalendarPage() {
                       key={i}
                       className={`p-3 rounded-[12px] border ${typeStyle(e.type)} group relative`}
                     >
-                      <p className="text-[12.5px] font-semibold pr-6">
-                        {e.title}
-                      </p>
+                      <p className="text-[12.5px] font-semibold pr-6">{e.title}</p>
                       <div className="flex items-center gap-1.5 mt-1.5 text-[11.5px] opacity-75">
                         <Clock className="w-3.5 h-3.5" />
                         <span>
@@ -480,9 +434,7 @@ export function CalendarPage() {
                         </span>
                       </div>
                       {e.location && (
-                        <p className="text-[11px] opacity-70 mt-1 font-medium">
-                          📍 {e.location}
-                        </p>
+                        <p className="text-[11px] opacity-70 mt-1 font-medium">📍 {e.location}</p>
                       )}
                       {e.meetingUrl && (
                         <a
@@ -501,7 +453,7 @@ export function CalendarPage() {
                         <X className="w-3 h-3" />
                       </button>
                     </div>
-                  );
+                  )
                 })
               )}
             </div>
@@ -512,8 +464,8 @@ export function CalendarPage() {
       {addModalOpen && (
         <AddEventModal
           onClose={() => {
-            setAddModalOpen(false);
-            setSelectedDateStr("");
+            setAddModalOpen(false)
+            setSelectedDateStr("")
           }}
           onAdd={handleAddSlot}
           candidates={candidates}
@@ -521,5 +473,5 @@ export function CalendarPage() {
         />
       )}
     </div>
-  );
+  )
 }

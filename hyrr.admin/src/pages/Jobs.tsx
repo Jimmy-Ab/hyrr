@@ -1,58 +1,43 @@
-import { useState } from "react";
-import {
-  Search,
-  Star,
-  Archive,
-  Eye,
-  CheckCircle2,
-  XCircle,
-  Zap,
-} from "lucide-react";
-import { Card } from "hyrr.shared";
-import { Badge } from "hyrr.shared";
-import { Button } from "hyrr.shared";
-import { Input } from "hyrr.shared";
-import { useAdminStore, type AdminJob } from "../store/useAdminStore";
-import { useToast } from "hyrr.shared";
+import { Badge, Button, Card, Input, useToast } from "hyrr.shared"
+import { Archive, CheckCircle2, Eye, Search, Star, XCircle, Zap } from "lucide-react"
+import { useState } from "react"
+import { useAdminStore, type AdminJob } from "../store/useAdminStore"
 
 const colorBg: Record<string, string> = {
   purple: "bg-primary text-white",
   blue: "bg-sec-blue text-white",
   green: "bg-sec-green text-white",
   orange: "bg-sec-orange text-white",
-};
+}
 
 const statusBadge = (status: AdminJob["status"]) => {
-  if (status === "active") return <Badge variant="success">Active</Badge>;
-  if (status === "flagged") return <Badge variant="destructive">Flagged</Badge>;
-  if (status === "draft") return <Badge variant="secondary">Draft</Badge>;
-  return <Badge variant="secondary">Closed</Badge>;
-};
+  if (status === "active") return <Badge variant="success">Active</Badge>
+  if (status === "flagged") return <Badge variant="destructive">Flagged</Badge>
+  if (status === "draft") return <Badge variant="secondary">Draft</Badge>
+  return <Badge variant="secondary">Closed</Badge>
+}
 
 export function JobsPage() {
-  const { jobs, updateJobStatus } = useAdminStore();
-  const { toast } = useToast();
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<AdminJob["status"] | "all">("all");
-  const [selected, setSelected] = useState<AdminJob | null>(null);
+  const { jobs, updateJobStatus } = useAdminStore()
+  const { toast } = useToast()
+  const [search, setSearch] = useState("")
+  const [filter, setFilter] = useState<AdminJob["status"] | "all">("all")
+  const [selected, setSelected] = useState<AdminJob | null>(null)
 
   const filtered = jobs.filter((j) => {
     const matchSearch =
       j.title.toLowerCase().includes(search.toLowerCase()) ||
-      j.company.toLowerCase().includes(search.toLowerCase());
-    const matchFilter = filter === "all" || j.status === filter;
-    return matchSearch && matchFilter;
-  });
+      j.company.toLowerCase().includes(search.toLowerCase())
+    const matchFilter = filter === "all" || j.status === filter
+    return matchSearch && matchFilter
+  })
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div>
-        <h1 className="text-[36px] font-bold text-txt-title tracking-tight">
-          Jobs
-        </h1>
+        <h1 className="text-[36px] font-bold text-txt-title tracking-tight">Jobs</h1>
         <p className="text-body text-txt-body mt-1 font-medium">
-          Review every job posting across all companies, approve, reject,
-          feature, or archive.
+          Review every job posting across all companies, approve, reject, feature, or archive.
         </p>
       </div>
 
@@ -97,17 +82,15 @@ export function JobsPage() {
           />
         </div>
         <div className="flex gap-1 bg-bg-secondary border border-bg-border p-1 rounded-[12px]">
-          {(["all", "active", "flagged", "draft", "closed"] as const).map(
-            (s) => (
-              <button
-                key={s}
-                onClick={() => setFilter(s)}
-                className={`px-3 py-1 rounded-[9px] text-[12px] font-semibold cursor-pointer capitalize transition-all ${filter === s ? "bg-primary text-white" : "text-txt-body hover:bg-bg-hover"}`}
-              >
-                {s}
-              </button>
-            ),
-          )}
+          {(["all", "active", "flagged", "draft", "closed"] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setFilter(s)}
+              className={`px-3 py-1 rounded-[9px] text-[12px] font-semibold cursor-pointer capitalize transition-all ${filter === s ? "bg-primary text-white" : "text-txt-body hover:bg-bg-hover"}`}
+            >
+              {s}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -117,9 +100,7 @@ export function JobsPage() {
             {filtered.map((job) => (
               <div
                 key={job.id}
-                onClick={() =>
-                  setSelected(selected?.id === job.id ? null : job)
-                }
+                onClick={() => setSelected(selected?.id === job.id ? null : job)}
                 className={`flex items-center gap-4 p-4 cursor-pointer transition-colors hover:bg-bg-hover/50 ${selected?.id === job.id ? "bg-primary-light/30" : ""}`}
               >
                 <div
@@ -136,9 +117,7 @@ export function JobsPage() {
                   </p>
                 </div>
                 <div className="text-center shrink-0 hidden md:block">
-                  <p className="text-[12.5px] font-bold text-txt-heading">
-                    {job.applicants}
-                  </p>
+                  <p className="text-[12.5px] font-bold text-txt-heading">{job.applicants}</p>
                   <p className="text-[10px] text-txt-caption">applicants</p>
                 </div>
                 <div className="flex items-center gap-1 text-[12px] font-semibold text-sec-orange shrink-0">
@@ -156,12 +135,8 @@ export function JobsPage() {
                 <div className="flex gap-1 shrink-0">
                   <button
                     onClick={(e) => {
-                      e.stopPropagation();
-                      toast(
-                        "Featured",
-                        `${job.title} marked as featured.`,
-                        "success",
-                      );
+                      e.stopPropagation()
+                      toast("Featured", `${job.title} marked as featured.`, "success")
                     }}
                     className="p-1.5 hover:bg-bg-hover rounded-[8px] text-txt-caption hover:text-sec-orange cursor-pointer"
                   >
@@ -171,13 +146,9 @@ export function JobsPage() {
                     <>
                       <button
                         onClick={(e) => {
-                          e.stopPropagation();
-                          updateJobStatus(job.id, "active");
-                          toast(
-                            "Approved",
-                            `${job.title} approved.`,
-                            "success",
-                          );
+                          e.stopPropagation()
+                          updateJobStatus(job.id, "active")
+                          toast("Approved", `${job.title} approved.`, "success")
                         }}
                         className="p-1.5 hover:bg-bg-hover rounded-[8px] text-sec-green cursor-pointer"
                       >
@@ -185,9 +156,9 @@ export function JobsPage() {
                       </button>
                       <button
                         onClick={(e) => {
-                          e.stopPropagation();
-                          updateJobStatus(job.id, "closed");
-                          toast("Removed", `${job.title} removed.`, "warning");
+                          e.stopPropagation()
+                          updateJobStatus(job.id, "closed")
+                          toast("Removed", `${job.title} removed.`, "warning")
                         }}
                         className="p-1.5 hover:bg-bg-hover rounded-[8px] text-sec-red cursor-pointer"
                       >
@@ -197,9 +168,9 @@ export function JobsPage() {
                   )}
                   <button
                     onClick={(e) => {
-                      e.stopPropagation();
-                      updateJobStatus(job.id, "closed");
-                      toast("Archived", `${job.title} archived.`, "info");
+                      e.stopPropagation()
+                      updateJobStatus(job.id, "closed")
+                      toast("Archived", `${job.title} archived.`, "info")
                     }}
                     className="p-1.5 hover:bg-bg-hover rounded-[8px] text-txt-caption cursor-pointer"
                   >
@@ -223,9 +194,7 @@ export function JobsPage() {
                 <h2 className="text-[14px] font-bold text-txt-heading leading-snug">
                   {selected.title}
                 </h2>
-                <p className="text-[12px] text-txt-caption">
-                  {selected.company}
-                </p>
+                <p className="text-[12px] text-txt-caption">{selected.company}</p>
               </div>
             </div>
             {statusBadge(selected.status)}
@@ -242,20 +211,15 @@ export function JobsPage() {
                 },
                 {
                   label: "AI Score",
-                  value:
-                    selected.aiScore > 0 ? `${selected.aiScore} / 100` : "—",
+                  value: selected.aiScore > 0 ? `${selected.aiScore} / 100` : "—",
                 },
               ].map((row) => (
                 <div
                   key={row.label}
                   className="flex items-center justify-between py-1.5 border-b border-bg-border/30 last:border-0"
                 >
-                  <span className="text-[12px] text-txt-caption">
-                    {row.label}
-                  </span>
-                  <span className="text-[12.5px] font-semibold text-txt-heading">
-                    {row.value}
-                  </span>
+                  <span className="text-[12px] text-txt-caption">{row.label}</span>
+                  <span className="text-[12.5px] font-semibold text-txt-heading">{row.value}</span>
                 </div>
               ))}
             </div>
@@ -263,9 +227,7 @@ export function JobsPage() {
               <Button
                 size="sm"
                 className="w-full cursor-pointer text-[12px]"
-                onClick={() =>
-                  toast("Featured", `${selected.title} featured!`, "success")
-                }
+                onClick={() => toast("Featured", `${selected.title} featured!`, "success")}
               >
                 Feature Job
               </Button>
@@ -274,8 +236,8 @@ export function JobsPage() {
                 variant="secondary"
                 className="w-full cursor-pointer text-[12px]"
                 onClick={() => {
-                  updateJobStatus(selected.id, "closed");
-                  toast("Archived", `${selected.title} archived.`, "info");
+                  updateJobStatus(selected.id, "closed")
+                  toast("Archived", `${selected.title} archived.`, "info")
                 }}
               >
                 Archive
@@ -284,9 +246,7 @@ export function JobsPage() {
                 size="sm"
                 variant="ghost"
                 className="w-full cursor-pointer text-[12px] text-sec-red hover:text-sec-red"
-                onClick={() =>
-                  toast("Deleted", `${selected.title} deleted.`, "warning")
-                }
+                onClick={() => toast("Deleted", `${selected.title} deleted.`, "warning")}
               >
                 Delete Job
               </Button>
@@ -304,5 +264,5 @@ export function JobsPage() {
         )}
       </div>
     </div>
-  );
+  )
 }

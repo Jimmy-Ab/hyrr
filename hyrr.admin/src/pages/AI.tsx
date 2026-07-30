@@ -1,8 +1,6 @@
+import { Button, Card, useToast } from "hyrr.shared"
+import { AlertOctagon, Save } from "lucide-react"
 import { useState } from "react"
-import { Save, AlertOctagon } from "lucide-react"
-import { Card } from "hyrr.shared"
-import { Button } from "hyrr.shared"
-import { useToast } from "hyrr.shared"
 
 export function AIManagementPage() {
   const { toast } = useToast()
@@ -21,17 +19,24 @@ export function AIManagementPage() {
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div>
         <h1 className="text-[36px] font-bold text-txt-title tracking-tight">AI Management</h1>
-        <p className="text-body text-txt-body mt-1 font-medium">Fine-tune matching prompts, configure engine model endpoints, and monitor parsing failure rates.</p>
+        <p className="text-body text-txt-body mt-1 font-medium">
+          Fine-tune matching prompts, configure engine model endpoints, and monitor parsing failure
+          rates.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Configuration settings */}
         <Card className="xl:col-span-2 p-5">
-          <h2 className="text-[16px] font-bold text-txt-heading border-b border-bg-border/40 pb-2 mb-4">Prompt & Model Rules</h2>
+          <h2 className="text-[16px] font-bold text-txt-heading border-b border-bg-border/40 pb-2 mb-4">
+            Prompt & Model Rules
+          </h2>
           <form onSubmit={handleSave} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-[12px] font-bold text-txt-caption uppercase tracking-wider">Model Selection</label>
+                <label className="text-[12px] font-bold text-txt-caption uppercase tracking-wider">
+                  Model Selection
+                </label>
                 <select
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
@@ -45,7 +50,9 @@ export function AIManagementPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[12px] font-bold text-txt-caption uppercase tracking-wider">Temperature ({temperature})</label>
+                <label className="text-[12px] font-bold text-txt-caption uppercase tracking-wider">
+                  Temperature ({temperature})
+                </label>
                 <input
                   type="range"
                   min="0"
@@ -59,7 +66,9 @@ export function AIManagementPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[12px] font-bold text-txt-caption uppercase tracking-wider">AI System Prompt</label>
+              <label className="text-[12px] font-bold text-txt-caption uppercase tracking-wider">
+                AI System Prompt
+              </label>
               <textarea
                 value={systemPrompt}
                 onChange={(e) => setSystemPrompt(e.target.value)}
@@ -83,8 +92,11 @@ export function AIManagementPage() {
                 { metric: "Total Parses (24h)", value: "14,892" },
                 { metric: "Average Matching Speed", value: "320ms" },
                 { metric: "Accuracy Yield Rate", value: "98.7%" },
-              ].map(s => (
-                <div key={s.metric} className="flex justify-between text-[12.5px] py-1 border-b border-bg-border/30 last:border-0">
+              ].map((s) => (
+                <div
+                  key={s.metric}
+                  className="flex justify-between text-[12.5px] py-1 border-b border-bg-border/30 last:border-0"
+                >
                   <span className="text-txt-caption">{s.metric}</span>
                   <span className="font-semibold text-txt-heading">{s.value}</span>
                 </div>
@@ -99,7 +111,9 @@ export function AIManagementPage() {
                 <AlertOctagon className="w-4 h-4 text-sec-red mt-0.5 shrink-0" />
                 <div>
                   <p className="text-[11.5px] font-bold text-sec-red">API Rate Limit Hit (429)</p>
-                  <p className="text-[10px] text-txt-caption mt-0.5">GPT-4o endpoint reported throttle conditions 5m ago.</p>
+                  <p className="text-[10px] text-txt-caption mt-0.5">
+                    GPT-4o endpoint reported throttle conditions 5m ago.
+                  </p>
                 </div>
               </div>
             </div>

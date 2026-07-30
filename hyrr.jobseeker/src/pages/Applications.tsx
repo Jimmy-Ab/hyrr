@@ -1,13 +1,29 @@
-import { useEffect } from "react"
-import { useJobStore, type JobApplication, APPLICATION_STATUS, APPLICATION_STATUS_COLUMNS, APPLICATION_STATUS_LABEL, type ApplicationStatusCode } from "hyrr.shared"
-import { Card, Badge, Button } from "hyrr.shared"
 import {
-  Bookmark, MoreHorizontal, MapPin, DollarSign, Calendar, User, LayoutList, MessageSquare
-} from "lucide-react"
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuLabel, DropdownMenuTrigger,
+  APPLICATION_STATUS,
+  APPLICATION_STATUS_COLUMNS,
+  APPLICATION_STATUS_LABEL,
+  Badge,
+  Card,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+  useJobStore,
+  type ApplicationStatusCode,
+  type JobApplication,
 } from "hyrr.shared"
+import {
+  Bookmark,
+  Calendar,
+  DollarSign,
+  LayoutList,
+  MapPin,
+  MessageSquare,
+  MoreHorizontal,
+  User,
+} from "lucide-react"
+import { useEffect } from "react"
 
 // ─── Kanban Column ─────────────────────────────────────────────────────────────
 const columnColors: Record<ApplicationStatusCode, string> = {
@@ -20,20 +36,22 @@ const columnColors: Record<ApplicationStatusCode, string> = {
 }
 
 function JobColumn({
-  id, title, items
+  id,
+  title,
+  items,
 }: {
   id: JobApplication["status"]
   title: string
   items: JobApplication[]
 }) {
   return (
-    <div
-      className="flex flex-col w-[280px] min-w-[280px] shrink-0 rounded-[20px] bg-bg-secondary/60 border border-bg-border/40"
-    >
+    <div className="flex flex-col w-[280px] min-w-[280px] shrink-0 rounded-[20px] bg-bg-secondary/60 border border-bg-border/40">
       {/* Column Header */}
       <div className="flex items-center justify-between px-4 py-3.5 border-b border-bg-border/30">
         <div className="flex items-center gap-2.5">
-          <span className={`inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full text-[11px] font-bold border ${columnColors[id]}`}>
+          <span
+            className={`inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full text-[11px] font-bold border ${columnColors[id]}`}
+          >
             {items.length}
           </span>
           <h3 className="text-[14px] font-bold text-txt-heading">{title}</h3>
@@ -42,7 +60,9 @@ function JobColumn({
 
       {/* Cards */}
       <div className="flex flex-col gap-3 p-3 flex-1 min-h-[480px]">
-        {items.map((app) => <JobCard key={app.id} application={app} />)}
+        {items.map((app) => (
+          <JobCard key={app.id} application={app} />
+        ))}
         {items.length === 0 && (
           <div className="flex flex-col items-center justify-center flex-1 gap-2 text-txt-disabled">
             <LayoutList className="w-8 h-8 opacity-30" />
@@ -57,8 +77,8 @@ function JobColumn({
 // ─── Job Card ──────────────────────────────────────────────────────────────────
 const companyDotColors: Record<string, string> = {
   purple: "bg-primary text-white",
-  blue:   "bg-sec-blue text-white",
-  green:  "bg-sec-green text-white",
+  blue: "bg-sec-blue text-white",
+  green: "bg-sec-green text-white",
   orange: "bg-sec-orange text-white",
 }
 
@@ -66,26 +86,30 @@ function JobCard({ application }: { application: JobApplication }) {
   const { toggleJobBookmark, setCandidateActiveView, setActiveConversation } = useJobStore()
 
   const tag = application.tag
-  const tagVariant = tag === "Offer Received" ? "success" as const
-    : tag === "Not a fit"         ? "destructive" as const
-    : tag === "Technical Interview" ? "warning" as const
-    : "secondary" as const
+  const tagVariant =
+    tag === "Offer Received"
+      ? ("success" as const)
+      : tag === "Not a fit"
+        ? ("destructive" as const)
+        : tag === "Technical Interview"
+          ? ("warning" as const)
+          : ("secondary" as const)
 
   return (
-    <div
-      className="group select-none outline-none"
-    >
-      <Card
-        className="p-4 relative border border-bg-border/60 bg-bg-secondary transition-all hover:shadow-card-hover hover:border-bg-border/90"
-      >
+    <div className="group select-none outline-none">
+      <Card className="p-4 relative border border-bg-border/60 bg-bg-secondary transition-all hover:shadow-card-hover hover:border-bg-border/90">
         <div className="flex items-start justify-between gap-2">
           {/* Company Logo + Info */}
           <div className="flex gap-3">
-            <div className={`w-10 h-10 rounded-[12px] shrink-0 flex items-center justify-center font-bold text-[13px] ${companyDotColors[application.companyColor] ?? "bg-primary text-white"}`}>
+            <div
+              className={`w-10 h-10 rounded-[12px] shrink-0 flex items-center justify-center font-bold text-[13px] ${companyDotColors[application.companyColor] ?? "bg-primary text-white"}`}
+            >
               {application.company[0]}
             </div>
             <div className="min-w-0">
-              <h4 className="text-body font-semibold text-txt-heading truncate">{application.title}</h4>
+              <h4 className="text-body font-semibold text-txt-heading truncate">
+                {application.title}
+              </h4>
               <p className="text-caption text-txt-body mt-0.5 font-medium">{application.company}</p>
             </div>
           </div>
@@ -161,14 +185,20 @@ function JobCard({ application }: { application: JobApplication }) {
               <MessageSquare className="w-3.5 h-3.5" />
             </button>
             <button
-              onClick={(e) => { e.stopPropagation(); toggleJobBookmark(application.id) }}
+              onClick={(e) => {
+                e.stopPropagation()
+                toggleJobBookmark(application.id)
+              }}
               onPointerDown={(e) => e.stopPropagation()}
               title={application.bookmarked ? "Remove Bookmark" : "Bookmark"}
               className={`cursor-pointer transition-colors p-1 -m-1 rounded-full hover:bg-bg-hover ${
                 application.bookmarked ? "text-primary" : "text-txt-caption hover:text-txt-heading"
               }`}
             >
-              <Bookmark className="w-3.5 h-3.5" fill={application.bookmarked ? "currentColor" : "none"} />
+              <Bookmark
+                className="w-3.5 h-3.5"
+                fill={application.bookmarked ? "currentColor" : "none"}
+              />
             </button>
           </div>
         </div>
@@ -185,7 +215,10 @@ export function ApplicationsBoard() {
     fetchInitialData()
   }, []) // eslint-disable-line
 
-  const columns = APPLICATION_STATUS_COLUMNS.map((id) => ({ id, title: APPLICATION_STATUS_LABEL[id] }))
+  const columns = APPLICATION_STATUS_COLUMNS.map((id) => ({
+    id,
+    title: APPLICATION_STATUS_LABEL[id],
+  }))
 
   return (
     <div className="flex flex-col gap-5 animate-in fade-in duration-200 relative">
@@ -203,10 +236,21 @@ export function ApplicationsBoard() {
         {columns.map((col) => {
           const count = jobApplications.filter((a) => a.status === col.id).length
           return (
-            <Card key={col.id} className="p-3.5 flex flex-col items-center border border-slate-100 bg-white rounded-xl shadow-xs">
-              <span className={`text-[20px] font-bold ${
-                col.id === APPLICATION_STATUS.OFFER ? "text-emerald-600" : col.id === APPLICATION_STATUS.ARCHIVED ? "text-slate-400" : "text-slate-900"
-              }`}>{count}</span>
+            <Card
+              key={col.id}
+              className="p-3.5 flex flex-col items-center border border-slate-100 bg-white rounded-xl shadow-xs"
+            >
+              <span
+                className={`text-[20px] font-bold ${
+                  col.id === APPLICATION_STATUS.OFFER
+                    ? "text-emerald-600"
+                    : col.id === APPLICATION_STATUS.ARCHIVED
+                      ? "text-slate-400"
+                      : "text-slate-900"
+                }`}
+              >
+                {count}
+              </span>
               <span className="text-[11.5px] text-slate-400 font-medium mt-0.5">{col.title}</span>
             </Card>
           )
@@ -215,14 +259,14 @@ export function ApplicationsBoard() {
 
       {/* Kanban board */}
       <div className="flex gap-4 overflow-x-auto pb-6 pt-1 custom-scrollbar-none min-h-[600px]">
-          {columns.map((col) => (
-            <JobColumn
-              key={col.id}
-              id={col.id}
-              title={col.title}
-              items={jobApplications.filter((a) => a.status === col.id)}
-            />
-          ))}
+        {columns.map((col) => (
+          <JobColumn
+            key={col.id}
+            id={col.id}
+            title={col.title}
+            items={jobApplications.filter((a) => a.status === col.id)}
+          />
+        ))}
       </div>
     </div>
   )

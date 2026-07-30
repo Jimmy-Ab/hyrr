@@ -1,20 +1,20 @@
-import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
-import { PassportModule } from '@nestjs/passport';
-import { AuthController } from './auth.controller';
-import { AuthService } from './auth.service';
-import { JwtStrategy } from './strategies/jwt.strategy';
-import { GithubStrategy } from './strategies/github.strategy';
-import { GoogleStrategy } from './strategies/google.strategy';
-import { LinkedinStrategy } from './strategies/linkedin.strategy';
-import { jwtSecret } from './jwt.config';
+import { Module } from "@nestjs/common"
+import { JwtModule } from "@nestjs/jwt"
+import { PassportModule } from "@nestjs/passport"
+import { AuthController } from "./auth.controller"
+import { AuthService } from "./auth.service"
+import { jwtSecret } from "./jwt.config"
+import { GithubStrategy } from "./strategies/github.strategy"
+import { GoogleStrategy } from "./strategies/google.strategy"
+import { JwtStrategy } from "./strategies/jwt.strategy"
+import { LinkedinStrategy } from "./strategies/linkedin.strategy"
 
 @Module({
   imports: [
     PassportModule,
     JwtModule.register({
       secret: jwtSecret(),
-      signOptions: { expiresIn: '15m' },
+      signOptions: { expiresIn: "15m" },
     }),
   ],
   controllers: [AuthController],

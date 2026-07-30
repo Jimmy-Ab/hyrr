@@ -1,52 +1,47 @@
-import { useEffect, useState } from "react";
+import type { CalendarEvent } from "hyrr.shared"
+import { Button, Card, useJobStore, useToast } from "hyrr.shared"
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
   ChevronRight,
   Clock,
+  Loader2,
   Plus,
   X,
-  Loader2,
-} from "lucide-react";
-import { Card, Button, useToast, useJobStore } from "hyrr.shared";
-import type { CalendarEvent } from "hyrr.shared";
+} from "lucide-react"
+import { useEffect, useState } from "react"
 
 const typeStyle = (type: string) => {
-  if (type === "interview")
-    return "bg-primary-light border-primary-border/30 text-primary";
-  if (type === "deadline")
-    return "bg-sec-orange/10 border-sec-orange/20 text-sec-orange";
-  if (type === "offer")
-    return "bg-sec-green/10 border-sec-green/20 text-sec-green";
-  return "bg-bg-primary border-bg-border text-txt-body";
-};
+  if (type === "interview") return "bg-primary-light border-primary-border/30 text-primary"
+  if (type === "deadline") return "bg-sec-orange/10 border-sec-orange/20 text-sec-orange"
+  if (type === "offer") return "bg-sec-green/10 border-sec-green/20 text-sec-green"
+  return "bg-bg-primary border-bg-border text-txt-body"
+}
 
 function AddEventModal({
   onClose,
   onAdd,
 }: {
-  onClose: () => void;
-  onAdd: (e: Omit<CalendarEvent, "id">) => void;
+  onClose: () => void
+  onAdd: (e: Omit<CalendarEvent, "id">) => void
 }) {
-  const [title, setTitle] = useState("");
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("10:00");
-  const [type, setType] = useState<CalendarEvent["type"]>("interview");
+  const [title, setTitle] = useState("")
+  const [date, setDate] = useState("")
+  const [time, setTime] = useState("10:00")
+  const [type, setType] = useState<CalendarEvent["type"]>("interview")
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title || !date) return;
-    onAdd({ title, startTime: `${date}T${time}:00`, type, notes: undefined });
-    onClose();
-  };
+    e.preventDefault()
+    if (!title || !date) return
+    onAdd({ title, startTime: `${date}T${time}:00`, type, notes: undefined })
+    onClose()
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-bg-secondary border border-bg-border/60 rounded-[20px] shadow-[0_20px_60px_rgba(0,0,0,0.15)] w-full max-w-sm p-6 space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-[15px] font-bold text-txt-heading">
-            Add Calendar Event
-          </h3>
+          <h3 className="text-[15px] font-bold text-txt-heading">Add Calendar Event</h3>
           <button
             onClick={onClose}
             className="p-1 rounded-full hover:bg-bg-hover text-txt-caption cursor-pointer"
@@ -116,67 +111,58 @@ function AddEventModal({
             >
               Cancel
             </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              className="flex-1 cursor-pointer shadow-button"
-            >
+            <Button type="submit" variant="primary" className="flex-1 cursor-pointer shadow-button">
               Add Event
             </Button>
           </div>
         </form>
       </div>
     </div>
-  );
+  )
 }
 
 export function CandidateCalendar() {
-  const { toast } = useToast();
-  const { events, eventsLoading, fetchEvents, createEvent, deleteEvent } =
-    useJobStore();
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [addModalOpen, setAddModalOpen] = useState(false);
+  const { toast } = useToast()
+  const { events, eventsLoading, fetchEvents, createEvent, deleteEvent } = useJobStore()
+  const [currentDate, setCurrentDate] = useState(new Date())
+  const [addModalOpen, setAddModalOpen] = useState(false)
 
   useEffect(() => {
-    fetchEvents();
-  }, []); // eslint-disable-line
+    fetchEvents()
+  }, []) // eslint-disable-line
 
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
+  const year = currentDate.getFullYear()
+  const month = currentDate.getMonth()
 
   const monthName = new Date(year, month).toLocaleString("en-US", {
     month: "long",
     year: "numeric",
-  });
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const startDayOffset = new Date(year, month, 1).getDay();
+  })
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const startDayOffset = new Date(year, month, 1).getDay()
   const calendarDays = [
     ...Array.from({ length: startDayOffset }, () => null),
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ];
+  ]
 
   // Map events to day numbers for the current month
-  const eventsByDay: Record<number, CalendarEvent[]> = {};
+  const eventsByDay: Record<number, CalendarEvent[]> = {}
   events.forEach((ev) => {
-    const d = new Date(ev.startTime);
+    const d = new Date(ev.startTime)
     if (d.getFullYear() === year && d.getMonth() === month) {
-      const day = d.getDate();
-      if (!eventsByDay[day]) eventsByDay[day] = [];
-      eventsByDay[day].push(ev);
+      const day = d.getDate()
+      if (!eventsByDay[day]) eventsByDay[day] = []
+      eventsByDay[day].push(ev)
     }
-  });
+  })
 
-  const today = new Date();
-  const isCurrentMonth =
-    today.getMonth() === month && today.getFullYear() === year;
+  const today = new Date()
+  const isCurrentMonth = today.getMonth() === month && today.getFullYear() === year
 
   const upcoming = events
     .filter((ev) => new Date(ev.startTime) >= new Date())
-    .sort(
-      (a, b) =>
-        new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
-    )
-    .slice(0, 4);
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+    .slice(0, 4)
 
   return (
     <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300 select-none relative">
@@ -187,12 +173,8 @@ export function CandidateCalendar() {
         <AddEventModal
           onClose={() => setAddModalOpen(false)}
           onAdd={async (data) => {
-            await createEvent(data);
-            toast(
-              "Event Added",
-              "Calendar event saved successfully.",
-              "success",
-            );
+            await createEvent(data)
+            toast("Event Added", "Calendar event saved successfully.", "success")
           }}
         />
       )}
@@ -220,12 +202,8 @@ export function CandidateCalendar() {
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
               <CalendarIcon className="w-5 h-5 text-primary" />
-              <h2 className="text-[18px] font-bold text-txt-heading">
-                {monthName}
-              </h2>
-              {eventsLoading && (
-                <Loader2 className="w-4 h-4 animate-spin text-primary" />
-              )}
+              <h2 className="text-[18px] font-bold text-txt-heading">{monthName}</h2>
+              {eventsLoading && <Loader2 className="w-4 h-4 animate-spin text-primary" />}
             </div>
             <div className="flex gap-1">
               <button
@@ -262,21 +240,16 @@ export function CandidateCalendar() {
 
           <div className="grid grid-cols-7 gap-1">
             {calendarDays.map((day, idx) => {
-              if (day === null) return <div key={`empty-${idx}`} />;
-              const dayEvts = eventsByDay[day] || [];
-              const isToday = isCurrentMonth && day === today.getDate();
-              const hasEvent = dayEvts.length > 0;
+              if (day === null) return <div key={`empty-${idx}`} />
+              const dayEvts = eventsByDay[day] || []
+              const isToday = isCurrentMonth && day === today.getDate()
+              const hasEvent = dayEvts.length > 0
 
               return (
                 <div
                   key={day}
                   onClick={() =>
-                    hasEvent &&
-                    toast(
-                      "Events",
-                      dayEvts.map((e) => e.title).join(" | "),
-                      "info",
-                    )
+                    hasEvent && toast("Events", dayEvts.map((e) => e.title).join(" | "), "info")
                   }
                   className={`relative aspect-square flex flex-col items-center justify-start pt-2 rounded-[10px] cursor-pointer transition-all group ${
                     isToday
@@ -302,7 +275,7 @@ export function CandidateCalendar() {
                     </div>
                   )}
                 </div>
-              );
+              )
             })}
           </div>
         </Card>
@@ -311,9 +284,7 @@ export function CandidateCalendar() {
         <div className="flex flex-col gap-4">
           <Card className="p-5">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[14px] font-bold text-txt-heading">
-                Upcoming Events
-              </h3>
+              <h3 className="text-[14px] font-bold text-txt-heading">Upcoming Events</h3>
               <button
                 onClick={() => setAddModalOpen(true)}
                 className="text-[11px] text-primary font-semibold hover:underline cursor-pointer flex items-center gap-1"
@@ -323,19 +294,17 @@ export function CandidateCalendar() {
             </div>
             <div className="space-y-3">
               {upcoming.length === 0 ? (
-                <p className="text-caption text-txt-caption text-center py-4">
-                  No upcoming events
-                </p>
+                <p className="text-caption text-txt-caption text-center py-4">No upcoming events</p>
               ) : (
                 upcoming.map((e, i) => {
-                  const type = e.type;
-                  const label = e.title;
+                  const type = e.type
+                  const label = e.title
                   const timeStr = new Date(e.startTime).toLocaleString([], {
                     month: "short",
                     day: "numeric",
                     hour: "2-digit",
                     minute: "2-digit",
-                  });
+                  })
 
                   return (
                     <div
@@ -354,26 +323,21 @@ export function CandidateCalendar() {
                         <X className="w-3 h-3" />
                       </button>
                     </div>
-                  );
+                  )
                 })
               )}
             </div>
           </Card>
 
           <Card className="p-5">
-            <h3 className="text-[14px] font-bold text-txt-heading mb-3">
-              Legend
-            </h3>
+            <h3 className="text-[14px] font-bold text-txt-heading mb-3">Legend</h3>
             <div className="space-y-2">
               {[
                 { color: "bg-primary", label: "Interview" },
                 { color: "bg-sec-orange", label: "Deadline" },
                 { color: "bg-sec-green", label: "Offer / Onboarding" },
               ].map((l) => (
-                <div
-                  key={l.label}
-                  className="flex items-center gap-2 text-[12.5px] text-txt-body"
-                >
+                <div key={l.label} className="flex items-center gap-2 text-[12.5px] text-txt-body">
                   <div className={`w-2.5 h-2.5 rounded-full ${l.color}`} />
                   {l.label}
                 </div>
@@ -383,5 +347,5 @@ export function CandidateCalendar() {
         </div>
       </div>
     </div>
-  );
+  )
 }

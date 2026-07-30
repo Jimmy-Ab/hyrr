@@ -1,8 +1,15 @@
-import { useState, type FormEvent, useEffect } from "react"
+import { useEffect, useState, type FormEvent } from "react"
 import { useJobStore } from "../../store/useJobStore"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../ui/dialog"
-import { Input } from "../ui/input"
 import { Button } from "../ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog"
+import { Input } from "../ui/input"
 import { useToast } from "../ui/toast"
 
 export function AddCandidateDialog() {
@@ -50,7 +57,10 @@ export function AddCandidateDialog() {
   }
 
   return (
-    <Dialog open={isAddCandidateOpen} onOpenChange={(open) => setAddCandidateOpen(open, addCandidateColumn)}>
+    <Dialog
+      open={isAddCandidateOpen}
+      onOpenChange={(open) => setAddCandidateOpen(open, addCandidateColumn)}
+    >
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add Candidate</DialogTitle>
@@ -102,7 +112,9 @@ export function AddCandidateDialog() {
             >
               Cancel
             </Button>
-            <Button type="submit" className="cursor-pointer font-semibold">Add Candidate</Button>
+            <Button type="submit" className="cursor-pointer font-semibold">
+              Add Candidate
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

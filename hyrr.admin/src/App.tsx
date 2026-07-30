@@ -1,23 +1,23 @@
-import { useAdminStore } from "./store/useAdminStore"
+import { ToastProvider } from "hyrr.shared"
 import { AdminHeader } from "./components/layout/header"
 import { AdminSidebar } from "./components/layout/sidebar"
-import { ToastProvider } from "hyrr.shared"
+import { useAdminStore } from "./store/useAdminStore"
 
 // Pages
-import { AdminDashboard } from "./pages/Dashboard"
-import { UsersPage } from "./pages/Users"
-import { RecruitersPage } from "./pages/Recruiters"
-import { CompaniesPage } from "./pages/Companies"
-import { JobsPage } from "./pages/Jobs"
-import { ApplicationsPage } from "./pages/Applications"
-import { ReportsPage } from "./pages/Reports"
-import { AnalyticsPage } from "./pages/Analytics"
-import { MomentumPage } from "./pages/Momentum"
-import { PaymentsPage } from "./pages/Payments"
-import { NotificationsPage } from "./pages/Notifications"
-import { AuditLogsPage } from "./pages/AuditLogs"
 import { AIManagementPage } from "./pages/AI"
+import { AnalyticsPage } from "./pages/Analytics"
+import { ApplicationsPage } from "./pages/Applications"
+import { AuditLogsPage } from "./pages/AuditLogs"
+import { CompaniesPage } from "./pages/Companies"
+import { AdminDashboard } from "./pages/Dashboard"
+import { JobsPage } from "./pages/Jobs"
+import { MomentumPage } from "./pages/Momentum"
+import { NotificationsPage } from "./pages/Notifications"
+import { PaymentsPage } from "./pages/Payments"
+import { RecruitersPage } from "./pages/Recruiters"
+import { ReportsPage } from "./pages/Reports"
 import { PlatformSettingsPage } from "./pages/Settings"
+import { UsersPage } from "./pages/Users"
 
 function AppContent() {
   const { activeView } = useAdminStore()
@@ -63,9 +63,7 @@ function AppContent() {
       <div className="flex flex-1 h-[calc(100vh-68px)] overflow-hidden">
         <AdminSidebar />
         <main className="flex-1 overflow-y-auto p-8 bg-bg-primary">
-          <div className="max-w-[1440px] mx-auto w-full h-full">
-            {renderActiveView()}
-          </div>
+          <div className="max-w-[1440px] mx-auto w-full h-full">{renderActiveView()}</div>
         </main>
       </div>
     </div>

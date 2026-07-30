@@ -1,5 +1,3 @@
-import React from "react"
-
 export interface RichTextRendererProps {
   content: string
   className?: string
@@ -35,17 +33,26 @@ function parseContentToHtml(raw: string): string {
 
     // Headings
     if (trimmed.startsWith("### ")) {
-      if (inList) { html += isOrdered ? "</ol>" : "</ul>"; inList = false }
+      if (inList) {
+        html += isOrdered ? "</ol>" : "</ul>"
+        inList = false
+      }
       html += `<h3>${parseInline(trimmed.slice(4))}</h3>`
       return
     }
     if (trimmed.startsWith("## ")) {
-      if (inList) { html += isOrdered ? "</ol>" : "</ul>"; inList = false }
+      if (inList) {
+        html += isOrdered ? "</ol>" : "</ul>"
+        inList = false
+      }
       html += `<h2>${parseInline(trimmed.slice(3))}</h2>`
       return
     }
     if (trimmed.startsWith("# ")) {
-      if (inList) { html += isOrdered ? "</ol>" : "</ul>"; inList = false }
+      if (inList) {
+        html += isOrdered ? "</ol>" : "</ul>"
+        inList = false
+      }
       html += `<h2>${parseInline(trimmed.slice(2))}</h2>`
       return
     }

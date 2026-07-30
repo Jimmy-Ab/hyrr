@@ -1,28 +1,33 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsOptional, IsEmail } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger"
+import { IsEmail, IsNotEmpty, IsOptional, IsString } from "class-validator"
 
 export class CreateApplicationDto {
-  @ApiProperty({ example: 'Emily Carter', description: 'Applicant full name' })
-  @IsString() @IsNotEmpty()
-  name: string;
+  @ApiProperty({ example: "Emily Carter", description: "Applicant full name" })
+  @IsString()
+  @IsNotEmpty()
+  name: string
 
-  @ApiProperty({ example: 'emily@example.com', description: 'Applicant email address' })
+  @ApiProperty({ example: "emily@example.com", description: "Applicant email address" })
   @IsEmail()
-  email: string;
+  email: string
 
-  @ApiPropertyOptional({ example: '+1 555 123 4567' })
-  @IsOptional() @IsString()
-  phone?: string;
+  @ApiPropertyOptional({ example: "+1 555 123 4567" })
+  @IsOptional()
+  @IsString()
+  phone?: string
 
-  @ApiProperty({ example: 'Senior Frontend Engineer', description: 'Current job title' })
-  @IsString() @IsNotEmpty()
-  title: string;
+  @ApiProperty({ example: "Senior Frontend Engineer", description: "Current job title" })
+  @IsString()
+  @IsNotEmpty()
+  title: string
 
-  @ApiProperty({ example: 'San Francisco, CA', description: 'Applicant location' })
-  @IsString() @IsNotEmpty()
-  location: string;
+  @ApiProperty({ example: "San Francisco, CA", description: "Applicant location" })
+  @IsString()
+  @IsNotEmpty()
+  location: string
 
-  @ApiPropertyOptional({ example: 'I am passionate about...' })
-  @IsOptional() @IsString()
-  coverLetter?: string;
+  @ApiPropertyOptional({ example: "I am passionate about..." })
+  @IsOptional()
+  @IsString()
+  coverLetter?: string
 }

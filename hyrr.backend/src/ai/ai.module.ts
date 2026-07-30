@@ -1,10 +1,10 @@
-import { Module } from '@nestjs/common';
-import { AiService } from './ai.service';
-import { AiController } from './ai.controller';
-import { AiFactory } from './ai.factory';
-import { GeminiAdapter } from './adapters/gemini.adapter';
-import { OpenAIAdapter } from './adapters/openai.adapter';
-import { ClaudeAdapter } from './adapters/claude.adapter';
+import { Module } from "@nestjs/common"
+import { ClaudeAdapter } from "./adapters/claude.adapter"
+import { GeminiAdapter } from "./adapters/gemini.adapter"
+import { OpenAIAdapter } from "./adapters/openai.adapter"
+import { AiController } from "./ai.controller"
+import { AiFactory } from "./ai.factory"
+import { AiService } from "./ai.service"
 
 @Module({
   controllers: [AiController],

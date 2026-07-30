@@ -1,10 +1,21 @@
-import { useState, useEffect } from "react"
+import {
+  Bookmark,
+  Calendar,
+  FileText,
+  Loader2,
+  Mail,
+  MapPin,
+  MessageSquare,
+  Phone,
+  Sparkles,
+  X,
+} from "lucide-react"
+import { useEffect, useState } from "react"
 import { useJobStore, type Candidate } from "../../store/useJobStore"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../ui/dialog"
 import { Button } from "../ui/button"
-import { useToast } from "../ui/toast"
-import { MapPin, Mail, Phone, Calendar, X, Bookmark, Sparkles, FileText, Loader2, MessageSquare } from "lucide-react"
 import { Card } from "../ui/card"
+import { Dialog, DialogContent, DialogFooter } from "../ui/dialog"
+import { useToast } from "../ui/toast"
 
 export function CandidateDetailDialog() {
   const {
@@ -81,7 +92,10 @@ export function CandidateDetailDialog() {
   }
 
   return (
-    <Dialog open={!!selectedCandidateId} onOpenChange={(open) => !open && setSelectedCandidateId(null)}>
+    <Dialog
+      open={!!selectedCandidateId}
+      onOpenChange={(open) => !open && setSelectedCandidateId(null)}
+    >
       <DialogContent className="max-w-2xl overflow-hidden p-0 rounded-[20px] bg-bg-secondary border border-bg-border/60 shadow-[0_20px_60px_rgba(0,0,0,0.15)] flex flex-col max-h-[90vh]">
         {/* Banner with profile summary */}
         <div className="relative p-6 bg-gradient-to-r from-primary-light/50 via-primary-light/20 to-transparent flex gap-5 border-b border-bg-border/40 shrink-0">
@@ -92,14 +106,19 @@ export function CandidateDetailDialog() {
           />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="text-[20px] font-extrabold text-txt-heading truncate">{candidate.name}</h2>
+              <h2 className="text-[20px] font-extrabold text-txt-heading truncate">
+                {candidate.name}
+              </h2>
               <button
                 onClick={() => toggleBookmark(candidate.id)}
                 className={`p-1 rounded-full hover:bg-bg-hover transition-colors cursor-pointer outline-none ${
                   candidate.bookmarked ? "text-primary" : "text-txt-caption"
                 }`}
               >
-                <Bookmark className="w-4.5 h-4.5" fill={candidate.bookmarked ? "currentColor" : "none"} />
+                <Bookmark
+                  className="w-4.5 h-4.5"
+                  fill={candidate.bookmarked ? "currentColor" : "none"}
+                />
               </button>
             </div>
             <p className="text-[13.5px] font-semibold text-txt-body mt-0.5">{candidate.title}</p>
@@ -178,15 +197,23 @@ export function CandidateDetailDialog() {
                 <Card className="p-4 flex items-center gap-3">
                   <Mail className="w-4.5 h-4.5 text-txt-caption" />
                   <div>
-                    <p className="text-[11px] text-txt-caption font-bold uppercase tracking-wider">Email Address</p>
-                    <p className="text-[13px] text-txt-heading font-semibold mt-0.5">{candidate.email || "Not provided"}</p>
+                    <p className="text-[11px] text-txt-caption font-bold uppercase tracking-wider">
+                      Email Address
+                    </p>
+                    <p className="text-[13px] text-txt-heading font-semibold mt-0.5">
+                      {candidate.email || "Not provided"}
+                    </p>
                   </div>
                 </Card>
                 <Card className="p-4 flex items-center gap-3">
                   <Phone className="w-4.5 h-4.5 text-txt-caption" />
                   <div>
-                    <p className="text-[11px] text-txt-caption font-bold uppercase tracking-wider">Phone Number</p>
-                    <p className="text-[13px] text-txt-heading font-semibold mt-0.5">{candidate.phone || "Not provided"}</p>
+                    <p className="text-[11px] text-txt-caption font-bold uppercase tracking-wider">
+                      Phone Number
+                    </p>
+                    <p className="text-[13px] text-txt-heading font-semibold mt-0.5">
+                      {candidate.phone || "Not provided"}
+                    </p>
                   </div>
                 </Card>
               </div>
@@ -194,7 +221,9 @@ export function CandidateDetailDialog() {
               {/* Cover Letter */}
               {candidate.coverLetter && (
                 <div>
-                  <h4 className="text-[12.5px] font-bold text-txt-heading uppercase tracking-wider mb-2.5">Cover Letter</h4>
+                  <h4 className="text-[12.5px] font-bold text-txt-heading uppercase tracking-wider mb-2.5">
+                    Cover Letter
+                  </h4>
                   <div className="p-4 rounded-[14px] border border-bg-border/60 bg-bg-secondary text-[13px] text-txt-body leading-relaxed max-h-[160px] overflow-y-auto font-medium">
                     {candidate.coverLetter}
                   </div>
@@ -203,7 +232,9 @@ export function CandidateDetailDialog() {
 
               {/* Resume download section */}
               <div>
-                <h4 className="text-[12.5px] font-bold text-txt-heading uppercase tracking-wider mb-2.5">Candidate Documents</h4>
+                <h4 className="text-[12.5px] font-bold text-txt-heading uppercase tracking-wider mb-2.5">
+                  Candidate Documents
+                </h4>
                 <Card className="p-4 flex items-center justify-between border border-bg-border bg-bg-secondary hover:border-primary/20 transition-all group">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-10 h-10 rounded-[12px] bg-primary-light border border-primary-border/20 flex items-center justify-center shrink-0">
@@ -213,7 +244,9 @@ export function CandidateDetailDialog() {
                       <p className="text-[13px] font-semibold text-txt-heading truncate">
                         {candidate.name.replace(/\s+/g, "_")}_Resume.pdf
                       </p>
-                      <p className="text-[11px] text-txt-caption mt-0.5 font-medium">Primary Resume Document</p>
+                      <p className="text-[11px] text-txt-caption mt-0.5 font-medium">
+                        Primary Resume Document
+                      </p>
                     </div>
                   </div>
                   <Button
@@ -241,17 +274,21 @@ export function CandidateDetailDialog() {
                 <div className="space-y-6">
                   {/* Score circle */}
                   <div className="flex items-center gap-5 p-5 bg-gradient-to-r from-bg-secondary to-bg-primary/30 border border-bg-border/60 rounded-[18px]">
-                    <div className={`w-16 h-16 rounded-full flex items-center justify-center text-[22px] font-extrabold select-none shrink-0 ${getAiScoreColor(candidate.aiScore)}`}>
+                    <div
+                      className={`w-16 h-16 rounded-full flex items-center justify-center text-[22px] font-extrabold select-none shrink-0 ${getAiScoreColor(candidate.aiScore)}`}
+                    >
                       {candidate.aiScore}%
                     </div>
                     <div>
-                      <h4 className="text-[14.5px] font-bold text-txt-heading">Gemini Smart Match Fit</h4>
+                      <h4 className="text-[14.5px] font-bold text-txt-heading">
+                        Gemini Smart Match Fit
+                      </h4>
                       <p className="text-[12.5px] text-txt-caption mt-1 font-medium">
                         {candidate.aiScore >= 80
                           ? "Exceptional match! Candidate has matching experience and skills."
                           : candidate.aiScore >= 60
-                          ? "Good match potential. Some minor gaps identified in requirements."
-                          : "Lower match alignment. Skill sets might not be an exact fit."}
+                            ? "Good match potential. Some minor gaps identified in requirements."
+                            : "Lower match alignment. Skill sets might not be an exact fit."}
                       </p>
                     </div>
                   </div>
@@ -260,10 +297,13 @@ export function CandidateDetailDialog() {
                   <div className="space-y-2.5">
                     <div className="flex items-center gap-1.5 text-primary">
                       <Sparkles className="w-4 h-4" />
-                      <h4 className="text-[12.5px] font-bold uppercase tracking-wider">AI Evaluation Analysis</h4>
+                      <h4 className="text-[12.5px] font-bold uppercase tracking-wider">
+                        AI Evaluation Analysis
+                      </h4>
                     </div>
                     <div className="p-5 rounded-[18px] border border-bg-border/60 bg-bg-secondary text-[13px] text-txt-body leading-relaxed font-medium">
-                      {candidate.aiSummary || "AI assessment summary data is being populated. Please re-open the window in a few moments."}
+                      {candidate.aiSummary ||
+                        "AI assessment summary data is being populated. Please re-open the window in a few moments."}
                     </div>
                   </div>
                 </div>
@@ -275,7 +315,8 @@ export function CandidateDetailDialog() {
                   <div>
                     <h4 className="text-[15px] font-bold text-txt-heading">Run AI Fit Analysis</h4>
                     <p className="text-[12.5px] text-txt-caption mt-1 max-w-sm leading-relaxed">
-                      Evaluate this candidate's resume and details against the job requirements using Gemini AI.
+                      Evaluate this candidate's resume and details against the job requirements
+                      using Gemini AI.
                     </p>
                   </div>
                   <Button
@@ -335,7 +376,11 @@ export function CandidateDetailDialog() {
               </div>
 
               <div className="pt-2">
-                <Button type="submit" disabled={scheduling} className="w-full h-10 font-bold shadow-button cursor-pointer">
+                <Button
+                  type="submit"
+                  disabled={scheduling}
+                  className="w-full h-10 font-bold shadow-button cursor-pointer"
+                >
                   {scheduling ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                   Schedule and Send Invite <Calendar className="w-4 h-4 ml-1.5" />
                 </Button>

@@ -1,7 +1,7 @@
-import { Module, Global } from '@nestjs/common';
-import { LoggerService } from './logger/logger.service';
-import { AccessService } from './access/access.service';
-import { EmailDeliveryService } from './delivery/email-delivery.service';
+import { Global, Module } from "@nestjs/common"
+import { AccessService } from "./access/access.service"
+import { EmailDeliveryService } from "./delivery/email-delivery.service"
+import { LoggerService } from "./logger/logger.service"
 
 @Global()
 @Module({

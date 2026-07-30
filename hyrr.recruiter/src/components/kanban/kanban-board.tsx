@@ -1,25 +1,26 @@
-import { useState } from "react"
 import {
+  defaultDropAnimationSideEffects,
   DndContext,
   DragOverlay,
+  PointerSensor,
   useSensor,
   useSensors,
-  PointerSensor,
   type DragEndEvent,
   type DragStartEvent,
-  defaultDropAnimationSideEffects,
 } from "@dnd-kit/core"
-import { KanbanColumn } from "./kanban-column"
-import { ApplicationCard } from "./application-card"
+import { useState } from "react"
 import { useJobStore, type Candidate } from "../../store/useJobStore"
 import { useToast } from "../ui/toast"
+import { ApplicationCard } from "./application-card"
+import { KanbanColumn } from "./kanban-column"
 
 export function KanbanBoard() {
-  const { candidates, selectedJobId, moveCandidate, searchQuery, setAddCandidateOpen } = useJobStore()
+  const { candidates, selectedJobId, moveCandidate, searchQuery, setAddCandidateOpen } =
+    useJobStore()
   const { toast } = useToast()
-  
+
   const [activeId, setActiveId] = useState<string | null>(null)
-  
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -34,7 +35,7 @@ export function KanbanBoard() {
   const filteredCandidates = candidates.filter((c) => {
     if (c.jobId !== selectedJobId) return false
     if (!searchQuery) return true
-    
+
     const query = searchQuery.toLowerCase()
     return (
       c.name.toLowerCase().includes(query) ||
@@ -44,11 +45,11 @@ export function KanbanBoard() {
   })
 
   const columns: { id: Candidate["status"]; title: string }[] = [
-    { id: "Saved",        title: "Saved" },
-    { id: "Applied",      title: "Applied" },
-    { id: "In Process",   title: "In Process" },
-    { id: "Offer",        title: "Offer" },
-    { id: "Archived",     title: "Archived" },
+    { id: "Saved", title: "Saved" },
+    { id: "Applied", title: "Applied" },
+    { id: "In Process", title: "In Process" },
+    { id: "Offer", title: "Offer" },
+    { id: "Archived", title: "Archived" },
   ]
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -76,11 +77,7 @@ export function KanbanBoard() {
   }
 
   return (
-    <DndContext
-      sensors={sensors}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
+    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="flex gap-6 overflow-x-auto pb-6 pt-2 custom-scrollbar-none min-h-[640px]">
         {columns.map((col) => {
           const colCandidates = filteredCandidates.filter((c) => c.status === col.id)
@@ -108,9 +105,7 @@ export function KanbanBoard() {
           }),
         }}
       >
-        {activeCandidate ? (
-          <ApplicationCard candidate={activeCandidate} isOverlay />
-        ) : null}
+        {activeCandidate ? <ApplicationCard candidate={activeCandidate} isOverlay /> : null}
       </DragOverlay>
     </DndContext>
   )

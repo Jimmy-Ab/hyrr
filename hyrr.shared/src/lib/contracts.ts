@@ -11,7 +11,7 @@ export const APPLICATION_STATUS = {
   ARCHIVED: "ARCHIVED",
 } as const
 
-export type ApplicationStatusCode = typeof APPLICATION_STATUS[keyof typeof APPLICATION_STATUS]
+export type ApplicationStatusCode = (typeof APPLICATION_STATUS)[keyof typeof APPLICATION_STATUS]
 
 export const APPLICATION_STATUS_LABEL: Record<ApplicationStatusCode, string> = {
   SAVED: "Saved",
@@ -22,7 +22,7 @@ export const APPLICATION_STATUS_LABEL: Record<ApplicationStatusCode, string> = {
   ARCHIVED: "Archived",
 }
 
-export type ApplicationStatusLabel = typeof APPLICATION_STATUS_LABEL[ApplicationStatusCode]
+export type ApplicationStatusLabel = (typeof APPLICATION_STATUS_LABEL)[ApplicationStatusCode]
 
 export const APPLICATION_STATUS_COLUMNS = Object.values(APPLICATION_STATUS)
 
@@ -31,7 +31,7 @@ export function applicationStatusLabel(status: ApplicationStatusCode): string {
 }
 
 export const JOB_TYPES = ["All", "Full Time", "Part Time", "Contract", "Remote"] as const
-export type JobType = Exclude<typeof JOB_TYPES[number], "All">
+export type JobType = Exclude<(typeof JOB_TYPES)[number], "All">
 
 export const CALENDAR_EVENT_TYPE = {
   INTERVIEW: "INTERVIEW",
@@ -40,7 +40,7 @@ export const CALENDAR_EVENT_TYPE = {
   OTHER: "OTHER",
 } as const
 
-export type CalendarEventTypeCode = typeof CALENDAR_EVENT_TYPE[keyof typeof CALENDAR_EVENT_TYPE]
+export type CalendarEventTypeCode = (typeof CALENDAR_EVENT_TYPE)[keyof typeof CALENDAR_EVENT_TYPE]
 export type CalendarEventType = Lowercase<CalendarEventTypeCode>
 
 export const CALENDAR_EVENT_TYPE_LABEL: Record<CalendarEventType, string> = {
@@ -51,4 +51,4 @@ export const CALENDAR_EVENT_TYPE_LABEL: Record<CalendarEventType, string> = {
 }
 
 export const DOCUMENT_TYPES = ["resume", "cover", "cert", "portfolio", "other"] as const
-export type DocumentType = typeof DOCUMENT_TYPES[number]
+export type DocumentType = (typeof DOCUMENT_TYPES)[number]

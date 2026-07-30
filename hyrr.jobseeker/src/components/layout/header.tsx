@@ -1,27 +1,27 @@
-import * as React from "react";
 import {
-  Search,
-  Bell,
-  Sun,
-  Moon,
-  ChevronDown,
-  Command,
-  Settings,
-  LogOut,
-  User,
-  ExternalLink,
-} from "lucide-react";
-import { useJobStore } from "hyrr.shared";
-import {
+  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "hyrr.shared";
-import { useToast } from "hyrr.shared";
-import { Button } from "hyrr.shared";
+  useJobStore,
+  useToast,
+} from "hyrr.shared"
+import {
+  Bell,
+  ChevronDown,
+  Command,
+  ExternalLink,
+  LogOut,
+  Moon,
+  Search,
+  Settings,
+  Sun,
+  User,
+} from "lucide-react"
+import * as React from "react"
 
 function HyrrIcon({ size = 36 }: { size?: number }) {
   return (
@@ -39,7 +39,7 @@ function HyrrIcon({ size = 36 }: { size?: number }) {
       <rect x="8" y="15.5" width="20" height="4" rx="2" fill="white" />
       <circle cx="28.5" cy="8.5" r="3" fill="#FFB547" />
     </svg>
-  );
+  )
 }
 
 export function Header() {
@@ -49,29 +49,28 @@ export function Header() {
     notifications,
     markNotificationsAsRead,
     markNotificationRead,
-    clearNotifications,
     setCandidateActiveView,
     discoverSearch,
     setDiscoverSearch,
     user,
     logout,
-  } = useJobStore();
-  const { toast } = useToast();
-  const [searchFocused, setSearchFocused] = React.useState(false);
-  const [notifOpen, setNotifOpen] = React.useState(false);
+  } = useJobStore()
+  const { toast } = useToast()
+  const [searchFocused, setSearchFocused] = React.useState(false)
+  const [notifOpen, setNotifOpen] = React.useState(false)
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const unreadCount = notifications.filter((n) => !n.read).length
 
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        document.getElementById("seeker-search")?.focus();
+        e.preventDefault()
+        document.getElementById("seeker-search")?.focus()
       }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
+    }
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+  }, [])
 
   return (
     <div className="h-[68px] border-b border-bg-border bg-bg-secondary flex items-center justify-between px-6 select-none shrink-0 animate-in fade-in duration-200">
@@ -79,9 +78,7 @@ export function Header() {
       <div className="flex items-center gap-3">
         <HyrrIcon size={36} />
         <div className="flex flex-col">
-          <span className="font-bold text-[15px] text-txt-title leading-tight">
-            HYRR
-          </span>
+          <span className="font-bold text-[15px] text-txt-title leading-tight">HYRR</span>
           <span className="text-[10px] font-bold text-primary tracking-wider uppercase">
             Careers
           </span>
@@ -99,7 +96,7 @@ export function Header() {
           value={discoverSearch}
           onChange={(event) => setDiscoverSearch(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === "Enter") setCandidateActiveView("Discover");
+            if (event.key === "Enter") setCandidateActiveView("Discover")
           }}
           placeholder="Search jobs, companies, skills…"
           onFocus={() => setSearchFocused(true)}
@@ -119,11 +116,7 @@ export function Header() {
           onClick={toggleTheme}
           className="w-8 h-8 rounded-full flex items-center justify-center text-txt-caption hover:text-txt-heading hover:bg-bg-hover transition-all cursor-pointer"
         >
-          {theme === "dark" ? (
-            <Sun className="w-4 h-4" />
-          ) : (
-            <Moon className="w-4 h-4" />
-          )}
+          {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>
 
         {/* Notifications */}
@@ -144,8 +137,8 @@ export function Header() {
               {unreadCount > 0 && (
                 <button
                   onClick={() => {
-                    markNotificationsAsRead();
-                    toast("Done", "All marked as read", "success");
+                    markNotificationsAsRead()
+                    toast("Done", "All marked as read", "success")
                   }}
                   className="text-[11px] text-primary font-semibold cursor-pointer hover:underline"
                 >
@@ -169,9 +162,7 @@ export function Header() {
                   >
                     {n.title}
                   </p>
-                  <p className="text-[11px] text-txt-caption mt-0.5">
-                    {n.time}
-                  </p>
+                  <p className="text-[11px] text-txt-caption mt-0.5">{n.time}</p>
                 </div>
               </DropdownMenuItem>
             ))}
@@ -183,8 +174,8 @@ export function Header() {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => {
-                setCandidateActiveView("Notifications");
-                setNotifOpen(false);
+                setCandidateActiveView("Notifications")
+                setNotifOpen(false)
               }}
               className="text-center text-[12px] text-primary font-semibold"
             >
@@ -197,7 +188,13 @@ export function Header() {
         <Button
           variant="secondary"
           size="sm"
-          onClick={() => window.open(import.meta.env.VITE_RECRUITER_APP_URL || "http://localhost:5173", "_blank", "noopener,noreferrer")}
+          onClick={() =>
+            window.open(
+              import.meta.env.VITE_RECRUITER_APP_URL || "http://localhost:5173",
+              "_blank",
+              "noopener,noreferrer"
+            )
+          }
           className="h-8 px-3 rounded-[10px] text-[12px] gap-1.5 cursor-pointer"
         >
           <ExternalLink className="w-3.5 h-3.5" />
@@ -220,9 +217,7 @@ export function Header() {
                 <span className="text-[12.5px] font-semibold text-txt-heading leading-tight">
                   {user?.name || "Job Seeker"}
                 </span>
-                <span className="text-[10.5px] text-txt-caption">
-                  Candidate
-                </span>
+                <span className="text-[10.5px] text-txt-caption">Candidate</span>
               </div>
               <ChevronDown className="w-3 h-3 text-txt-caption ml-0.5" />
             </button>
@@ -233,16 +228,14 @@ export function Header() {
             <DropdownMenuItem onClick={() => setCandidateActiveView("Profile")}>
               <User className="w-4 h-4 mr-2" /> View Profile
             </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => setCandidateActiveView("Settings")}
-            >
+            <DropdownMenuItem onClick={() => setCandidateActiveView("Settings")}>
               <Settings className="w-4 h-4 mr-2" /> Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => {
-                logout();
-                toast("Signed out", "See you next time!", "success");
+                logout()
+                toast("Signed out", "See you next time!", "success")
               }}
               className="text-sec-red focus:text-sec-red"
             >
@@ -252,5 +245,5 @@ export function Header() {
         </DropdownMenu>
       </div>
     </div>
-  );
+  )
 }

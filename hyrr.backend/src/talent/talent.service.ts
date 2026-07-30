@@ -1,109 +1,196 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { createHash, randomBytes } from 'crypto';
-import { PrismaService } from '../prisma/prisma.service';
-import { AccessService, Actor } from '../core/access/access.service';
+import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common"
+import { createHash, randomBytes } from "crypto"
+import { AccessService, Actor } from "../core/access/access.service"
+import { PrismaService } from "../prisma/prisma.service"
 
 @Injectable()
 export class TalentService {
-  constructor(private readonly prisma: PrismaService, private readonly access: AccessService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly access: AccessService
+  ) {}
 
-  private db() { return this.prisma as any; }
+  private db() {
+    return this.prisma as any
+  }
   private requireCompany(actor: Actor) {
-    if (actor.role !== 'RECRUITER' || !actor.companyId) throw new ForbiddenException('A recruiter company is required');
-    return actor.companyId;
+    if (actor.role !== "RECRUITER" || !actor.companyId)
+      throw new ForbiddenException("A recruiter company is required")
+    return actor.companyId
   }
 
-  async addScreeningQuestion(actor: Actor, jobId: string, data: { question: string; required?: boolean }) {
-    await this.access.jobForManagement(actor, jobId);
-    const count = await this.db().screeningQuestion.count({ where: { jobId } });
-    return this.db().screeningQuestion.create({ data: { jobId, question: data.question, required: !!data.required, position: count } });
+  async addScreeningQuestion(
+    actor: Actor,
+    jobId: string,
+    data: { question: string; required?: boolean }
+  ) {
+    await this.access.jobForManagement(actor, jobId)
+    const count = await this.db().screeningQuestion.count({ where: { jobId } })
+    return this.db().screeningQuestion.create({
+      data: { jobId, question: data.question, required: !!data.required, position: count },
+    })
   }
 
   getScreeningQuestions(jobId: string) {
-    return this.db().screeningQuestion.findMany({ where: { jobId }, orderBy: { position: 'asc' } });
+    return this.db().screeningQuestion.findMany({ where: { jobId }, orderBy: { position: "asc" } })
   }
 
   async submitAnswer(actor: Actor, applicationId: string, questionId: string, answer: string) {
-    const application = await this.access.applicationFor(actor, applicationId, 'view');
-    if (actor.role !== 'SEEKER') throw new ForbiddenException('Only the applicant can answer screening questions');
-    const question = await this.db().screeningQuestion.findUnique({ where: { id: questionId } });
-    if (!question || question.jobId !== application.jobId) throw new NotFoundException('Screening question not found');
-    return this.db().screeningAnswer.upsert({ where: { applicationId_questionId: { applicationId, questionId } }, update: { answer }, create: { applicationId, questionId, answer } });
+    const application = await this.access.applicationFor(actor, applicationId, "view")
+    if (actor.role !== "SEEKER")
+      throw new ForbiddenException("Only the applicant can answer screening questions")
+    const question = await this.db().screeningQuestion.findUnique({ where: { id: questionId } })
+    if (!question || question.jobId !== application.jobId)
+      throw new NotFoundException("Screening question not found")
+    return this.db().screeningAnswer.upsert({
+      where: { applicationId_questionId: { applicationId, questionId } },
+      update: { answer },
+      create: { applicationId, questionId, answer },
+    })
   }
 
   async createLabel(actor: Actor, data: { name: string; color?: string }) {
-    const companyId = this.requireCompany(actor);
-    return this.db().candidateLabel.upsert({ where: { companyId_name: { companyId, name: data.name } }, update: { color: data.color || 'purple' }, create: { companyId, name: data.name, color: data.color || 'purple' } });
+    const companyId = this.requireCompany(actor)
+    return this.db().candidateLabel.upsert({
+      where: { companyId_name: { companyId, name: data.name } },
+      update: { color: data.color || "purple" },
+      create: { companyId, name: data.name, color: data.color || "purple" },
+    })
   }
 
   async listLabels(actor: Actor) {
-    return this.db().candidateLabel.findMany({ where: { companyId: this.requireCompany(actor) }, orderBy: { name: 'asc' } });
+    return this.db().candidateLabel.findMany({
+      where: { companyId: this.requireCompany(actor) },
+      orderBy: { name: "asc" },
+    })
   }
 
   async attachLabel(actor: Actor, applicationId: string, labelId: string) {
-    const application = await this.access.applicationFor(actor, applicationId, 'manage');
-    const label = await this.db().candidateLabel.findUnique({ where: { id: labelId } });
-    if (!label || label.companyId !== application.job.companyId) throw new ForbiddenException('Label is not available for this application');
-    return this.db().applicationLabel.upsert({ where: { applicationId_labelId: { applicationId, labelId } }, update: {}, create: { applicationId, labelId } });
+    const application = await this.access.applicationFor(actor, applicationId, "manage")
+    const label = await this.db().candidateLabel.findUnique({ where: { id: labelId } })
+    if (!label || label.companyId !== application.job.companyId)
+      throw new ForbiddenException("Label is not available for this application")
+    return this.db().applicationLabel.upsert({
+      where: { applicationId_labelId: { applicationId, labelId } },
+      update: {},
+      create: { applicationId, labelId },
+    })
   }
 
   async addNote(actor: Actor, applicationId: string, body: string) {
-    await this.access.applicationFor(actor, applicationId, 'manage');
-    return this.db().applicationNote.create({ data: { applicationId, authorId: actor.userId, body } });
+    await this.access.applicationFor(actor, applicationId, "manage")
+    return this.db().applicationNote.create({
+      data: { applicationId, authorId: actor.userId, body },
+    })
   }
 
   async listNotes(actor: Actor, applicationId: string) {
-    await this.access.applicationFor(actor, applicationId, 'manage');
-    return this.db().applicationNote.findMany({ where: { applicationId }, orderBy: { createdAt: 'desc' } });
+    await this.access.applicationFor(actor, applicationId, "manage")
+    return this.db().applicationNote.findMany({
+      where: { applicationId },
+      orderBy: { createdAt: "desc" },
+    })
   }
 
   async addTeamMember(actor: Actor, data: { userId: string; role: string }) {
-    const companyId = this.requireCompany(actor);
-    if (data.userId === actor.userId) throw new ForbiddenException('Owner membership already exists');
-    const user = await this.prisma.user.findUnique({ where: { id: data.userId } });
-    if (!user) throw new NotFoundException('User not found');
-    const member = await this.db().companyMember.upsert({ where: { companyId_userId: { companyId, userId: data.userId } }, update: { role: data.role }, create: { companyId, userId: data.userId, role: data.role } });
-    await this.prisma.user.update({ where: { id: data.userId }, data: { companyId } });
-    return member;
+    const companyId = this.requireCompany(actor)
+    if (data.userId === actor.userId)
+      throw new ForbiddenException("Owner membership already exists")
+    const user = await this.prisma.user.findUnique({ where: { id: data.userId } })
+    if (!user) throw new NotFoundException("User not found")
+    const member = await this.db().companyMember.upsert({
+      where: { companyId_userId: { companyId, userId: data.userId } },
+      update: { role: data.role },
+      create: { companyId, userId: data.userId, role: data.role },
+    })
+    await this.prisma.user.update({ where: { id: data.userId }, data: { companyId } })
+    return member
   }
 
   async listTeam(actor: Actor) {
-    const companyId = this.requireCompany(actor);
-    return this.db().companyMember.findMany({ where: { companyId }, include: { user: { select: { id: true, name: true, email: true, avatar: true } } }, orderBy: { createdAt: 'asc' } });
+    const companyId = this.requireCompany(actor)
+    return this.db().companyMember.findMany({
+      where: { companyId },
+      include: { user: { select: { id: true, name: true, email: true, avatar: true } } },
+      orderBy: { createdAt: "asc" },
+    })
   }
 
   async createTrackingLink(actor: Actor, applicationId: string) {
-    await this.access.applicationFor(actor, applicationId, 'view');
-    const token = randomBytes(32).toString('base64url');
-    const tokenHash = createHash('sha256').update(token).digest('hex');
-    await this.db().applicationTrackingLink.create({ data: { applicationId, tokenHash, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) } });
-    return { token, expiresInDays: 30 };
+    await this.access.applicationFor(actor, applicationId, "view")
+    const token = randomBytes(32).toString("base64url")
+    const tokenHash = createHash("sha256").update(token).digest("hex")
+    await this.db().applicationTrackingLink.create({
+      data: {
+        applicationId,
+        tokenHash,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    })
+    return { token, expiresInDays: 30 }
   }
 
   async publicTrackingStatus(token: string) {
-    const tokenHash = createHash('sha256').update(token).digest('hex');
-    const link = await this.db().applicationTrackingLink.findUnique({ where: { tokenHash }, include: { application: { include: { job: { include: { company: true } } } } } });
-    if (!link || link.expiresAt < new Date()) throw new NotFoundException('Tracking link is invalid or expired');
-    return { status: link.application.status, appliedAt: link.application.appliedAt, job: { title: link.application.job.title, company: link.application.job.company.name } };
+    const tokenHash = createHash("sha256").update(token).digest("hex")
+    const link = await this.db().applicationTrackingLink.findUnique({
+      where: { tokenHash },
+      include: { application: { include: { job: { include: { company: true } } } } },
+    })
+    if (!link || link.expiresAt < new Date())
+      throw new NotFoundException("Tracking link is invalid or expired")
+    return {
+      status: link.application.status,
+      appliedAt: link.application.appliedAt,
+      job: { title: link.application.job.title, company: link.application.job.company.name },
+    }
   }
 
   async createAlert(actor: Actor, data: any) {
-    if (actor.role !== 'SEEKER') throw new ForbiddenException('Only seekers can create job alerts');
-    return this.db().jobAlert.create({ data: { userId: actor.userId, name: data.name, keywords: data.keywords || [], locations: data.locations || [], jobTypes: data.jobTypes || [], minSalary: data.minSalary, remoteOnly: !!data.remoteOnly, frequency: data.frequency || 'DAILY' } });
+    if (actor.role !== "SEEKER") throw new ForbiddenException("Only seekers can create job alerts")
+    return this.db().jobAlert.create({
+      data: {
+        userId: actor.userId,
+        name: data.name,
+        keywords: data.keywords || [],
+        locations: data.locations || [],
+        jobTypes: data.jobTypes || [],
+        minSalary: data.minSalary,
+        remoteOnly: !!data.remoteOnly,
+        frequency: data.frequency || "DAILY",
+      },
+    })
   }
 
   /** Produces review-only suggestions; it never mutates a seeker profile automatically. */
   async resumeSuggestions(actor: Actor, resumeText: string) {
-    if (actor.role !== 'SEEKER') throw new ForbiddenException('Only seekers can parse a resume');
-    const lines = resumeText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-    const email = resumeText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0];
-    const phone = resumeText.match(/(?:\+?\d[\d\s().-]{7,}\d)/)?.[0];
-    const urlMatches = resumeText.match(/https?:\/\/[^\s]+/g) || [];
-    const skills = ['JavaScript', 'TypeScript', 'React', 'Node.js', 'Python', 'Java', 'SQL', 'PostgreSQL', 'AWS', 'Docker', 'Figma', 'Excel']
-      .filter((skill) => new RegExp(`\\b${skill.replace('.', '\\.') }\\b`, 'i').test(resumeText));
+    if (actor.role !== "SEEKER") throw new ForbiddenException("Only seekers can parse a resume")
+    const lines = resumeText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+    const email = resumeText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0]
+    const phone = resumeText.match(/(?:\+?\d[\d\s().-]{7,}\d)/)?.[0]
+    const urlMatches = resumeText.match(/https?:\/\/[^\s]+/g) || []
+    const skills = [
+      "JavaScript",
+      "TypeScript",
+      "React",
+      "Node.js",
+      "Python",
+      "Java",
+      "SQL",
+      "PostgreSQL",
+      "AWS",
+      "Docker",
+      "Figma",
+      "Excel",
+    ].filter((skill) => new RegExp(`\\b${skill.replace(".", "\\.")}\\b`, "i").test(resumeText))
     return {
       suggested: {
-        title: lines.find((line) => /engineer|designer|developer|manager|analyst|specialist/i.test(line)) || undefined,
+        title:
+          lines.find((line) =>
+            /engineer|designer|developer|manager|analyst|specialist/i.test(line)
+          ) || undefined,
         email,
         phone,
         website: urlMatches.find((url) => !/github\.com|linkedin\.com/i.test(url)),
@@ -112,29 +199,61 @@ export class TalentService {
         skills,
       },
       requiresConfirmation: true,
-    };
+    }
   }
 
-  async listAlerts(actor: Actor) { return this.db().jobAlert.findMany({ where: { userId: actor.userId }, orderBy: { createdAt: 'desc' } }); }
-  async createSavedSearch(actor: Actor, data: any) { return this.db().savedSearch.create({ data: { userId: actor.userId, name: data.name, query: data.query, filters: data.filters } }); }
-  async listSavedSearches(actor: Actor) { return this.db().savedSearch.findMany({ where: { userId: actor.userId }, orderBy: { createdAt: 'desc' } }); }
+  async listAlerts(actor: Actor) {
+    return this.db().jobAlert.findMany({
+      where: { userId: actor.userId },
+      orderBy: { createdAt: "desc" },
+    })
+  }
+  async createSavedSearch(actor: Actor, data: any) {
+    return this.db().savedSearch.create({
+      data: { userId: actor.userId, name: data.name, query: data.query, filters: data.filters },
+    })
+  }
+  async listSavedSearches(actor: Actor) {
+    return this.db().savedSearch.findMany({
+      where: { userId: actor.userId },
+      orderBy: { createdAt: "desc" },
+    })
+  }
 
   async reportJob(actor: Actor, jobId: string, data: { reason: string; details?: string }) {
-    const job = await this.prisma.job.findUnique({ where: { id: jobId } });
-    if (!job) throw new NotFoundException('Job not found');
-    return this.db().jobReport.upsert({ where: { jobId_reporterId: { jobId, reporterId: actor.userId } }, update: { reason: data.reason, details: data.details, status: 'PENDING' }, create: { jobId, reporterId: actor.userId, reason: data.reason, details: data.details } });
+    const job = await this.prisma.job.findUnique({ where: { id: jobId } })
+    if (!job) throw new NotFoundException("Job not found")
+    return this.db().jobReport.upsert({
+      where: { jobId_reporterId: { jobId, reporterId: actor.userId } },
+      update: { reason: data.reason, details: data.details, status: "PENDING" },
+      create: { jobId, reporterId: actor.userId, reason: data.reason, details: data.details },
+    })
   }
 
   async analytics(actor: Actor) {
-    const companyId = this.requireCompany(actor);
-    const applications = await this.prisma.application.findMany({ where: { job: { companyId } }, select: { status: true, appliedAt: true, updatedAt: true } });
-    const totals = applications.reduce<Record<string, number>>((result, app: any) => ({ ...result, [app.status]: (result[app.status] || 0) + 1 }), {});
-    const hired = totals.OFFER || 0;
-    return { totalApplications: applications.length, stages: totals, offerRate: applications.length ? Number(((hired / applications.length) * 100).toFixed(1)) : 0 };
+    const companyId = this.requireCompany(actor)
+    const applications = await this.prisma.application.findMany({
+      where: { job: { companyId } },
+      select: { status: true, appliedAt: true, updatedAt: true },
+    })
+    const totals = applications.reduce<Record<string, number>>(
+      (result, app: any) => ({ ...result, [app.status]: (result[app.status] || 0) + 1 }),
+      {}
+    )
+    const hired = totals.OFFER || 0
+    return {
+      totalApplications: applications.length,
+      stages: totals,
+      offerRate: applications.length ? Number(((hired / applications.length) * 100).toFixed(1)) : 0,
+    }
   }
 
   async subscription(actor: Actor) {
-    const companyId = this.requireCompany(actor);
-    return this.db().subscription.upsert({ where: { companyId }, update: {}, create: { companyId } });
+    const companyId = this.requireCompany(actor)
+    return this.db().subscription.upsert({
+      where: { companyId },
+      update: {},
+      create: { companyId },
+    })
   }
 }

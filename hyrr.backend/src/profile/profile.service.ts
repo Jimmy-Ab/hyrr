@@ -1,5 +1,5 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
-import { PrismaService } from "../prisma/prisma.service";
+import { Injectable, NotFoundException } from "@nestjs/common"
+import { PrismaService } from "../prisma/prisma.service"
 
 @Injectable()
 export class ProfileService {
@@ -21,7 +21,7 @@ export class ProfileService {
           select: { id: true, name: true, logo: true, color: true, plan: true },
         },
       },
-    });
+    })
   }
 
   async getProfile(userId: string) {
@@ -33,7 +33,7 @@ export class ProfileService {
         interests: true,
         user: true,
       },
-    });
+    })
 
     if (!profile) {
       // Create lazy profile
@@ -49,22 +49,22 @@ export class ProfileService {
           interests: true,
           user: true,
         },
-      });
+      })
     }
 
-    return profile;
+    return profile
   }
 
   async updateProfile(userId: string, data: any) {
     const profile = await this.prisma.seekerProfile.findUnique({
       where: { userId },
-    });
-    if (!profile) throw new NotFoundException("Profile not found");
+    })
+    if (!profile) throw new NotFoundException("Profile not found")
 
-    const { experiences, educations, interests, name } = data;
+    const { experiences, educations, interests, name } = data
 
     // Filter valid fields for profile update
-    const updateData: any = {};
+    const updateData: any = {}
     const allowedFields = [
       "title",
       "location",
@@ -81,36 +81,36 @@ export class ProfileService {
       "preferredLocations",
       "phone",
       "yearsOfExperience",
-    ];
+    ]
     for (const key of allowedFields) {
-      if (data[key] !== undefined) updateData[key] = data[key];
+      if (data[key] !== undefined) updateData[key] = data[key]
     }
 
     // Handle nested interests relation update if interest slugs are provided
     if (Array.isArray(interests)) {
       updateData.interests = {
         set: interests.map((id: string) => ({ id })),
-      };
+      }
     }
 
     // Transaction to update profile and sync experiences/educations
     return this.prisma.$transaction(async (tx) => {
       // Update user name or avatar if provided
       if (name !== undefined || data.avatar !== undefined) {
-        const userData: any = {};
-        if (name !== undefined) userData.name = name;
-        if (data.avatar !== undefined) userData.avatar = data.avatar;
+        const userData: any = {}
+        if (name !== undefined) userData.name = name
+        if (data.avatar !== undefined) userData.avatar = data.avatar
         await tx.user.update({
           where: { id: userId },
           data: userData,
-        });
+        })
       }
 
       // Sync experiences if provided
       if (Array.isArray(experiences)) {
         await tx.workExperience.deleteMany({
           where: { profileId: profile.id },
-        });
+        })
         await tx.workExperience.createMany({
           data: experiences.map((exp: any) => ({
             profileId: profile.id,
@@ -119,12 +119,12 @@ export class ProfileService {
             duration: exp.duration,
             desc: exp.desc || "",
           })),
-        });
+        })
       }
 
       // Sync educations if provided
       if (Array.isArray(educations)) {
-        await tx.education.deleteMany({ where: { profileId: profile.id } });
+        await tx.education.deleteMany({ where: { profileId: profile.id } })
         await tx.education.createMany({
           data: educations.map((edu: any) => ({
             profileId: profile.id,
@@ -132,7 +132,7 @@ export class ProfileService {
             degree: edu.degree,
             duration: edu.duration,
           })),
-        });
+        })
       }
 
       return tx.seekerProfile.update({
@@ -144,15 +144,15 @@ export class ProfileService {
           interests: true,
           user: true,
         },
-      });
-    });
+      })
+    })
   }
 
   async addExperience(
     userId: string,
-    exp: { role: string; company: string; duration: string; desc?: string },
+    exp: { role: string; company: string; duration: string; desc?: string }
   ) {
-    const profile = await this.getProfile(userId);
+    const profile = await this.getProfile(userId)
     return this.prisma.workExperience.create({
       data: {
         profileId: profile.id,
@@ -161,22 +161,18 @@ export class ProfileService {
         duration: exp.duration,
         desc: exp.desc,
       },
-    });
+    })
   }
 
   async deleteExperience(id: string, userId: string) {
-    const profile = await this.getProfile(userId);
-    const exp = await this.prisma.workExperience.findUnique({ where: { id } });
-    if (!exp || exp.profileId !== profile.id)
-      throw new NotFoundException("Experience not found");
-    return this.prisma.workExperience.delete({ where: { id } });
+    const profile = await this.getProfile(userId)
+    const exp = await this.prisma.workExperience.findUnique({ where: { id } })
+    if (!exp || exp.profileId !== profile.id) throw new NotFoundException("Experience not found")
+    return this.prisma.workExperience.delete({ where: { id } })
   }
 
-  async addEducation(
-    userId: string,
-    edu: { school: string; degree: string; duration: string },
-  ) {
-    const profile = await this.getProfile(userId);
+  async addEducation(userId: string, edu: { school: string; degree: string; duration: string }) {
+    const profile = await this.getProfile(userId)
     return this.prisma.education.create({
       data: {
         profileId: profile.id,
@@ -184,14 +180,13 @@ export class ProfileService {
         degree: edu.degree,
         duration: edu.duration,
       },
-    });
+    })
   }
 
   async deleteEducation(id: string, userId: string) {
-    const profile = await this.getProfile(userId);
-    const edu = await this.prisma.education.findUnique({ where: { id } });
-    if (!edu || edu.profileId !== profile.id)
-      throw new NotFoundException("Education not found");
-    return this.prisma.education.delete({ where: { id } });
+    const profile = await this.getProfile(userId)
+    const edu = await this.prisma.education.findUnique({ where: { id } })
+    if (!edu || edu.profileId !== profile.id) throw new NotFoundException("Education not found")
+    return this.prisma.education.delete({ where: { id } })
   }
 }

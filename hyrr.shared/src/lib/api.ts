@@ -1,118 +1,116 @@
-import { useJobStore } from '../store/useJobStore';
+import { useJobStore } from "../store/useJobStore"
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const BASE_URL = (import.meta as any).env?.VITE_API_URL || "http://localhost:3000/api"
 
 interface RequestOptions extends RequestInit {
-  skipAuth?: boolean;
+  skipAuth?: boolean
 }
 
-let isRefreshing = false;
+let isRefreshing = false
 let failedQueue: Array<{
-  resolve: (token: string | null) => void;
-  reject: (err: any) => void;
-}> = [];
+  resolve: (token: string | null) => void
+  reject: (err: any) => void
+}> = []
 
 const processQueue = (error: any, token: string | null = null) => {
   failedQueue.forEach((prom) => {
-    if (error) prom.reject(error);
-    else prom.resolve(token);
-  });
-  failedQueue = [];
-};
+    if (error) prom.reject(error)
+    else prom.resolve(token)
+  })
+  failedQueue = []
+}
 
 export async function apiFetch(path: string, options: RequestOptions = {}): Promise<any> {
-  const url = `${BASE_URL}${path}`;
-  const headers = new Headers(options.headers || {});
-  
-  if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
-    headers.set('Content-Type', 'application/json');
+  const url = `${BASE_URL}${path}`
+  const headers = new Headers(options.headers || {})
+
+  if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json")
   }
 
   // Inject Bearer access token
   if (!options.skipAuth) {
-    const token = useJobStore.getState().accessToken;
+    const token = useJobStore.getState().accessToken
     if (token) {
-      headers.set('Authorization', `Bearer ${token}`);
+      headers.set("Authorization", `Bearer ${token}`)
     }
   }
 
   const finalOptions: RequestInit = {
     ...options,
     headers,
-    credentials: 'include',
-  };
+    credentials: "include",
+  }
 
-  try {
-    const response = await fetch(url, finalOptions);
+  const response = await fetch(url, finalOptions)
 
-    if (response.status === 401 && !options.skipAuth) {
-      // Access token expired, attempt silent token refresh
-      if (isRefreshing) {
-        return new Promise<string | null>((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        })
-          .then((token) => {
-            if (token) {
-              headers.set('Authorization', `Bearer ${token}`);
-              return fetch(url, finalOptions).then(handleResponse);
-            }
-            throw new Error('Unauthorized');
-          });
-      }
-
-      isRefreshing = true;
-
-      try {
-        const refreshResponse = await fetch(`${BASE_URL}/auth/refresh`, {
-          method: 'POST',
-          credentials: 'include',
-        });
-
-        if (!refreshResponse.ok) {
-          throw new Error('Refresh failed');
+  if (response.status === 401 && !options.skipAuth) {
+    // Access token expired, attempt silent token refresh
+    if (isRefreshing) {
+      return new Promise<string | null>((resolve, reject) => {
+        failedQueue.push({ resolve, reject })
+      }).then((token) => {
+        if (token) {
+          headers.set("Authorization", `Bearer ${token}`)
+          return fetch(url, finalOptions).then(handleResponse)
         }
-
-        const data = await refreshResponse.json();
-        useJobStore.getState().setAccessToken(data.accessToken);
-
-        processQueue(null, data.accessToken);
-        isRefreshing = false;
-
-        headers.set('Authorization', `Bearer ${data.accessToken}`);
-        return fetch(url, finalOptions).then(handleResponse);
-      } catch (err) {
-        processQueue(err, null);
-        isRefreshing = false;
-        useJobStore.getState().logout();
-        throw err;
-      }
+        throw new Error("Unauthorized")
+      })
     }
 
-    return await handleResponse(response);
-  } catch (err) {
-    throw err;
+    isRefreshing = true
+
+    try {
+      const refreshResponse = await fetch(`${BASE_URL}/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+      })
+
+      if (!refreshResponse.ok) {
+        throw new Error("Refresh failed")
+      }
+
+      const data = await refreshResponse.json()
+      useJobStore.getState().setAccessToken(data.accessToken)
+
+      processQueue(null, data.accessToken)
+      isRefreshing = false
+
+      headers.set("Authorization", `Bearer ${data.accessToken}`)
+      return fetch(url, finalOptions).then(handleResponse)
+    } catch (err) {
+      processQueue(err, null)
+      isRefreshing = false
+      useJobStore.getState().logout()
+      throw err
+    }
   }
+
+  return handleResponse(response)
 }
 
 async function handleResponse(response: Response): Promise<any> {
-  const contentType = response.headers.get('content-type');
-  let data: any = null;
-  if (contentType && contentType.includes('application/json')) {
-    data = await response.json();
+  const contentType = response.headers.get("content-type")
+  let data: any = null
+  if (contentType && contentType.includes("application/json")) {
+    data = await response.json()
   } else {
-    data = await response.text();
+    data = await response.text()
   }
 
   if (!response.ok) {
     const errorObj = {
       status: response.status,
-      errorCode: data?.errorCode || 'HTTP_ERROR',
-      message: data?.message || (typeof data === 'string' ? data : response.statusText) || 'Request failed',
+      errorCode: data?.errorCode || "HTTP_ERROR",
+      message:
+        data?.message ||
+        (typeof data === "string" ? data : response.statusText) ||
+        "Request failed",
       details: data?.details || null,
       timestamp: data?.timestamp || new Date().toISOString(),
-    };
-    throw errorObj;
+    }
+    throw errorObj
   }
 
-  return data;
+  return data
 }

@@ -1,25 +1,21 @@
-import * as React from "react";
-import { useJobStore } from "../../store/useJobStore";
-import { Button } from "../ui/button";
-import {
-  ShieldAlert,
-  LogOut
-} from "lucide-react";
+import { LogOut, ShieldAlert } from "lucide-react"
+import { useJobStore } from "../../store/useJobStore"
+import { Button } from "../ui/button"
 
 interface RoleMismatchProps {
-  requiredRole: "SEEKER" | "RECRUITER" | "ADMIN";
-  currentRole: string;
+  requiredRole: "SEEKER" | "RECRUITER" | "ADMIN"
+  currentRole: string
 }
 
 export function RoleMismatch({ requiredRole, currentRole }: RoleMismatchProps) {
-  const { user, logout } = useJobStore();
+  const { user, logout } = useJobStore()
 
   const requiredRoleLabel =
     requiredRole === "SEEKER"
       ? "Job Seeker"
       : requiredRole === "RECRUITER"
         ? "Recruiter"
-        : "Administrator";
+        : "Administrator"
 
   const currentRoleLabel =
     currentRole === "SEEKER"
@@ -28,11 +24,11 @@ export function RoleMismatch({ requiredRole, currentRole }: RoleMismatchProps) {
         ? "Recruiter"
         : currentRole === "ADMIN"
           ? "Administrator"
-          : currentRole;
+          : currentRole
 
   const handleSwitchAccount = async () => {
-    await logout();
-  };
+    await logout()
+  }
 
   return (
     <div className="min-h-screen w-screen flex flex-col items-center justify-center bg-[#F6F7FB] p-6 text-[#17181C]">
@@ -44,19 +40,12 @@ export function RoleMismatch({ requiredRole, currentRole }: RoleMismatchProps) {
 
         {/* Content Header */}
         <div className="space-y-2">
-          <h2 className="text-[24px] font-bold tracking-tight text-[#17181C]">
-            Access Restricted
-          </h2>
+          <h2 className="text-[24px] font-bold tracking-tight text-[#17181C]">Access Restricted</h2>
           <p className="text-[14px] leading-relaxed text-[#646B7A]">
             This portal is exclusively for{" "}
-            <span className="font-semibold text-[#17181C]">
-              {requiredRoleLabel}s
-            </span>
-            . Your current account is registered as a{" "}
-            <span className="font-semibold text-[#6C63FF]">
-              {currentRoleLabel}
-            </span>
-            .
+            <span className="font-semibold text-[#17181C]">{requiredRoleLabel}s</span>. Your current
+            account is registered as a{" "}
+            <span className="font-semibold text-[#6C63FF]">{currentRoleLabel}</span>.
           </p>
         </div>
 
@@ -75,9 +64,7 @@ export function RoleMismatch({ requiredRole, currentRole }: RoleMismatchProps) {
               <p className="text-[14px] font-semibold text-[#17181C] truncate">
                 {user.name || "Signed in User"}
               </p>
-              <p className="text-[12px] text-[#98A2B3] truncate">
-                {user.email}
-              </p>
+              <p className="text-[12px] text-[#98A2B3] truncate">{user.email}</p>
             </div>
             <span className="px-2.5 py-1 text-[11px] font-medium rounded-full bg-[#F2F1FF] text-[#6C63FF] border border-[#6C63FF]/20">
               {currentRoleLabel}
@@ -97,5 +84,5 @@ export function RoleMismatch({ requiredRole, currentRole }: RoleMismatchProps) {
         </div>
       </div>
     </div>
-  );
+  )
 }

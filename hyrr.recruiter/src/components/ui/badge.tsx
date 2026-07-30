@@ -1,5 +1,5 @@
-import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
+import * as React from "react"
 import { cn } from "../../lib/utils"
 
 const badgeVariants = cva(
@@ -7,12 +7,17 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        primary: "bg-[var(--badge-primary-bg)] border-[var(--badge-primary-border)] text-[var(--badge-primary-text)]",
-        success: "bg-[var(--badge-success-bg)] border-[var(--badge-success-border)] text-[var(--badge-success-text)]",
+        primary:
+          "bg-[var(--badge-primary-bg)] border-[var(--badge-primary-border)] text-[var(--badge-primary-text)]",
+        success:
+          "bg-[var(--badge-success-bg)] border-[var(--badge-success-border)] text-[var(--badge-success-text)]",
         info: "bg-[var(--badge-info-bg)] border-[var(--badge-info-border)] text-[var(--badge-info-text)]",
-        warning: "bg-[var(--badge-warning-bg)] border-[var(--badge-warning-border)] text-[var(--badge-warning-text)]",
-        destructive: "bg-[var(--badge-destructive-bg)] border-[var(--badge-destructive-border)] text-[var(--badge-destructive-text)]",
-        secondary: "bg-[var(--badge-secondary-bg)] border-[var(--badge-secondary-border)] text-[var(--badge-secondary-text)]",
+        warning:
+          "bg-[var(--badge-warning-bg)] border-[var(--badge-warning-border)] text-[var(--badge-warning-text)]",
+        destructive:
+          "bg-[var(--badge-destructive-bg)] border-[var(--badge-destructive-border)] text-[var(--badge-destructive-text)]",
+        secondary:
+          "bg-[var(--badge-secondary-bg)] border-[var(--badge-secondary-border)] text-[var(--badge-secondary-text)]",
       },
     },
     defaultVariants: {
@@ -22,13 +27,10 @@ const badgeVariants = cva(
 )
 
 export interface BadgeProps
-  extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof badgeVariants> {}
+  extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof badgeVariants> {}
 
 function Badge({ className, variant, ...props }: BadgeProps) {
-  return (
-    <div className={cn(badgeVariants({ variant }), className)} {...props} />
-  )
+  return <div className={cn(badgeVariants({ variant }), className)} {...props} />
 }
 
 export { Badge, badgeVariants }

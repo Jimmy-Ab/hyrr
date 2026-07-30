@@ -1,22 +1,24 @@
+import { RichTextRenderer } from "hyrr.shared"
+import { ArrowUpRight, Briefcase, Clock, ExternalLink, MapPin, Search } from "lucide-react"
 import * as React from "react"
-import { Briefcase, MapPin, Clock, Search, ArrowUpRight, ExternalLink } from "lucide-react"
-import { useJobStore, type Job } from "../store/useJobStore"
-import { Card } from "../components/ui/card"
 import { Badge } from "../components/ui/badge"
 import { Button } from "../components/ui/button"
+import { Card } from "../components/ui/card"
 import { useToast } from "../components/ui/toast"
-import { RichTextRenderer } from "hyrr.shared"
+import { useJobStore, type Job } from "../store/useJobStore"
 
 export function Jobs() {
-  const { jobs, candidates, selectJob, setActiveView, setAddJobOpen, searchQuery, setSearchQuery } = useJobStore()
+  const { jobs, candidates, selectJob, setActiveView, setAddJobOpen, searchQuery, setSearchQuery } =
+    useJobStore()
   const { toast } = useToast()
-  
+
   const [selectedJob, setSelectedJob] = React.useState<Job | null>(jobs[0] || null)
   const [statusFilter, setStatusFilter] = React.useState<"All" | "Active" | "Closed">("All")
 
   const filteredJobs = jobs.filter((job) => {
-    const matchesSearch = job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          job.location.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesSearch =
+      job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      job.location.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesStatus = statusFilter === "All" || job.status === statusFilter
     return matchesSearch && matchesStatus
   })
@@ -136,7 +138,7 @@ export function Jobs() {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="flex flex-col items-end gap-2 shrink-0">
                     <Badge variant={job.status === "Active" ? "success" : "secondary"}>
                       {job.status}

@@ -1,8 +1,8 @@
 import { useDroppable } from "@dnd-kit/core"
-import { MoreHorizontal, Plus, Bookmark, Send, CheckCircle2, Archive, Clock } from "lucide-react"
-import { ApplicationCard } from "./application-card"
+import { Archive, Bookmark, CheckCircle2, Clock, MoreHorizontal, Plus, Send } from "lucide-react"
 import { type Candidate } from "../../store/useJobStore"
 import { Button } from "../ui/button"
+import { ApplicationCard } from "./application-card"
 
 interface KanbanColumnProps {
   id: Candidate["status"]

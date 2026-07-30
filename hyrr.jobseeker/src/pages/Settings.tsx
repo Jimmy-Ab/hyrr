@@ -1,16 +1,29 @@
-import { useState, useEffect } from "react"
-import { User, Shield, Bell, Palette, Globe, Lock, Smartphone, LogOut, Trash2, Eye, EyeOff, Loader2 } from "lucide-react"
-import { Card, Button, Input, Badge, useJobStore, useToast, apiFetch } from "hyrr.shared"
+import { apiFetch, Badge, Button, Card, Input, useJobStore, useToast } from "hyrr.shared"
+import {
+  Bell,
+  Eye,
+  EyeOff,
+  Globe,
+  Loader2,
+  Lock,
+  LogOut,
+  Palette,
+  Shield,
+  Smartphone,
+  Trash2,
+  User,
+} from "lucide-react"
+import { useEffect, useState } from "react"
 
 type Tab = "General" | "Account" | "Security" | "Notifications" | "Appearance" | "Privacy"
 
 const tabs: { id: Tab; icon: typeof User }[] = [
-  { id: "General",       icon: User },
-  { id: "Account",       icon: Shield },
-  { id: "Security",      icon: Lock },
+  { id: "General", icon: User },
+  { id: "Account", icon: Shield },
+  { id: "Security", icon: Lock },
   { id: "Notifications", icon: Bell },
-  { id: "Appearance",    icon: Palette },
-  { id: "Privacy",       icon: Globe },
+  { id: "Appearance", icon: Palette },
+  { id: "Privacy", icon: Globe },
 ]
 
 export function SettingsPage() {
@@ -30,11 +43,17 @@ export function SettingsPage() {
 
   // Notification & privacy prefs (persisted via /settings)
   const [notifPrefs, setNotifPrefs] = useState({
-    applicationUpdates: true, interviewReminders: true, offerNotifications: true,
-    messageNotifications: true, jobRecommendations: true, weeklyDigest: false,
+    applicationUpdates: true,
+    interviewReminders: true,
+    offerNotifications: true,
+    messageNotifications: true,
+    jobRecommendations: true,
+    weeklyDigest: false,
   })
   const [privacyPrefs, setPrivacyPrefs] = useState({
-    profilePublic: true, resumeVisible: true, showActivity: false,
+    profilePublic: true,
+    resumeVisible: true,
+    showActivity: false,
   })
   const [prefsLoading, setPrefsLoading] = useState(false)
   const [settingsSaving, setSettingsSaving] = useState(false)
@@ -51,24 +70,30 @@ export function SettingsPage() {
         if (!s) return
         setNotifPrefs({
           applicationUpdates: s.applicationUpdates ?? true,
-          interviewReminders:  s.interviewReminders  ?? true,
-          offerNotifications:  s.offerNotifications  ?? true,
+          interviewReminders: s.interviewReminders ?? true,
+          offerNotifications: s.offerNotifications ?? true,
           messageNotifications: s.messageNotifications ?? true,
-          jobRecommendations:  s.jobRecommendations  ?? true,
-          weeklyDigest:        s.weeklyDigest         ?? false,
+          jobRecommendations: s.jobRecommendations ?? true,
+          weeklyDigest: s.weeklyDigest ?? false,
         })
         setPrivacyPrefs({
-          profilePublic:  s.profilePublic  ?? true,
-          resumeVisible:  s.resumeVisible  ?? true,
-          showActivity:   s.showActivity   ?? false,
+          profilePublic: s.profilePublic ?? true,
+          resumeVisible: s.resumeVisible ?? true,
+          showActivity: s.showActivity ?? false,
         })
       })
-      .catch(() => {/* silently ignore – defaults stay */})
+      .catch(() => {
+        /* silently ignore – defaults stay */
+      })
       .finally(() => setPrefsLoading(false))
   }, [])
 
   const handleSaveGeneral = async () => {
-    const ok = await updateProfile({ name: generalName, title: generalTitle || undefined, location: generalLocation || undefined })
+    const ok = await updateProfile({
+      name: generalName,
+      title: generalTitle || undefined,
+      location: generalLocation || undefined,
+    })
     if (ok) toast("Saved", "General settings updated successfully.", "success")
     else toast("Error", "Could not save settings. Please try again.", "error")
   }
@@ -112,7 +137,9 @@ export function SettingsPage() {
               />
             </div>
             <div className="space-y-3">
-              <label className="text-[12.5px] font-bold text-txt-heading block">Professional Title</label>
+              <label className="text-[12.5px] font-bold text-txt-heading block">
+                Professional Title
+              </label>
               <Input
                 value={generalTitle}
                 onChange={(e) => setGeneralTitle(e.target.value)}
@@ -142,7 +169,11 @@ export function SettingsPage() {
                 ))}
               </div>
             </div>
-            <Button onClick={handleSaveGeneral} disabled={profileUpdating} className="cursor-pointer shadow-button gap-2">
+            <Button
+              onClick={handleSaveGeneral}
+              disabled={profileUpdating}
+              className="cursor-pointer shadow-button gap-2"
+            >
               {profileUpdating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               Save Changes
             </Button>
@@ -153,29 +184,52 @@ export function SettingsPage() {
         return (
           <div className="space-y-6">
             <div className="space-y-3">
-              <label className="text-[12.5px] font-bold text-txt-heading block">Email Address</label>
+              <label className="text-[12.5px] font-bold text-txt-heading block">
+                Email Address
+              </label>
               <Input defaultValue={user?.email || ""} type="email" className="max-w-sm" disabled />
-              <p className="text-[11px] text-txt-caption">Email cannot be changed. Contact support if needed.</p>
+              <p className="text-[11px] text-txt-caption">
+                Email cannot be changed. Contact support if needed.
+              </p>
             </div>
             <div className="space-y-3">
               <label className="text-[12.5px] font-bold text-txt-heading block">Phone Number</label>
               <Input defaultValue="+1 555 123 4567" className="max-w-sm" />
             </div>
-            <Button onClick={() => toast("Saved", "Account details updated.", "success")} className="cursor-pointer shadow-button">Update Account</Button>
+            <Button
+              onClick={() => toast("Saved", "Account details updated.", "success")}
+              className="cursor-pointer shadow-button"
+            >
+              Update Account
+            </Button>
 
             <div className="pt-4 border-t border-bg-border/40">
               <h3 className="text-[13px] font-bold text-txt-heading mb-3">Connected Accounts</h3>
               <div className="space-y-3">
                 {[
-                  { name: "GitHub",   connected: true },
+                  { name: "GitHub", connected: true },
                   { name: "LinkedIn", connected: true },
-                  { name: "Google",   connected: false },
+                  { name: "Google", connected: false },
                 ].map((acc) => (
-                  <div key={acc.name} className="flex items-center justify-between p-3 rounded-[12px] border border-bg-border/60">
+                  <div
+                    key={acc.name}
+                    className="flex items-center justify-between p-3 rounded-[12px] border border-bg-border/60"
+                  >
                     <span className="text-[13px] font-medium text-txt-heading">{acc.name}</span>
                     <div className="flex items-center gap-2">
                       {acc.connected && <Badge variant="success">Connected</Badge>}
-                      <Button variant={acc.connected ? "secondary" : "primary"} size="sm" onClick={() => toast(acc.connected ? "Disconnected" : "Connected", `${acc.name} ${acc.connected ? "disconnected" : "connected"}.`, "success")} className="cursor-pointer text-[11.5px]">
+                      <Button
+                        variant={acc.connected ? "secondary" : "primary"}
+                        size="sm"
+                        onClick={() =>
+                          toast(
+                            acc.connected ? "Disconnected" : "Connected",
+                            `${acc.name} ${acc.connected ? "disconnected" : "connected"}.`,
+                            "success"
+                          )
+                        }
+                        className="cursor-pointer text-[11.5px]"
+                      >
                         {acc.connected ? "Disconnect" : "Connect"}
                       </Button>
                     </div>
@@ -190,10 +244,20 @@ export function SettingsPage() {
         return (
           <div className="space-y-6">
             <div className="space-y-3">
-              <label className="text-[12.5px] font-bold text-txt-heading block">Current Password</label>
+              <label className="text-[12.5px] font-bold text-txt-heading block">
+                Current Password
+              </label>
               <div className="relative max-w-sm">
-                <Input type={showPassword ? "text" : "password"} placeholder="••••••••" value={pwForm.current} onChange={e => setPwForm(p => ({ ...p, current: e.target.value }))} />
-                <button onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-txt-caption hover:text-txt-heading cursor-pointer">
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={pwForm.current}
+                  onChange={(e) => setPwForm((p) => ({ ...p, current: e.target.value }))}
+                />
+                <button
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-txt-caption hover:text-txt-heading cursor-pointer"
+                >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
@@ -201,26 +265,48 @@ export function SettingsPage() {
             <div className="space-y-3">
               <label className="text-[12.5px] font-bold text-txt-heading block">New Password</label>
               <div className="relative max-w-sm">
-                <Input type={showNewPassword ? "text" : "password"} placeholder="Minimum 8 characters" value={pwForm.newPw} onChange={e => setPwForm(p => ({ ...p, newPw: e.target.value }))} />
-                <button onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-txt-caption hover:text-txt-heading cursor-pointer">
+                <Input
+                  type={showNewPassword ? "text" : "password"}
+                  placeholder="Minimum 8 characters"
+                  value={pwForm.newPw}
+                  onChange={(e) => setPwForm((p) => ({ ...p, newPw: e.target.value }))}
+                />
+                <button
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-txt-caption hover:text-txt-heading cursor-pointer"
+                >
                   {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
             <div className="space-y-3">
-              <label className="text-[12.5px] font-bold text-txt-heading block">Confirm New Password</label>
-              <Input type="password" placeholder="Re-enter new password" className="max-w-sm" value={pwForm.confirm} onChange={e => setPwForm(p => ({ ...p, confirm: e.target.value }))} />
+              <label className="text-[12.5px] font-bold text-txt-heading block">
+                Confirm New Password
+              </label>
+              <Input
+                type="password"
+                placeholder="Re-enter new password"
+                className="max-w-sm"
+                value={pwForm.confirm}
+                onChange={(e) => setPwForm((p) => ({ ...p, confirm: e.target.value }))}
+              />
             </div>
             <Button
               onClick={async () => {
-                if (!pwForm.current || !pwForm.newPw) return toast("Error", "Please fill in all password fields.", "error")
-                if (pwForm.newPw.length < 8) return toast("Error", "New password must be at least 8 characters.", "error")
-                if (pwForm.newPw !== pwForm.confirm) return toast("Error", "Passwords do not match.", "error")
+                if (!pwForm.current || !pwForm.newPw)
+                  return toast("Error", "Please fill in all password fields.", "error")
+                if (pwForm.newPw.length < 8)
+                  return toast("Error", "New password must be at least 8 characters.", "error")
+                if (pwForm.newPw !== pwForm.confirm)
+                  return toast("Error", "Passwords do not match.", "error")
                 setPwLoading(true)
                 try {
                   await apiFetch("/auth/change-password", {
                     method: "POST",
-                    body: JSON.stringify({ currentPassword: pwForm.current, newPassword: pwForm.newPw }),
+                    body: JSON.stringify({
+                      currentPassword: pwForm.current,
+                      newPassword: pwForm.newPw,
+                    }),
                   })
                   toast("Updated", "Password changed successfully.", "success")
                   setPwForm({ current: "", newPw: "", confirm: "" })
@@ -240,20 +326,35 @@ export function SettingsPage() {
             <div className="pt-4 border-t border-bg-border/40">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-[13px] font-bold text-txt-heading">Two-Factor Authentication</h3>
-                  <p className="text-[12px] text-txt-caption mt-0.5">Add an extra layer of security to your account.</p>
+                  <h3 className="text-[13px] font-bold text-txt-heading">
+                    Two-Factor Authentication
+                  </h3>
+                  <p className="text-[12px] text-txt-caption mt-0.5">
+                    Add an extra layer of security to your account.
+                  </p>
                 </div>
                 <button
-                  onClick={() => { setTwoFA(!twoFA); toast(twoFA ? "Disabled" : "Enabled", `2FA has been ${twoFA ? "disabled" : "enabled"}.`, "success") }}
+                  onClick={() => {
+                    setTwoFA(!twoFA)
+                    toast(
+                      twoFA ? "Disabled" : "Enabled",
+                      `2FA has been ${twoFA ? "disabled" : "enabled"}.`,
+                      "success"
+                    )
+                  }}
                   className={`relative w-12 h-6 rounded-full transition-colors cursor-pointer ${twoFA ? "bg-primary" : "bg-bg-border"}`}
                 >
-                  <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${twoFA ? "translate-x-6" : "translate-x-0.5"}`} />
+                  <div
+                    className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${twoFA ? "translate-x-6" : "translate-x-0.5"}`}
+                  />
                 </button>
               </div>
               {twoFA && (
                 <div className="mt-4 p-3 rounded-[12px] bg-primary-light border border-primary-border/30 flex items-center gap-2">
                   <Smartphone className="w-4 h-4 text-primary" />
-                  <span className="text-[12.5px] text-primary font-medium">Authenticator app enabled</span>
+                  <span className="text-[12.5px] text-primary font-medium">
+                    Authenticator app enabled
+                  </span>
                 </div>
               )}
             </div>
@@ -262,15 +363,25 @@ export function SettingsPage() {
               <h3 className="text-[13px] font-bold text-txt-heading mb-3">Active Sessions</h3>
               {[
                 { device: "MacBook Pro — Chrome", location: "San Francisco, CA", current: true },
-                { device: "iPhone 16 — Safari",   location: "San Francisco, CA", current: false },
+                { device: "iPhone 16 — Safari", location: "San Francisco, CA", current: false },
               ].map((s) => (
-                <div key={s.device} className="flex items-center justify-between p-3 rounded-[12px] border border-bg-border/60 mb-2">
+                <div
+                  key={s.device}
+                  className="flex items-center justify-between p-3 rounded-[12px] border border-bg-border/60 mb-2"
+                >
                   <div>
                     <p className="text-[12.5px] font-semibold text-txt-heading">{s.device}</p>
                     <p className="text-[11px] text-txt-caption">{s.location}</p>
                   </div>
-                  {s.current ? <Badge variant="success">Current</Badge> : (
-                    <Button variant="ghost" size="sm" onClick={() => toast("Signed out", "Session terminated.", "success")} className="text-[11.5px] text-sec-red cursor-pointer">
+                  {s.current ? (
+                    <Badge variant="success">Current</Badge>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => toast("Signed out", "Session terminated.", "success")}
+                      className="text-[11.5px] text-sec-red cursor-pointer"
+                    >
                       <LogOut className="w-3.5 h-3.5 mr-1" /> Sign Out
                     </Button>
                   )}
@@ -299,7 +410,10 @@ export function SettingsPage() {
                     weeklyDigest: "Weekly Job Digest",
                   }
                   return (
-                    <div key={key} className="flex items-center justify-between p-4 rounded-[14px] border border-bg-border/60 bg-bg-secondary">
+                    <div
+                      key={key}
+                      className="flex items-center justify-between p-4 rounded-[14px] border border-bg-border/60 bg-bg-secondary"
+                    >
                       <div>
                         <p className="text-[13px] font-semibold text-txt-heading">{labels[key]}</p>
                       </div>
@@ -307,12 +421,18 @@ export function SettingsPage() {
                         onClick={() => setNotifPrefs((p) => ({ ...p, [key]: !val }))}
                         className={`relative w-12 h-6 rounded-full transition-colors cursor-pointer ${val ? "bg-primary" : "bg-bg-border"}`}
                       >
-                        <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${val ? "translate-x-6" : "translate-x-0.5"}`} />
+                        <div
+                          className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${val ? "translate-x-6" : "translate-x-0.5"}`}
+                        />
                       </button>
                     </div>
                   )
                 })}
-                <Button onClick={handleSaveNotifications} disabled={settingsSaving} className="cursor-pointer shadow-button gap-2">
+                <Button
+                  onClick={handleSaveNotifications}
+                  disabled={settingsSaving}
+                  className="cursor-pointer shadow-button gap-2"
+                >
                   {settingsSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   Save Preferences
                 </Button>
@@ -329,16 +449,22 @@ export function SettingsPage() {
               <div className="grid grid-cols-2 gap-3 max-w-sm">
                 {[
                   { label: "Light", value: "light" },
-                  { label: "Dark",  value: "dark" },
+                  { label: "Dark", value: "dark" },
                 ].map((t) => (
                   <button
                     key={t.value}
-                    onClick={() => { if (theme !== t.value) toggleTheme() }}
+                    onClick={() => {
+                      if (theme !== t.value) toggleTheme()
+                    }}
                     className={`p-4 rounded-[14px] border-2 cursor-pointer transition-all text-left ${theme === t.value ? "border-primary bg-primary-light" : "border-bg-border hover:border-primary/30"}`}
                   >
-                    <div className={`w-full h-8 rounded-[8px] mb-2 ${t.value === "light" ? "bg-white border border-bg-border" : "bg-gray-900"}`} />
+                    <div
+                      className={`w-full h-8 rounded-[8px] mb-2 ${t.value === "light" ? "bg-white border border-bg-border" : "bg-gray-900"}`}
+                    />
                     <span className="text-[12.5px] font-semibold text-txt-heading">{t.label}</span>
-                    {theme === t.value && <span className="ml-2 text-[10.5px] text-primary font-bold">Active</span>}
+                    {theme === t.value && (
+                      <span className="ml-2 text-[10.5px] text-primary font-bold">Active</span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -357,26 +483,46 @@ export function SettingsPage() {
               <>
                 {Object.entries(privacyPrefs).map(([key, val]) => {
                   const labels: Record<string, { title: string; desc: string }> = {
-                    profilePublic: { title: "Public Profile", desc: "Allow recruiters to discover your profile" },
-                    resumeVisible: { title: "Resume Visibility", desc: "Make resume visible to verified recruiters" },
-                    showActivity: { title: "Show Activity Status", desc: "Let recruiters see when you were last active" },
+                    profilePublic: {
+                      title: "Public Profile",
+                      desc: "Allow recruiters to discover your profile",
+                    },
+                    resumeVisible: {
+                      title: "Resume Visibility",
+                      desc: "Make resume visible to verified recruiters",
+                    },
+                    showActivity: {
+                      title: "Show Activity Status",
+                      desc: "Let recruiters see when you were last active",
+                    },
                   }
                   return (
-                    <div key={key} className="flex items-center justify-between p-4 rounded-[14px] border border-bg-border/60 bg-bg-secondary">
+                    <div
+                      key={key}
+                      className="flex items-center justify-between p-4 rounded-[14px] border border-bg-border/60 bg-bg-secondary"
+                    >
                       <div>
-                        <p className="text-[13px] font-semibold text-txt-heading">{labels[key].title}</p>
+                        <p className="text-[13px] font-semibold text-txt-heading">
+                          {labels[key].title}
+                        </p>
                         <p className="text-[11.5px] text-txt-caption mt-0.5">{labels[key].desc}</p>
                       </div>
                       <button
                         onClick={() => setPrivacyPrefs((p) => ({ ...p, [key]: !val }))}
                         className={`relative w-12 h-6 rounded-full transition-colors cursor-pointer ${val ? "bg-primary" : "bg-bg-border"}`}
                       >
-                        <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${val ? "translate-x-6" : "translate-x-0.5"}`} />
+                        <div
+                          className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${val ? "translate-x-6" : "translate-x-0.5"}`}
+                        />
                       </button>
                     </div>
                   )
                 })}
-                <Button onClick={handleSavePrivacy} disabled={settingsSaving} className="cursor-pointer shadow-button gap-2">
+                <Button
+                  onClick={handleSavePrivacy}
+                  disabled={settingsSaving}
+                  className="cursor-pointer shadow-button gap-2"
+                >
                   {settingsSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   Save Privacy Settings
                 </Button>
@@ -385,10 +531,18 @@ export function SettingsPage() {
 
             <div className="pt-4 border-t border-bg-border/40">
               <h3 className="text-[13px] font-bold text-sec-red mb-2">Danger Zone</h3>
-              <p className="text-[12px] text-txt-caption mb-3">Permanently delete your account and all associated data.</p>
+              <p className="text-[12px] text-txt-caption mb-3">
+                Permanently delete your account and all associated data.
+              </p>
               <Button
                 variant="secondary"
-                onClick={() => toast("Account deletion", "Please contact support to delete your account.", "info")}
+                onClick={() =>
+                  toast(
+                    "Account deletion",
+                    "Please contact support to delete your account.",
+                    "info"
+                  )
+                }
                 className="gap-2 cursor-pointer border-sec-red/30 text-sec-red hover:bg-sec-red/5"
               >
                 <Trash2 className="w-4 h-4" /> Delete Account
@@ -406,9 +560,11 @@ export function SettingsPage() {
       <div className="ambient-glow-2" />
       <div>
         <h1 className="text-[36px] font-extrabold tracking-tight">
-            <span className="premium-gradient-text text-glow">Settings</span>
-          </h1>
-        <p className="text-body text-txt-body mt-1 font-medium">Manage your account, security, and preferences.</p>
+          <span className="premium-gradient-text text-glow">Settings</span>
+        </h1>
+        <p className="text-body text-txt-body mt-1 font-medium">
+          Manage your account, security, and preferences.
+        </p>
       </div>
 
       <div className="flex gap-6">
@@ -424,7 +580,9 @@ export function SettingsPage() {
                   : "text-txt-body hover:bg-bg-hover hover:text-txt-heading"
               }`}
             >
-              <Icon className={`w-4.5 h-4.5 shrink-0 ${activeTab === id ? "text-primary" : "text-txt-caption"}`} />
+              <Icon
+                className={`w-4.5 h-4.5 shrink-0 ${activeTab === id ? "text-primary" : "text-txt-caption"}`}
+              />
               {id}
             </button>
           ))}
@@ -432,7 +590,9 @@ export function SettingsPage() {
 
         {/* Content */}
         <Card className="flex-1 p-8">
-          <h2 className="text-[18px] font-bold text-txt-heading mb-6 pb-4 border-b border-bg-border/40">{activeTab}</h2>
+          <h2 className="text-[18px] font-bold text-txt-heading mb-6 pb-4 border-b border-bg-border/40">
+            {activeTab}
+          </h2>
           {renderTab()}
         </Card>
       </div>

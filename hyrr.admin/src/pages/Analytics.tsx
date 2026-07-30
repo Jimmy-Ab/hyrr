@@ -1,21 +1,19 @@
-import { useState } from "react";
-import { Download } from "lucide-react";
-import { Card } from "hyrr.shared";
-import { Button } from "hyrr.shared";
-import { useToast } from "hyrr.shared";
+import { Button, Card, useToast } from "hyrr.shared"
+import { Download } from "lucide-react"
+import { useState } from "react"
 import {
-  AreaChart,
   Area,
-  BarChart,
+  AreaChart,
   Bar,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
+  BarChart,
   CartesianGrid,
   Legend,
-} from "recharts";
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts"
 
 const jobGrowthData = [
   { month: "Jan", jobs: 45, applications: 120 },
@@ -25,7 +23,7 @@ const jobGrowthData = [
   { month: "May", jobs: 145, applications: 920 },
   { month: "Jun", jobs: 178, applications: 1240 },
   { month: "Jul", jobs: 184, applications: 1580 },
-];
+]
 
 const momentumUsageData = [
   { category: "React Dev", spent: 4800 },
@@ -33,29 +31,26 @@ const momentumUsageData = [
   { category: "Designers", spent: 3400 },
   { category: "Product Mgrs", spent: 2900 },
   { category: "Backend Dev", spent: 5100 },
-];
+]
 
 const conversionRateData = [
   { stage: "Saved", value: 100 },
   { stage: "Applied", value: 65 },
   { stage: "In Process", value: 24 },
   { stage: "Offer", value: 8 },
-];
+]
 
 export function AnalyticsPage() {
-  const { toast } = useToast();
-  const [range, setRange] = useState("30d");
+  const { toast } = useToast()
+  const [range, setRange] = useState("30d")
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-[36px] font-bold text-txt-title tracking-tight">
-            Analytics
-          </h1>
+          <h1 className="text-[36px] font-bold text-txt-title tracking-tight">Analytics</h1>
           <p className="text-body text-txt-body mt-1 font-medium">
-            Platform-wide traffic growth, job post yields, and transaction
-            funnels.
+            Platform-wide traffic growth, job post yields, and transaction funnels.
           </p>
         </div>
         <div className="flex gap-2">
@@ -71,9 +66,7 @@ export function AnalyticsPage() {
             ))}
           </div>
           <Button
-            onClick={() =>
-              toast("Report exported", "Full PDF summary ready.", "success")
-            }
+            onClick={() => toast("Report exported", "Full PDF summary ready.", "success")}
             className="gap-1.5 cursor-pointer text-[12px]"
           >
             <Download className="w-4 h-4" /> Export Report
@@ -118,11 +111,7 @@ export function AnalyticsPage() {
                   fontSize: 12,
                 }}
               />
-              <Legend
-                verticalAlign="top"
-                height={36}
-                wrapperStyle={{ fontSize: 12 }}
-              />
+              <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: 12 }} />
               <Area
                 type="monotone"
                 dataKey="jobs"
@@ -172,12 +161,7 @@ export function AnalyticsPage() {
                   fontSize: 12,
                 }}
               />
-              <Bar
-                dataKey="spent"
-                fill="#FFB547"
-                radius={[4, 4, 0, 0]}
-                name="Credits Spent"
-              />
+              <Bar dataKey="spent" fill="#FFB547" radius={[4, 4, 0, 0]} name="Credits Spent" />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -209,23 +193,18 @@ export function AnalyticsPage() {
 
         <Card className="p-6 flex flex-col justify-between">
           <div>
-            <h2 className="text-[15px] font-bold text-txt-heading mb-3">
-              Conversion Insights
-            </h2>
+            <h2 className="text-[15px] font-bold text-txt-heading mb-3">Conversion Insights</h2>
             <p className="text-[12.5px] text-txt-caption leading-relaxed">
-              Our conversion stats indicate a{" "}
-              <strong>65% application rate</strong> from saved listings. The
-              technical interview step remains the highest friction drop-off
-              point. Recruiter response speed has improved by 14% over the last
-              week.
+              Our conversion stats indicate a <strong>65% application rate</strong> from saved
+              listings. The technical interview step remains the highest friction drop-off point.
+              Recruiter response speed has improved by 14% over the last week.
             </p>
           </div>
           <div className="mt-4 p-3 rounded-[12px] bg-primary-light border border-primary-border/30 text-[11px] text-primary font-bold">
-            💡 Strategy recommendation: Reduce step 2 screening constraints to
-            increase funnel flow.
+            💡 Strategy recommendation: Reduce step 2 screening constraints to increase funnel flow.
           </div>
         </Card>
       </div>
     </div>
-  );
+  )
 }

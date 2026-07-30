@@ -1,47 +1,45 @@
-import { type ElementType } from "react"
 import {
-  Home,
-  BriefcaseBusiness,
-  Users,
-  CheckSquare,
-  Calendar,
-  MessageSquare,
   BarChart2,
+  BriefcaseBusiness,
+  Calendar,
+  CheckSquare,
+  Home,
+  MessageSquare,
   Plus,
   Sparkles,
-  ExternalLink,
+  Users,
 } from "lucide-react"
+import { type ElementType } from "react"
 import { useJobStore } from "../../store/useJobStore"
 import { Button } from "../ui/button"
 import { useToast } from "../ui/toast"
 
 export function Sidebar() {
-  const {
-    jobs,
-    selectedJobId,
-    selectJob,
-    activeView,
-    setActiveView,
-    unreadMessageCount,
-  } = useJobStore()
+  const { jobs, selectedJobId, selectJob, activeView, setActiveView, unreadMessageCount } =
+    useJobStore()
   const { toast } = useToast()
 
   type ViewId = typeof activeView
 
   const navItems: { id: ViewId; label: string; icon: ElementType; badge?: number }[] = [
-    { id: "Dashboard",    label: "Dashboard",    icon: Home },
-    { id: "Jobs",         label: "Jobs",         icon: BriefcaseBusiness },
-    { id: "Candidates",  label: "Candidates",   icon: Users },
+    { id: "Dashboard", label: "Dashboard", icon: Home },
+    { id: "Jobs", label: "Jobs", icon: BriefcaseBusiness },
+    { id: "Candidates", label: "Candidates", icon: Users },
     { id: "Applications", label: "Applications", icon: CheckSquare },
-    { id: "Calendar",    label: "Calendar",     icon: Calendar },
-    { id: "Messages",    label: "Messages",     icon: MessageSquare, badge: unreadMessageCount > 0 ? unreadMessageCount : undefined },
-    { id: "Analytics",   label: "Analytics",    icon: BarChart2 },
+    { id: "Calendar", label: "Calendar", icon: Calendar },
+    {
+      id: "Messages",
+      label: "Messages",
+      icon: MessageSquare,
+      badge: unreadMessageCount > 0 ? unreadMessageCount : undefined,
+    },
+    { id: "Analytics", label: "Analytics", icon: BarChart2 },
   ]
 
   const dotColorClasses: Record<string, string> = {
     purple: "bg-[#6C63FF]",
-    blue:   "bg-[#4F8EF7]",
-    green:  "bg-[#34C759]",
+    blue: "bg-[#4F8EF7]",
+    green: "bg-[#34C759]",
     orange: "bg-[#FFB547]",
   }
 
@@ -73,9 +71,7 @@ export function Sidebar() {
                 <div className="flex items-center gap-3">
                   <Icon
                     className={`w-[18px] h-[18px] shrink-0 transition-colors ${
-                      isActive
-                        ? "text-primary"
-                        : "text-txt-caption group-hover:text-txt-heading"
+                      isActive ? "text-primary" : "text-txt-caption group-hover:text-txt-heading"
                     }`}
                   />
                   <span className="text-[13.5px]">{item.label}</span>
@@ -98,7 +94,13 @@ export function Sidebar() {
               YOUR JOBS
             </span>
             <button
-              onClick={() => toast("Coming soon", "Job creation via the sidebar will be available in the next release.", "info")}
+              onClick={() =>
+                toast(
+                  "Coming soon",
+                  "Job creation via the sidebar will be available in the next release.",
+                  "info"
+                )
+              }
               className="text-txt-caption hover:text-txt-heading hover:bg-bg-hover p-1 rounded-full transition-colors cursor-pointer outline-none"
               title="Create new job"
             >

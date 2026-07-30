@@ -1,22 +1,22 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { NotificationsService } from '../notifications/notifications.service';
-import { AccessService, Actor } from '../core/access/access.service';
+import { Injectable } from "@nestjs/common"
+import { AccessService, Actor } from "../core/access/access.service"
+import { NotificationsService } from "../notifications/notifications.service"
+import { PrismaService } from "../prisma/prisma.service"
 
 @Injectable()
 export class CalendarService {
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
-    private access: AccessService,
+    private access: AccessService
   ) {}
 
   async getEvents(userId: string, role: string) {
-    let where: any;
+    let where: any
 
-    if (role === 'SEEKER') {
+    if (role === "SEEKER") {
       // Fetch the user so we can also match by email on the application
-      const user = await this.prisma.user.findUnique({ where: { id: userId } });
+      const user = await this.prisma.user.findUnique({ where: { id: userId } })
       where = {
         OR: [
           // Events linked to an application that belongs to this seeker (by userId)
@@ -26,15 +26,12 @@ export class CalendarService {
           // Events created directly for this seeker user
           { userId },
         ],
-      };
+      }
     } else {
       // Recruiters: events for their jobs or events they created
       where = {
-        OR: [
-          { application: { job: { recruiterId: userId } } },
-          { userId },
-        ],
-      };
+        OR: [{ application: { job: { recruiterId: userId } } }, { userId }],
+      }
     }
 
     return this.prisma.calendarEvent.findMany({
@@ -47,22 +44,25 @@ export class CalendarService {
           },
         },
       },
-      orderBy: { startTime: 'asc' },
-    });
+      orderBy: { startTime: "asc" },
+    })
   }
 
-  async createEvent(data: {
-    userId?: string;
-    applicationId?: string;
-    title: string;
-    startTime: string;
-    endTime?: string;
-    type: string;
-    meetingUrl?: string;
-    location?: string;
-    notes?: string;
-  }, actor: Actor) {
-    if (data.applicationId) await this.access.applicationFor(actor, data.applicationId, 'manage');
+  async createEvent(
+    data: {
+      userId?: string
+      applicationId?: string
+      title: string
+      startTime: string
+      endTime?: string
+      type: string
+      meetingUrl?: string
+      location?: string
+      notes?: string
+    },
+    actor: Actor
+  ) {
+    if (data.applicationId) await this.access.applicationFor(actor, data.applicationId, "manage")
     const event = await this.prisma.calendarEvent.create({
       data: {
         userId: data.userId || null,
@@ -70,10 +70,10 @@ export class CalendarService {
         title: data.title,
         startTime: new Date(data.startTime),
         endTime: data.endTime ? new Date(data.endTime) : null,
-        type: (data.type || 'INTERVIEW').toUpperCase() as any,
+        type: (data.type || "INTERVIEW").toUpperCase() as any,
         meetingUrl: data.meetingUrl || null,
         location: data.location || null,
-        notes: data.notes || '',
+        notes: data.notes || "",
       },
       include: {
         application: {
@@ -83,25 +83,27 @@ export class CalendarService {
           },
         },
       },
-    });
+    })
 
     // Notify the seeker if this event is linked to their application
     if (event.application?.user?.id) {
-      const seekerUserId = event.application.user.id;
-      const dateStr = new Date(event.startTime).toLocaleDateString('en-US', {
-        weekday: 'short', month: 'short', day: 'numeric',
-      });
+      const seekerUserId = event.application.user.id
+      const dateStr = new Date(event.startTime).toLocaleDateString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      })
       await this.notificationsService.createNotification(
         seekerUserId,
-        `📅 Interview scheduled: "${event.title}" on ${dateStr}`,
-      );
+        `📅 Interview scheduled: "${event.title}" on ${dateStr}`
+      )
     }
 
-    return event;
+    return event
   }
 
   async deleteEvent(id: string, actor: Actor) {
-    await this.access.calendarEventFor(actor, id);
-    return this.prisma.calendarEvent.delete({ where: { id } });
+    await this.access.calendarEventFor(actor, id)
+    return this.prisma.calendarEvent.delete({ where: { id } })
   }
 }

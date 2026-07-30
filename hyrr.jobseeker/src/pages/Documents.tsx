@@ -1,6 +1,17 @@
-import { useState, useRef, useEffect } from "react"
-import { FileText, Upload, Trash2, Eye, Download, History, CheckCircle2, Plus, Loader2, X } from "lucide-react"
-import { Card, Badge, Button, useToast, useJobStore, apiFetch } from "hyrr.shared"
+import { apiFetch, Button, Card, useJobStore, useToast } from "hyrr.shared"
+import {
+  CheckCircle2,
+  Download,
+  Eye,
+  FileText,
+  History,
+  Loader2,
+  Plus,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react"
+import { useEffect, useRef, useState } from "react"
 
 type DocType = "resume" | "cover" | "cert" | "portfolio" | "other"
 
@@ -63,32 +74,49 @@ function UploadModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
       onSuccess()
       onClose()
     } catch (err: any) {
-      toast("Upload Failed", err?.message || "Could not upload the file. Please try again.", "error")
+      toast(
+        "Upload Failed",
+        err?.message || "Could not upload the file. Please try again.",
+        "error"
+      )
     } finally {
       setUploading(false)
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-bg-primary rounded-card border border-bg-border shadow-modal w-full max-w-md p-6 flex flex-col gap-5" onClick={e => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-bg-primary rounded-card border border-bg-border shadow-modal w-full max-w-md p-6 flex flex-col gap-5"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between">
           <h2 className="text-[16px] font-bold text-txt-heading">Upload Document</h2>
-          <button onClick={onClose} className="p-1.5 rounded-[8px] hover:bg-bg-hover text-txt-caption hover:text-txt-heading transition-colors cursor-pointer">
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-[8px] hover:bg-bg-hover text-txt-caption hover:text-txt-heading transition-colors cursor-pointer"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Document type selector */}
         <div>
-          <label className="text-[12px] font-bold text-txt-heading uppercase tracking-wider block mb-2">Document Type</label>
+          <label className="text-[12px] font-bold text-txt-heading uppercase tracking-wider block mb-2">
+            Document Type
+          </label>
           <div className="flex flex-wrap gap-2">
-            {(["resume", "cover", "cert", "portfolio", "other"] as DocType[]).map(t => (
+            {(["resume", "cover", "cert", "portfolio", "other"] as DocType[]).map((t) => (
               <button
                 key={t}
                 onClick={() => setDocType(t)}
                 className={`px-3 py-1.5 rounded-[10px] text-[12px] font-semibold border transition-all cursor-pointer capitalize ${
-                  docType === t ? "bg-primary text-white border-primary" : "border-bg-border text-txt-body hover:border-primary/30"
+                  docType === t
+                    ? "bg-primary text-white border-primary"
+                    : "border-bg-border text-txt-body hover:border-primary/30"
                 }`}
               >
                 {typeLabel[t]}
@@ -100,32 +128,54 @@ function UploadModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
         {/* Drop zone */}
         <div
           onDrop={handleDrop}
-          onDragOver={e => e.preventDefault()}
+          onDragOver={(e) => e.preventDefault()}
           onClick={() => fileRef.current?.click()}
           className={`border-2 border-dashed rounded-[14px] p-8 flex flex-col items-center gap-3 cursor-pointer transition-all ${
-            file ? "border-primary bg-primary-light/40" : "border-bg-border hover:border-primary/40 hover:bg-primary-light/20"
+            file
+              ? "border-primary bg-primary-light/40"
+              : "border-bg-border hover:border-primary/40 hover:bg-primary-light/20"
           }`}
         >
           <div className="w-12 h-12 rounded-[14px] bg-primary-light flex items-center justify-center">
-            {file ? <CheckCircle2 className="w-6 h-6 text-primary" /> : <Upload className="w-6 h-6 text-primary" />}
+            {file ? (
+              <CheckCircle2 className="w-6 h-6 text-primary" />
+            ) : (
+              <Upload className="w-6 h-6 text-primary" />
+            )}
           </div>
           {file ? (
             <div className="text-center">
               <p className="text-[13px] font-bold text-txt-heading">{file.name}</p>
-              <p className="text-[11px] text-txt-caption mt-1">{(file.size / (1024 * 1024)).toFixed(2)} MB</p>
+              <p className="text-[11px] text-txt-caption mt-1">
+                {(file.size / (1024 * 1024)).toFixed(2)} MB
+              </p>
             </div>
           ) : (
             <div className="text-center">
-              <p className="text-[13px] font-semibold text-txt-body">Drop file here or click to browse</p>
+              <p className="text-[13px] font-semibold text-txt-body">
+                Drop file here or click to browse
+              </p>
               <p className="text-[11px] text-txt-disabled mt-1">PDF, DOCX, images up to 10MB</p>
             </div>
           )}
-          <input ref={fileRef} type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={handleFileChange} />
+          <input
+            ref={fileRef}
+            type="file"
+            className="hidden"
+            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+            onChange={handleFileChange}
+          />
         </div>
 
         <div className="flex gap-3 justify-end">
-          <Button variant="secondary" onClick={onClose} className="cursor-pointer">Cancel</Button>
-          <Button onClick={handleUpload} disabled={!file || uploading} className="cursor-pointer shadow-button gap-2">
+          <Button variant="secondary" onClick={onClose} className="cursor-pointer">
+            Cancel
+          </Button>
+          <Button
+            onClick={handleUpload}
+            disabled={!file || uploading}
+            className="cursor-pointer shadow-button gap-2"
+          >
             {uploading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             Upload File
           </Button>
@@ -138,7 +188,8 @@ function UploadModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
 // ─── Main Documents Page ────────────────────────────────────────────────
 export function Documents() {
   const { toast } = useToast()
-  const { documents, documentsLoading, fetchDocuments, deleteDocument, toggleDocumentActive } = useJobStore()
+  const { documents, documentsLoading, fetchDocuments, deleteDocument, toggleDocumentActive } =
+    useJobStore()
   const [activeType, setActiveType] = useState<DocType | "all">("all")
   const [showUpload, setShowUpload] = useState(false)
 
@@ -146,7 +197,7 @@ export function Documents() {
     fetchDocuments()
   }, []) // eslint-disable-line
 
-  const filtered = activeType === "all" ? documents : documents.filter(d => d.type === activeType)
+  const filtered = activeType === "all" ? documents : documents.filter((d) => d.type === activeType)
   const groups = ["all", "resume", "cover", "cert", "portfolio"] as const
 
   const handleDelete = async (id: string) => {
@@ -161,7 +212,9 @@ export function Documents() {
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300 relative">
-      {showUpload && <UploadModal onClose={() => setShowUpload(false)} onSuccess={fetchDocuments} />}
+      {showUpload && (
+        <UploadModal onClose={() => setShowUpload(false)} onSuccess={fetchDocuments} />
+      )}
 
       {/* Ambient glows */}
       <div className="ambient-glow-1" />
@@ -171,9 +224,14 @@ export function Documents() {
           <h1 className="text-[36px] font-extrabold tracking-tight">
             <span className="premium-gradient-text text-glow">Documents</span>
           </h1>
-          <p className="text-body text-txt-body mt-1 font-medium">Manage your resumes, cover letters, certificates, and portfolio files.</p>
+          <p className="text-body text-txt-body mt-1 font-medium">
+            Manage your resumes, cover letters, certificates, and portfolio files.
+          </p>
         </div>
-        <Button onClick={() => setShowUpload(true)} className="gap-2 cursor-pointer shadow-button font-semibold">
+        <Button
+          onClick={() => setShowUpload(true)}
+          className="gap-2 cursor-pointer shadow-button font-semibold"
+        >
           <Upload className="w-4 h-4" /> Upload File
         </Button>
       </div>
@@ -182,17 +240,36 @@ export function Documents() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Total Files", value: documents.length, color: "text-primary bg-primary-light" },
-          { label: "Resumes", value: documents.filter(d => d.type === "resume").length, color: "text-primary bg-primary-light" },
-          { label: "Cover Letters", value: documents.filter(d => d.type === "cover").length, color: "text-sec-blue bg-sec-blue/10" },
-          { label: "Certificates", value: documents.filter(d => d.type === "cert").length, color: "text-sec-green bg-sec-green/10" },
-        ].map(s => (
-          <Card key={s.label} className="p-4 flex items-center gap-3 hover:shadow-card-hover transition-shadow">
-            <div className={`w-10 h-10 rounded-[12px] border flex items-center justify-center shrink-0 ${s.color}`}>
+          {
+            label: "Resumes",
+            value: documents.filter((d) => d.type === "resume").length,
+            color: "text-primary bg-primary-light",
+          },
+          {
+            label: "Cover Letters",
+            value: documents.filter((d) => d.type === "cover").length,
+            color: "text-sec-blue bg-sec-blue/10",
+          },
+          {
+            label: "Certificates",
+            value: documents.filter((d) => d.type === "cert").length,
+            color: "text-sec-green bg-sec-green/10",
+          },
+        ].map((s) => (
+          <Card
+            key={s.label}
+            className="p-4 flex items-center gap-3 hover:shadow-card-hover transition-shadow"
+          >
+            <div
+              className={`w-10 h-10 rounded-[12px] border flex items-center justify-center shrink-0 ${s.color}`}
+            >
               <FileText className="w-5 h-5" />
             </div>
             <div>
               <p className="text-[22px] font-extrabold text-txt-title leading-none">{s.value}</p>
-              <p className="text-[11px] text-txt-caption font-semibold uppercase tracking-wider mt-0.5">{s.label}</p>
+              <p className="text-[11px] text-txt-caption font-semibold uppercase tracking-wider mt-0.5">
+                {s.label}
+              </p>
             </div>
           </Card>
         ))}
@@ -200,12 +277,14 @@ export function Documents() {
 
       {/* Filter tabs */}
       <div className="flex gap-1 bg-bg-secondary p-1 border border-bg-border rounded-[14px] w-fit">
-        {groups.map(g => (
+        {groups.map((g) => (
           <button
             key={g}
             onClick={() => setActiveType(g)}
             className={`px-4 py-1.5 rounded-[11px] text-[12.5px] font-semibold cursor-pointer transition-all capitalize ${
-              activeType === g ? "bg-primary text-white shadow-button" : "text-txt-body hover:bg-bg-hover hover:text-txt-heading"
+              activeType === g
+                ? "bg-primary text-white shadow-button"
+                : "text-txt-body hover:bg-bg-hover hover:text-txt-heading"
             }`}
           >
             {g === "all" ? "All Files" : typeLabel[g as DocType]}
@@ -226,26 +305,39 @@ export function Documents() {
               </div>
               <div className="text-center">
                 <p className="text-[15px] font-bold text-txt-heading">No documents yet</p>
-                <p className="text-[12.5px] text-txt-caption mt-1">Upload your resume, cover letters, or certificates to get started.</p>
+                <p className="text-[12.5px] text-txt-caption mt-1">
+                  Upload your resume, cover letters, or certificates to get started.
+                </p>
               </div>
-              <Button onClick={() => setShowUpload(true)} className="gap-2 cursor-pointer shadow-button">
+              <Button
+                onClick={() => setShowUpload(true)}
+                className="gap-2 cursor-pointer shadow-button"
+              >
                 <Upload className="w-4 h-4" /> Upload Your First File
               </Button>
             </div>
           ) : (
             <>
-              {filtered.map(doc => {
+              {filtered.map((doc) => {
                 const t = (doc.type as DocType) || "other"
                 return (
                   <Card key={doc.id} hoverEffect className="p-5 flex flex-col gap-4 group">
                     <div className="flex items-start gap-3">
-                      <div className={`w-11 h-11 rounded-[14px] border flex items-center justify-center shrink-0 ${typeColor[t]} transition-transform group-hover:scale-105`}>
+                      <div
+                        className={`w-11 h-11 rounded-[14px] border flex items-center justify-center shrink-0 ${typeColor[t]} transition-transform group-hover:scale-105`}
+                      >
                         <FileText className="w-5 h-5" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-semibold text-txt-heading truncate">{doc.name}</p>
+                        <p className="text-[13px] font-semibold text-txt-heading truncate">
+                          {doc.name}
+                        </p>
                         <div className="flex items-center gap-2 mt-1">
-                          <span className={`text-[10.5px] font-bold px-1.5 py-0.5 rounded-full border ${typeColor[t]}`}>{typeLabel[t]}</span>
+                          <span
+                            className={`text-[10.5px] font-bold px-1.5 py-0.5 rounded-full border ${typeColor[t]}`}
+                          >
+                            {typeLabel[t]}
+                          </span>
                           {doc.active && <CheckCircle2 className="w-3.5 h-3.5 text-sec-green" />}
                         </div>
                       </div>
@@ -256,20 +348,32 @@ export function Documents() {
                       <span>·</span>
                       <span>{new Date(doc.createdAt).toLocaleDateString()}</span>
                       <span>·</span>
-                      <span className={doc.active ? "text-sec-green font-semibold" : "text-txt-disabled"}>
+                      <span
+                        className={
+                          doc.active ? "text-sec-green font-semibold" : "text-txt-disabled"
+                        }
+                      >
                         {doc.active ? "Active" : "Inactive"}
                       </span>
                     </div>
 
                     <div className="flex gap-1 pt-1 border-t border-bg-border/30">
                       <button
-                        onClick={() => doc.url && doc.url !== "#" ? window.open(doc.url, "_blank") : toast("Preview", `Opening ${doc.name}`, "info")}
+                        onClick={() =>
+                          doc.url && doc.url !== "#"
+                            ? window.open(doc.url, "_blank")
+                            : toast("Preview", `Opening ${doc.name}`, "info")
+                        }
                         className="flex items-center gap-1 text-[11.5px] text-txt-caption hover:text-txt-heading transition-colors cursor-pointer px-2 py-1.5 rounded-[8px] hover:bg-bg-hover"
                       >
                         <Eye className="w-3.5 h-3.5" /> Preview
                       </button>
                       <button
-                        onClick={() => doc.url && doc.url !== "#" ? window.open(doc.url, "_blank") : toast("Download", `Downloading ${doc.name}`, "success")}
+                        onClick={() =>
+                          doc.url && doc.url !== "#"
+                            ? window.open(doc.url, "_blank")
+                            : toast("Download", `Downloading ${doc.name}`, "success")
+                        }
                         className="flex items-center gap-1 text-[11.5px] text-txt-caption hover:text-txt-heading transition-colors cursor-pointer px-2 py-1.5 rounded-[8px] hover:bg-bg-hover"
                       >
                         <Download className="w-3.5 h-3.5" /> Download
@@ -300,7 +404,9 @@ export function Documents() {
                   <Plus className="w-6 h-6 text-primary" />
                 </div>
                 <div className="text-center">
-                  <p className="text-[13px] font-semibold text-txt-caption group-hover:text-txt-heading transition-colors">Upload new file</p>
+                  <p className="text-[13px] font-semibold text-txt-caption group-hover:text-txt-heading transition-colors">
+                    Upload new file
+                  </p>
                   <p className="text-[11px] text-txt-disabled mt-0.5">PDF, DOCX, or image files</p>
                 </div>
               </button>

@@ -1,13 +1,19 @@
+import { Badge, Card, useJobStore, useToast } from "hyrr.shared"
+import { CheckCheck, Loader2, MessageSquare, Search, Send, Trash2 } from "lucide-react"
 import * as React from "react"
-import { Search, Send, CheckCheck, Pin, Loader2, MessageSquare, Trash2 } from "lucide-react"
-import { Card, Badge, useJobStore, useToast } from "hyrr.shared"
 
 export function CandidateMessages() {
   const {
-    conversations, conversationsLoading,
-    conversationMessages, messagesLoading,
+    conversations,
+    conversationsLoading,
+    conversationMessages,
+    messagesLoading,
     activeConversationId,
-    fetchConversations, fetchMessages, sendMessage, setActiveConversation, deleteConversation,
+    fetchConversations,
+    fetchMessages,
+    sendMessage,
+    setActiveConversation,
+    deleteConversation,
     user,
   } = useJobStore()
 
@@ -34,7 +40,7 @@ export function CandidateMessages() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [conversationMessages])
 
-  const activeConv = conversations.find(c => c.applicationId === activeConversationId)
+  const activeConv = conversations.find((c) => c.applicationId === activeConversationId)
 
   const handleSelectConversation = (appId: string) => {
     setActiveConversation(appId)
@@ -56,8 +62,11 @@ export function CandidateMessages() {
     }
   }
 
-  const filtered = conversations.filter(c =>
-    !search || c.candidateName.toLowerCase().includes(search.toLowerCase()) || c.jobTitle.toLowerCase().includes(search.toLowerCase())
+  const filtered = conversations.filter(
+    (c) =>
+      !search ||
+      c.candidateName.toLowerCase().includes(search.toLowerCase()) ||
+      c.jobTitle.toLowerCase().includes(search.toLowerCase())
   )
 
   return (
@@ -67,9 +76,11 @@ export function CandidateMessages() {
       <div className="ambient-glow-2" />
       <div>
         <h1 className="text-[36px] font-extrabold tracking-tight">
-            <span className="premium-gradient-text text-glow">Messages</span>
-          </h1>
-        <p className="text-body text-txt-body mt-1 font-medium">Your conversations with recruiters and hiring teams.</p>
+          <span className="premium-gradient-text text-glow">Messages</span>
+        </h1>
+        <p className="text-body text-txt-body mt-1 font-medium">
+          Your conversations with recruiters and hiring teams.
+        </p>
       </div>
 
       <div className="flex gap-5 h-[600px]">
@@ -104,19 +115,31 @@ export function CandidateMessages() {
                   key={c.applicationId}
                   onClick={() => handleSelectConversation(c.applicationId)}
                   className={`w-full text-left p-4 flex items-start gap-3 border-b border-bg-border/20 transition-colors cursor-pointer group relative ${
-                    activeConv?.applicationId === c.applicationId ? "bg-primary-light" : "hover:bg-bg-hover"
+                    activeConv?.applicationId === c.applicationId
+                      ? "bg-primary-light"
+                      : "hover:bg-bg-hover"
                   }`}
                 >
                   <div className="relative shrink-0">
-                    <img src={c.candidateAvatar} alt={c.candidateName} className="w-9 h-9 rounded-full object-cover" />
-                    {c.online && <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-sec-green border-2 border-bg-secondary" />}
+                    <img
+                      src={c.candidateAvatar}
+                      alt={c.candidateName}
+                      className="w-9 h-9 rounded-full object-cover"
+                    />
+                    {c.online && (
+                      <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-sec-green border-2 border-bg-secondary" />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <span className="text-[13px] font-semibold text-txt-heading">{c.candidateName}</span>
+                      <span className="text-[13px] font-semibold text-txt-heading">
+                        {c.candidateName}
+                      </span>
                       <span className="text-[10.5px] text-txt-caption">{c.lastMessageTime}</span>
                     </div>
-                    <p className="text-[11.5px] text-txt-caption mt-0.5">{c.company} · {c.jobTitle}</p>
+                    <p className="text-[11.5px] text-txt-caption mt-0.5">
+                      {c.company} · {c.jobTitle}
+                    </p>
                     <p className="text-[12px] text-txt-body mt-0.5 truncate">{c.lastMessage}</p>
                   </div>
                   <button
@@ -130,7 +153,9 @@ export function CandidateMessages() {
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
-                  {c.unreadCount > 0 && <div className="w-2 h-2 rounded-full bg-primary shrink-0" />}
+                  {c.unreadCount > 0 && (
+                    <div className="w-2 h-2 rounded-full bg-primary shrink-0" />
+                  )}
                 </div>
               ))
             )}
@@ -158,7 +183,11 @@ export function CandidateMessages() {
                   </p>
                 </div>
                 <div className="ml-auto flex items-center gap-2">
-                  {activeConv.online && <Badge variant="success" className="text-[10.5px]">Online</Badge>}
+                  {activeConv.online && (
+                    <Badge variant="success" className="text-[10.5px]">
+                      Online
+                    </Badge>
+                  )}
                   <button
                     onClick={() => {
                       deleteConversation(activeConv.applicationId)
@@ -180,21 +209,33 @@ export function CandidateMessages() {
                 ) : conversationMessages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-center gap-2">
                     <MessageSquare className="w-8 h-8 text-txt-disabled" />
-                    <p className="text-[13px] text-txt-caption">No messages yet. Send the first message!</p>
+                    <p className="text-[13px] text-txt-caption">
+                      No messages yet. Send the first message!
+                    </p>
                   </div>
                 ) : (
                   conversationMessages.map((msg, i) => {
                     const isMe = msg.senderId === user?.id
                     return (
-                      <div key={i} className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>
-                        <div className={`max-w-[72%] rounded-[18px] px-4 py-2.5 text-[13px] leading-relaxed ${
-                          isMe ? "bg-primary text-white rounded-tr-none" : "bg-bg-primary border border-bg-border text-txt-heading rounded-tl-none"
-                        }`}>
+                      <div
+                        key={i}
+                        className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}
+                      >
+                        <div
+                          className={`max-w-[72%] rounded-[18px] px-4 py-2.5 text-[13px] leading-relaxed ${
+                            isMe
+                              ? "bg-primary text-white rounded-tr-none"
+                              : "bg-bg-primary border border-bg-border text-txt-heading rounded-tl-none"
+                          }`}
+                        >
                           {msg.text}
                         </div>
                         <div className="flex items-center gap-1 mt-1 px-1">
                           <span className="text-[10px] text-txt-caption">
-                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            {new Date(msg.createdAt).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
                           </span>
                           {isMe && <CheckCheck className="w-3 h-3 text-txt-caption" />}
                         </div>
@@ -219,7 +260,11 @@ export function CandidateMessages() {
                   disabled={sending || !input.trim()}
                   className="w-10 h-10 rounded-[11px] bg-primary flex items-center justify-center text-white disabled:opacity-50 hover:bg-primary-hover transition-all cursor-pointer shadow-button shrink-0"
                 >
-                  {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  {sending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
                 </button>
               </div>
             </div>
@@ -227,7 +272,9 @@ export function CandidateMessages() {
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
                 <MessageSquare className="w-10 h-10 text-txt-disabled mx-auto mb-2" />
-                <p className="text-[14px] text-txt-caption">Select a conversation to start messaging</p>
+                <p className="text-[14px] text-txt-caption">
+                  Select a conversation to start messaging
+                </p>
               </div>
             </div>
           )}

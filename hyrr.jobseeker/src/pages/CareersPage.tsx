@@ -1,13 +1,42 @@
-import { useState, type FormEvent } from "react"
 import {
-  MapPin, Clock, Briefcase, Search, ChevronRight, ArrowLeft,
-  Building2, Users, Globe, Star, CheckCircle2, X, Upload,
-  ExternalLink, Bookmark
+  APPLICATION_STATUS,
+  Badge,
+  Button,
+  Card,
+  Input,
+  useJobStore,
+  useToast,
+  type Job,
+} from "hyrr.shared"
+import {
+  ArrowLeft,
+  Bookmark,
+  Briefcase,
+  Building2,
+  CheckCircle2,
+  ChevronRight,
+  Clock,
+  ExternalLink,
+  Globe,
+  MapPin,
+  Search,
+  Star,
+  Upload,
+  Users,
+  X,
 } from "lucide-react"
-import { useJobStore, type Job, Badge, Button, Input, useToast, Card, APPLICATION_STATUS } from "hyrr.shared"
+import { useState, type FormEvent } from "react"
 
 /* ─── Tiny company stat ─── */
-function CompanyStat({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
+function CompanyStat({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: React.ElementType
+  label: string
+  value: string
+}) {
   return (
     <div className="flex items-center gap-2 text-txt-body">
       <div className="w-8 h-8 rounded-xl bg-primary-light flex items-center justify-center shrink-0">
@@ -36,8 +65,14 @@ function ApplyModal({ job, onClose }: { job: Job; onClose: () => void }) {
 
   const [step, setStep] = useState<"form" | "success">("form")
   const [form, setForm] = useState({
-    name: "", email: "", phone: "", title: "", location: "",
-    linkedin: "", coverLetter: "", resumeName: "",
+    name: "",
+    email: "",
+    phone: "",
+    title: "",
+    location: "",
+    linkedin: "",
+    coverLetter: "",
+    resumeName: "",
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -83,15 +118,23 @@ function ApplyModal({ job, onClose }: { job: Job; onClose: () => void }) {
         {/* Header */}
         <div className="flex items-start justify-between p-6 border-b border-bg-border/40">
           <div>
-            <p className="text-[11px] text-primary font-bold uppercase tracking-widest mb-1">Applying for</p>
+            <p className="text-[11px] text-primary font-bold uppercase tracking-widest mb-1">
+              Applying for
+            </p>
             <h2 className="text-[20px] font-bold text-txt-title leading-tight">{job.title}</h2>
             <div className="flex items-center gap-3 mt-1.5 text-[12px] text-txt-caption font-medium">
-              <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{job.location}</span>
+              <span className="flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5" />
+                {job.location}
+              </span>
               <span>·</span>
               <span>{job.type}</span>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-full hover:bg-bg-hover text-txt-caption hover:text-txt-heading transition-colors cursor-pointer">
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-full hover:bg-bg-hover text-txt-caption hover:text-txt-heading transition-colors cursor-pointer"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -105,7 +148,9 @@ function ApplyModal({ job, onClose }: { job: Job; onClose: () => void }) {
             <div>
               <h3 className="text-[20px] font-bold text-txt-title">Application Submitted!</h3>
               <p className="text-txt-body mt-2 max-w-sm mx-auto leading-relaxed">
-                Thank you <strong className="text-txt-heading">{form.name}</strong>! Your application for <strong className="text-txt-heading">{job.title}</strong> has been received and is now in review.
+                Thank you <strong className="text-txt-heading">{form.name}</strong>! Your
+                application for <strong className="text-txt-heading">{job.title}</strong> has been
+                received and is now in review.
               </p>
             </div>
             <div className="flex gap-3 mt-2">
@@ -162,11 +207,14 @@ function ApplyModal({ job, onClose }: { job: Job; onClose: () => void }) {
                   Location <span className="text-sec-red">*</span>
                 </label>
                 <Input placeholder="San Francisco, CA" {...field("location")} />
-                {errors.location && <p className="text-[11px] text-sec-red mt-1">{errors.location}</p>}
+                {errors.location && (
+                  <p className="text-[11px] text-sec-red mt-1">{errors.location}</p>
+                )}
               </div>
               <div>
                 <label className="text-[12.5px] font-semibold text-txt-heading block mb-1.5">
-                  LinkedIn Profile <span className="text-[11px] text-txt-caption font-normal">(optional)</span>
+                  LinkedIn Profile{" "}
+                  <span className="text-[11px] text-txt-caption font-normal">(optional)</span>
                 </label>
                 <Input placeholder="linkedin.com/in/yourname" {...field("linkedin")} />
               </div>
@@ -175,13 +223,19 @@ function ApplyModal({ job, onClose }: { job: Job; onClose: () => void }) {
             {/* Resume upload (simulated) */}
             <div>
               <label className="text-[12.5px] font-semibold text-txt-heading block mb-1.5">
-                Resume / CV <span className="text-[11px] text-txt-caption font-normal">(PDF, DOCX)</span>
+                Resume / CV{" "}
+                <span className="text-[11px] text-txt-caption font-normal">(PDF, DOCX)</span>
               </label>
               <label className="flex items-center justify-center gap-3 w-full h-24 border-2 border-dashed border-bg-border rounded-[16px] cursor-pointer hover:border-primary/40 hover:bg-primary-light/10 transition-all group">
-                <input type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) setForm((f) => ({ ...f, resumeName: file.name }))
-                }} />
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) setForm((f) => ({ ...f, resumeName: file.name }))
+                  }}
+                />
                 <Upload className="w-5 h-5 text-txt-caption group-hover:text-primary transition-colors" />
                 <span className="text-[13px] text-txt-caption group-hover:text-txt-heading transition-colors font-medium">
                   {form.resumeName ? form.resumeName : "Click to upload or drag & drop"}
@@ -192,7 +246,8 @@ function ApplyModal({ job, onClose }: { job: Job; onClose: () => void }) {
             {/* Cover letter */}
             <div>
               <label className="text-[12.5px] font-semibold text-txt-heading block mb-1.5">
-                Cover Letter <span className="text-[11px] text-txt-caption font-normal">(optional)</span>
+                Cover Letter{" "}
+                <span className="text-[11px] text-txt-caption font-normal">(optional)</span>
               </label>
               <textarea
                 rows={4}
@@ -206,10 +261,13 @@ function ApplyModal({ job, onClose }: { job: Job; onClose: () => void }) {
             {/* Footer */}
             <div className="flex items-center justify-between pt-2 border-t border-bg-border/40">
               <p className="text-[11px] text-txt-caption">
-                By applying you agree to our <span className="text-primary cursor-pointer hover:underline">Privacy Policy</span>
+                By applying you agree to our{" "}
+                <span className="text-primary cursor-pointer hover:underline">Privacy Policy</span>
               </p>
               <div className="flex gap-3">
-                <Button type="button" variant="ghost" onClick={onClose} className="cursor-pointer">Cancel</Button>
+                <Button type="button" variant="ghost" onClick={onClose} className="cursor-pointer">
+                  Cancel
+                </Button>
                 <Button type="submit" variant="primary" className="cursor-pointer px-6">
                   Submit Application
                 </Button>
@@ -226,8 +284,12 @@ function ApplyModal({ job, onClose }: { job: Job; onClose: () => void }) {
 function JobDetail({ job, onApply }: { job: Job; onApply: () => void }) {
   const { candidates, jobApplications, saveJobFromDiscover } = useJobStore()
   const applicantCount = candidates.filter((c) => c.jobId === job.id).length
-  const isApplied = jobApplications.some((a) => a.publicJobId === job.id && a.status !== APPLICATION_STATUS.SAVED)
-  const isSaved = jobApplications.some((a) => a.publicJobId === job.id && a.status === APPLICATION_STATUS.SAVED)
+  const isApplied = jobApplications.some(
+    (a) => a.publicJobId === job.id && a.status !== APPLICATION_STATUS.SAVED
+  )
+  const isSaved = jobApplications.some(
+    (a) => a.publicJobId === job.id && a.status === APPLICATION_STATUS.SAVED
+  )
 
   const requirements: Record<string, string[]> = {
     "senior-frontend-developer": [
@@ -287,12 +349,23 @@ function JobDetail({ job, onApply }: { job: Job; onApply: () => void }) {
           <div>
             <h2 className="text-[22px] font-bold text-txt-title leading-tight">{job.title}</h2>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 text-[12.5px] text-txt-body font-medium">
-              <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-txt-caption" />{job.location}</span>
-              <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-txt-caption" />{job.posted}</span>
-              <span className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-txt-caption" />{applicantCount} applicant{applicantCount !== 1 ? "s" : ""}</span>
+              <span className="flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-txt-caption" />
+                {job.location}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-txt-caption" />
+                {job.posted}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-txt-caption" />
+                {applicantCount} applicant{applicantCount !== 1 ? "s" : ""}
+              </span>
             </div>
           </div>
-          <Badge variant={typeBadge(job.type) as "primary" | "info" | "warning" | "secondary"}>{job.type}</Badge>
+          <Badge variant={typeBadge(job.type) as "primary" | "info" | "warning" | "secondary"}>
+            {job.type}
+          </Badge>
         </div>
         <div className="flex gap-3">
           <Button
@@ -321,20 +394,28 @@ function JobDetail({ job, onApply }: { job: Job; onApply: () => void }) {
       <div className="p-7 space-y-7 flex-1">
         {/* About */}
         <div>
-          <h3 className="text-[13px] font-bold text-txt-heading uppercase tracking-widest mb-3">About the Role</h3>
+          <h3 className="text-[13px] font-bold text-txt-heading uppercase tracking-widest mb-3">
+            About the Role
+          </h3>
           <p className="text-[13.5px] text-txt-body leading-relaxed font-medium">
-            We're looking for a talented <strong className="text-txt-heading">{job.title}</strong> to join our growing team.
-            You'll work closely with cross-functional teams to ship premium, high-quality features that delight our users.
-            This is a high-impact role with a direct line to product leadership.
+            We're looking for a talented <strong className="text-txt-heading">{job.title}</strong>{" "}
+            to join our growing team. You'll work closely with cross-functional teams to ship
+            premium, high-quality features that delight our users. This is a high-impact role with a
+            direct line to product leadership.
           </p>
         </div>
 
         {/* Requirements */}
         <div>
-          <h3 className="text-[13px] font-bold text-txt-heading uppercase tracking-widest mb-3">Requirements</h3>
+          <h3 className="text-[13px] font-bold text-txt-heading uppercase tracking-widest mb-3">
+            Requirements
+          </h3>
           <ul className="space-y-2">
             {reqs.map((r, i) => (
-              <li key={i} className="flex items-start gap-2.5 text-[13.5px] text-txt-body font-medium">
+              <li
+                key={i}
+                className="flex items-start gap-2.5 text-[13.5px] text-txt-body font-medium"
+              >
                 <CheckCircle2 className="w-4 h-4 text-sec-green shrink-0 mt-0.5" />
                 {r}
               </li>
@@ -344,10 +425,15 @@ function JobDetail({ job, onApply }: { job: Job; onApply: () => void }) {
 
         {/* Perks */}
         <div>
-          <h3 className="text-[13px] font-bold text-txt-heading uppercase tracking-widest mb-3">Perks & Benefits</h3>
+          <h3 className="text-[13px] font-bold text-txt-heading uppercase tracking-widest mb-3">
+            Perks & Benefits
+          </h3>
           <div className="grid grid-cols-2 gap-2">
             {perks.map((p, i) => (
-              <div key={i} className="flex items-center gap-2 p-2.5 rounded-[12px] bg-bg-primary border border-bg-border/40 text-[12.5px] text-txt-body font-medium">
+              <div
+                key={i}
+                className="flex items-center gap-2 p-2.5 rounded-[12px] bg-bg-primary border border-bg-border/40 text-[12.5px] text-txt-body font-medium"
+              >
                 <Star className="w-3.5 h-3.5 text-sec-orange shrink-0" />
                 {p}
               </div>
@@ -361,7 +447,7 @@ function JobDetail({ job, onApply }: { job: Job; onApply: () => void }) {
 
 /* ─── Main Careers Page ─── */
 export function CareersPage() {
-  const { jobs, careerSelectedJobId, setCareerSelectedJobId, setActiveView, workspaceName } = useJobStore()
+  const { jobs, careerSelectedJobId, setCareerSelectedJobId, setActiveView } = useJobStore()
   const [search, setSearch] = useState("")
   const [typeFilter, setTypeFilter] = useState("All")
   const [applyJob, setApplyJob] = useState<Job | null>(null)
@@ -370,7 +456,8 @@ export function CareersPage() {
   const activeJobs = jobs.filter((j) => j.status === "Active")
 
   const filtered = activeJobs.filter((j) => {
-    const matchSearch = j.title.toLowerCase().includes(search.toLowerCase()) ||
+    const matchSearch =
+      j.title.toLowerCase().includes(search.toLowerCase()) ||
       j.location.toLowerCase().includes(search.toLowerCase())
     const matchType = typeFilter === "All" || j.type === typeFilter
     return matchSearch && matchType
@@ -394,8 +481,8 @@ export function CareersPage() {
       <div className="ambient-glow-2" />
       <div>
         <h1 className="text-[36px] font-extrabold tracking-tight">
-            <span className="premium-gradient-text text-glow">Explore Roles</span>
-          </h1>
+          <span className="premium-gradient-text text-glow">Explore Roles</span>
+        </h1>
         <p className="text-body text-txt-body mt-1 font-medium">
           Find your next challenge. Search open roles, filter by work types, and apply directly.
         </p>
@@ -413,7 +500,8 @@ export function CareersPage() {
               Build the future of <span className="text-primary">talent, together.</span>
             </h2>
             <p className="text-txt-body mt-2.5 max-w-lg leading-relaxed text-[13px] font-medium">
-              Join our world-class team and help shape how companies discover extraordinary people. Remote-first, mission-driven, and growing fast.
+              Join our world-class team and help shape how companies discover extraordinary people.
+              Remote-first, mission-driven, and growing fast.
             </p>
           </div>
 
@@ -445,7 +533,9 @@ export function CareersPage() {
               key={t}
               onClick={() => setTypeFilter(t)}
               className={`px-3 py-1.5 rounded-[10px] text-[12px] font-semibold cursor-pointer transition-all ${
-                typeFilter === t ? "bg-primary text-white" : "text-txt-body hover:bg-bg-hover hover:text-txt-heading"
+                typeFilter === t
+                  ? "bg-primary text-white"
+                  : "text-txt-body hover:bg-bg-hover hover:text-txt-heading"
               }`}
             >
               {t}
@@ -457,12 +547,16 @@ export function CareersPage() {
       {/* ── Split layout: list + detail ── */}
       <div className="flex gap-6 flex-1 items-start">
         {/* Job list */}
-        <div className={`flex flex-col gap-3 w-full md:w-[380px] shrink-0 ${mobileDetail ? "hidden md:flex" : "flex"}`}>
+        <div
+          className={`flex flex-col gap-3 w-full md:w-[380px] shrink-0 ${mobileDetail ? "hidden md:flex" : "flex"}`}
+        >
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-bg-border rounded-card bg-bg-secondary/50">
               <Briefcase className="w-10 h-10 text-txt-disabled mb-3" />
               <p className="text-txt-heading font-semibold">No roles found</p>
-              <p className="text-txt-caption text-[12.5px] mt-1">Try adjusting your search or filters</p>
+              <p className="text-txt-caption text-[12.5px] mt-1">
+                Try adjusting your search or filters
+              </p>
             </div>
           ) : (
             filtered.map((job) => {
@@ -475,10 +569,11 @@ export function CareersPage() {
                     setCareerSelectedJobId(job.id)
                     setMobileDetail(true)
                   }}
-                  className={`w-full text-left p-5 rounded-card border transition-all cursor-pointer group ${isSelected
-                    ? "border-primary bg-bg-secondary shadow-card ring-2 ring-primary/10"
-                    : "border-bg-border/60 bg-bg-secondary hover:border-primary/30 hover:shadow-card"
-                    }`}
+                  className={`w-full text-left p-5 rounded-card border transition-all cursor-pointer group ${
+                    isSelected
+                      ? "border-primary bg-bg-secondary shadow-card ring-2 ring-primary/10"
+                      : "border-bg-border/60 bg-bg-secondary hover:border-primary/30 hover:shadow-card"
+                  }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3">
@@ -488,16 +583,28 @@ export function CareersPage() {
                           {job.title}
                         </h3>
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[12px] text-txt-caption font-medium">
-                          <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{job.location}</span>
-                          <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{job.posted}</span>
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-3.5 h-3.5" />
+                            {job.location}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5" />
+                            {job.posted}
+                          </span>
                         </div>
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-2 shrink-0">
-                      <Badge variant={typeBadge(job.type) as "primary" | "info" | "warning" | "secondary"}>
+                      <Badge
+                        variant={
+                          typeBadge(job.type) as "primary" | "info" | "warning" | "secondary"
+                        }
+                      >
                         {job.type}
                       </Badge>
-                      <ChevronRight className={`w-4 h-4 transition-colors ${isSelected ? "text-primary" : "text-txt-disabled group-hover:text-txt-caption"}`} />
+                      <ChevronRight
+                        className={`w-4 h-4 transition-colors ${isSelected ? "text-primary" : "text-txt-disabled group-hover:text-txt-caption"}`}
+                      />
                     </div>
                   </div>
                 </button>
@@ -511,17 +618,28 @@ export function CareersPage() {
               <ExternalLink className="w-3.5 h-3.5 text-primary" />
             </div>
             <p className="text-[12px] text-txt-body font-medium flex-1">
-              Are you a recruiter? <button onClick={() => setActiveView("Dashboard")} className="text-primary font-bold cursor-pointer hover:underline">Go to Dashboard →</button>
+              Are you a recruiter?{" "}
+              <button
+                onClick={() => setActiveView("Dashboard")}
+                className="text-primary font-bold cursor-pointer hover:underline"
+              >
+                Go to Dashboard →
+              </button>
             </p>
           </div>
         </div>
 
         {/* Job detail panel */}
         {selectedJob && (
-          <div className={`flex-1 bg-bg-secondary border border-bg-border/60 rounded-card shadow-card overflow-hidden ${!mobileDetail ? "hidden md:flex flex-col" : "flex flex-col"}`}>
+          <div
+            className={`flex-1 bg-bg-secondary border border-bg-border/60 rounded-card shadow-card overflow-hidden ${!mobileDetail ? "hidden md:flex flex-col" : "flex flex-col"}`}
+          >
             {/* Mobile back */}
             <div className="md:hidden flex items-center px-5 pt-4">
-              <button onClick={() => setMobileDetail(false)} className="flex items-center gap-1.5 text-[12.5px] text-primary font-semibold cursor-pointer">
+              <button
+                onClick={() => setMobileDetail(false)}
+                className="flex items-center gap-1.5 text-[12.5px] text-primary font-semibold cursor-pointer"
+              >
                 <ArrowLeft className="w-4 h-4" /> All Jobs
               </button>
             </div>

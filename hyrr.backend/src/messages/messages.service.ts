@@ -1,27 +1,24 @@
-import { Injectable, Optional, Inject, forwardRef } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { MessagesGateway } from './messages.gateway';
-import { AccessService, Actor } from '../core/access/access.service';
+import { Inject, Injectable, Optional, forwardRef } from "@nestjs/common"
+import { AccessService, Actor } from "../core/access/access.service"
+import { PrismaService } from "../prisma/prisma.service"
+import { MessagesGateway } from "./messages.gateway"
 
 @Injectable()
 export class MessagesService {
   constructor(
     private prisma: PrismaService,
     private access: AccessService,
-    @Optional() @Inject(forwardRef(() => MessagesGateway)) private messagesGateway?: MessagesGateway,
+    @Optional() @Inject(forwardRef(() => MessagesGateway)) private messagesGateway?: MessagesGateway
   ) {}
 
   async getConversations(userId: string, role: string) {
-    if (role === 'SEEKER') {
-      const me = await this.prisma.user.findUnique({ where: { id: userId } });
-      const seekerEmail = me?.email;
+    if (role === "SEEKER") {
+      const me = await this.prisma.user.findUnique({ where: { id: userId } })
+      const seekerEmail = me?.email
 
       const apps: any[] = await this.prisma.application.findMany({
         where: {
-          OR: [
-            { userId },
-            ...(seekerEmail ? [{ email: seekerEmail }] : []),
-          ],
+          OR: [{ userId }, ...(seekerEmail ? [{ email: seekerEmail }] : [])],
         },
         include: {
           job: {
@@ -33,11 +30,11 @@ export class MessagesService {
           user: { select: { id: true, name: true, avatar: true } },
           messages: {
             where: { deletedBySeeker: false },
-            orderBy: { createdAt: 'desc' },
+            orderBy: { createdAt: "desc" },
           },
         },
-        orderBy: { updatedAt: 'desc' },
-      });
+        orderBy: { updatedAt: "desc" },
+      })
 
       // A chat is scoped to its application. Returning every application keeps
       // first-contact threads reachable and prevents messages for other roles
@@ -45,14 +42,14 @@ export class MessagesService {
       return apps.map((app: any) => ({
         ...app,
         _unreadCount: (app.messages || []).filter(
-          (message: any) => message.receiverId === userId && !message.read,
+          (message: any) => message.receiverId === userId && !message.read
         ).length,
-        candidateName: app.job?.postedBy?.name || app.job?.company?.name || 'Recruiter',
+        candidateName: app.job?.postedBy?.name || app.job?.company?.name || "Recruiter",
         jobTitle: app.job?.title || app.title,
         avatar:
           app.job?.postedBy?.avatar ||
-          `https://ui-avatars.com/api/?name=${encodeURIComponent(app.job?.company?.name || 'Recruiter')}`,
-      }));
+          `https://ui-avatars.com/api/?name=${encodeURIComponent(app.job?.company?.name || "Recruiter")}`,
+      }))
     } else {
       // Recruiter role: group by Seeker
       const apps: any[] = await this.prisma.application.findMany({
@@ -64,74 +61,80 @@ export class MessagesService {
           user: { select: { id: true, name: true, avatar: true, email: true } },
           messages: {
             where: { deletedByRecruiter: false },
-            orderBy: { createdAt: 'desc' },
+            orderBy: { createdAt: "desc" },
           },
         },
-        orderBy: { updatedAt: 'desc' },
-      });
+        orderBy: { updatedAt: "desc" },
+      })
 
       return apps.map((app: any) => ({
         ...app,
         _unreadCount: (app.messages || []).filter(
-          (message: any) => message.receiverId === userId && !message.read,
+          (message: any) => message.receiverId === userId && !message.read
         ).length,
-        candidateName: app.name || app.user?.name || 'Applicant',
+        candidateName: app.name || app.user?.name || "Applicant",
         jobTitle: app.job?.title || app.title,
         avatar:
           app.user?.avatar ||
-          `https://ui-avatars.com/api/?name=${encodeURIComponent(app.name || 'Applicant')}`,
-      }));
+          `https://ui-avatars.com/api/?name=${encodeURIComponent(app.name || "Applicant")}`,
+      }))
     }
   }
 
   async getMessages(applicationId: string, actor: Actor) {
-    await this.access.applicationFor(actor, applicationId, 'view');
+    await this.access.applicationFor(actor, applicationId, "view")
     await this.prisma.message.updateMany({
       where: { applicationId, senderId: { not: actor.userId }, read: false },
       data: { read: true },
-    });
-    const where: any = { applicationId };
-    if (actor.role === 'SEEKER') {
-      where.deletedBySeeker = false;
-    } else if (actor.role === 'RECRUITER') {
-      where.deletedByRecruiter = false;
+    })
+    const where: any = { applicationId }
+    if (actor.role === "SEEKER") {
+      where.deletedBySeeker = false
+    } else if (actor.role === "RECRUITER") {
+      where.deletedByRecruiter = false
     }
 
     return this.prisma.message.findMany({
       where,
-      orderBy: { createdAt: 'asc' },
-    });
+      orderBy: { createdAt: "asc" },
+    })
   }
 
   async deleteConversation(applicationId: string, userId: string, role: string, actor: Actor) {
-    await this.access.applicationFor(actor, applicationId, 'view');
-    if (role === 'SEEKER') {
+    await this.access.applicationFor(actor, applicationId, "view")
+    if (role === "SEEKER") {
       await this.prisma.message.updateMany({
         where: { applicationId },
         data: { deletedBySeeker: true },
-      });
+      })
     } else {
       await this.prisma.message.updateMany({
         where: { applicationId },
         data: { deletedByRecruiter: true },
-      });
+      })
     }
-    return { success: true, message: 'Conversation deleted for this user.' };
+    return { success: true, message: "Conversation deleted for this user." }
   }
 
-  async createMessage(applicationId: string, senderId: string | null, senderType: string, text: string, actor: Actor) {
-    await this.access.applicationFor(actor, applicationId, 'view');
+  async createMessage(
+    applicationId: string,
+    senderId: string | null,
+    senderType: string,
+    text: string,
+    actor: Actor
+  ) {
+    await this.access.applicationFor(actor, applicationId, "view")
     const application: any = await this.prisma.application.findUnique({
       where: { id: applicationId },
       include: { job: true },
-    });
+    })
 
-    let receiverId: string | null = null;
+    let receiverId: string | null = null
     if (application) {
-      if (senderType === 'SEEKER') {
-        receiverId = application.job?.recruiterId || null;
+      if (senderType === "SEEKER") {
+        receiverId = application.job?.recruiterId || null
       } else {
-        receiverId = application.userId || null;
+        receiverId = application.userId || null
       }
     }
 
@@ -145,43 +148,47 @@ export class MessagesService {
         deletedBySeeker: false,
         deletedByRecruiter: false,
       },
-    });
+    })
 
     if (senderId) {
       await this.prisma.message.updateMany({
         where: { applicationId, senderId: { not: senderId }, read: false },
         data: { read: true },
-      });
+      })
     }
 
     if (this.messagesGateway?.server) {
       // Broadcast to chat room (gateway's send_message uses client.to() to exclude sender)
-      this.messagesGateway.server.to(`chat_${applicationId}`).emit('new_message', message);
-      this.messagesGateway.server.to(`chat_${applicationId}`).emit('unread_update', { applicationId });
+      this.messagesGateway.server.to(`chat_${applicationId}`).emit("new_message", message)
+      this.messagesGateway.server
+        .to(`chat_${applicationId}`)
+        .emit("unread_update", { applicationId })
 
       // Also notify receiver's private room in case they're not in the chat room
       if (receiverId) {
-        this.messagesGateway.server.to(`user_${receiverId}`).emit('new_message', message);
-        this.messagesGateway.server.to(`user_${receiverId}`).emit('unread_update', { applicationId });
+        this.messagesGateway.server.to(`user_${receiverId}`).emit("new_message", message)
+        this.messagesGateway.server
+          .to(`user_${receiverId}`)
+          .emit("unread_update", { applicationId })
       }
     }
 
-    return message;
+    return message
   }
 
   async markThreadRead(applicationId: string, userId: string) {
     return this.prisma.message.updateMany({
       where: { applicationId, senderId: { not: userId }, read: false },
       data: { read: true },
-    });
+    })
   }
 
   async assertParticipant(applicationId: string, actor: Actor) {
-    await this.access.applicationFor(actor, applicationId, 'view');
+    await this.access.applicationFor(actor, applicationId, "view")
   }
 
-  async getUnreadCount(userId: string, role: string = 'SEEKER') {
-    if (role === 'SEEKER') {
+  async getUnreadCount(userId: string, role: string = "SEEKER") {
+    if (role === "SEEKER") {
       const count = await this.prisma.message.count({
         where: {
           application: { userId },
@@ -189,8 +196,8 @@ export class MessagesService {
           read: false,
           deletedBySeeker: false,
         },
-      });
-      return { count };
+      })
+      return { count }
     } else {
       const count = await this.prisma.message.count({
         where: {
@@ -199,8 +206,8 @@ export class MessagesService {
           read: false,
           deletedByRecruiter: false,
         },
-      });
-      return { count };
+      })
+      return { count }
     }
   }
 }

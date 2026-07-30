@@ -1,31 +1,28 @@
-import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { PrismaModule } from './prisma/prisma.module';
-import { AuthModule } from './auth/auth.module';
-import { JobsModule } from './jobs/jobs.module';
-import { ApplicationsModule } from './applications/applications.module';
-import { MessagesModule } from './messages/messages.module';
-import { DocumentsModule } from './documents/documents.module';
-import { CalendarModule } from './calendar/calendar.module';
-import { AiModule } from './ai/ai.module';
-import { ProfileModule } from './profile/profile.module';
-import { CacheModule } from './cache/cache.module';
-import { SettingsModule } from './settings/settings.module';
-import { TalentModule } from './talent/talent.module';
-import { EngagementModule } from './engagement/engagement.module';
+import { Module } from "@nestjs/common"
+import { ConfigModule } from "@nestjs/config"
+import { AiModule } from "./ai/ai.module"
+import { ApplicationsModule } from "./applications/applications.module"
+import { AuthModule } from "./auth/auth.module"
+import { CacheModule } from "./cache/cache.module"
+import { CalendarModule } from "./calendar/calendar.module"
+import { DocumentsModule } from "./documents/documents.module"
+import { EngagementModule } from "./engagement/engagement.module"
+import { JobsModule } from "./jobs/jobs.module"
+import { MessagesModule } from "./messages/messages.module"
+import { PrismaModule } from "./prisma/prisma.module"
+import { ProfileModule } from "./profile/profile.module"
+import { SettingsModule } from "./settings/settings.module"
+import { TalentModule } from "./talent/talent.module"
 
-import { CoreModule } from './core/core.module';
-import { UploadsModule } from './uploads/uploads.module';
-import { NotificationsModule } from './notifications/notifications.module';
+import { CoreModule } from "./core/core.module"
+import { NotificationsModule } from "./notifications/notifications.module"
+import { UploadsModule } from "./uploads/uploads.module"
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: [
-        `${__dirname}/../.env`,
-        `${__dirname}/../../.env`,
-      ],
+      envFilePath: [`${__dirname}/../.env`, `${__dirname}/../../.env`],
     }),
     CoreModule,
     UploadsModule,

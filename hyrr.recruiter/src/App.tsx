@@ -1,25 +1,23 @@
+import { AiChatWidget, AuthPage, OAuthCallback, RoleMismatch, apiFetch } from "hyrr.shared"
 import * as React from "react"
-import { Header } from "./components/layout/header"
-import { Sidebar } from "./components/layout/sidebar"
-import { ToastProvider } from "./components/ui/toast"
-import { useJobStore } from "./store/useJobStore"
-import { Dashboard } from "./pages/Dashboard"
-import { Jobs } from "./pages/Jobs"
-import { Candidates } from "./pages/Candidates"
-import { Applications } from "./pages/Applications"
-import { CalendarPage } from "./pages/CalendarPage"
-import { Messages } from "./pages/Messages"
-import { Analytics } from "./pages/Analytics"
 import { AddCandidateDialog } from "./components/layout/add-candidate-dialog"
 import { AddJobDialog } from "./components/layout/add-job-dialog"
 import { CandidateDetailDialog } from "./components/layout/candidate-detail-dialog"
-import { AuthPage, OAuthCallback, RoleMismatch, apiFetch, AiChatWidget } from "hyrr.shared"
+import { Header } from "./components/layout/header"
+import { Sidebar } from "./components/layout/sidebar"
+import { ToastProvider } from "./components/ui/toast"
+import { Analytics } from "./pages/Analytics"
+import { Applications } from "./pages/Applications"
+import { CalendarPage } from "./pages/CalendarPage"
+import { Candidates } from "./pages/Candidates"
+import { Dashboard } from "./pages/Dashboard"
+import { Jobs } from "./pages/Jobs"
+import { Messages } from "./pages/Messages"
+import { useJobStore } from "./store/useJobStore"
 
 function AppContent() {
-  const {
-    activeView, theme, fetchInitialData,
-    isAuthenticated, user, setAccessToken, logout
-  } = useJobStore()
+  const { activeView, theme, fetchInitialData, isAuthenticated, user, setAccessToken, logout } =
+    useJobStore()
 
   const [loading, setLoading] = React.useState(true)
 
@@ -27,7 +25,7 @@ function AppContent() {
   React.useEffect(() => {
     async function silentRefresh() {
       try {
-        const res = await apiFetch('/auth/refresh', { method: 'POST', skipAuth: true })
+        const res = await apiFetch("/auth/refresh", { method: "POST", skipAuth: true })
         if (res.accessToken) {
           setAccessToken(res.accessToken)
         }
@@ -108,9 +106,7 @@ function AppContent() {
 
         {/* Right Scrollable Content Area */}
         <main className="flex-1 overflow-y-auto p-8 bg-bg-primary">
-          <div className="max-w-[1440px] mx-auto w-full h-full">
-            {renderView()}
-          </div>
+          <div className="max-w-[1440px] mx-auto w-full h-full">{renderView()}</div>
         </main>
       </div>
 

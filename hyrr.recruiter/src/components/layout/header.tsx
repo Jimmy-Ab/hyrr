@@ -1,6 +1,19 @@
-import { useState, useEffect } from "react"
-import { Search, Plus, Bell, Sun, Moon, ChevronDown, Command, Settings, LogOut, User, Briefcase } from "lucide-react"
+import {
+  Bell,
+  Briefcase,
+  ChevronDown,
+  Command,
+  LogOut,
+  Moon,
+  Plus,
+  Search,
+  Settings,
+  Sun,
+  User,
+} from "lucide-react"
+import { useEffect, useState } from "react"
 import { useJobStore } from "../../store/useJobStore"
+import { Button } from "../ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,7 +23,6 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown"
 import { useToast } from "../ui/toast"
-import { Button } from "../ui/button"
 
 /** HYRR custom brand icon — geometric "H" monogram with accent mark */
 function HyrrIcon({ size = 36 }: { size?: number }) {
@@ -87,26 +99,32 @@ export function Header() {
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-52">
             <DropdownMenuLabel>Switch Workspace</DropdownMenuLabel>
-            <DropdownMenuItem onClick={() => {
-              setWorkspaceName("Acme Careers")
-              toast("Workspace Switched", "Active: Acme Careers", "success")
-            }}>
+            <DropdownMenuItem
+              onClick={() => {
+                setWorkspaceName("Acme Careers")
+                toast("Workspace Switched", "Active: Acme Careers", "success")
+              }}
+            >
               Acme Careers {workspaceName === "Acme Careers" && "(Active)"}
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => {
-              setWorkspaceName("Beta Labs")
-              toast("Workspace Switched", "Active: Beta Labs", "success")
-            }}>
+            <DropdownMenuItem
+              onClick={() => {
+                setWorkspaceName("Beta Labs")
+                toast("Workspace Switched", "Active: Beta Labs", "success")
+              }}
+            >
               Beta Labs {workspaceName === "Beta Labs" && "(Active)"}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => {
-              const name = prompt("Enter new workspace name:")
-              if (name && name.trim()) {
-                setWorkspaceName(name.trim())
-                toast("Workspace Created", `Switched to ${name.trim()}`, "success")
-              }
-            }}>
+            <DropdownMenuItem
+              onClick={() => {
+                const name = prompt("Enter new workspace name:")
+                if (name && name.trim()) {
+                  setWorkspaceName(name.trim())
+                  toast("Workspace Created", `Switched to ${name.trim()}`, "success")
+                }
+              }}
+            >
               <Plus className="w-3.5 h-3.5 mr-1.5 text-txt-body" />
               Add Workspace
             </DropdownMenuItem>
@@ -115,7 +133,9 @@ export function Header() {
       </div>
 
       {/* ─── Centre: Search ─── */}
-      <div className={`relative w-[480px] transition-all duration-200 ${searchFocused ? "w-[540px]" : ""}`}>
+      <div
+        className={`relative w-[480px] transition-all duration-200 ${searchFocused ? "w-[540px]" : ""}`}
+      >
         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-txt-caption pointer-events-none" />
         <input
           type="text"
@@ -165,9 +185,18 @@ export function Header() {
           <DropdownMenuTrigger asChild>
             <button className="flex -space-x-2 cursor-pointer outline-none hover:opacity-90 transition-opacity">
               {[
-                { src: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80", alt: "Emily" },
-                { src: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80", alt: "Michael" },
-                { src: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=80", alt: "Sarah" },
+                {
+                  src: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80",
+                  alt: "Emily",
+                },
+                {
+                  src: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80",
+                  alt: "Michael",
+                },
+                {
+                  src: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=80",
+                  alt: "Sarah",
+                },
               ].map((av) => (
                 <img
                   key={av.alt}
@@ -186,27 +215,71 @@ export function Header() {
             <DropdownMenuSeparator />
             <div className="max-h-60 overflow-y-auto py-1">
               {[
-                { name: "Sarah Martinez", role: "Staff HR (You)", status: "Active Now", online: true, img: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80" },
-                { name: "Emily Carter", role: "Senior Developer", status: "Active 5m ago", online: true, img: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80" },
-                { name: "Michael Chen", role: "UI Engineer", status: "Active Now", online: true, img: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80" },
-                { name: "Sarah Johnson", role: "React Developer", status: "Active 1h ago", online: false, img: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=80" },
-                { name: "David Kim", role: "Frontend Engineer", status: "Offline", online: false, img: "https://images.unsplash.com/photo-1500000000000?w=80" },
+                {
+                  name: "Sarah Martinez",
+                  role: "Staff HR (You)",
+                  status: "Active Now",
+                  online: true,
+                  img: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80",
+                },
+                {
+                  name: "Emily Carter",
+                  role: "Senior Developer",
+                  status: "Active 5m ago",
+                  online: true,
+                  img: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80",
+                },
+                {
+                  name: "Michael Chen",
+                  role: "UI Engineer",
+                  status: "Active Now",
+                  online: true,
+                  img: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80",
+                },
+                {
+                  name: "Sarah Johnson",
+                  role: "React Developer",
+                  status: "Active 1h ago",
+                  online: false,
+                  img: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=80",
+                },
+                {
+                  name: "David Kim",
+                  role: "Frontend Engineer",
+                  status: "Offline",
+                  online: false,
+                  img: "https://images.unsplash.com/photo-1500000000000?w=80",
+                },
               ].map((member, idx) => (
-                <div key={idx} className="flex items-center gap-3 px-3 py-1.5 hover:bg-bg-hover transition-colors rounded-[8px] mx-1">
-                  <img src={member.img} alt={member.name} className="w-7 h-7 rounded-full object-cover shrink-0" />
+                <div
+                  key={idx}
+                  className="flex items-center gap-3 px-3 py-1.5 hover:bg-bg-hover transition-colors rounded-[8px] mx-1"
+                >
+                  <img
+                    src={member.img}
+                    alt={member.name}
+                    className="w-7 h-7 rounded-full object-cover shrink-0"
+                  />
                   <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-semibold text-txt-heading truncate">{member.name}</p>
+                    <p className="text-[12px] font-semibold text-txt-heading truncate">
+                      {member.name}
+                    </p>
                     <p className="text-[10px] text-txt-caption truncate">{member.role}</p>
                   </div>
-                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${member.online ? "bg-sec-green" : "bg-txt-disabled"}`} />
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${member.online ? "bg-sec-green" : "bg-txt-disabled"}`}
+                  />
                 </div>
               ))}
             </div>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => {
-              const email = prompt("Enter email to invite:")
-              if (email && email.trim()) toast("Invitation Sent", `Invite sent to ${email.trim()}`, "success")
-            }}>
+            <DropdownMenuItem
+              onClick={() => {
+                const email = prompt("Enter email to invite:")
+                if (email && email.trim())
+                  toast("Invitation Sent", `Invite sent to ${email.trim()}`, "success")
+              }}
+            >
               <Plus className="w-3.5 h-3.5 mr-1.5 text-txt-body" />
               Invite Member
             </DropdownMenuItem>
@@ -291,7 +364,10 @@ export function Header() {
           <DropdownMenuTrigger asChild>
             <button id="profile-btn" className="outline-none cursor-pointer">
               <img
-                src={user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || user?.email || "Recruiter")}&background=6C63FF&color=fff`}
+                src={
+                  user?.avatar ||
+                  `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || user?.email || "Recruiter")}&background=6C63FF&color=fff`
+                }
                 alt={user?.name || "User Profile"}
                 className="w-8 h-8 rounded-full object-cover border border-bg-border/60 hover:ring-2 hover:ring-primary/20 transition-all"
               />
@@ -299,18 +375,26 @@ export function Header() {
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-52" align="end">
             <DropdownMenuLabel>
-              <p className="text-txt-heading font-semibold text-[13px] truncate">{user?.name || "Recruiter Account"}</p>
-              <p className="text-txt-caption text-[11px] font-normal truncate">{user?.email || workspaceName}</p>
+              <p className="text-txt-heading font-semibold text-[13px] truncate">
+                {user?.name || "Recruiter Account"}
+              </p>
+              <p className="text-txt-caption text-[11px] font-normal truncate">
+                {user?.email || workspaceName}
+              </p>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => {
-              setActiveView("Dashboard")
-              toast("Navigate", "Navigating to Overview Dashboard", "info")
-            }}>
+            <DropdownMenuItem
+              onClick={() => {
+                setActiveView("Dashboard")
+                toast("Navigate", "Navigating to Overview Dashboard", "info")
+              }}
+            >
               <User className="w-3.5 h-3.5 mr-2 text-txt-body" />
               View Profile
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => toast("Settings", "Account settings panel coming soon.", "info")}>
+            <DropdownMenuItem
+              onClick={() => toast("Settings", "Account settings panel coming soon.", "info")}
+            >
               <Settings className="w-3.5 h-3.5 mr-2 text-txt-body" />
               Settings
             </DropdownMenuItem>

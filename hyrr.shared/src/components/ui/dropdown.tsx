@@ -1,6 +1,6 @@
-import * as React from "react"
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu"
 import { motion } from "framer-motion"
+import * as React from "react"
 import { cn } from "../../lib/utils"
 
 const DropdownMenu = DropdownMenuPrimitive.Root
@@ -15,12 +15,7 @@ const DropdownMenuContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
 >(({ className, sideOffset = 6, children, ...props }, ref) => (
   <DropdownMenuPortal>
-    <DropdownMenuPrimitive.Content
-      asChild
-      ref={ref}
-      sideOffset={sideOffset}
-      {...props}
-    >
+    <DropdownMenuPrimitive.Content asChild ref={ref} sideOffset={sideOffset} {...props}>
       <motion.div
         initial={{ opacity: 0, scale: 0.96, y: -4 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -48,8 +43,8 @@ const DropdownMenuItem = React.forwardRef<
     ref={ref}
     className={cn(
       "relative flex cursor-pointer select-none items-center rounded-[10px] px-3 py-2 text-[13px] outline-none transition-colors hover:bg-bg-hover focus:bg-bg-hover data-[disabled]:pointer-events-none data-[disabled]:opacity-50 gap-2 font-medium",
-      "text-[#23262F] hover:text-[#17181C]",          /* light: near-black */
-      "dark:text-[#C8CBD4] dark:hover:text-[#F0F2F5]", /* dark: bright */
+      "text-[#23262F] hover:text-[#17181C]" /* light: near-black */,
+      "dark:text-[#C8CBD4] dark:hover:text-[#F0F2F5]" /* dark: bright */,
       inset && "pl-8",
       className
     )}
@@ -90,13 +85,13 @@ DropdownMenuSeparator.displayName = DropdownMenuPrimitive.Separator.displayName
 
 export {
   DropdownMenu,
-  DropdownMenuTrigger,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuGroup,
   DropdownMenuPortal,
-  DropdownMenuSub,
   DropdownMenuRadioGroup,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuTrigger,
 }

@@ -9,7 +9,7 @@ export interface PaginationProps {
 
 export function Pagination({ currentPage, totalPages, onPageChange }: PaginationProps) {
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1)
-  
+
   return (
     <div className="flex items-center justify-between py-4 border-t border-bg-border/30 mt-6 select-none">
       <span className="text-[13px] text-txt-caption">

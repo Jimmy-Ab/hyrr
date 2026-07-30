@@ -1,7 +1,7 @@
-import { Module } from '@nestjs/common';
-import { JobsService } from './jobs.service';
-import { JobsController } from './jobs.controller';
-import { NotificationsModule } from '../notifications/notifications.module';
+import { Module } from "@nestjs/common"
+import { NotificationsModule } from "../notifications/notifications.module"
+import { JobsController } from "./jobs.controller"
+import { JobsService } from "./jobs.service"
 
 @Module({
   imports: [NotificationsModule],

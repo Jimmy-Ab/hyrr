@@ -1,9 +1,8 @@
+import { CheckCheck, Loader2, MessageSquare, Search, Send, Trash2 } from "lucide-react"
 import * as React from "react"
-import { Search, Send, CheckCheck, Loader2, MessageSquare, Trash2 } from "lucide-react"
 import { Card } from "../components/ui/card"
-import { Badge } from "../components/ui/badge"
-import { useJobStore } from "../store/useJobStore"
 import { useToast } from "../components/ui/toast"
+import { useJobStore } from "../store/useJobStore"
 
 export function Messages() {
   const {
@@ -42,7 +41,8 @@ export function Messages() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [conversationMessages])
 
-  const activeConv = conversations.find(c => c.applicationId === activeConversationId) || conversations[0]
+  const activeConv =
+    conversations.find((c) => c.applicationId === activeConversationId) || conversations[0]
 
   const handleSelectConversation = (appId: string) => {
     setActiveConversation(appId)
@@ -65,11 +65,12 @@ export function Messages() {
     }
   }
 
-  const filtered = conversations.filter(c =>
-    !search || c.candidateName.toLowerCase().includes(search.toLowerCase()) || c.jobTitle.toLowerCase().includes(search.toLowerCase())
+  const filtered = conversations.filter(
+    (c) =>
+      !search ||
+      c.candidateName.toLowerCase().includes(search.toLowerCase()) ||
+      c.jobTitle.toLowerCase().includes(search.toLowerCase())
   )
-
-  const showMock = conversations.length === 0 && !conversationsLoading
 
   return (
     <div className="flex gap-6 h-[calc(100vh-210px)] select-none animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -121,12 +122,18 @@ export function Messages() {
                   </div>
                   <div className="min-w-0 flex-1 flex flex-col justify-between">
                     <div className="flex items-center justify-between">
-                      <span className={`text-[14px] font-bold ${isSelected ? "text-primary" : "text-txt-heading"}`}>
+                      <span
+                        className={`text-[14px] font-bold ${isSelected ? "text-primary" : "text-txt-heading"}`}
+                      >
                         {contact.candidateName}
                       </span>
-                      <span className="text-[11px] text-txt-caption font-semibold">{contact.lastMessageTime}</span>
+                      <span className="text-[11px] text-txt-caption font-semibold">
+                        {contact.lastMessageTime}
+                      </span>
                     </div>
-                    <p className={`text-caption truncate ${contact.unreadCount > 0 && !isSelected ? "font-bold text-txt-heading" : "text-txt-body font-medium"}`}>
+                    <p
+                      className={`text-caption truncate ${contact.unreadCount > 0 && !isSelected ? "font-bold text-txt-heading" : "text-txt-body font-medium"}`}
+                    >
                       {contact.lastMessage}
                     </p>
                   </div>
@@ -141,7 +148,9 @@ export function Messages() {
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
-                  {contact.unreadCount > 0 && <div className="w-2 h-2 rounded-full bg-primary shrink-0" />}
+                  {contact.unreadCount > 0 && (
+                    <div className="w-2 h-2 rounded-full bg-primary shrink-0" />
+                  )}
                 </div>
               )
             })
@@ -196,14 +205,18 @@ export function Messages() {
               ) : conversationMessages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center gap-2">
                   <MessageSquare className="w-8 h-8 text-txt-disabled" />
-                  <p className="text-[13px] text-txt-caption">No messages yet. Send the first message!</p>
+                  <p className="text-[13px] text-txt-caption">
+                    No messages yet. Send the first message!
+                  </p>
                 </div>
               ) : (
                 conversationMessages.map((msg, index) => {
                   const isMe = msg.senderId === user?.id || msg.senderType === "RECRUITER"
                   return (
                     <div key={index} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-                      <div className={`max-w-[70%] flex flex-col gap-1 ${isMe ? "items-end" : "items-start"}`}>
+                      <div
+                        className={`max-w-[70%] flex flex-col gap-1 ${isMe ? "items-end" : "items-start"}`}
+                      >
                         <div
                           className={`p-3.5 rounded-[18px] text-[14px] leading-relaxed font-medium ${
                             isMe
@@ -215,7 +228,10 @@ export function Messages() {
                         </div>
                         <div className="flex items-center gap-1 text-[10px] text-txt-caption font-bold mt-0.5">
                           <span>
-                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            {new Date(msg.createdAt).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
                           </span>
                           {isMe && <CheckCheck className="w-3 h-3 text-primary" />}
                         </div>
@@ -228,7 +244,10 @@ export function Messages() {
             </div>
 
             {/* Input Footer */}
-            <form onSubmit={handleSend} className="p-4 border-t border-bg-border/30 bg-bg-secondary flex gap-3 shrink-0">
+            <form
+              onSubmit={handleSend}
+              className="p-4 border-t border-bg-border/30 bg-bg-secondary flex gap-3 shrink-0"
+            >
               <input
                 type="text"
                 placeholder={`Message ${activeConv.candidateName}...`}
@@ -241,7 +260,11 @@ export function Messages() {
                 disabled={sending || !input.trim()}
                 className="w-11 h-11 p-0 bg-primary hover:bg-primary-hover text-white rounded-full flex items-center justify-center shrink-0 cursor-pointer disabled:opacity-50 transition-all shadow-button"
               >
-                {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                {sending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
               </button>
             </form>
           </>
@@ -249,7 +272,9 @@ export function Messages() {
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
               <MessageSquare className="w-10 h-10 text-txt-disabled mx-auto mb-2" />
-              <p className="text-[14px] text-txt-caption">Select a conversation to start messaging</p>
+              <p className="text-[14px] text-txt-caption">
+                Select a conversation to start messaging
+              </p>
             </div>
           </div>
         )}

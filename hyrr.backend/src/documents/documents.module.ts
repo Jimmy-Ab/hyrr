@@ -1,7 +1,7 @@
-import { Module } from '@nestjs/common';
-import { DocumentsService } from './documents.service';
-import { DocumentsController } from './documents.controller';
-import { UploadsModule } from '../uploads/uploads.module';
+import { Module } from "@nestjs/common"
+import { UploadsModule } from "../uploads/uploads.module"
+import { DocumentsController } from "./documents.controller"
+import { DocumentsService } from "./documents.service"
 
 @Module({
   imports: [UploadsModule],

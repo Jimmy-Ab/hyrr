@@ -1,6 +1,6 @@
+import { AnimatePresence, motion } from "framer-motion"
+import { AlertCircle, CheckCircle, Info, X } from "lucide-react"
 import * as React from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import { CheckCircle, AlertCircle, X, Info } from "lucide-react"
 
 export type ToastType = "success" | "error" | "info" | "warning"
 
@@ -27,15 +27,18 @@ export const useToast = () => {
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = React.useState<Toast[]>([])
 
-  const toast = React.useCallback((title: string, description?: string, type: ToastType = "success") => {
-    const id = Math.random().toString(36).substring(2, 9)
-    setToasts((prev) => [...prev, { id, title, description, type }])
-    setTimeout(() => dismiss(id), 5000)
-  }, [])
-
   const dismiss = React.useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id))
   }, [])
+
+  const toast = React.useCallback(
+    (title: string, description?: string, type: ToastType = "success") => {
+      const id = Math.random().toString(36).substring(2, 9)
+      setToasts((prev) => [...prev, { id, title, description, type }])
+      setTimeout(() => dismiss(id), 5000)
+    },
+    [dismiss]
+  )
 
   return (
     <ToastContext.Provider value={{ toast, dismiss }}>
@@ -60,7 +63,9 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               </div>
               <div className="flex-1 min-w-0">
                 <h4 className="text-body font-semibold text-txt-heading">{t.title}</h4>
-                {t.description && <p className="text-caption text-txt-body mt-1 leading-normal">{t.description}</p>}
+                {t.description && (
+                  <p className="text-caption text-txt-body mt-1 leading-normal">{t.description}</p>
+                )}
               </div>
               <button
                 onClick={() => dismiss(t.id)}

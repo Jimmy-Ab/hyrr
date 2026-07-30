@@ -1,8 +1,8 @@
 import { useDraggable } from "@dnd-kit/core"
-import { Bookmark, MapPin, MoreHorizontal, Trash2, Sparkles } from "lucide-react"
-import { Card } from "../ui/card"
-import { Badge } from "../ui/badge"
+import { Bookmark, MoreHorizontal, Sparkles, Trash2 } from "lucide-react"
 import { useJobStore, type Candidate } from "../../store/useJobStore"
+import { Badge } from "../ui/badge"
+import { Card } from "../ui/card"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,7 +19,7 @@ interface ApplicationCardProps {
 
 export function ApplicationCard({ candidate, isOverlay = false }: ApplicationCardProps) {
   const { toggleBookmark, deleteCandidate, setSelectedCandidateId } = useJobStore()
-  
+
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: candidate.id,
     disabled: isOverlay,
@@ -51,14 +51,14 @@ export function ApplicationCard({ candidate, isOverlay = false }: ApplicationCar
           return { variant: "secondary" as const, text: candidate.tag }
       }
     }
-    
+
     // Fallback based on column for time texts
     if (candidate.status === "Saved") {
       return { variant: "primary" as const, text: candidate.dateText }
     } else if (candidate.status === "Applied") {
       return { variant: "info" as const, text: candidate.dateText }
     }
-    
+
     return { variant: "secondary" as const, text: candidate.dateText }
   }
 
@@ -70,9 +70,7 @@ export function ApplicationCard({ candidate, isOverlay = false }: ApplicationCar
       style={style}
       {...attributes}
       {...listeners}
-      className={`group select-none outline-none ${
-        isOverlay ? "cursor-grabbing" : "cursor-grab"
-      }`}
+      className={`group select-none outline-none ${isOverlay ? "cursor-grabbing" : "cursor-grab"}`}
     >
       <Card
         onDoubleClick={() => setSelectedCandidateId(candidate.id)}
@@ -101,7 +99,7 @@ export function ApplicationCard({ candidate, isOverlay = false }: ApplicationCar
               <p className="text-[12px] text-slate-500 mt-0.5 truncate font-normal">
                 {candidate.title}
               </p>
-              
+
               {/* Location */}
               <div className="text-[11.5px] text-slate-400 mt-1 font-normal">
                 <span className="truncate">{candidate.location}</span>
@@ -142,17 +140,23 @@ export function ApplicationCard({ candidate, isOverlay = false }: ApplicationCar
         {/* Card Footer: Tag & Bookmark Ribbon */}
         <div className="flex items-center justify-between mt-3.5 pt-2">
           <div className="flex items-center gap-1.5 min-w-0">
-            <Badge variant={tagDetails.variant} className="font-medium text-[11px] px-2.5 py-0.5 rounded-md">
+            <Badge
+              variant={tagDetails.variant}
+              className="font-medium text-[11px] px-2.5 py-0.5 rounded-md"
+            >
               {tagDetails.text}
             </Badge>
             {candidate.aiScore != null && (
-              <Badge variant="success" className="bg-emerald-500 text-white flex items-center gap-1 shrink-0 py-0.5 px-2 text-[10.5px] border-none">
+              <Badge
+                variant="success"
+                className="bg-emerald-500 text-white flex items-center gap-1 shrink-0 py-0.5 px-2 text-[10.5px] border-none"
+              >
                 <Sparkles className="w-3 h-3 fill-current" />
                 {candidate.aiScore}%
               </Badge>
             )}
           </div>
-          
+
           <button
             onClick={(e) => {
               e.stopPropagation()
@@ -165,10 +169,7 @@ export function ApplicationCard({ candidate, isOverlay = false }: ApplicationCar
                 : "text-slate-300 hover:text-slate-500"
             }`}
           >
-            <Bookmark
-              className="w-4 h-4"
-              fill={candidate.bookmarked ? "currentColor" : "none"}
-            />
+            <Bookmark className="w-4 h-4" fill={candidate.bookmarked ? "currentColor" : "none"} />
           </button>
         </div>
       </Card>

@@ -1,21 +1,21 @@
-import React, { useRef, useState, useEffect, useCallback } from "react"
 import {
   Bold,
-  Italic,
-  Underline,
-  Strikethrough,
+  Code,
+  Code2,
+  Eraser,
+  Eye,
   Heading2,
   Heading3,
+  Italic,
   List,
   ListOrdered,
   Quote,
-  Code,
   Sparkles,
-  Eraser,
-  Eye,
-  Code2,
+  Strikethrough,
   Type,
+  Underline,
 } from "lucide-react"
+import React, { useCallback, useEffect, useRef, useState } from "react"
 
 export interface RichTextEditorProps {
   value: string
@@ -140,14 +140,15 @@ export function RichTextEditor({
   const isEmpty = !value || value.trim() === "" || value === "<br>" || value === "<div><br></div>"
 
   return (
-    <div className={`w-full rounded-input border transition-all duration-200 overflow-hidden bg-bg-secondary ${
-      error
-        ? "border-sec-red ring-2 ring-sec-red/10"
-        : isFocused
-        ? "border-primary/40 ring-2 ring-primary/10 shadow-sm"
-        : "border-bg-border hover:border-primary/20"
-    } ${className}`}>
-      
+    <div
+      className={`w-full rounded-input border transition-all duration-200 overflow-hidden bg-bg-secondary ${
+        error
+          ? "border-sec-red ring-2 ring-sec-red/10"
+          : isFocused
+            ? "border-primary/40 ring-2 ring-primary/10 shadow-sm"
+            : "border-bg-border hover:border-primary/20"
+      } ${className}`}
+    >
       {/* ── Toolbar Header ────────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-1 px-3 py-2 border-b border-bg-border/60 bg-bg-primary/70 backdrop-blur-sm select-none">
         <div className="flex items-center flex-wrap gap-0.5">
@@ -259,7 +260,9 @@ export function RichTextEditor({
                 ? "bg-primary text-white border-primary shadow-sm"
                 : "bg-bg-primary text-txt-body border-bg-border hover:bg-bg-hover hover:text-txt-heading"
             }`}
-            title={isRawMode ? "Switch to Visual Rich Text Editor" : "Switch to Raw HTML/Markdown View"}
+            title={
+              isRawMode ? "Switch to Visual Rich Text Editor" : "Switch to Raw HTML/Markdown View"
+            }
           >
             {isRawMode ? <Eye className="w-3.5 h-3.5" /> : <Code2 className="w-3.5 h-3.5" />}
             <span>{isRawMode ? "Visual" : "HTML"}</span>
