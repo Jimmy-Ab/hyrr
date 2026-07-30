@@ -3,6 +3,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateJobDto } from './dtos/create-job.dto';
 import { UpdateJobDto } from './dtos/update-job.dto';
 import { CacheService } from '../cache/cache.service';
+import { AccessService, Actor } from '../core/access/access.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const JOB_COLORS = ['purple', 'blue', 'green', 'orange'] as const;
 const PUBLIC_JOBS_CACHE_KEY = 'jobs:public';
@@ -12,6 +14,8 @@ export class JobsService {
   constructor(
     private prisma: PrismaService,
     private cache: CacheService,
+    private access: AccessService,
+    private notifications: NotificationsService,
   ) {}
 
   // ─── Recruiter: list their own company jobs ───────────────────────
@@ -69,11 +73,24 @@ export class JobsService {
 
     // Invalidate cached public listings
     await this.cache.delByPattern('jobs:public*');
+    await this.notifyMatchingAlerts(job);
     return job;
   }
 
+  private async notifyMatchingAlerts(job: any) {
+    const alerts = await (this.prisma as any).jobAlert.findMany({ where: { active: true } });
+    const searchable = `${job.title} ${job.location} ${job.type} ${(job.skills || []).join(' ')}`.toLowerCase();
+    await Promise.all(alerts.filter((alert: any) => {
+      const keywordMatch = !alert.keywords.length || alert.keywords.some((keyword: string) => searchable.includes(keyword.toLowerCase()));
+      const locationMatch = !alert.locations.length || alert.locations.some((location: string) => job.location.toLowerCase().includes(location.toLowerCase()));
+      const typeMatch = !alert.jobTypes.length || alert.jobTypes.includes(job.type);
+      return keywordMatch && locationMatch && typeMatch && (!alert.remoteOnly || job.remote);
+    }).map((alert: any) => this.notifications.createNotification(alert.userId, `New job alert match: ${job.title} at ${job.company?.name || 'a company'}`)));
+  }
+
   // ─── Recruiter: update / close a job ─────────────────────────────
-  async updateJob(jobId: string, dto: UpdateJobDto) {
+  async updateJob(jobId: string, dto: UpdateJobDto, actor: Actor) {
+    await this.access.jobForManagement(actor, jobId);
     const job = await this.prisma.job.update({
       where: { id: jobId },
       data: dto as any,
@@ -84,7 +101,8 @@ export class JobsService {
   }
 
   // ─── Recruiter: delete a job ──────────────────────────────────────
-  async deleteJob(jobId: string) {
+  async deleteJob(jobId: string, actor: Actor) {
+    await this.access.jobForManagement(actor, jobId);
     const result = await this.prisma.job.delete({ where: { id: jobId } });
     await this.cache.delByPattern('jobs:public*');
     return result;

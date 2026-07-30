@@ -3,13 +3,13 @@ import {
   Home, Compass, LayoutList, MessageSquare, Bell,
   Calendar, FileText, User, Settings,
 } from "lucide-react"
-import { useJobStore } from "hyrr.shared"
+import { useJobStore, APPLICATION_STATUS } from "hyrr.shared"
 
 export function Sidebar() {
   const { candidateActiveView, setCandidateActiveView, notifications, jobApplications, user, seekerProfile, unreadMessageCount } = useJobStore()
 
   const unreadNotifs = notifications.filter((n) => !n.read).length
-  const offerCount = jobApplications.filter((a) => a.status === "Offer").length
+  const offerCount = jobApplications.filter((a) => a.status === APPLICATION_STATUS.OFFER).length
 
   type CandidateView = typeof candidateActiveView
 
@@ -38,18 +38,18 @@ export function Sidebar() {
                 key={item.id}
                 id={`seeker-nav-${item.id.toLowerCase()}`}
                 onClick={() => setCandidateActiveView(item.id)}
-                className={`flex items-center justify-between h-[42px] px-3.5 rounded-[13px] transition-all duration-200 group text-left cursor-pointer outline-none w-full ${
+                className={`flex items-center justify-between h-[40px] px-3.5 rounded-xl transition-colors duration-150 group text-left cursor-pointer outline-none w-full ${
                   isActive
-                    ? "bg-gradient-to-r from-primary-light to-primary-light/40 text-primary font-bold shadow-[0_2px_8px_rgba(108,99,255,0.1)] border border-primary-border/40"
-                    : "text-txt-body hover:bg-bg-hover hover:text-txt-heading font-medium hover:-translate-y-px"
+                    ? "bg-primary-light text-primary font-semibold"
+                    : "text-txt-body hover:bg-bg-hover hover:text-txt-heading font-medium"
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <Icon className={`w-[18px] h-[18px] shrink-0 transition-colors ${isActive ? "text-primary drop-shadow-[0_0_4px_rgba(108,99,255,0.5)]" : "text-txt-caption group-hover:text-txt-heading"}`} />
+                  <Icon className={`w-[18px] h-[18px] shrink-0 transition-colors ${isActive ? "text-primary" : "text-txt-caption group-hover:text-txt-heading"}`} />
                   <span className="text-[13.5px]">{item.label}</span>
                 </div>
                 {item.badge != null && (
-                  <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-white text-[10px] font-bold shadow-[0_0_6px_rgba(108,99,255,0.4)]">
+                  <span className="flex items-center justify-center min-w-[20px] h-[20px] px-1.5 rounded-full bg-primary/15 text-primary text-[11px] font-bold">
                     {item.badge}
                   </span>
                 )}

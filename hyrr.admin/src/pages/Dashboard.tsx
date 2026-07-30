@@ -1,8 +1,6 @@
-import { useState } from "react"
 import {
   TrendingUp, TrendingDown, Users, Building2, Briefcase, FileText,
-  Zap, DollarSign, Flag, Activity, Clock, ChevronRight, Calendar, ArrowUpRight
-} from "lucide-react"
+  Zap, DollarSign, Flag, ChevronRight, Calendar} from "lucide-react"
 import { Card } from "hyrr.shared"
 import { Badge } from "hyrr.shared"
 import { useToast } from "hyrr.shared"

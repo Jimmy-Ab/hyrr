@@ -1,45 +1,68 @@
-import { useState } from "react"
-import { Search, MapPin, Bookmark, Trash2, MessageSquare } from "lucide-react"
-import { useJobStore, type Candidate } from "../store/useJobStore"
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "../components/ui/table"
-import { Badge } from "../components/ui/badge"
-import { Card } from "../components/ui/card"
-import { useToast } from "../components/ui/toast"
+import { useState } from "react";
+import { Search, MapPin, Bookmark, Trash2, MessageSquare } from "lucide-react";
+import { useJobStore, type Candidate } from "../store/useJobStore";
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from "../components/ui/table";
+import { Badge } from "../components/ui/badge";
+import { Card } from "../components/ui/card";
+import { useToast } from "../components/ui/toast";
 
 export function Candidates() {
-  const { candidates, toggleBookmark, deleteCandidate, searchQuery, setSearchQuery, setSelectedCandidateId, setActiveConversation, setActiveView } = useJobStore()
-  const { toast } = useToast()
-  const [statusFilter, setStatusFilter] = useState<string>("All")
+  const {
+    candidates,
+    toggleBookmark,
+    deleteCandidate,
+    searchQuery,
+    setSearchQuery,
+    setSelectedCandidateId,
+    setActiveConversation,
+    setActiveView,
+  } = useJobStore();
+  const [statusFilter, setStatusFilter] = useState<string>("All");
 
   const filteredCandidates = candidates.filter((c) => {
-    const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          c.location.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesStatus = statusFilter === "All" || c.status === statusFilter
-    return matchesSearch && matchesStatus
-  })
+    const matchesSearch =
+      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.location.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = statusFilter === "All" || c.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   // List of statuses for selection filter
-  const statuses = ["All", "Applied", "In Process", "Interviewing", "Offer", "Archived"]
+  const statuses = [
+    "All",
+    "Applied",
+    "In Process",
+    "Interviewing",
+    "Offer",
+    "Archived",
+  ];
 
   const getStatusBadgeVariant = (status: Candidate["status"]) => {
     switch (status) {
       case "Saved":
-        return "primary"
+        return "primary";
       case "Applied":
-        return "info"
+        return "info";
       case "In Process":
-        return "warning"
+        return "warning";
       case "Interviewing":
-        return "primary"
+        return "primary";
       case "Offer":
-        return "success"
+        return "success";
       case "Archived":
-        return "destructive"
+        return "destructive";
       default:
-        return "secondary"
+        return "secondary";
     }
-  }
+  };
 
   return (
     <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300 select-none relative">
@@ -49,8 +72,10 @@ export function Candidates() {
       {/* Header */}
       <div>
         <h1 className="text-[36px] font-extrabold tracking-tight">
-            <span className="premium-gradient-text text-glow">Candidates Directory</span>
-          </h1>
+          <span className="premium-gradient-text text-glow">
+            Candidates Directory
+          </span>
+        </h1>
         <p className="text-body text-txt-body mt-1 font-medium">
           Detailed list of all applicants in your workspace.
         </p>
@@ -117,7 +142,9 @@ export function Candidates() {
                     </span>
                   </div>
                 </TableCell>
-                <TableCell className="py-4 font-semibold text-txt-body">{c.title}</TableCell>
+                <TableCell className="py-4 font-semibold text-txt-body">
+                  {c.title}
+                </TableCell>
                 <TableCell className="py-4">
                   <div className="flex items-center gap-1 text-[13px] text-txt-body font-semibold">
                     <MapPin className="w-3.5 h-3.5 text-txt-caption" />
@@ -125,9 +152,13 @@ export function Candidates() {
                   </div>
                 </TableCell>
                 <TableCell className="py-4">
-                  <Badge variant={getStatusBadgeVariant(c.status)}>{c.status}</Badge>
+                  <Badge variant={getStatusBadgeVariant(c.status)}>
+                    {c.status}
+                  </Badge>
                 </TableCell>
-                <TableCell className="py-4 text-[13px] text-txt-caption font-semibold">{c.dateText}</TableCell>
+                <TableCell className="py-4 text-[13px] text-txt-caption font-semibold">
+                  {c.dateText}
+                </TableCell>
                 <TableCell className="pr-6 py-4 text-right">
                   <div className="flex items-center justify-end gap-2.5">
                     <button
@@ -136,12 +167,15 @@ export function Candidates() {
                         c.bookmarked ? "text-primary" : "text-txt-caption"
                       }`}
                     >
-                      <Bookmark className="w-4 h-4" fill={c.bookmarked ? "currentColor" : "none"} />
+                      <Bookmark
+                        className="w-4 h-4"
+                        fill={c.bookmarked ? "currentColor" : "none"}
+                      />
                     </button>
                     <button
                       onClick={() => {
-                        setActiveConversation(c.id)
-                        setActiveView("Messages")
+                        setActiveConversation(c.id);
+                        setActiveView("Messages");
                       }}
                       title="Send Message"
                       className="cursor-pointer p-1.5 rounded-full text-txt-caption hover:text-primary hover:bg-bg-hover transition-colors"
@@ -160,7 +194,10 @@ export function Candidates() {
             ))}
             {filteredCandidates.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-12 text-txt-caption font-semibold">
+                <TableCell
+                  colSpan={6}
+                  className="text-center py-12 text-txt-caption font-semibold"
+                >
                   No candidates match your filters.
                 </TableCell>
               </TableRow>
@@ -169,5 +206,5 @@ export function Candidates() {
         </Table>
       </Card>
     </div>
-  )
+  );
 }

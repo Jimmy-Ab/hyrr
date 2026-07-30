@@ -9,6 +9,7 @@ import { AuthService } from './auth.service';
 import { RegisterDto } from './dtos/register.dto';
 import { LoginDto } from './dtos/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { ChangePasswordDto } from './dtos/change-password.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -46,11 +47,9 @@ export class AuthController {
     const token = req.cookies?.['refreshToken'];
     if (!token) throw new UnauthorizedException('No refresh token');
 
-    const { authService, setRefreshCookie } = this;
-    const jwtService = (authService as any).jwtService;
-    const payload = jwtService.verify(token, { secret: process.env.JWT_SECRET || 'hyrr_dev_secret' });
-    const tokens = await authService.refreshTokens(payload.sub);
-    setRefreshCookie(res, tokens.refreshToken);
+    const payload = await this.authService.verifyRefreshToken(token);
+    const tokens = await this.authService.refreshTokens(payload.sub);
+    this.setRefreshCookie(res, tokens.refreshToken);
     return { accessToken: tokens.accessToken };
   }
 
@@ -84,7 +83,7 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Password changed successfully' })
   async changePassword(
     @Req() req: any,
-    @Body() body: { currentPassword: string; newPassword: string },
+    @Body() body: ChangePasswordDto,
   ) {
     return this.authService.changePassword(req.user.userId, body.currentPassword, body.newPassword);
   }
@@ -101,7 +100,7 @@ export class AuthController {
   async googleCallback(@Req() req: any, @Res() res: Response) {
     this.setRefreshCookie(res, req.user.refreshToken);
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
-    res.redirect(`${frontendUrl}/auth/callback?token=${req.user.accessToken}&role=${req.user.role}`);
+    res.redirect(`${frontendUrl}/auth/callback#token=${encodeURIComponent(req.user.accessToken)}&role=${encodeURIComponent(req.user.role)}`);
   }
 
   // ─── GitHub OAuth ──────────────────────────────────────────────────
@@ -116,7 +115,7 @@ export class AuthController {
   async githubCallback(@Req() req: any, @Res() res: Response) {
     this.setRefreshCookie(res, req.user.refreshToken);
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
-    res.redirect(`${frontendUrl}/auth/callback?token=${req.user.accessToken}&role=${req.user.role}`);
+    res.redirect(`${frontendUrl}/auth/callback#token=${encodeURIComponent(req.user.accessToken)}&role=${encodeURIComponent(req.user.role)}`);
   }
 
   // ─── LinkedIn OAuth ────────────────────────────────────────────────
@@ -131,7 +130,7 @@ export class AuthController {
   async linkedinCallback(@Req() req: any, @Res() res: Response) {
     this.setRefreshCookie(res, req.user.refreshToken);
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
-    res.redirect(`${frontendUrl}/auth/callback?token=${req.user.accessToken}&role=${req.user.role}`);
+    res.redirect(`${frontendUrl}/auth/callback#token=${encodeURIComponent(req.user.accessToken)}&role=${encodeURIComponent(req.user.role)}`);
   }
 
   // ─── Helpers ───────────────────────────────────────────────────────

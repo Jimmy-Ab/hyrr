@@ -56,6 +56,19 @@ enum EventType {
   OTHER
 }
 
+enum CompanyMemberRole {
+  OWNER
+  RECRUITER
+  HIRING_MANAGER
+  VIEWER
+}
+
+enum AlertFrequency {
+  INSTANT
+  DAILY
+  WEEKLY
+}
+
 // ==========================================
 // 1. Core Authentication & Users
 // ==========================================
@@ -89,6 +102,9 @@ model User {
   sentMessages Message[]   @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
   calendarEvents CalendarEvent[]
+  companyMemberships CompanyMember[]
+  jobAlerts     JobAlert[]
+  savedSearches  SavedSearch[]
 }
 
 model Company {
@@ -107,6 +123,7 @@ model Company {
 
   // Relations
   members     User[]
+  teamMembers CompanyMember[]
   jobs        Job[]
 }
 
@@ -212,6 +229,7 @@ model Job {
 
   // Relations
   applications  Application[]
+  screeningQuestions ScreeningQuestion[]
 }
 
 // ==========================================
@@ -252,6 +270,11 @@ model Application {
   // Relations
   messages           Message[]
   calendarEvents     CalendarEvent[]
+  labels             ApplicationLabel[]
+  recruiterNotes     ApplicationNote[]
+  answers            ScreeningAnswer[]
+  stageEvents        ApplicationStageEvent[]
+  trackingLinks      ApplicationTrackingLink[]
 }
 
 // ==========================================
@@ -354,4 +377,161 @@ model AuditLog {
   ip        String
   severity  String
   createdAt DateTime @default(now())
+}
+
+// ==========================================
+// 9. Recruiter collaboration and hiring workflow
+// ==========================================
+model CompanyMember {
+  id        String            @id @default(uuid())
+  companyId String
+  company   Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      CompanyMemberRole @default(RECRUITER)
+  createdAt DateTime          @default(now())
+  @@unique([companyId, userId])
+}
+
+model ScreeningQuestion {
+  id        String   @id @default(uuid())
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  question  String   @db.Text
+  required  Boolean  @default(false)
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  answers   ScreeningAnswer[]
+}
+
+model ScreeningAnswer {
+  id         String            @id @default(uuid())
+  applicationId String
+  application Application       @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  questionId String
+  question   ScreeningQuestion  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answer     String             @db.Text
+  @@unique([applicationId, questionId])
+}
+
+model CandidateLabel {
+  id        String   @id @default(uuid())
+  companyId String
+  name      String
+  color     String   @default("purple")
+  createdAt DateTime @default(now())
+  applications ApplicationLabel[]
+  @@unique([companyId, name])
+}
+
+model ApplicationLabel {
+  applicationId String
+  application   Application    @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  labelId       String
+  label         CandidateLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  @@id([applicationId, labelId])
+}
+
+model ApplicationNote {
+  id            String      @id @default(uuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  authorId      String
+  body          String      @db.Text
+  createdAt     DateTime    @default(now())
+}
+
+model ApplicationStageEvent {
+  id            String            @id @default(uuid())
+  applicationId String
+  application   Application       @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  fromStatus    ApplicationStatus?
+  toStatus      ApplicationStatus
+  actorId       String?
+  createdAt     DateTime          @default(now())
+}
+
+model ApplicationTrackingLink {
+  id            String      @id @default(uuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  tokenHash     String      @unique
+  expiresAt     DateTime
+  createdAt     DateTime    @default(now())
+}
+
+// ==========================================
+// 10. Seeker discovery, trust and billing foundations
+// ==========================================
+model JobAlert {
+  id         String         @id @default(uuid())
+  userId     String
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  keywords   String[]
+  locations  String[]
+  jobTypes   String[]
+  minSalary  String?
+  remoteOnly Boolean        @default(false)
+  frequency  AlertFrequency @default(DAILY)
+  active     Boolean        @default(true)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+}
+
+model SavedSearch {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  query     String?
+  filters   Json
+  createdAt DateTime @default(now())
+}
+
+model JobReport {
+  id          String   @id @default(uuid())
+  jobId       String
+  reporterId  String
+  reason      String
+  details     String?  @db.Text
+  status      String   @default("PENDING")
+  createdAt   DateTime @default(now())
+  @@unique([jobId, reporterId])
+}
+
+model Subscription {
+  id        String   @id @default(uuid())
+  companyId String   @unique
+  plan      String   @default("Starter")
+  status    String   @default("TRIAL")
+  provider  String?
+  providerCustomerId String?
+  renewsAt  DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CompanyEmailTemplate {
+  id        String   @id @default(uuid())
+  companyId String
+  name      String
+  kind      String
+  subject   String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([companyId, name])
+}
+
+model InterviewAvailability {
+  id                  String   @id @default(uuid())
+  companyId           String
+  jobId               String
+  createdById         String
+  startTime           DateTime
+  endTime             DateTime
+  meetingUrl          String?
+  bookedApplicationId String?  @unique
+  createdAt           DateTime @default(now())
 }

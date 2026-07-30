@@ -4,7 +4,7 @@ import {
   Building2, Users, Globe, Star, CheckCircle2, X, Upload,
   ExternalLink, Bookmark
 } from "lucide-react"
-import { useJobStore, type Job, Badge, Button, Input, useToast, Card } from "hyrr.shared"
+import { useJobStore, type Job, Badge, Button, Input, useToast, Card, APPLICATION_STATUS } from "hyrr.shared"
 
 /* ─── Tiny company stat ─── */
 function CompanyStat({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
@@ -226,8 +226,8 @@ function ApplyModal({ job, onClose }: { job: Job; onClose: () => void }) {
 function JobDetail({ job, onApply }: { job: Job; onApply: () => void }) {
   const { candidates, jobApplications, saveJobFromDiscover } = useJobStore()
   const applicantCount = candidates.filter((c) => c.jobId === job.id).length
-  const isApplied = jobApplications.some((a) => a.publicJobId === job.id && a.status !== "Saved")
-  const isSaved = jobApplications.some((a) => a.publicJobId === job.id && a.status === "Saved")
+  const isApplied = jobApplications.some((a) => a.publicJobId === job.id && a.status !== APPLICATION_STATUS.SAVED)
+  const isSaved = jobApplications.some((a) => a.publicJobId === job.id && a.status === APPLICATION_STATUS.SAVED)
 
   const requirements: Record<string, string[]> = {
     "senior-frontend-developer": [

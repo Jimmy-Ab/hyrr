@@ -3,11 +3,12 @@ import { JwtModule } from '@nestjs/jwt';
 import { MessagesService } from './messages.service';
 import { MessagesController } from './messages.controller';
 import { MessagesGateway } from './messages.gateway';
+import { jwtSecret } from '../auth/jwt.config';
 
 @Module({
   imports: [
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'hyrr_dev_secret',
+      secret: jwtSecret(),
       signOptions: { expiresIn: '15m' },
     }),
   ],

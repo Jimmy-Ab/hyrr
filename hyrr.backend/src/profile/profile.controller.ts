@@ -4,6 +4,7 @@ import { ProfileService } from './profile.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { EducationDto, ExperienceDto, UpdateProfileDto } from './dtos/profile.dto';
 
 @ApiTags('Profile')
 @ApiBearerAuth()
@@ -35,7 +36,7 @@ export class ProfileController {
   @Roles('SEEKER')
   @ApiOperation({ summary: 'Update seeker profile fields' })
   @ApiResponse({ status: 200, description: 'Profile updated successfully' })
-  updateProfile(@Req() req: any, @Body() body: any) {
+  updateProfile(@Req() req: any, @Body() body: UpdateProfileDto) {
     return this.profileService.updateProfile(req.user.userId, body);
   }
 
@@ -46,7 +47,7 @@ export class ProfileController {
   @ApiResponse({ status: 201, description: 'Experience added' })
   addExperience(
     @Req() req: any,
-    @Body() body: { role: string; company: string; duration: string; desc?: string },
+    @Body() body: ExperienceDto,
   ) {
     return this.profileService.addExperience(req.user.userId, body);
   }
@@ -67,7 +68,7 @@ export class ProfileController {
   @ApiResponse({ status: 201, description: 'Education history added' })
   addEducation(
     @Req() req: any,
-    @Body() body: { school: string; degree: string; duration: string },
+    @Body() body: EducationDto,
   ) {
     return this.profileService.addEducation(req.user.userId, body);
   }

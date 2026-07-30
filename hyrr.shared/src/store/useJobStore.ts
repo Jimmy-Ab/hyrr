@@ -1,6 +1,7 @@
 import { create } from "zustand"
 import { apiFetch } from "../lib/api"
 import { io } from "socket.io-client"
+import { APPLICATION_STATUS, type ApplicationStatusCode, type ApplicationStatusLabel, type CalendarEventType, type DocumentType, type JobType } from "../lib/contracts"
 
 function decodeJwt(token: string) {
   try {
@@ -40,7 +41,7 @@ export interface Candidate {
   coverLetter?: string
   resumeUrl?: string
   dateText: string
-  status: "Saved" | "Applied" | "In Process" | "Interviewing" | "Offer" | "Archived"
+  status: ApplicationStatusLabel
   tag?: string
   avatar: string
   bookmarked: boolean
@@ -61,7 +62,7 @@ export interface PublicJob {
   company: string
   companyColor: "purple" | "blue" | "green" | "orange"
   location: string
-  type: "Full Time" | "Part Time" | "Contract" | "Remote"
+  type: JobType
   salary: string
   posted: string
   description: string
@@ -100,7 +101,7 @@ export interface JobApplication {
   type: string
   salary: string
   appliedDate: string
-  status: "Saved" | "Applied" | "In Process" | "Interviewing" | "Offer" | "Archived"
+  status: ApplicationStatusCode
   bookmarked: boolean
   recruiterName: string
   recruiterAvatar: string
@@ -115,7 +116,7 @@ export interface CalendarEvent {
   title: string
   startTime: string
   endTime?: string
-  type: "interview" | "deadline" | "offer" | "other"
+  type: CalendarEventType
   applicationId?: string
   meetingUrl?: string
   location?: string
@@ -125,7 +126,7 @@ export interface CalendarEvent {
 export interface Document {
   id: string
   name: string
-  type: "resume" | "cover" | "cert" | "portfolio" | "other"
+  type: DocumentType
   size: string
   url: string
   active: boolean
@@ -230,16 +231,16 @@ export interface JobState {
   // ── Seeker workspace ─────────────────────────────────────────────────────
   candidateActiveView: "Dashboard" | "Discover" | "Applications" | "Messages" | "Notifications" | "Calendar" | "Documents" | "Profile" | "Settings"
   publicJobs: PublicJob[]
+  recommendedJobs: PublicJob[]
   publicJobsLoading: boolean
   jobApplications: JobApplication[]
   discoverSearch: string
   discoverTypeFilter: string
   seekerProfile: SeekerProfileData | null
   setCandidateActiveView: (view: "Dashboard" | "Discover" | "Applications" | "Messages" | "Notifications" | "Calendar" | "Documents" | "Profile" | "Settings") => void
-  moveJobApplication: (id: string, status: JobApplication["status"]) => void
-  toggleJobBookmark: (id: string) => void
-  applyFromDiscover: (publicJobId: string) => void
-  saveJobFromDiscover: (publicJobId: string) => void
+  toggleJobBookmark: (id: string) => Promise<boolean>
+  applyFromDiscover: (publicJobId: string) => Promise<boolean>
+  saveJobFromDiscover: (publicJobId: string) => Promise<boolean>
   setDiscoverSearch: (q: string) => void
   setDiscoverTypeFilter: (t: string) => void
 
@@ -405,7 +406,7 @@ export const useJobStore = create<JobState>((set, get) => ({
       get().socket.disconnect()
     }
 
-    const socket = io("http://localhost:3000", {
+    const socket = io(import.meta.env.VITE_SOCKET_URL || "http://localhost:3000", {
       auth: { token },
       withCredentials: true,
       transports: ["websocket", "polling"],
@@ -419,9 +420,13 @@ export const useJobStore = create<JobState>((set, get) => ({
     })
 
     socket.on("application_status_updated", (data: any) => {
+      const status = Object.values(APPLICATION_STATUS).includes(data.status)
+        ? data.status as ApplicationStatusCode
+        : null
+      if (!status) return
       set((state) => ({
         jobApplications: state.jobApplications.map((app) =>
-          app.id === data.applicationId ? { ...app, status: data.status, tag: data.tag } : app
+          app.id === data.applicationId ? { ...app, status, tag: data.tag } : app
         ),
       }))
     })
@@ -517,6 +522,7 @@ export const useJobStore = create<JobState>((set, get) => ({
   discoverTypeFilter: "All",
   profileUpdating: false,
   publicJobsLoading: false,
+  recommendedJobs: [],
   seekerProfile: null,
   setCandidateActiveView: (view) => set({ candidateActiveView: view }),
   setDiscoverSearch: (q) => set({ discoverSearch: q }),
@@ -787,7 +793,7 @@ export const useJobStore = create<JobState>((set, get) => ({
           type: a.job.type,
           salary: a.job.salary || "Competitive",
           appliedDate: new Date(a.appliedAt).toLocaleDateString(),
-          status: a.status === "IN_PROCESS" ? "In Process" : a.status === "INTERVIEWING" ? "Interviewing" : a.status === "OFFER" ? "Offer" : a.status === "ARCHIVED" ? "Archived" : a.status === "SAVED" ? "Saved" : "Applied",
+          status: (Object.values(APPLICATION_STATUS).includes(a.status) ? a.status : APPLICATION_STATUS.APPLIED) as ApplicationStatusCode,
           bookmarked: a.seekerBookmarked,
           recruiterName: a.job.postedBy?.name || "Hiring Team",
           recruiterAvatar: a.job.postedBy?.avatar || `https://ui-avatars.com/api/?name=Hiring+Team`,
@@ -819,6 +825,32 @@ export const useJobStore = create<JobState>((set, get) => ({
           publicJobs: publicJobsList,
           publicJobsLoading: false,
         })
+
+        try {
+          const recommendations = await apiFetch("/ai/featured-jobs")
+          set({
+            recommendedJobs: (recommendations || []).map((job: any) => ({
+              id: job.id,
+              title: job.title,
+              company: job.company.name,
+              companyColor: job.company.color || "purple",
+              location: job.location,
+              type: job.type,
+              salary: job.salary || "Competitive",
+              posted: new Date(job.createdAt).toLocaleDateString(),
+              description: job.description,
+              requirements: job.requirements || [],
+              skills: job.skills || [],
+              benefits: job.benefits || [],
+              featured: job.featured,
+              remote: job.remote,
+            })),
+          })
+        } catch {
+          // Still backend sourced: retain active featured roles when the AI
+          // recommendation provider is unavailable.
+          set({ recommendedJobs: publicJobsList.filter((job) => job.featured) })
+        }
 
         // Fetch user profile data and store seeker profile
         try {
@@ -862,28 +894,15 @@ export const useJobStore = create<JobState>((set, get) => ({
       }
     } catch (e) {
       console.warn("Failed to load workspace data from backend API.", e)
+      if (role === "SEEKER") set({ publicJobsLoading: false })
     }
   },
 
   // ── Seeker actions ─────────────────────────────────────────────────────────
 
-  moveJobApplication: async (id, status) => {
-    set((state) => ({
-      jobApplications: state.jobApplications.map((a) => a.id === id ? { ...a, status } : a),
-    }))
-    try {
-      await apiFetch(`/applications/${id}`, {
-        method: "PUT",
-        body: JSON.stringify({ status: status.toUpperCase().replace(" ", "_") }),
-      })
-    } catch (e) {
-      console.warn("Failed to sync application status update to database.", e)
-    }
-  },
-
   toggleJobBookmark: async (id) => {
     const app = get().jobApplications.find((a) => a.id === id)
-    if (!app) return
+    if (!app) return false
     const isBookmarked = !app.bookmarked
     set((state) => ({
       jobApplications: state.jobApplications.map((a) => a.id === id ? { ...a, bookmarked: isBookmarked } : a),
@@ -893,15 +912,20 @@ export const useJobStore = create<JobState>((set, get) => ({
         method: "PUT",
         body: JSON.stringify({ seekerBookmarked: isBookmarked }),
       })
+      return true
     } catch (e) {
+      set((state) => ({
+        jobApplications: state.jobApplications.map((a) => a.id === id ? { ...a, bookmarked: app.bookmarked } : a),
+      }))
       console.warn("Failed to update bookmark status in database.", e)
+      return false
     }
   },
 
   applyFromDiscover: async (publicJobId) => {
     const seeker = get().user
     const profile = get().seekerProfile
-    if (!seeker) return
+    if (!seeker) return false
     try {
       await apiFetch(`/applications/jobs/${publicJobId}/apply`, {
         method: "POST",
@@ -914,16 +938,18 @@ export const useJobStore = create<JobState>((set, get) => ({
           coverLetter: "",
         }),
       })
-      get().fetchInitialData()
+      await get().fetchInitialData()
+      return true
     } catch (e) {
       console.warn("Failed to apply to job.", e)
+      return false
     }
   },
 
   saveJobFromDiscover: async (publicJobId) => {
     const seeker = get().user
     const profile = get().seekerProfile
-    if (!seeker) return
+    if (!seeker) return false
     try {
       await apiFetch(`/applications/jobs/${publicJobId}/save`, {
         method: "POST",
@@ -934,9 +960,11 @@ export const useJobStore = create<JobState>((set, get) => ({
           location: profile?.location || "Remote",
         }),
       })
-      get().fetchInitialData()
+      await get().fetchInitialData()
+      return true
     } catch (e) {
       console.warn("Failed to save job.", e)
+      return false
     }
   },
 
@@ -1101,7 +1129,7 @@ export const useJobStore = create<JobState>((set, get) => ({
           company: app.job?.company?.name || "Company",
           lastMessage: lastMsg?.text || "No messages yet",
           lastMessageTime: lastMsg?.createdAt ? new Date(lastMsg.createdAt).toLocaleDateString() : "",
-          unreadCount: app._count?.messages || 0,
+          unreadCount: app._unreadCount || 0,
           online: false,
         }
       })

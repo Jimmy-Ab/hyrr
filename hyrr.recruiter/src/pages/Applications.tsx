@@ -20,63 +20,54 @@ export function Applications() {
   }
 
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300 select-none relative">
-      {/* Ambient glows */}
-      <div className="ambient-glow-1" />
-      <div className="ambient-glow-2" />
+    <div className="flex flex-col gap-5 animate-in fade-in duration-200 select-none relative">
       {/* Job Title & Sub-header */}
-      <div className="flex items-center justify-between border-b border-bg-border/30 pb-4 shrink-0">
+      <div className="flex items-center justify-between pb-2 shrink-0">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-[28px] font-extrabold text-txt-title tracking-tight leading-none">
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-[22px] font-bold text-[#111827] tracking-tight leading-none">
               {currentJob.title}
             </h1>
-            <Badge variant="success">Active</Badge>
+            <Badge variant="success" className="bg-[#E6F8ED] text-[#16A34A] hover:bg-[#E6F8ED] border-0 font-semibold px-2.5 py-0.5 rounded-md text-xs">
+              Active
+            </Badge>
           </div>
-          <p className="text-caption text-txt-body mt-2 font-semibold">
-            {currentJob.location}  •  {currentJob.type}  •  {currentJob.posted}
+          <p className="text-[13px] text-slate-400 mt-1.5 font-normal">
+            {currentJob.location}  •  {currentJob.type}  •  Posted 5 days ago
           </p>
         </div>
 
         {/* View Switchers & Dots */}
         <div className="flex items-center gap-2">
-          <div className="flex gap-1 bg-bg-secondary p-1 border border-bg-border rounded-[14px] shadow-[0_1px_3px_rgba(0,0,0,0.02)] shrink-0">
-            <Button
-              variant="primary"
-              size="sm"
-              className="h-8 rounded-[10px] gap-1.5 font-bold cursor-pointer px-3"
+          <div className="flex gap-1 bg-white p-1 border border-slate-200 rounded-xl shadow-xs shrink-0">
+            <button
+              className="h-8 rounded-lg gap-1.5 font-semibold text-xs cursor-pointer px-3 flex items-center bg-primary-light text-primary border border-primary-border/40"
             >
-              <Kanban className="w-4 h-4 text-white" />
+              <Kanban className="w-3.5 h-3.5 text-primary" />
               Board
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
+            </button>
+            <button
               onClick={() => setActiveView("Candidates")}
-              className="text-txt-body hover:text-txt-heading h-8 rounded-[10px] gap-1.5 font-semibold cursor-pointer px-3"
+              className="h-8 rounded-lg gap-1.5 font-medium text-xs cursor-pointer px-3 flex items-center text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors"
             >
-              <List className="w-4 h-4" />
+              <List className="w-3.5 h-3.5" />
               List
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
+            </button>
+            <button
               onClick={() => setActiveView("Analytics")}
-              className="text-txt-body hover:text-txt-heading h-8 rounded-[10px] gap-1.5 font-semibold cursor-pointer px-3"
+              className="h-8 rounded-lg gap-1.5 font-medium text-xs cursor-pointer px-3 flex items-center text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors"
             >
-              <BarChart3 className="w-4 h-4" />
+              <BarChart3 className="w-3.5 h-3.5" />
               Analytics
-            </Button>
+            </button>
           </div>
 
-          <Button
-            variant="secondary"
-            size="icon"
+          <button
             onClick={() => toast("Menu Clicked", "Contextual actions triggered.", "info")}
-            className="w-8 h-8 border border-bg-border hover:border-primary/20 shadow-none cursor-pointer rounded-[10px] shrink-0"
+            className="w-8 h-8 border border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50 transition-colors cursor-pointer rounded-xl flex items-center justify-center shrink-0 text-slate-400"
           >
-            <MoreHorizontal className="w-4 h-4 text-txt-heading" />
-          </Button>
+            <MoreHorizontal className="w-4 h-4" />
+          </button>
         </div>
       </div>
 

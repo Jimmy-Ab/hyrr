@@ -2,8 +2,8 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, IsOptional, IsBoolean, IsEnum } from 'class-validator';
 
 export class UpdateApplicationDto {
-  @ApiPropertyOptional({ enum: ['SAVED', 'APPLIED', 'IN_PROCESS', 'OFFER', 'ARCHIVED'] })
-  @IsOptional() @IsEnum(['SAVED', 'APPLIED', 'IN_PROCESS', 'OFFER', 'ARCHIVED'])
+  @ApiPropertyOptional({ enum: ['SAVED', 'APPLIED', 'IN_PROCESS', 'INTERVIEWING', 'OFFER', 'ARCHIVED'] })
+  @IsOptional() @IsEnum(['SAVED', 'APPLIED', 'IN_PROCESS', 'INTERVIEWING', 'OFFER', 'ARCHIVED'])
   status?: string;
 
   @ApiPropertyOptional({ example: 'Technical Interview', description: 'Pipeline sub-stage tag' })

@@ -21,6 +21,7 @@ export * from "./store/useJobStore"
 // Export Utils
 export * from "./lib/utils"
 export * from "./lib/api"
+export * from "./lib/contracts"
 
 // Export Auth Views
 export * from "./components/auth/AuthPage"

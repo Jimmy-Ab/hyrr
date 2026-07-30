@@ -1,6 +1,6 @@
 import { useEffect } from "react"
 import { Briefcase, ArrowUpRight, Star, Calendar, Bookmark, CheckCircle2, TrendingUp } from "lucide-react"
-import { Card, Badge, Button, useJobStore } from "hyrr.shared"
+import { Card, Badge, Button, useJobStore, APPLICATION_STATUS, APPLICATION_STATUS_LABEL } from "hyrr.shared"
 
 const colorDot: Record<string, string> = {
   purple: "bg-primary",
@@ -10,17 +10,17 @@ const colorDot: Record<string, string> = {
 }
 
 export function CandidateDashboard() {
-  const { jobApplications, publicJobs, setCandidateActiveView, notifications, user, seekerProfile, fetchInitialData } = useJobStore()
+  const { jobApplications, recommendedJobs, setCandidateActiveView, notifications, user, seekerProfile, fetchInitialData } = useJobStore()
 
   useEffect(() => {
     fetchInitialData()
   }, []) // eslint-disable-line
 
-  const applied = jobApplications.filter((a) => a.status === "Applied").length
-  const inProcess = jobApplications.filter((a) => a.status === "In Process" || a.status === "Interviewing").length
-  const interviewing = jobApplications.filter((a) => a.status === "Interviewing").length
-  const offers = jobApplications.filter((a) => a.status === "Offer").length
-  const saved = jobApplications.filter((a) => a.status === "Saved").length
+  const applied = jobApplications.filter((a) => a.status === APPLICATION_STATUS.APPLIED).length
+  const inProcess = jobApplications.filter((a) => a.status === APPLICATION_STATUS.IN_PROCESS || a.status === APPLICATION_STATUS.INTERVIEWING).length
+  const interviewing = jobApplications.filter((a) => a.status === APPLICATION_STATUS.INTERVIEWING).length
+  const offers = jobApplications.filter((a) => a.status === APPLICATION_STATUS.OFFER).length
+  const saved = jobApplications.filter((a) => a.status === APPLICATION_STATUS.SAVED).length
 
   // Compute profile completion dynamically
   const completionItems = [
@@ -59,9 +59,9 @@ export function CandidateDashboard() {
   ]
 
   const upcomingInterview = jobApplications.find((a) => a.interviewDate)
-  const offerApps = jobApplications.filter((a) => a.status === "Offer")
+  const offerApps = jobApplications.filter((a) => a.status === APPLICATION_STATUS.OFFER)
   const recentActivity = jobApplications.slice().reverse().slice(0, 4)
-  const recommended = publicJobs.filter((j) => j.featured).slice(0, 3)
+  const recommended = recommendedJobs.slice(0, 3)
   const hasRecentActivity = recentActivity.length > 0
   const hasRecommended = recommended.length > 0
 
@@ -141,8 +141,8 @@ export function CandidateDashboard() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Badge variant={app.status === "Offer" ? "success" : app.status === "Archived" ? "secondary" : app.status === "Interviewing" ? "primary" : app.status === "In Process" ? "warning" : "info"}>
-                    {app.tag ?? app.status}
+                  <Badge variant={app.status === APPLICATION_STATUS.OFFER ? "success" : app.status === APPLICATION_STATUS.ARCHIVED ? "secondary" : app.status === APPLICATION_STATUS.INTERVIEWING ? "primary" : app.status === APPLICATION_STATUS.IN_PROCESS ? "warning" : "info"}>
+                    {app.tag ?? APPLICATION_STATUS_LABEL[app.status]}
                   </Badge>
                   <span className="text-caption text-txt-caption font-bold">{app.appliedDate}</span>
                 </div>

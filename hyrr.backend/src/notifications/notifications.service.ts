@@ -1,11 +1,13 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessagesGateway } from '../messages/messages.gateway';
+import { EmailDeliveryService } from '../core/delivery/email-delivery.service';
 
 @Injectable()
 export class NotificationsService {
   constructor(
     private prisma: PrismaService,
+    private emailDelivery: EmailDeliveryService,
     @Optional() private messagesGateway?: MessagesGateway,
   ) {}
 
@@ -31,6 +33,14 @@ export class NotificationsService {
       } catch {
         // socket optional
       }
+    }
+
+    const [user, setting] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: userId }, select: { email: true } }),
+      this.prisma.userSetting.findUnique({ where: { userId }, select: { emailNotifications: true } }),
+    ]);
+    if (user?.email && setting?.emailNotifications !== false) {
+      this.emailDelivery.send(user.email, 'Hyrr notification', title).catch(() => undefined);
     }
 
     return notification;

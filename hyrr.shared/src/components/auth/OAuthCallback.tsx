@@ -5,7 +5,8 @@ export function OAuthCallback() {
   const { setAccessToken } = useJobStore()
 
   React.useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
+    // OAuth credentials are placed in the fragment, which browsers do not send to servers/logs.
+    const params = new URLSearchParams(window.location.hash.replace(/^#/, "") || window.location.search)
     const token = params.get("token")
     if (token) {
       setAccessToken(token)

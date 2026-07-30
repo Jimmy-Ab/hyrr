@@ -76,35 +76,34 @@ export function ApplicationCard({ candidate, isOverlay = false }: ApplicationCar
     >
       <Card
         onDoubleClick={() => setSelectedCandidateId(candidate.id)}
-        className={`p-5 relative border border-bg-border/60 bg-bg-secondary transition-all ${
+        className={`p-4 relative border border-slate-100 bg-white rounded-2xl transition-all shadow-xs ${
           isOverlay
-            ? "shadow-floating scale-[1.03] rotate-[1deg] border-primary-border ring-2 ring-primary/10"
-            : "hover:shadow-card-hover hover:border-bg-border/90 active:cursor-grabbing"
+            ? "shadow-lg scale-[1.02] rotate-[1deg] border-primary-border ring-2 ring-primary/10"
+            : "hover:shadow-md hover:border-slate-200 active:cursor-grabbing"
         }`}
       >
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-2.5">
           <div className="flex gap-3">
             {/* Avatar */}
             <img
               src={candidate.avatar}
               alt={candidate.name}
-              className="w-11 h-11 rounded-full object-cover border border-bg-border/50 shrink-0 pointer-events-none"
+              className="w-10 h-10 rounded-full object-cover shrink-0 pointer-events-none"
             />
             {/* Candidate Info */}
             <div className="min-w-0">
               <h4
                 onClick={() => setSelectedCandidateId(candidate.id)}
-                className="text-body font-semibold text-txt-heading truncate hover:text-primary cursor-pointer hover:underline"
+                className="text-[13.5px] font-bold text-slate-800 truncate hover:text-primary cursor-pointer"
               >
                 {candidate.name}
               </h4>
-              <p className="text-caption text-txt-body mt-0.5 truncate font-medium">
+              <p className="text-[12px] text-slate-500 mt-0.5 truncate font-normal">
                 {candidate.title}
               </p>
               
               {/* Location */}
-              <div className="flex items-center gap-1 text-[11px] text-txt-caption mt-2 font-medium">
-                <MapPin className="w-3.5 h-3.5 shrink-0" />
+              <div className="text-[11.5px] text-slate-400 mt-1 font-normal">
                 <span className="truncate">{candidate.location}</span>
               </div>
             </div>
@@ -118,8 +117,8 @@ export function ApplicationCard({ candidate, isOverlay = false }: ApplicationCar
           >
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="text-txt-caption hover:text-txt-heading hover:bg-bg-hover p-1 rounded-full transition-colors cursor-pointer outline-none">
-                  <MoreHorizontal className="w-4 h-4" />
+                <button className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 transition-colors cursor-pointer outline-none">
+                  <MoreHorizontal className="w-3.5 h-3.5" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-40" align="end">
@@ -141,14 +140,14 @@ export function ApplicationCard({ candidate, isOverlay = false }: ApplicationCar
         </div>
 
         {/* Card Footer: Tag & Bookmark Ribbon */}
-        <div className="flex items-center justify-between mt-5 pt-3 border-t border-bg-border/30">
+        <div className="flex items-center justify-between mt-3.5 pt-2">
           <div className="flex items-center gap-1.5 min-w-0">
-            <Badge variant={tagDetails.variant}>
+            <Badge variant={tagDetails.variant} className="font-medium text-[11px] px-2.5 py-0.5 rounded-md">
               {tagDetails.text}
             </Badge>
             {candidate.aiScore != null && (
-              <Badge variant="success" className="bg-[#34C759] text-white flex items-center gap-1 shrink-0 py-0.5 px-2 text-[10.5px] border-none shadow-[0_0_8px_rgba(52,199,89,0.2)]">
-                <Sparkles className="w-3 h-3 fill-current animate-pulse" />
+              <Badge variant="success" className="bg-emerald-500 text-white flex items-center gap-1 shrink-0 py-0.5 px-2 text-[10.5px] border-none">
+                <Sparkles className="w-3 h-3 fill-current" />
                 {candidate.aiScore}%
               </Badge>
             )}
@@ -160,10 +159,10 @@ export function ApplicationCard({ candidate, isOverlay = false }: ApplicationCar
               toggleBookmark(candidate.id)
             }}
             onPointerDown={(e) => e.stopPropagation()}
-            className={`cursor-pointer transition-colors p-1 -m-1 rounded-full hover:bg-bg-hover ${
+            className={`cursor-pointer transition-colors p-1 -m-1 rounded-full hover:bg-slate-100 ${
               candidate.bookmarked
                 ? "text-primary hover:text-primary-hover"
-                : "text-txt-caption hover:text-txt-heading"
+                : "text-slate-300 hover:text-slate-500"
             }`}
           >
             <Bookmark

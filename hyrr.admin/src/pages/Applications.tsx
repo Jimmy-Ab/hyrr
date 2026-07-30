@@ -7,12 +7,6 @@ import { Input } from "hyrr.shared"
 import { useAdminStore, type AdminApplication } from "../store/useAdminStore"
 import { useToast } from "hyrr.shared"
 
-const colorBg: Record<string, string> = {
-  purple: "bg-primary text-white",
-  blue:   "bg-sec-blue text-white",
-  green:  "bg-sec-green text-white",
-  orange: "bg-sec-orange text-white",
-}
 
 const statusColor = (status: string) => {
   const s = status.toLowerCase()

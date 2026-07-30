@@ -34,7 +34,7 @@ export function CandidateMessages() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [conversationMessages])
 
-  const activeConv = conversations.find(c => c.applicationId === activeConversationId) || conversations[0]
+  const activeConv = conversations.find(c => c.applicationId === activeConversationId)
 
   const handleSelectConversation = (appId: string) => {
     setActiveConversation(appId)
@@ -48,6 +48,9 @@ export function CandidateMessages() {
     setSending(true)
     try {
       await sendMessage(activeConv.applicationId, text)
+    } catch {
+      setInput(text)
+      toast("Message not sent", "Please check your connection and try again.", "error")
     } finally {
       setSending(false)
     }
@@ -56,9 +59,6 @@ export function CandidateMessages() {
   const filtered = conversations.filter(c =>
     !search || c.candidateName.toLowerCase().includes(search.toLowerCase()) || c.jobTitle.toLowerCase().includes(search.toLowerCase())
   )
-
-  // Use mock data when no real conversations exist (fallback UX)
-  const showMock = conversations.length === 0 && !conversationsLoading
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300 relative">
@@ -184,7 +184,7 @@ export function CandidateMessages() {
                   </div>
                 ) : (
                   conversationMessages.map((msg, i) => {
-                    const isMe = msg.senderId === user?.id || msg.senderType === "SEEKER"
+                    const isMe = msg.senderId === user?.id
                     return (
                       <div key={i} className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>
                         <div className={`max-w-[72%] rounded-[18px] px-4 py-2.5 text-[13px] leading-relaxed ${

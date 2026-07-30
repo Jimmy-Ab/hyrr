@@ -1,5 +1,5 @@
 import { useDroppable } from "@dnd-kit/core"
-import { MoreHorizontal, Plus, Briefcase, Send, CheckCircle2, Archive, Clock } from "lucide-react"
+import { MoreHorizontal, Plus, Bookmark, Send, CheckCircle2, Archive, Clock } from "lucide-react"
 import { ApplicationCard } from "./application-card"
 import { type Candidate } from "../../store/useJobStore"
 import { Button } from "../ui/button"
@@ -16,39 +16,60 @@ export function KanbanColumn({ id, title, candidates, onAddCandidate }: KanbanCo
     id,
   })
 
-  // Determine header icon
+  // Determine header icon with background box matching screenshot
   const getHeaderIcon = () => {
     switch (id) {
+      case "Saved":
+        return (
+          <div className="w-7 h-7 rounded-lg bg-[#F2EFFF] flex items-center justify-center text-[#7C5CFC] shrink-0">
+            <Bookmark className="w-3.5 h-3.5" />
+          </div>
+        )
       case "Applied":
-        return <Send className="w-5 h-5 text-sec-blue" />
+        return (
+          <div className="w-7 h-7 rounded-lg bg-[#EFF6FF] flex items-center justify-center text-[#3B82F6] shrink-0">
+            <Send className="w-3.5 h-3.5" />
+          </div>
+        )
       case "In Process":
-        return <Clock className="w-5 h-5 text-sec-orange" />
       case "Interviewing":
-        return <Briefcase className="w-5 h-5 text-primary" />
+        return (
+          <div className="w-7 h-7 rounded-lg bg-[#FEF3C7] flex items-center justify-center text-[#D97706] shrink-0">
+            <Clock className="w-3.5 h-3.5" />
+          </div>
+        )
       case "Offer":
-        return <CheckCircle2 className="w-5 h-5 text-sec-green" />
+        return (
+          <div className="w-7 h-7 rounded-lg bg-[#E6F8ED] flex items-center justify-center text-[#10B981] shrink-0">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+          </div>
+        )
       case "Archived":
-        return <Archive className="w-5 h-5 text-sec-gray" />
+        return (
+          <div className="w-7 h-7 rounded-lg bg-[#F1F5F9] flex items-center justify-center text-[#6B7280] shrink-0">
+            <Archive className="w-3.5 h-3.5" />
+          </div>
+        )
     }
   }
 
   return (
     <div
       ref={setNodeRef}
-      className={`flex flex-col w-[340px] shrink-0 rounded-card bg-bg-secondary border border-bg-border/60 p-4 min-h-[640px] max-h-[calc(100vh-260px)] transition-colors duration-200 ${
-        isOver ? "bg-primary-light/20 border-primary-border/50" : ""
+      className={`flex flex-col w-[300px] shrink-0 rounded-2xl p-2.5 min-h-[640px] max-h-[calc(100vh-220px)] transition-colors duration-200 ${
+        isOver ? "bg-primary-light/10" : "bg-transparent"
       }`}
     >
       {/* Column Header */}
-      <div className="flex items-center justify-between mb-4 pb-2 border-b border-bg-border/20 shrink-0">
+      <div className="flex items-center justify-between mb-3 px-1 shrink-0">
         <div className="flex items-center gap-2">
           {getHeaderIcon()}
-          <span className="text-[15px] font-semibold text-txt-heading">{title}</span>
-          <span className="flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full bg-bg-primary border border-bg-border text-[11px] text-txt-body font-bold">
+          <span className="text-[14px] font-bold text-[#111827]">{title}</span>
+          <span className="flex items-center justify-center min-w-[20px] h-[20px] px-1 rounded-full bg-slate-100 text-slate-500 text-[11px] font-semibold">
             {candidates.length}
           </span>
         </div>
-        <button className="text-txt-caption hover:text-txt-heading p-1 rounded-full hover:bg-bg-hover transition-colors cursor-pointer outline-none">
+        <button className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-100 transition-colors cursor-pointer outline-none">
           <MoreHorizontal className="w-4 h-4" />
         </button>
       </div>
@@ -59,8 +80,8 @@ export function KanbanColumn({ id, title, candidates, onAddCandidate }: KanbanCo
           <ApplicationCard key={c.id} candidate={c} />
         ))}
         {candidates.length === 0 && (
-          <div className="flex-1 flex flex-col items-center justify-center p-6 border border-dashed border-bg-border/40 rounded-card text-center min-h-[140px] bg-bg-primary/20">
-            <p className="text-caption text-txt-caption font-semibold">No candidates</p>
+          <div className="flex-1 flex flex-col items-center justify-center p-6 border border-dashed border-slate-200 rounded-xl text-center min-h-[140px] bg-slate-50/50">
+            <p className="text-xs text-slate-400 font-medium">No candidates</p>
           </div>
         )}
       </div>
@@ -69,7 +90,7 @@ export function KanbanColumn({ id, title, candidates, onAddCandidate }: KanbanCo
       <Button
         variant="ghost"
         onClick={() => onAddCandidate(id)}
-        className="w-full justify-center gap-1.5 mt-4 border border-dashed border-bg-border hover:border-primary-border text-txt-body hover:text-primary rounded-button text-caption hover:bg-primary-light/20 shadow-none font-semibold h-10 shrink-0 cursor-pointer"
+        className="w-full justify-start gap-1.5 mt-3 text-slate-400 hover:text-slate-600 rounded-xl text-[12.5px] hover:bg-slate-100/70 shadow-none font-medium h-9 shrink-0 cursor-pointer px-2"
       >
         <Plus className="w-4 h-4" />
         Add candidate

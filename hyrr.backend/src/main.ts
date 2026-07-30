@@ -19,6 +19,22 @@ import { LoggingInterceptor } from './core/interceptors/logging.interceptor';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // Lightweight process-local abuse protection. Use a shared Redis store when the API is scaled horizontally.
+  const requests = new Map<string, { count: number; resetAt: number }>();
+  app.use((req: any, res: any, next: any) => {
+    if (req.method === 'OPTIONS') return next();
+    const key = `${req.ip}:${req.path}`;
+    const now = Date.now();
+    const bucket = requests.get(key);
+    const current = !bucket || bucket.resetAt <= now ? { count: 0, resetAt: now + 60_000 } : bucket;
+    current.count += 1;
+    requests.set(key, current);
+    if (current.count > Number(process.env.RATE_LIMIT_PER_MINUTE || 120)) {
+      return res.status(429).json({ success: false, message: 'Too many requests. Please try again shortly.' });
+    }
+    next();
+  });
+
   // Global Centralized Error Filter & Logging Interceptor
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new LoggingInterceptor());
@@ -26,23 +42,16 @@ async function bootstrap() {
   // Enable validation globally for DTOs
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,
+    forbidNonWhitelisted: true,
     transform: true,
   }));
 
   // Cookie parser for reading secure refresh token cookies
   app.use(cookieParser());
 
-  // Static file serving for uploads directory
-  const express = require('express');
-  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
-
   // Enable CORS with support for credentials
   app.enableCors({
-    origin: [
-      'http://localhost:5173', // Recruiter app
-      'http://localhost:5174', // Seeker app
-      'http://localhost:5175', // Admin app
-    ],
+    origin: (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:5174,http://localhost:5175').split(','),
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });

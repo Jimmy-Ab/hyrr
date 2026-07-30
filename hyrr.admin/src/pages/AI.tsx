@@ -1,9 +1,7 @@
 import { useState } from "react"
-import { Bot, Sliders, Cpu, Save, AlertOctagon, BarChart } from "lucide-react"
+import { Save, AlertOctagon } from "lucide-react"
 import { Card } from "hyrr.shared"
-import { Badge } from "hyrr.shared"
 import { Button } from "hyrr.shared"
-import { Input } from "hyrr.shared"
 import { useToast } from "hyrr.shared"
 
 export function AIManagementPage() {

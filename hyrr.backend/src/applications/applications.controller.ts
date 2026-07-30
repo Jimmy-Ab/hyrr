@@ -24,8 +24,8 @@ export class ApplicationsController {
   @ApiOperation({ summary: 'Track application status by email (public tracker page)' })
   @ApiQuery({ name: 'email', required: true, description: 'Email used when applying' })
   @ApiResponse({ status: 200, description: 'Returns applications matching the email' })
-  getByEmail(@Query('email') email: string) {
-    return this.applicationsService.getApplicationsByEmail(email);
+  getByEmail(@Query('token') token: string) {
+    return this.applicationsService.getApplicationsByTrackingToken(token);
   }
 
   // ─── Public/Logged-in: apply to a job (career site or logged-in seeker) ──────
@@ -74,8 +74,8 @@ export class ApplicationsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all candidates in Kanban pipeline for a job (Recruiter only)' })
   @ApiResponse({ status: 200, description: 'Returns candidate pipeline columns' })
-  getCandidatesForJob(@Param('jobId') jobId: string) {
-    return this.applicationsService.getCandidatesForJob(jobId);
+  getCandidatesForJob(@Param('jobId') jobId: string, @Req() req: any) {
+    return this.applicationsService.getCandidatesForJob(jobId, req.user);
   }
 
   // ─── Recruiter: get all company candidates ────────────────────────
@@ -97,7 +97,7 @@ export class ApplicationsController {
   @ApiOperation({ summary: 'Update application (move pipeline column, bookmark, add notes)' })
   @ApiResponse({ status: 200, description: 'Application updated' })
   async updateApplication(@Param('id') id: string, @Body() dto: UpdateApplicationDto, @Req() req: any) {
-    const updated = await this.applicationsService.updateApplication(id, dto);
+    const updated = await this.applicationsService.updateApplication(id, dto, req.user);
     // Re-score on significant status changes
     if (dto.status && dto.status !== 'SAVED') {
       this.aiService.scoreApplication(id).catch(() => {});
@@ -112,15 +112,15 @@ export class ApplicationsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete a candidate application (Recruiter only)' })
   @ApiResponse({ status: 200, description: 'Application deleted' })
-  deleteApplication(@Param('id') id: string) {
-    return this.applicationsService.deleteApplication(id);
+  deleteApplication(@Param('id') id: string, @Req() req: any) {
+    return this.applicationsService.deleteApplication(id, req.user);
   }
 
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get a single application by ID' })
-  getApplication(@Param('id') id: string) {
-    return this.applicationsService.getApplicationById(id);
+  getApplication(@Param('id') id: string, @Req() req: any) {
+    return this.applicationsService.getApplicationById(id, req.user);
   }
 }

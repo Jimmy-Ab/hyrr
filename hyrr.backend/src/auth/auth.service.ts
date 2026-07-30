@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dtos/register.dto';
 import { LoginDto } from './dtos/login.dto';
 import * as bcrypt from 'bcrypt';
+import { jwtSecret } from './jwt.config';
 
 @Injectable()
 export class AuthService {
@@ -47,6 +48,10 @@ export class AuthService {
         where: { id: user.id },
         data: { companyId: company.id },
       });
+      user.companyId = company.id;
+      await (this.prisma as any).companyMember.create({
+        data: { companyId: company.id, userId: user.id, role: 'OWNER' },
+      });
     }
 
     return this.generateTokens(user);
@@ -71,6 +76,17 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user || user.status !== 'ACTIVE') throw new UnauthorizedException('Access denied');
     return this.generateTokens(user);
+  }
+
+  async verifyRefreshToken(token: string) {
+    try {
+      const payload = await this.jwtService.verifyAsync<{ sub: string; type?: string }>(token, { secret: jwtSecret() });
+      if (payload.type !== 'refresh' || !payload.sub) throw new UnauthorizedException('Invalid refresh token');
+      return payload;
+    } catch (error) {
+      if (error instanceof UnauthorizedException) throw error;
+      throw new UnauthorizedException('Invalid refresh token');
+    }
   }
 
   async upsertOAuthUser(profile: {

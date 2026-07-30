@@ -7,7 +7,7 @@ import { apiFetch } from "hyrr.shared"
 interface AnalyticsData {
   totalJobs: number
   totalApplications: number
-  pipeline: { Saved: number; Applied: number; InProcess: number; Offer: number; Archived: number }
+  pipeline: { Saved: number; Applied: number; InProcess: number; Interviewing: number; Offer: number; Archived: number }
   offerConversionRate: string
   avgAiMatchScore: number
   monthlyApplications: { month: string; applications: number }[]

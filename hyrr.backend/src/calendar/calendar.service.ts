@@ -1,12 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { AccessService, Actor } from '../core/access/access.service';
 
 @Injectable()
 export class CalendarService {
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
+    private access: AccessService,
   ) {}
 
   async getEvents(userId: string, role: string) {
@@ -59,7 +61,8 @@ export class CalendarService {
     meetingUrl?: string;
     location?: string;
     notes?: string;
-  }) {
+  }, actor: Actor) {
+    if (data.applicationId) await this.access.applicationFor(actor, data.applicationId, 'manage');
     const event = await this.prisma.calendarEvent.create({
       data: {
         userId: data.userId || null,
@@ -97,7 +100,8 @@ export class CalendarService {
     return event;
   }
 
-  async deleteEvent(id: string) {
+  async deleteEvent(id: string, actor: Actor) {
+    await this.access.calendarEventFor(actor, id);
     return this.prisma.calendarEvent.delete({ where: { id } });
   }
 }

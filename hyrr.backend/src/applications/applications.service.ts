@@ -1,15 +1,19 @@
-import { Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateApplicationDto } from './dtos/create-application.dto';
 import { UpdateApplicationDto } from './dtos/update-application.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MessagesGateway } from '../messages/messages.gateway';
+import { AccessService, Actor } from '../core/access/access.service';
+import { createHash } from 'crypto';
+import { randomBytes } from 'crypto';
 
 @Injectable()
 export class ApplicationsService {
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
+    private access: AccessService,
     @Optional() private messagesGateway?: MessagesGateway,
   ) {}
 
@@ -31,7 +35,7 @@ export class ApplicationsService {
         ],
       },
     });
-    if (existing) return existing;
+    if (existing) return { ...existing, trackingToken: await this.createTrackingLink(existing.id) };
 
     const app = await this.prisma.application.create({
       data: {
@@ -55,7 +59,16 @@ export class ApplicationsService {
       );
     }
 
-    return app;
+    return { ...app, trackingToken: await this.createTrackingLink(app.id) };
+  }
+
+  private async createTrackingLink(applicationId: string) {
+    const token = randomBytes(32).toString('base64url');
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+    await (this.prisma as any).applicationTrackingLink.create({
+      data: { applicationId, tokenHash, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) },
+    });
+    return token;
   }
 
   // ─── Seeker: save a job without applying ─────────────────────────
@@ -125,19 +138,22 @@ export class ApplicationsService {
   }
 
   // ─── Seeker: tracker lookup by email ─────────────────────────────
-  async getApplicationsByEmail(email: string) {
-    return this.prisma.application.findMany({
-      where: { email },
-      include: {
-        job: { include: { company: true } },
-        messages: { orderBy: { createdAt: 'asc' } },
-      },
-      orderBy: { appliedAt: 'desc' },
+  async getApplicationsByTrackingToken(token: string) {
+    if (!token) throw new NotFoundException('Tracking link is invalid or expired');
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+    const link = await (this.prisma as any).applicationTrackingLink.findUnique({
+      where: { tokenHash },
+      include: { application: { include: { job: { include: { company: true } } } } },
     });
+    if (!link || link.expiresAt < new Date()) throw new NotFoundException('Tracking link is invalid or expired');
+    const app = link.application;
+    // Public tracking never exposes messages, contact details, notes, or applicant profile data.
+    return [{ id: app.id, status: app.status, appliedAt: app.appliedAt, job: { title: app.job.title, company: { name: app.job.company.name } } }];
   }
 
   // ─── Recruiter: get all candidates for a job (Kanban board) ──────
-  async getCandidatesForJob(jobId: string) {
+  async getCandidatesForJob(jobId: string, actor: Actor) {
+    await this.access.jobForManagement(actor, jobId);
     return this.prisma.application.findMany({
       where: { jobId },
       include: {
@@ -171,7 +187,13 @@ export class ApplicationsService {
   }
 
   // ─── Shared: update application (move column, bookmark, offer) ────
-  async updateApplication(id: string, dto: UpdateApplicationDto) {
+  async updateApplication(id: string, dto: UpdateApplicationDto, actor: Actor) {
+    const mode = actor.role === 'SEEKER' ? 'view' : 'manage';
+    await this.access.applicationFor(actor, id, mode);
+    if (actor.role === 'SEEKER') {
+      const disallowed = Object.keys(dto).filter((key) => key !== 'seekerBookmarked');
+      if (disallowed.length) throw new ForbiddenException('Seekers can only update their saved state');
+    }
     // Auto-set tags when moving pipeline stages
     let tag = dto.tag;
     if (!tag && dto.status) {
@@ -182,11 +204,18 @@ export class ApplicationsService {
       else if (dto.status === 'SAVED' || dto.status === 'APPLIED') tag = undefined;
     }
 
+    const previous = await this.prisma.application.findUnique({ where: { id }, select: { status: true } });
     const app = await this.prisma.application.update({
       where: { id },
       data: { ...dto, tag, status: dto.status as any },
       include: { job: { include: { company: true } } },
     });
+
+    if (dto.status && previous?.status !== dto.status) {
+      await (this.prisma as any).applicationStageEvent.create({
+        data: { applicationId: id, fromStatus: previous?.status, toStatus: dto.status, actorId: actor.userId },
+      });
+    }
 
     if (app.userId && dto.status) {
       const statusLabel =
@@ -214,11 +243,13 @@ export class ApplicationsService {
   }
 
   // ─── Recruiter: delete candidate ─────────────────────────────────
-  async deleteApplication(id: string) {
+  async deleteApplication(id: string, actor: Actor) {
+    await this.access.applicationFor(actor, id, 'manage');
     return this.prisma.application.delete({ where: { id } });
   }
 
-  async getApplicationById(id: string) {
+  async getApplicationById(id: string, actor: Actor) {
+    await this.access.applicationFor(actor, id, 'view');
     const app = await this.prisma.application.findUnique({
       where: { id },
       include: { job: { include: { company: true } }, messages: true, calendarEvents: true },

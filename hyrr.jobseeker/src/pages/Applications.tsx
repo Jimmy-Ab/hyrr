@@ -1,27 +1,22 @@
-import { useState, useEffect } from "react"
-import {
-  DndContext, DragOverlay, useSensor, useSensors, PointerSensor,
-  type DragEndEvent, type DragStartEvent, defaultDropAnimationSideEffects,
-} from "@dnd-kit/core"
-import { useDroppable, useDraggable } from "@dnd-kit/core"
-import { useJobStore, type JobApplication } from "hyrr.shared"
-import { Card, Badge, Button, useToast } from "hyrr.shared"
+import { useEffect } from "react"
+import { useJobStore, type JobApplication, APPLICATION_STATUS, APPLICATION_STATUS_COLUMNS, APPLICATION_STATUS_LABEL, type ApplicationStatusCode } from "hyrr.shared"
+import { Card, Badge, Button } from "hyrr.shared"
 import {
   Bookmark, MoreHorizontal, MapPin, DollarSign, Calendar, User, LayoutList, MessageSquare
 } from "lucide-react"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenuLabel, DropdownMenuTrigger,
 } from "hyrr.shared"
 
 // ─── Kanban Column ─────────────────────────────────────────────────────────────
-const columnColors: Record<string, string> = {
-  Saved:        "text-primary bg-primary-light border-primary-border/40",
-  Applied:      "text-sec-blue bg-sec-blue/10 border-sec-blue/20",
-  "In Process": "text-sec-orange bg-sec-orange/10 border-sec-orange/20",
-  Interviewing: "text-primary bg-primary-light border-primary-border/40",
-  Offer:        "text-sec-green bg-sec-green/10 border-sec-green/20",
-  Archived:     "text-txt-caption bg-bg-primary border-bg-border/40",
+const columnColors: Record<ApplicationStatusCode, string> = {
+  [APPLICATION_STATUS.SAVED]: "text-primary bg-primary-light border-primary-border/40",
+  [APPLICATION_STATUS.APPLIED]: "text-sec-blue bg-sec-blue/10 border-sec-blue/20",
+  [APPLICATION_STATUS.IN_PROCESS]: "text-sec-orange bg-sec-orange/10 border-sec-orange/20",
+  [APPLICATION_STATUS.INTERVIEWING]: "text-primary bg-primary-light border-primary-border/40",
+  [APPLICATION_STATUS.OFFER]: "text-sec-green bg-sec-green/10 border-sec-green/20",
+  [APPLICATION_STATUS.ARCHIVED]: "text-txt-caption bg-bg-primary border-bg-border/40",
 }
 
 function JobColumn({
@@ -31,14 +26,9 @@ function JobColumn({
   title: string
   items: JobApplication[]
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id })
-
   return (
     <div
-      ref={setNodeRef}
-      className={`flex flex-col w-[280px] min-w-[280px] shrink-0 rounded-[20px] bg-bg-secondary/60 border transition-all duration-200 ${
-        isOver ? "border-primary/40 bg-primary-light/30 shadow-card" : "border-bg-border/40"
-      }`}
+      className="flex flex-col w-[280px] min-w-[280px] shrink-0 rounded-[20px] bg-bg-secondary/60 border border-bg-border/40"
     >
       {/* Column Header */}
       <div className="flex items-center justify-between px-4 py-3.5 border-b border-bg-border/30">
@@ -72,26 +62,8 @@ const companyDotColors: Record<string, string> = {
   orange: "bg-sec-orange text-white",
 }
 
-const badgeVariant = (status: JobApplication["status"]) => {
-  if (status === "Offer")      return "success" as const
-  if (status === "Archived")   return "secondary" as const
-  if (status === "Interviewing") return "primary" as const
-  if (status === "In Process") return "warning" as const
-  if (status === "Applied")    return "info" as const
-  return "primary" as const
-}
-
-function JobCard({ application, isOverlay = false }: { application: JobApplication; isOverlay?: boolean }) {
-  const { toggleJobBookmark, moveJobApplication, setCandidateActiveView, setActiveConversation } = useJobStore()
-
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: application.id,
-    disabled: isOverlay,
-  })
-
-  const style = transform
-    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, opacity: isDragging ? 0.3 : 1 }
-    : undefined
+function JobCard({ application }: { application: JobApplication }) {
+  const { toggleJobBookmark, setCandidateActiveView, setActiveConversation } = useJobStore()
 
   const tag = application.tag
   const tagVariant = tag === "Offer Received" ? "success" as const
@@ -101,18 +73,10 @@ function JobCard({ application, isOverlay = false }: { application: JobApplicati
 
   return (
     <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      className={`group select-none outline-none ${isOverlay ? "cursor-grabbing" : "cursor-grab"}`}
+      className="group select-none outline-none"
     >
       <Card
-        className={`p-4 relative border border-bg-border/60 bg-bg-secondary transition-all ${
-          isOverlay
-            ? "shadow-floating scale-[1.03] rotate-[1deg] border-primary-border ring-2 ring-primary/10"
-            : "hover:shadow-card-hover hover:border-bg-border/90 active:cursor-grabbing"
-        }`}
+        className="p-4 relative border border-bg-border/60 bg-bg-secondary transition-all hover:shadow-card-hover hover:border-bg-border/90"
       >
         <div className="flex items-start justify-between gap-2">
           {/* Company Logo + Info */}
@@ -142,10 +106,6 @@ function JobCard({ application, isOverlay = false }: { application: JobApplicati
                 <DropdownMenuLabel>Application Actions</DropdownMenuLabel>
                 <DropdownMenuItem onClick={() => toggleJobBookmark(application.id)}>
                   {application.bookmarked ? "Remove Bookmark" : "Bookmark"}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => moveJobApplication(application.id, "Archived")} className="text-sec-red focus:text-sec-red">
-                  Archive Application
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -219,50 +179,22 @@ function JobCard({ application, isOverlay = false }: { application: JobApplicati
 
 // ─── Kanban Board ─────────────────────────────────────────────────────────────
 export function ApplicationsBoard() {
-  const { jobApplications, moveJobApplication, fetchInitialData } = useJobStore()
-  const { toast } = useToast()
-  const [activeId, setActiveId] = useState<string | null>(null)
+  const { jobApplications, fetchInitialData } = useJobStore()
 
   useEffect(() => {
     fetchInitialData()
   }, []) // eslint-disable-line
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
-  const activeApp = jobApplications.find((a) => a.id === activeId)
-
-  const columns: { id: JobApplication["status"]; title: string }[] = [
-    { id: "Saved",        title: "Saved" },
-    { id: "Applied",      title: "Applied" },
-    { id: "In Process",   title: "In Process" },
-    { id: "Interviewing", title: "Interviewing" },
-    { id: "Offer",        title: "Offer" },
-    { id: "Archived",     title: "Archived" },
-  ]
-
-  const handleDragStart = (e: DragStartEvent) => setActiveId(e.active.id as string)
-  const handleDragEnd   = (e: DragEndEvent) => {
-    const { active, over } = e
-    setActiveId(null)
-    if (!over) return
-    const app = jobApplications.find((a) => a.id === active.id)
-    const targetStatus = over.id as JobApplication["status"]
-    if (app && app.status !== targetStatus) {
-      moveJobApplication(app.id, targetStatus)
-      toast("Status Updated", `${app.title} moved to ${targetStatus}`, "success")
-    }
-  }
+  const columns = APPLICATION_STATUS_COLUMNS.map((id) => ({ id, title: APPLICATION_STATUS_LABEL[id] }))
 
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300 relative">
-      {/* Ambient glows */}
-      <div className="ambient-glow-1" />
-      <div className="ambient-glow-2" />
+    <div className="flex flex-col gap-5 animate-in fade-in duration-200 relative">
       <div>
-        <h1 className="text-[36px] font-extrabold tracking-tight">
-            <span className="premium-gradient-text text-glow">My Applications</span>
-          </h1>
-        <p className="text-body text-txt-body mt-1 font-medium">
-          Drag jobs between columns to track your search pipeline — just like a recruiter would.
+        <h1 className="text-[22px] font-bold text-[#111827] tracking-tight leading-none">
+          My Applications
+        </h1>
+        <p className="text-[13px] text-slate-400 mt-1.5 font-normal">
+          Track your search pipeline across saved, applied, process, offer, and archived stages.
         </p>
       </div>
 
@@ -271,19 +203,18 @@ export function ApplicationsBoard() {
         {columns.map((col) => {
           const count = jobApplications.filter((a) => a.status === col.id).length
           return (
-            <Card key={col.id} className="p-4 flex flex-col items-center">
-              <span className={`text-[22px] font-extrabold ${
-                col.id === "Offer" ? "text-sec-green" : col.id === "Archived" ? "text-txt-caption" : "text-txt-title"
+            <Card key={col.id} className="p-3.5 flex flex-col items-center border border-slate-100 bg-white rounded-xl shadow-xs">
+              <span className={`text-[20px] font-bold ${
+                col.id === APPLICATION_STATUS.OFFER ? "text-emerald-600" : col.id === APPLICATION_STATUS.ARCHIVED ? "text-slate-400" : "text-slate-900"
               }`}>{count}</span>
-              <span className="text-[11px] text-txt-caption font-semibold mt-0.5">{col.title}</span>
+              <span className="text-[11.5px] text-slate-400 font-medium mt-0.5">{col.title}</span>
             </Card>
           )
         })}
       </div>
 
       {/* Kanban board */}
-      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="flex gap-4 overflow-x-auto pb-6 pt-1 custom-scrollbar-none min-h-[600px]">
+      <div className="flex gap-4 overflow-x-auto pb-6 pt-1 custom-scrollbar-none min-h-[600px]">
           {columns.map((col) => (
             <JobColumn
               key={col.id}
@@ -292,18 +223,7 @@ export function ApplicationsBoard() {
               items={jobApplications.filter((a) => a.status === col.id)}
             />
           ))}
-        </div>
-
-        <DragOverlay
-          dropAnimation={{
-            sideEffects: defaultDropAnimationSideEffects({
-              styles: { active: { opacity: "0.4" } },
-            }),
-          }}
-        >
-          {activeApp ? <JobCard application={activeApp} isOverlay /> : null}
-        </DragOverlay>
-      </DndContext>
+      </div>
     </div>
   )
 }

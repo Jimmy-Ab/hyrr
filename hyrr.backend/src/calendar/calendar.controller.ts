@@ -2,6 +2,7 @@ import { Controller, Get, Post, Delete, Body, Param, UseGuards, Req } from '@nes
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { CalendarService } from './calendar.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CreateCalendarEventDto } from './dtos/create-calendar-event.dto';
 
 @ApiTags('Calendar')
 @ApiBearerAuth()
@@ -23,27 +24,18 @@ export class CalendarController {
   createEvent(
     @Req() req: any,
     @Body()
-    body: {
-      applicationId?: string;
-      title: string;
-      startTime: string;
-      endTime?: string;
-      type: string;
-      meetingUrl?: string;
-      location?: string;
-      notes?: string;
-    },
+    body: CreateCalendarEventDto,
   ) {
     return this.calendarService.createEvent({
       ...body,
       userId: req.user.userId,
-    });
+    }, req.user);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Cancel/delete a calendar event' })
   @ApiResponse({ status: 200, description: 'Event deleted' })
-  deleteEvent(@Param('id') id: string) {
-    return this.calendarService.deleteEvent(id);
+  deleteEvent(@Param('id') id: string, @Req() req: any) {
+    return this.calendarService.deleteEvent(id, req.user);
   }
 }

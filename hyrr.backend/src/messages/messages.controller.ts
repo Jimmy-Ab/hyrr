@@ -2,6 +2,7 @@ import { Controller, Get, Post, Delete, Body, Param, UseGuards, Req } from '@nes
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { MessagesService } from './messages.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CreateMessageDto } from './dtos/create-message.dto';
 
 @ApiTags('Messages')
 @ApiBearerAuth()
@@ -34,7 +35,7 @@ export class MessagesController {
   @ApiOperation({ summary: 'Get all messages in a conversation thread' })
   @ApiResponse({ status: 200, description: 'Returns message history' })
   getMessages(@Param('applicationId') applicationId: string, @Req() req: any) {
-    return this.messagesService.getMessages(applicationId, req.user.role);
+    return this.messagesService.getMessages(applicationId, req.user);
   }
 
   @Post(':applicationId')
@@ -42,16 +43,16 @@ export class MessagesController {
   @ApiResponse({ status: 201, description: 'Message sent' })
   sendMessage(
     @Param('applicationId') applicationId: string,
-    @Body() body: { text: string },
+    @Body() body: CreateMessageDto,
     @Req() req: any,
   ) {
-    return this.messagesService.createMessage(applicationId, req.user.userId, req.user.role, body.text);
+    return this.messagesService.createMessage(applicationId, req.user.userId, req.user.role, body.text, req.user);
   }
 
   @Delete('conversations/:applicationId')
   @ApiOperation({ summary: 'Delete a conversation for the logged-in user only' })
   @ApiResponse({ status: 200, description: 'Conversation deleted for this user' })
   deleteConversation(@Param('applicationId') applicationId: string, @Req() req: any) {
-    return this.messagesService.deleteConversation(applicationId, req.user.userId, req.user.role);
+    return this.messagesService.deleteConversation(applicationId, req.user.userId, req.user.role, req.user);
   }
 }

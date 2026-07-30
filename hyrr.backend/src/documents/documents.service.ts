@@ -1,15 +1,17 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { UploadsService } from '../uploads/uploads.service';
 
 @Injectable()
 export class DocumentsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private uploads: UploadsService) {}
 
   async getMyDocuments(userId: string) {
-    return this.prisma.document.findMany({
+    const documents = await this.prisma.document.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
     });
+    return documents.map((document) => ({ ...document, url: this.uploads.formatFileUrl(this.uploads.getFilename(document.url)) }));
   }
 
   async createDocument(userId: string, data: { name: string; type: string; size: string; url: string }) {
@@ -24,16 +26,17 @@ export class DocumentsService {
       });
     }
 
-    return this.prisma.document.create({
+    const document = await this.prisma.document.create({
       data: {
         userId,
         name: data.name,
         type: docType,
         size: data.size,
-        url: data.url,
+        url: this.uploads.getFilename(data.url),
         active: true,
       },
     });
+    return { ...document, url: this.uploads.formatFileUrl(this.uploads.getFilename(document.url)) };
   }
 
   async toggleActive(id: string, userId: string) {

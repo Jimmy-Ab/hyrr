@@ -24,7 +24,7 @@ function HyrrIcon({ size = 36 }: { size?: number }) {
       aria-label="HYRR logo"
     >
       {/* Background pill */}
-      <rect width="36" height="36" rx="10" fill="#6C63FF" />
+      <rect width="36" height="36" rx="10" fill="#7C5CFC" />
       {/* Left vertical bar of H */}
       <rect x="8" y="9" width="4" height="18" rx="2" fill="white" />
       {/* Right vertical bar of H */}

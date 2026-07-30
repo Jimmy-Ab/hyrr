@@ -7,12 +7,13 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { GithubStrategy } from './strategies/github.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { LinkedinStrategy } from './strategies/linkedin.strategy';
+import { jwtSecret } from './jwt.config';
 
 @Module({
   imports: [
     PassportModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'hyrr_dev_secret',
+      secret: jwtSecret(),
       signOptions: { expiresIn: '15m' },
     }),
   ],

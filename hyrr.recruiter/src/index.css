@@ -2,66 +2,66 @@
 @import "../../hyrr.shared/src/styles/index.css";
 
 @theme {
-  --color-primary: #6C63FF;
-  --color-primary-hover: #5B52F5;
-  --color-primary-light: #F2F1FF;
-  --color-primary-border: #D8D5FF;
+  --color-primary: #7C5CFC;
+  --color-primary-hover: #6C4CEE;
+  --color-primary-light: #F2EFFF;
+  --color-primary-border: #E1D9FE;
   
-  --color-bg-primary: #F6F7FB;
+  --color-bg-primary: #F8F9FD;
   --color-bg-secondary: #FFFFFF;
-  --color-bg-sidebar: #FBFBFD;
+  --color-bg-sidebar: #FAFAFE;
   --color-bg-card: #FFFFFF;
-  --color-bg-hover: #F0F1F7;
-  --color-bg-border: #E8EAF1;
+  --color-bg-hover: #F3F2F8;
+  --color-bg-border: #EBECEF;
   
-  --color-sec-blue: #3B7FF5;
-  --color-sec-green: #1B9E3C;
-  --color-sec-orange: #C47F00;
-  --color-sec-red: #D93030;
+  --color-sec-blue: #3B82F6;
+  --color-sec-green: #10B981;
+  --color-sec-orange: #F59E0B;
+  --color-sec-red: #EF4444;
   --color-sec-gray: #6B7485;
   
-  --color-txt-title: #17181C;
-  --color-txt-heading: #23262F;
-  --color-txt-body: #505668;
-  --color-txt-caption: #7C8494;
-  --color-txt-disabled: #C3C7D2;
+  --color-txt-title: #111827;
+  --color-txt-heading: #1F2937;
+  --color-txt-body: #4B5563;
+  --color-txt-caption: #6B7280;
+  --color-txt-disabled: #9CA3AF;
   
-  --shadow-card: 0 10px 40px rgba(15,23,42,0.06);
-  --shadow-card-hover: 0 20px 60px rgba(15,23,42,0.12);
-  --shadow-floating: 0 30px 80px rgba(15,23,42,0.16);
-  --shadow-button: 0 8px 30px rgba(108,99,255,0.22);
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
+  --shadow-card-hover: 0 4px 12px rgba(0,0,0,0.06);
+  --shadow-floating: 0 10px 30px rgba(15,23,42,0.1);
+  --shadow-button: none;
   
-  --radius-window: 32px;
-  --radius-card: 24px;
-  --radius-button: 18px;
-  --radius-input: 18px;
+  --radius-window: 24px;
+  --radius-card: 16px;
+  --radius-button: 12px;
+  --radius-input: 12px;
   
-  --font-sans: "SF Pro Text", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-sans: "Plus Jakarta Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 
   /* ── Badge color tokens (light mode) ── */
-  --badge-primary-bg: #ECEAFF;
-  --badge-primary-border: #C8C3FF;
-  --badge-primary-text: #4B44CC;
+  --badge-primary-bg: #F2EFFF;
+  --badge-primary-border: #E1D9FE;
+  --badge-primary-text: #7C5CFC;
 
-  --badge-success-bg: #E0F5E9;
-  --badge-success-border: #B6E8C8;
-  --badge-success-text: #1B7A38;
+  --badge-success-bg: #E6F8ED;
+  --badge-success-border: #C3F0D4;
+  --badge-success-text: #16A34A;
 
-  --badge-info-bg: #E3EDFD;
-  --badge-info-border: #BAD2FB;
-  --badge-info-text: #1A5FCC;
+  --badge-info-bg: #EFF6FF;
+  --badge-info-border: #DBEAFE;
+  --badge-info-text: #2563EB;
 
-  --badge-warning-bg: #FFF4D6;
-  --badge-warning-border: #FFE199;
-  --badge-warning-text: #9A6200;
+  --badge-warning-bg: #FEF3C7;
+  --badge-warning-border: #FDE68A;
+  --badge-warning-text: #D97706;
 
-  --badge-destructive-bg: #FDEAEA;
-  --badge-destructive-border: #F8C4C4;
-  --badge-destructive-text: #B82020;
+  --badge-destructive-bg: #FEE2E2;
+  --badge-destructive-border: #FCA5A5;
+  --badge-destructive-text: #DC2626;
 
-  --badge-secondary-bg: #EDEEF3;
-  --badge-secondary-border: #D8DAE5;
-  --badge-secondary-text: #505668;
+  --badge-secondary-bg: #F1F5F9;
+  --badge-secondary-border: #E2E8F0;
+  --badge-secondary-text: #64748B;
 }
 
 /* ── Dark mode overrides ── */

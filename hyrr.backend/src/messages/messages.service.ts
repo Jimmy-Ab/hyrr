@@ -1,11 +1,13 @@
 import { Injectable, Optional, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessagesGateway } from './messages.gateway';
+import { AccessService, Actor } from '../core/access/access.service';
 
 @Injectable()
 export class MessagesService {
   constructor(
     private prisma: PrismaService,
+    private access: AccessService,
     @Optional() @Inject(forwardRef(() => MessagesGateway)) private messagesGateway?: MessagesGateway,
   ) {}
 
@@ -37,43 +39,14 @@ export class MessagesService {
         orderBy: { updatedAt: 'desc' },
       });
 
-      // Group by Recruiter ID so there is only 1 conversation item per recruiter
-      const groupedMap = new Map<string, any>();
-
-      for (const app of apps) {
-        const recruiterKey = app.job?.recruiterId || app.job?.companyId || app.id;
-        const activeMessages: any[] = app.messages || [];
-        const unreadCount = activeMessages.filter(
-          (m: any) => m.receiverId === userId && !m.read
-        ).length;
-
-        const existing = groupedMap.get(recruiterKey);
-        if (!existing) {
-          groupedMap.set(recruiterKey, { ...app, _visibleMessages: activeMessages, _unreadCount: unreadCount });
-        } else {
-          const existingDate = existing._visibleMessages[0]?.createdAt ?? existing.updatedAt;
-          const currentDate = activeMessages[0]?.createdAt ?? app.updatedAt;
-
-          if (currentDate > existingDate || (existing._visibleMessages.length === 0 && activeMessages.length > 0)) {
-            groupedMap.set(recruiterKey, {
-              ...app,
-              _visibleMessages: activeMessages,
-              _unreadCount: existing._unreadCount + unreadCount,
-            });
-          } else {
-            existing._unreadCount += unreadCount;
-          }
-        }
-      }
-
-      // Only show conversations that have at least 1 visible (non-deleted) message
-      const result = Array.from(groupedMap.values()).filter(
-        (item) => item._visibleMessages.length > 0
-      );
-
-      return result.map((app: any) => ({
+      // A chat is scoped to its application. Returning every application keeps
+      // first-contact threads reachable and prevents messages for other roles
+      // at the same company from being hidden by client-side grouping.
+      return apps.map((app: any) => ({
         ...app,
-        messages: app._visibleMessages,
+        _unreadCount: (app.messages || []).filter(
+          (message: any) => message.receiverId === userId && !message.read,
+        ).length,
         candidateName: app.job?.postedBy?.name || app.job?.company?.name || 'Recruiter',
         jobTitle: app.job?.title || app.title,
         avatar:
@@ -97,42 +70,11 @@ export class MessagesService {
         orderBy: { updatedAt: 'desc' },
       });
 
-      const groupedMap = new Map<string, any>();
-
-      for (const app of apps) {
-        const candidateKey = app.userId || app.email;
-        const activeMessages: any[] = app.messages || [];
-        const unreadCount = activeMessages.filter(
-          (m: any) => m.receiverId === userId && !m.read
-        ).length;
-
-        const existing = groupedMap.get(candidateKey);
-        if (!existing) {
-          groupedMap.set(candidateKey, { ...app, _visibleMessages: activeMessages, _unreadCount: unreadCount });
-        } else {
-          const existingDate = existing._visibleMessages[0]?.createdAt ?? existing.updatedAt;
-          const currentDate = activeMessages[0]?.createdAt ?? app.updatedAt;
-
-          if (currentDate > existingDate || (existing._visibleMessages.length === 0 && activeMessages.length > 0)) {
-            groupedMap.set(candidateKey, {
-              ...app,
-              _visibleMessages: activeMessages,
-              _unreadCount: existing._unreadCount + unreadCount,
-            });
-          } else {
-            existing._unreadCount += unreadCount;
-          }
-        }
-      }
-
-      // Only show conversations that have at least 1 visible (non-deleted) message
-      const result = Array.from(groupedMap.values()).filter(
-        (item) => item._visibleMessages.length > 0
-      );
-
-      return result.map((app: any) => ({
+      return apps.map((app: any) => ({
         ...app,
-        messages: app._visibleMessages,
+        _unreadCount: (app.messages || []).filter(
+          (message: any) => message.receiverId === userId && !message.read,
+        ).length,
         candidateName: app.name || app.user?.name || 'Applicant',
         jobTitle: app.job?.title || app.title,
         avatar:
@@ -142,11 +84,16 @@ export class MessagesService {
     }
   }
 
-  async getMessages(applicationId: string, role?: string) {
+  async getMessages(applicationId: string, actor: Actor) {
+    await this.access.applicationFor(actor, applicationId, 'view');
+    await this.prisma.message.updateMany({
+      where: { applicationId, senderId: { not: actor.userId }, read: false },
+      data: { read: true },
+    });
     const where: any = { applicationId };
-    if (role === 'SEEKER') {
+    if (actor.role === 'SEEKER') {
       where.deletedBySeeker = false;
-    } else if (role === 'RECRUITER') {
+    } else if (actor.role === 'RECRUITER') {
       where.deletedByRecruiter = false;
     }
 
@@ -156,7 +103,8 @@ export class MessagesService {
     });
   }
 
-  async deleteConversation(applicationId: string, userId: string, role: string) {
+  async deleteConversation(applicationId: string, userId: string, role: string, actor: Actor) {
+    await this.access.applicationFor(actor, applicationId, 'view');
     if (role === 'SEEKER') {
       await this.prisma.message.updateMany({
         where: { applicationId },
@@ -171,7 +119,8 @@ export class MessagesService {
     return { success: true, message: 'Conversation deleted for this user.' };
   }
 
-  async createMessage(applicationId: string, senderId: string | null, senderType: string, text: string) {
+  async createMessage(applicationId: string, senderId: string | null, senderType: string, text: string, actor: Actor) {
+    await this.access.applicationFor(actor, applicationId, 'view');
     const application: any = await this.prisma.application.findUnique({
       where: { id: applicationId },
       include: { job: true },
@@ -225,6 +174,10 @@ export class MessagesService {
       where: { applicationId, senderId: { not: userId }, read: false },
       data: { read: true },
     });
+  }
+
+  async assertParticipant(applicationId: string, actor: Actor) {
+    await this.access.applicationFor(actor, applicationId, 'view');
   }
 
   async getUnreadCount(userId: string, role: string = 'SEEKER') {

@@ -44,9 +44,9 @@ export function KanbanBoard() {
   })
 
   const columns: { id: Candidate["status"]; title: string }[] = [
+    { id: "Saved",        title: "Saved" },
     { id: "Applied",      title: "Applied" },
     { id: "In Process",   title: "In Process" },
-    { id: "Interviewing", title: "Interviewing" },
     { id: "Offer",        title: "Offer" },
     { id: "Archived",     title: "Archived" },
   ]

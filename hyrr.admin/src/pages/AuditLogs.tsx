@@ -1,7 +1,6 @@
 import { useState } from "react"
 import { Search, ScrollText, Download, ShieldAlert, AlertTriangle, Info } from "lucide-react"
 import { Card } from "hyrr.shared"
-import { Badge } from "hyrr.shared"
 import { Button } from "hyrr.shared"
 import { Input } from "hyrr.shared"
 import { useAdminStore, type AuditLog } from "../store/useAdminStore"

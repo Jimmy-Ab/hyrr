@@ -14,7 +14,6 @@ const colorBg: Record<string, string> = {
   orange: "bg-sec-orange text-white",
 }
 
-const plans = ["Starter", "Pro", "Enterprise"]
 
 export function CompaniesPage() {
   const { companies, updateCompanyStatus } = useAdminStore()

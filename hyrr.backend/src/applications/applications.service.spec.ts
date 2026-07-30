@@ -3,6 +3,7 @@ import { ApplicationsService } from './applications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { mockDeep, DeepMockProxy } from 'jest-mock-extended';
 import { PrismaClient } from '@prisma/client';
+import { AccessService } from '../core/access/access.service';
 
 describe('ApplicationsService', () => {
   let service: ApplicationsService;
@@ -14,6 +15,7 @@ describe('ApplicationsService', () => {
       providers: [
         ApplicationsService,
         { provide: PrismaService, useValue: prismaMock },
+        { provide: AccessService, useValue: { jobForManagement: jest.fn(), applicationFor: jest.fn() } },
       ],
     }).compile();
 
@@ -46,7 +48,7 @@ describe('ApplicationsService', () => {
       { id: 'app-2', status: 'IN_PROCESS' },
     ] as any);
 
-    const result = await service.getCandidatesForJob('job-1');
+    const result = await service.getCandidatesForJob('job-1', { userId: 'recruiter-1', role: 'RECRUITER' });
     expect(result).toHaveLength(2);
   });
 });

@@ -84,8 +84,8 @@ export class JobsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update a job posting status or details' })
   @ApiResponse({ status: 200, description: 'Job updated' })
-  updateJob(@Param('id') id: string, @Body() dto: UpdateJobDto) {
-    return this.jobsService.updateJob(id, dto);
+  updateJob(@Param('id') id: string, @Body() dto: UpdateJobDto, @Req() req: any) {
+    return this.jobsService.updateJob(id, dto, req.user);
   }
 
   @Delete(':id')
@@ -94,7 +94,7 @@ export class JobsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete a job posting' })
   @ApiResponse({ status: 200, description: 'Job deleted' })
-  deleteJob(@Param('id') id: string) {
-    return this.jobsService.deleteJob(id);
+  deleteJob(@Param('id') id: string, @Req() req: any) {
+    return this.jobsService.deleteJob(id, req.user);
   }
 }

@@ -5,9 +5,10 @@ import {
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { MessagesService } from './messages.service';
+import { jwtSecret } from '../auth/jwt.config';
 
 @WebSocketGateway({
-  cors: { origin: '*', credentials: true },
+  cors: { origin: (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:5174').split(','), credentials: true },
   namespace: '/',
 })
 export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -26,12 +27,13 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
       if (!token) { client.disconnect(); return; }
 
       const payload = this.jwtService.verify(token, {
-        secret: process.env.JWT_SECRET || 'hyrr_dev_secret',
+        secret: jwtSecret(),
       });
 
       // Attach user info to the socket
       (client as any).userId = payload.sub;
       (client as any).userRole = payload.role;
+      (client as any).userEmail = payload.email;
 
       // Join private user room
       client.join(`user_${payload.sub}`);
@@ -54,7 +56,12 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   // ─── Chat Room Join ───────────────────────────────────────────────
   @SubscribeMessage('join_chat')
-  handleJoinChat(@MessageBody() data: { applicationId: string }, @ConnectedSocket() client: Socket) {
+  async handleJoinChat(@MessageBody() data: { applicationId: string }, @ConnectedSocket() client: Socket) {
+    await this.messagesService.assertParticipant(data.applicationId, {
+      userId: (client as any).userId,
+      role: (client as any).userRole,
+      email: (client as any).userEmail,
+    });
     client.join(`chat_${data.applicationId}`);
     return { event: 'joined_chat', data: { room: `chat_${data.applicationId}` } };
   }
@@ -78,6 +85,7 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
       userId,
       role,
       data.text,
+      { userId, role, email: (client as any).userEmail },
     );
 
     // Broadcast to all OTHER clients in the chat room (exclude sender to avoid duplicate)
@@ -96,11 +104,16 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   // ─── Typing Indicator ─────────────────────────────────────────────
   @SubscribeMessage('typing')
-  handleTyping(
+  async handleTyping(
     @MessageBody() data: { applicationId: string; isTyping: boolean },
     @ConnectedSocket() client: Socket,
   ) {
     const userId = (client as any).userId;
+    await this.messagesService.assertParticipant(data.applicationId, {
+      userId,
+      role: (client as any).userRole,
+      email: (client as any).userEmail,
+    });
     client.to(`chat_${data.applicationId}`).emit('user_typing', {
       userId,
       isTyping: data.isTyping,

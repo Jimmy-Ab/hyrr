@@ -1,9 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
 export class ProfileService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
   // ─── Any role: get basic user info + company ──────────────────────
   async getMe(userId: string) {
@@ -27,7 +27,12 @@ export class ProfileService {
   async getProfile(userId: string) {
     let profile = await this.prisma.seekerProfile.findUnique({
       where: { userId },
-      include: { experiences: true, educations: true, interests: true, user: true },
+      include: {
+        experiences: true,
+        educations: true,
+        interests: true,
+        user: true,
+      },
     });
 
     if (!profile) {
@@ -35,10 +40,15 @@ export class ProfileService {
       profile = await this.prisma.seekerProfile.create({
         data: {
           userId,
-          title: '',
-          location: '',
+          title: "",
+          location: "",
         },
-        include: { experiences: true, educations: true, interests: true, user: true },
+        include: {
+          experiences: true,
+          educations: true,
+          interests: true,
+          user: true,
+        },
       });
     }
 
@@ -46,18 +56,31 @@ export class ProfileService {
   }
 
   async updateProfile(userId: string, data: any) {
-    const profile = await this.prisma.seekerProfile.findUnique({ where: { userId } });
-    if (!profile) throw new NotFoundException('Profile not found');
+    const profile = await this.prisma.seekerProfile.findUnique({
+      where: { userId },
+    });
+    if (!profile) throw new NotFoundException("Profile not found");
 
-    const { experiences, educations, interests, name, ...profileFields } = data;
+    const { experiences, educations, interests, name } = data;
 
     // Filter valid fields for profile update
     const updateData: any = {};
     const allowedFields = [
-      'title', 'location', 'website', 'github', 'linkedin',
-      'bio', 'expectedSalary', 'preferredType', 'availability',
-      'visibility', 'skills', 'languages', 'preferredLocations',
-      'phone', 'yearsOfExperience'
+      "title",
+      "location",
+      "website",
+      "github",
+      "linkedin",
+      "bio",
+      "expectedSalary",
+      "preferredType",
+      "availability",
+      "visibility",
+      "skills",
+      "languages",
+      "preferredLocations",
+      "phone",
+      "yearsOfExperience",
     ];
     for (const key of allowedFields) {
       if (data[key] !== undefined) updateData[key] = data[key];
@@ -85,14 +108,16 @@ export class ProfileService {
 
       // Sync experiences if provided
       if (Array.isArray(experiences)) {
-        await tx.workExperience.deleteMany({ where: { profileId: profile.id } });
+        await tx.workExperience.deleteMany({
+          where: { profileId: profile.id },
+        });
         await tx.workExperience.createMany({
           data: experiences.map((exp: any) => ({
             profileId: profile.id,
             role: exp.role,
             company: exp.company,
             duration: exp.duration,
-            desc: exp.desc || '',
+            desc: exp.desc || "",
           })),
         });
       }
@@ -113,12 +138,20 @@ export class ProfileService {
       return tx.seekerProfile.update({
         where: { userId },
         data: updateData,
-        include: { experiences: true, educations: true, interests: true, user: true },
+        include: {
+          experiences: true,
+          educations: true,
+          interests: true,
+          user: true,
+        },
       });
     });
   }
 
-  async addExperience(userId: string, exp: { role: string; company: string; duration: string; desc?: string }) {
+  async addExperience(
+    userId: string,
+    exp: { role: string; company: string; duration: string; desc?: string },
+  ) {
     const profile = await this.getProfile(userId);
     return this.prisma.workExperience.create({
       data: {
@@ -134,11 +167,15 @@ export class ProfileService {
   async deleteExperience(id: string, userId: string) {
     const profile = await this.getProfile(userId);
     const exp = await this.prisma.workExperience.findUnique({ where: { id } });
-    if (!exp || exp.profileId !== profile.id) throw new NotFoundException('Experience not found');
+    if (!exp || exp.profileId !== profile.id)
+      throw new NotFoundException("Experience not found");
     return this.prisma.workExperience.delete({ where: { id } });
   }
 
-  async addEducation(userId: string, edu: { school: string; degree: string; duration: string }) {
+  async addEducation(
+    userId: string,
+    edu: { school: string; degree: string; duration: string },
+  ) {
     const profile = await this.getProfile(userId);
     return this.prisma.education.create({
       data: {
@@ -153,7 +190,8 @@ export class ProfileService {
   async deleteEducation(id: string, userId: string) {
     const profile = await this.getProfile(userId);
     const edu = await this.prisma.education.findUnique({ where: { id } });
-    if (!edu || edu.profileId !== profile.id) throw new NotFoundException('Education not found');
+    if (!edu || edu.profileId !== profile.id)
+      throw new NotFoundException("Education not found");
     return this.prisma.education.delete({ where: { id } });
   }
 }

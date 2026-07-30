@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { Search, Bookmark, CheckCircle2, MapPin, DollarSign, Clock, Star, Briefcase, Globe, Loader2 } from "lucide-react"
-import { useJobStore, type PublicJob } from "hyrr.shared"
+import { useJobStore, type PublicJob, APPLICATION_STATUS, JOB_TYPES } from "hyrr.shared"
 import { Card, Badge, Button, useToast, RichTextRenderer } from "hyrr.shared"
 
 const colorBg: Record<string, string> = {
@@ -9,8 +9,6 @@ const colorBg: Record<string, string> = {
   green: "bg-sec-green text-white",
   orange: "bg-sec-orange text-white",
 }
-
-const types = ["All", "Full Time", "Part Time", "Contract", "Remote"]
 
 function JobSkeleton() {
   return (
@@ -59,19 +57,24 @@ export function DiscoverJobs() {
     return matchType && matchSearch
   })
 
-  const isApplied = (id: string) => jobApplications.some((a) => a.publicJobId === id && a.status !== "Saved")
+  const isApplied = (id: string) => jobApplications.some((a) => a.publicJobId === id && a.status !== APPLICATION_STATUS.SAVED)
   const isSaved = (id: string) => jobApplications.some((a) => a.publicJobId === id)
 
-  const handleApply = (job: PublicJob) => {
+  const handleApply = async (job: PublicJob) => {
     if (isApplied(job.id)) return
-    applyFromDiscover(job.id)
-    toast("Applied!", `Your application to ${job.company} has been submitted.`, "success")
-    setCandidateActiveView("Applications")
+    const applied = await applyFromDiscover(job.id)
+    if (applied) {
+      toast("Applied!", `Your application to ${job.company} has been submitted.`, "success")
+      setCandidateActiveView("Applications")
+    } else {
+      toast("Application failed", "We could not submit your application. Please try again.", "error")
+    }
   }
 
-  const handleSave = (job: PublicJob) => {
-    saveJobFromDiscover(job.id)
-    toast("Saved", `${job.title} at ${job.company} added to your Saved list.`, "success")
+  const handleSave = async (job: PublicJob) => {
+    const saved = await saveJobFromDiscover(job.id)
+    if (saved) toast("Saved", `${job.title} at ${job.company} added to your Saved list.`, "success")
+    else toast("Could not save job", "Please try again.", "error")
   }
 
   return (
@@ -103,7 +106,7 @@ export function DiscoverJobs() {
             />
           </div>
           <div className="flex gap-1 bg-bg-primary p-1 border border-bg-border rounded-[13px] shrink-0">
-            {types.map((t) => (
+            {JOB_TYPES.map((t) => (
               <button
                 key={t}
                 onClick={() => setDiscoverTypeFilter(t)}
