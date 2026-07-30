@@ -90,4 +90,3 @@ export class UpdateProfileDto {
   @Type(() => EducationDto)
   educations?: EducationDto[]
 }
-

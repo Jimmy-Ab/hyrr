@@ -156,7 +156,9 @@ export function ProfilePage() {
     }
   }
 
-  useEffect(() => { loadProfile() }, [])
+  useEffect(() => {
+    loadProfile()
+  }, [])
 
   /* ═══════════════════════════════════════════════════════════
      Avatar upload  →  auto-saves avatar to backend
@@ -401,12 +403,19 @@ export function ProfilePage() {
             <CheckCircle2 className="w-5 h-5 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider">Profile Completeness</p>
-            <p className="text-[19px] font-black text-txt-title leading-none mt-0.5">{completionPct}%</p>
+            <p className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider">
+              Profile Completeness
+            </p>
+            <p className="text-[19px] font-black text-txt-title leading-none mt-0.5">
+              {completionPct}%
+            </p>
             <div className="w-full h-1.5 bg-bg-border rounded-full overflow-hidden mt-1.5">
               <div
                 className="h-full rounded-full transition-all duration-700"
-                style={{ width: `${completionPct}%`, background: "linear-gradient(90deg,#7c5cfc,#3b7ff5)" }}
+                style={{
+                  width: `${completionPct}%`,
+                  background: "linear-gradient(90deg,#7c5cfc,#3b7ff5)",
+                }}
               />
             </div>
             <p className="text-[10.5px] text-txt-caption mt-1">Keep going! Add more details.</p>
@@ -419,8 +428,12 @@ export function ProfilePage() {
             <span className="text-[14px] font-black text-sec-blue">&lt;/&gt;</span>
           </div>
           <div>
-            <p className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider">Skills Listed</p>
-            <p className="text-[22px] font-black text-txt-title leading-none mt-0.5">{skills.length}</p>
+            <p className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider">
+              Skills Listed
+            </p>
+            <p className="text-[22px] font-black text-txt-title leading-none mt-0.5">
+              {skills.length}
+            </p>
             <p className="text-[10.5px] text-txt-caption">proficiencies</p>
           </div>
         </Card>
@@ -431,8 +444,12 @@ export function ProfilePage() {
             <Briefcase className="w-5 h-5 text-sec-green" />
           </div>
           <div>
-            <p className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider">Work History</p>
-            <p className="text-[22px] font-black text-txt-title leading-none mt-0.5">{experience.length}</p>
+            <p className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider">
+              Work History
+            </p>
+            <p className="text-[22px] font-black text-txt-title leading-none mt-0.5">
+              {experience.length}
+            </p>
             <p className="text-[10.5px] text-txt-caption">recorded positions</p>
           </div>
         </Card>
@@ -443,19 +460,23 @@ export function ProfilePage() {
             <FileText className="w-5 h-5 text-sec-orange" />
           </div>
           <div>
-            <p className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider">Resume</p>
-            <p className="text-[22px] font-black text-txt-title leading-none mt-0.5">{activeResume ? 1 : 0}</p>
-            <p className="text-[10.5px] text-txt-caption">{activeResume ? "active resume" : "no resume yet"}</p>
+            <p className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider">
+              Resume
+            </p>
+            <p className="text-[22px] font-black text-txt-title leading-none mt-0.5">
+              {activeResume ? 1 : 0}
+            </p>
+            <p className="text-[10.5px] text-txt-caption">
+              {activeResume ? "active resume" : "no resume yet"}
+            </p>
           </div>
         </Card>
       </div>
 
       {/* ── Main 3-column grid ───────────────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-[260px_1fr_260px] gap-5 items-start">
-
         {/* ══════════════ LEFT: Profile Card + Checklist ══════════════ */}
         <div className="space-y-4">
-
           {/* Profile Card */}
           <Card className="overflow-hidden">
             {/* Hero banner */}
@@ -513,10 +534,27 @@ export function ProfilePage() {
               {/* Contact info rows — editable */}
               <div className="space-y-2.5">
                 {[
-                  { icon: <MapPin className="w-3.5 h-3.5" />, key: "location", placeholder: "Location…" },
-                  { icon: <Mail className="w-3.5 h-3.5" />, key: "email", placeholder: "Email", disabled: true },
-                  { icon: <Phone className="w-3.5 h-3.5" />, key: "phone", placeholder: "+1 (555) 000-0000" },
-                  { icon: <Globe className="w-3.5 h-3.5" />, key: "website", placeholder: "yourportfolio.com" },
+                  {
+                    icon: <MapPin className="w-3.5 h-3.5" />,
+                    key: "location",
+                    placeholder: "Location…",
+                  },
+                  {
+                    icon: <Mail className="w-3.5 h-3.5" />,
+                    key: "email",
+                    placeholder: "Email",
+                    disabled: true,
+                  },
+                  {
+                    icon: <Phone className="w-3.5 h-3.5" />,
+                    key: "phone",
+                    placeholder: "+1 (555) 000-0000",
+                  },
+                  {
+                    icon: <Globe className="w-3.5 h-3.5" />,
+                    key: "website",
+                    placeholder: "yourportfolio.com",
+                  },
                 ].map(({ icon, key, placeholder, disabled }) => (
                   <div key={key} className="flex items-center gap-2">
                     <span className="text-txt-caption shrink-0">{icon}</span>
@@ -554,7 +592,9 @@ export function ProfilePage() {
                   </div>
                   <span
                     className={`text-[12px] font-medium transition-colors ${
-                      item.done ? "text-txt-body line-through decoration-sec-green/50" : "text-txt-caption"
+                      item.done
+                        ? "text-txt-body line-through decoration-sec-green/50"
+                        : "text-txt-caption"
                     }`}
                   >
                     {item.label}
@@ -565,7 +605,10 @@ export function ProfilePage() {
             <div className="mt-4 w-full h-1.5 bg-bg-border rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-700"
-                style={{ width: `${completionPct}%`, background: "linear-gradient(90deg,#7c5cfc,#3b7ff5)" }}
+                style={{
+                  width: `${completionPct}%`,
+                  background: "linear-gradient(90deg,#7c5cfc,#3b7ff5)",
+                }}
               />
             </div>
             <button
@@ -580,7 +623,6 @@ export function ProfilePage() {
 
         {/* ══════════════ CENTER: Experience, Education, Skills, Languages, Resume ══════════════ */}
         <div className="space-y-5">
-
           {/* ── Work Experience ──────────────────────────────────────── */}
           <Card className="p-5">
             <SectionTitle
@@ -605,10 +647,13 @@ export function ProfilePage() {
                         <div>
                           <p className="text-[13px] font-bold text-txt-heading">{exp.role}</p>
                           <p className="text-[12px] text-txt-caption font-medium">
-                            {exp.company}{exp.duration ? ` · ${exp.duration}` : ""}
+                            {exp.company}
+                            {exp.duration ? ` · ${exp.duration}` : ""}
                           </p>
                           {exp.desc && (
-                            <p className="text-[12px] text-txt-body mt-1 leading-relaxed">{exp.desc}</p>
+                            <p className="text-[12px] text-txt-body mt-1 leading-relaxed">
+                              {exp.desc}
+                            </p>
                           )}
                         </div>
                         <button
@@ -636,7 +681,9 @@ export function ProfilePage() {
                 <div className="w-10 h-10 rounded-full bg-bg-primary border border-dashed border-bg-border flex items-center justify-center mb-3">
                   <Plus className="w-5 h-5 text-txt-caption" />
                 </div>
-                <p className="text-[13px] font-semibold text-txt-heading mb-1">Add Your Work Experience</p>
+                <p className="text-[13px] font-semibold text-txt-heading mb-1">
+                  Add Your Work Experience
+                </p>
                 <p className="text-[12px] text-txt-caption max-w-[280px]">
                   Share your work history to help employers understand your background.
                 </p>
@@ -649,7 +696,9 @@ export function ProfilePage() {
                 <p className="text-[12px] font-bold text-txt-heading">New Position</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">Job Title *</label>
+                    <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
+                      Job Title *
+                    </label>
                     <Input
                       placeholder="e.g. Senior Developer"
                       value={expForm.role}
@@ -658,7 +707,9 @@ export function ProfilePage() {
                     />
                   </div>
                   <div>
-                    <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">Company *</label>
+                    <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
+                      Company *
+                    </label>
                     <Input
                       placeholder="e.g. Google"
                       value={expForm.company}
@@ -668,7 +719,9 @@ export function ProfilePage() {
                   </div>
                 </div>
                 <div>
-                  <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">Duration</label>
+                  <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
+                    Duration
+                  </label>
                   <Input
                     placeholder="e.g. Jan 2022 – Present"
                     value={expForm.duration}
@@ -677,7 +730,9 @@ export function ProfilePage() {
                   />
                 </div>
                 <div>
-                  <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">Description</label>
+                  <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
+                    Description
+                  </label>
                   <textarea
                     rows={2}
                     placeholder="Key achievements or responsibilities…"
@@ -688,13 +743,25 @@ export function ProfilePage() {
                 </div>
                 <div className="flex gap-2 justify-end">
                   <button
-                    onClick={() => { setShowExpForm(false); setExpForm({ role: "", company: "", duration: "", desc: "" }) }}
+                    onClick={() => {
+                      setShowExpForm(false)
+                      setExpForm({ role: "", company: "", duration: "", desc: "" })
+                    }}
                     className="px-3 py-1.5 rounded-[10px] text-[12px] font-semibold text-txt-caption hover:bg-bg-hover transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
-                  <Button size="sm" onClick={handleAddExperience} disabled={addingExp} className="gap-1.5 cursor-pointer">
-                    {addingExp ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                  <Button
+                    size="sm"
+                    onClick={handleAddExperience}
+                    disabled={addingExp}
+                    className="gap-1.5 cursor-pointer"
+                  >
+                    {addingExp ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Plus className="w-3 h-3" />
+                    )}
                     Add Experience
                   </Button>
                 </div>
@@ -730,7 +797,8 @@ export function ProfilePage() {
                         <div>
                           <p className="text-[13px] font-bold text-txt-heading">{edu.school}</p>
                           <p className="text-[12px] text-txt-caption font-medium">
-                            {edu.degree}{edu.duration ? ` · ${edu.duration}` : ""}
+                            {edu.degree}
+                            {edu.duration ? ` · ${edu.duration}` : ""}
                           </p>
                         </div>
                         <button
@@ -758,7 +826,9 @@ export function ProfilePage() {
                 <div className="w-10 h-10 rounded-full bg-bg-primary border border-dashed border-bg-border flex items-center justify-center mb-3">
                   <Plus className="w-5 h-5 text-txt-caption" />
                 </div>
-                <p className="text-[13px] font-semibold text-txt-heading mb-1">Add Your Education</p>
+                <p className="text-[13px] font-semibold text-txt-heading mb-1">
+                  Add Your Education
+                </p>
                 <p className="text-[12px] text-txt-caption max-w-[280px]">
                   Add your degrees, certifications, and relevant coursework.
                 </p>
@@ -771,7 +841,9 @@ export function ProfilePage() {
                 <p className="text-[12px] font-bold text-txt-heading">New Education</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">Institution *</label>
+                    <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
+                      Institution *
+                    </label>
                     <Input
                       placeholder="e.g. MIT"
                       value={eduForm.school}
@@ -780,7 +852,9 @@ export function ProfilePage() {
                     />
                   </div>
                   <div>
-                    <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">Degree *</label>
+                    <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
+                      Degree *
+                    </label>
                     <Input
                       placeholder="e.g. B.S. Computer Science"
                       value={eduForm.degree}
@@ -790,7 +864,9 @@ export function ProfilePage() {
                   </div>
                 </div>
                 <div>
-                  <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">Duration</label>
+                  <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
+                    Duration
+                  </label>
                   <Input
                     placeholder="e.g. 2018 – 2022"
                     value={eduForm.duration}
@@ -800,13 +876,25 @@ export function ProfilePage() {
                 </div>
                 <div className="flex gap-2 justify-end">
                   <button
-                    onClick={() => { setShowEduForm(false); setEduForm({ school: "", degree: "", duration: "" }) }}
+                    onClick={() => {
+                      setShowEduForm(false)
+                      setEduForm({ school: "", degree: "", duration: "" })
+                    }}
                     className="px-3 py-1.5 rounded-[10px] text-[12px] font-semibold text-txt-caption hover:bg-bg-hover transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
-                  <Button size="sm" onClick={handleAddEducation} disabled={addingEdu} className="gap-1.5 cursor-pointer">
-                    {addingEdu ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                  <Button
+                    size="sm"
+                    onClick={handleAddEducation}
+                    disabled={addingEdu}
+                    className="gap-1.5 cursor-pointer"
+                  >
+                    {addingEdu ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Plus className="w-3 h-3" />
+                    )}
                     Add Education
                   </Button>
                 </div>
@@ -825,7 +913,6 @@ export function ProfilePage() {
 
           {/* ── Bottom row: Skills | Languages | Resume ─────────────── */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
             {/* Core Technical Skills */}
             <Card className="p-5 flex flex-col gap-3">
               <SectionTitle
@@ -857,7 +944,9 @@ export function ProfilePage() {
                     <Plus className="w-4 h-4 text-txt-caption" />
                   </div>
                   <p className="text-[11.5px] font-semibold text-txt-heading">Add Your Skills</p>
-                  <p className="text-[11px] text-txt-caption">Technologies and tools you work with.</p>
+                  <p className="text-[11px] text-txt-caption">
+                    Technologies and tools you work with.
+                  </p>
                 </div>
               )}
 
@@ -930,7 +1019,11 @@ export function ProfilePage() {
                   value={newLang}
                   onChange={(e) => setNewLang(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && newLang.trim() && !languages.includes(newLang.trim())) {
+                    if (
+                      e.key === "Enter" &&
+                      newLang.trim() &&
+                      !languages.includes(newLang.trim())
+                    ) {
                       setLanguages([...languages, newLang.trim()])
                       setNewLang("")
                     }
@@ -1009,7 +1102,9 @@ export function ProfilePage() {
                   <div className="w-9 h-9 rounded-full bg-bg-primary border border-dashed border-bg-border flex items-center justify-center mb-2">
                     <FileText className="w-4 h-4 text-txt-caption" />
                   </div>
-                  <p className="text-[11.5px] font-semibold text-txt-heading mb-0.5">No Active Resume</p>
+                  <p className="text-[11.5px] font-semibold text-txt-heading mb-0.5">
+                    No Active Resume
+                  </p>
                   <p className="text-[11px] text-txt-caption mb-3">Upload to apply to jobs.</p>
                   <Button
                     size="sm"
@@ -1043,7 +1138,6 @@ export function ProfilePage() {
 
         {/* ══════════════ RIGHT: Prefs + About Me + Quick Links ══════════════ */}
         <div className="space-y-4">
-
           {/* Career Preferences */}
           <Card className="p-5">
             <div className="flex items-center justify-between mb-4">
@@ -1211,7 +1305,9 @@ export function ProfilePage() {
                   className="w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] hover:bg-bg-primary text-left transition-colors group cursor-pointer"
                 >
                   <div className="flex items-center gap-2.5">
-                    <span className="text-txt-caption group-hover:text-primary transition-colors">{link.icon}</span>
+                    <span className="text-txt-caption group-hover:text-primary transition-colors">
+                      {link.icon}
+                    </span>
                     <span className="text-[12.5px] font-medium text-txt-body group-hover:text-txt-heading transition-colors">
                       {link.label}
                     </span>
@@ -1221,7 +1317,6 @@ export function ProfilePage() {
               ))}
             </div>
           </Card>
-
         </div>
       </div>
     </div>
