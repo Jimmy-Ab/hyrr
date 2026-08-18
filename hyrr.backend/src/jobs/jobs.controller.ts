@@ -16,6 +16,7 @@ import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { RolesGuard } from "../auth/guards/roles.guard"
 import { CreateJobDto } from "./dtos/create-job.dto"
 import { UpdateJobDto } from "./dtos/update-job.dto"
+import { SearchPublicJobsDto } from "./dtos/search-public-jobs.dto"
 import { JobsService } from "./jobs.service"
 
 @ApiTags("Jobs")
@@ -27,21 +28,17 @@ export class JobsController {
   @Get("public")
   @ApiOperation({ summary: "Search and filter active public job listings" })
   @ApiQuery({ name: "q", required: false, description: "Full-text search query" })
-  @ApiQuery({
-    name: "type",
-    required: false,
-    description: "Job type filter (Full Time, Remote, etc.)",
-  })
+  @ApiQuery({ name: "type", required: false, description: "Employment type enum code" })
   @ApiQuery({ name: "category", required: false, description: "Category slug filter" })
   @ApiQuery({ name: "remote", required: false, type: Boolean })
   @ApiResponse({ status: 200, description: "Returns list of matching job listings" })
-  searchPublicJobs(
-    @Query("q") q?: string,
-    @Query("type") type?: string,
-    @Query("category") category?: string,
-    @Query("remote") remote?: string
-  ) {
-    return this.jobsService.searchPublicJobs(q, type, category, remote === "true")
+  searchPublicJobs(@Query() query: SearchPublicJobsDto) {
+    return this.jobsService.searchPublicJobs(
+      query.q,
+      query.type,
+      query.category,
+      query.remote === "true"
+    )
   }
 
   @Get("categories")

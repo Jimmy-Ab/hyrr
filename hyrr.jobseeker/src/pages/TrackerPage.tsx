@@ -1,4 +1,14 @@
-import { apiFetch, Badge, Button, Card, Input, useJobStore } from "hyrr.shared"
+import {
+  APPLICATION_STATUS,
+  APPLICATION_STATUS_LABEL,
+  apiFetch,
+  Badge,
+  Button,
+  Card,
+  Input,
+  type ApplicationStatusCode,
+  useJobStore,
+} from "hyrr.shared"
 import {
   ArrowLeft,
   ArrowRight,
@@ -17,7 +27,7 @@ interface TrackerApplication {
   jobTitle: string
   company: string
   location: string
-  status: "Saved" | "Applied" | "In Process" | "Interviewing" | "Offer" | "Archived"
+  status: ApplicationStatusCode
   appliedAt: string
   tag?: string
 }
@@ -28,28 +38,19 @@ interface TrackerMessage {
   time: string
 }
 
-const STATUS_MAP: Record<string, TrackerApplication["status"]> = {
-  SAVED: "Saved",
-  APPLIED: "Applied",
-  IN_PROCESS: "In Process",
-  INTERVIEWING: "Interviewing",
-  OFFER: "Offer",
-  ARCHIVED: "Archived",
-}
-
 const steps = [
-  { name: "Applied", label: "Application Received" },
-  { name: "In Process", label: "Under Review" },
-  { name: "Interviewing", label: "Interviewing Phase" },
-  { name: "Offer", label: "Offer Details Sent" },
+  { status: APPLICATION_STATUS.APPLIED, label: "Application Received" },
+  { status: APPLICATION_STATUS.IN_PROCESS, label: "Under Review" },
+  { status: APPLICATION_STATUS.INTERVIEWING, label: "Interviewing Phase" },
+  { status: APPLICATION_STATUS.OFFER, label: "Offer Details Sent" },
 ]
 
-function getStepIndex(status: TrackerApplication["status"]) {
-  if (status === "Archived") return -1
-  if (status === "Saved" || status === "Applied") return 0
-  if (status === "In Process") return 1
-  if (status === "Interviewing") return 2
-  if (status === "Offer") return 3
+function getStepIndex(status: ApplicationStatusCode) {
+  if (status === APPLICATION_STATUS.ARCHIVED) return -1
+  if (status === APPLICATION_STATUS.SAVED || status === APPLICATION_STATUS.APPLIED) return 0
+  if (status === APPLICATION_STATUS.IN_PROCESS) return 1
+  if (status === APPLICATION_STATUS.INTERVIEWING) return 2
+  if (status === APPLICATION_STATUS.OFFER) return 3
   return 0
 }
 
@@ -129,7 +130,9 @@ export function TrackerPage() {
         jobTitle: a.job?.title || a.title || "Position",
         company: a.job?.company?.name || "Company",
         location: a.job?.location || a.location || "Remote",
-        status: STATUS_MAP[a.status] || "Applied",
+        status: Object.values(APPLICATION_STATUS).includes(a.status)
+          ? a.status as ApplicationStatusCode
+          : APPLICATION_STATUS.APPLIED,
         appliedAt: a.appliedAt ? new Date(a.appliedAt).toLocaleDateString() : "N/A",
         tag: a.tag,
       }))
@@ -296,14 +299,14 @@ export function TrackerPage() {
                       </span>
                       <Badge
                         variant={
-                          app.status === "Offer"
+                          app.status === APPLICATION_STATUS.OFFER
                             ? "success"
-                            : app.status === "Archived"
+                            : app.status === APPLICATION_STATUS.ARCHIVED
                               ? "secondary"
                               : "primary"
                         }
                       >
-                        {app.status}
+                        {APPLICATION_STATUS_LABEL[app.status]}
                       </Badge>
                     </div>
                   </button>
@@ -328,7 +331,7 @@ export function TrackerPage() {
                             {activeApp.company} · Applied {activeApp.appliedAt}
                           </p>
                         </div>
-                        {activeApp.status === "Archived" && (
+                        {activeApp.status === APPLICATION_STATUS.ARCHIVED && (
                           <Badge
                             variant="secondary"
                             className="px-3 py-1 font-semibold text-[12px]"
@@ -338,7 +341,7 @@ export function TrackerPage() {
                         )}
                       </div>
 
-                      {activeApp.status !== "Archived" ? (
+                      {activeApp.status !== APPLICATION_STATUS.ARCHIVED ? (
                         <div className="space-y-4">
                           <p className="text-[12px] font-bold text-txt-heading uppercase tracking-wider">
                             Progress Timeline
@@ -367,7 +370,7 @@ export function TrackerPage() {
                                   <span
                                     className={`text-[11px] mt-2 font-bold ${isCurrent ? "text-primary" : "text-txt-caption"}`}
                                   >
-                                    {st.name}
+                                    {APPLICATION_STATUS_LABEL[st.status]}
                                   </span>
                                 </div>
                               )

@@ -1,4 +1,4 @@
-import { apiFetch, RichTextEditor } from "hyrr.shared"
+import { apiFetch, JOB_TYPE_OPTIONS, RichTextEditor, type JobType } from "hyrr.shared"
 import { Briefcase, ChevronLeft, ChevronRight, FileText, Plus, Sparkles, X } from "lucide-react"
 import { useEffect, useState, type FormEvent } from "react"
 import { useJobStore } from "../../store/useJobStore"
@@ -20,7 +20,7 @@ interface Category {
   slug: string
 }
 
-const WORK_TYPES = ["Full Time", "Part Time", "Contract", "Remote"]
+const WORK_TYPES = JOB_TYPE_OPTIONS
 
 const FALLBACK_CATEGORIES: Category[] = [
   { id: "software-development", name: "Software Development", slug: "software-development" },
@@ -205,7 +205,7 @@ export function AddJobDialog() {
   // Step 1 – Basics
   const [title, setTitle] = useState("")
   const [location, setLocation] = useState("")
-  const [type, setType] = useState("Full Time")
+  const [type, setType] = useState<JobType>(JOB_TYPE_OPTIONS[0])
   const [salary, setSalary] = useState("")
   const [categoryId, setCategoryId] = useState(FALLBACK_CATEGORIES[0].id)
   const [remote, setRemote] = useState(false)
@@ -245,7 +245,7 @@ export function AddJobDialog() {
     setStep(0)
     setTitle("")
     setLocation("")
-    setType("Full Time")
+    setType(JOB_TYPE_OPTIONS[0])
     setSalary("")
     setCategoryId(categories[0]?.id || FALLBACK_CATEGORIES[0].id)
     setRemote(false)

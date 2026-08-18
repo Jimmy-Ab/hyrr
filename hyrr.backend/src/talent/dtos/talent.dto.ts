@@ -9,6 +9,7 @@ import {
   IsString,
   MaxLength,
 } from "class-validator"
+import { AlertFrequency, CompanyMemberRole } from "@prisma/client"
 
 export class CreateScreeningQuestionDto {
   @IsString()
@@ -49,8 +50,8 @@ export class AddTeamMemberDto {
   @IsString()
   @IsNotEmpty()
   userId: string
-  @IsEnum(["RECRUITER", "HIRING_MANAGER", "VIEWER"])
-  role: "RECRUITER" | "HIRING_MANAGER" | "VIEWER"
+  @IsEnum(CompanyMemberRole)
+  role: CompanyMemberRole
 }
 
 export class CreateJobAlertDto {
@@ -80,8 +81,8 @@ export class CreateJobAlertDto {
   @IsBoolean()
   remoteOnly?: boolean
   @IsOptional()
-  @IsEnum(["INSTANT", "DAILY", "WEEKLY"])
-  frequency?: "INSTANT" | "DAILY" | "WEEKLY"
+  @IsEnum(AlertFrequency)
+  frequency?: AlertFrequency
 }
 
 export class CreateSavedSearchDto {

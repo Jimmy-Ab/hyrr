@@ -1,0 +1,5 @@
+CREATE TYPE "NotificationType" AS ENUM ('APPLICATION', 'INTERVIEW', 'MESSAGE', 'OFFER', 'JOB_ALERT', 'SYSTEM');
+
+ALTER TABLE "Notification"
+  ADD COLUMN "type" "NotificationType" NOT NULL DEFAULT 'SYSTEM',
+  ADD COLUMN "actionView" TEXT;

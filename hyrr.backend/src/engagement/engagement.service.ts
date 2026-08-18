@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common"
+import { EventType } from "@prisma/client"
 import { AccessService, Actor } from "../core/access/access.service"
 import { EmailDeliveryService } from "../core/delivery/email-delivery.service"
 import { PrismaService } from "../prisma/prisma.service"
@@ -111,7 +112,7 @@ export class EngagementService {
         startTime: slot.startTime,
         endTime: slot.endTime,
         meetingUrl: slot.meetingUrl,
-        type: "INTERVIEW",
+        type: EventType.INTERVIEW,
       },
     })
     return booked

@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common"
+import { DocType } from "@prisma/client"
 import { PrismaService } from "../prisma/prisma.service"
 import { UploadsService } from "../uploads/uploads.service"
 
@@ -25,12 +26,15 @@ export class DocumentsService {
     data: { name: string; type: string; size: string; url: string }
   ) {
     // Normalize type to uppercase to match Prisma DocType enum
-    const docType = (data.type || "OTHER").toUpperCase() as any
+    const normalizedType = data.type?.toUpperCase()
+    const docType = Object.values(DocType).includes(normalizedType as DocType)
+      ? normalizedType as DocType
+      : DocType.OTHER
 
     // If uploading a new active resume, deactivate existing ones first
-    if (docType === "RESUME") {
+    if (docType === DocType.RESUME) {
       await this.prisma.document.updateMany({
-        where: { userId, type: "RESUME", active: true },
+        where: { userId, type: DocType.RESUME, active: true },
         data: { active: false },
       })
     }
@@ -52,7 +56,7 @@ export class DocumentsService {
     const document = await this.prisma.document.findUnique({ where: { id } })
     if (!document || document.userId !== userId) throw new NotFoundException("Document not found")
 
-    if (document.type === "RESUME" && !document.active) {
+    if (document.type === DocType.RESUME && !document.active) {
       // Deactivate others
       await this.prisma.document.updateMany({
         where: { userId, type: "RESUME", active: true },

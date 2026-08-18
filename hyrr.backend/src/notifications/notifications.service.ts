@@ -1,4 +1,5 @@
 import { Injectable, Optional } from "@nestjs/common"
+import { NotificationAction, NotificationType } from "@prisma/client"
 import { EmailDeliveryService } from "../core/delivery/email-delivery.service"
 import { MessagesGateway } from "../messages/messages.gateway"
 import { PrismaService } from "../prisma/prisma.service"
@@ -19,11 +20,18 @@ export class NotificationsService {
     })
   }
 
-  async createNotification(userId: string, title: string) {
+  async createNotification(
+    userId: string,
+    title: string,
+    type: NotificationType = NotificationType.SYSTEM,
+    actionView?: NotificationAction
+  ) {
     const notification = await this.prisma.notification.create({
       data: {
         userId,
         title,
+        type,
+        actionView,
       },
     })
 

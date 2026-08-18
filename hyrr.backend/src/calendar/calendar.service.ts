@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common"
+import { EventType, NotificationAction, NotificationType } from "@prisma/client"
 import { AccessService, Actor } from "../core/access/access.service"
 import { NotificationsService } from "../notifications/notifications.service"
 import { PrismaService } from "../prisma/prisma.service"
@@ -70,7 +71,9 @@ export class CalendarService {
         title: data.title,
         startTime: new Date(data.startTime),
         endTime: data.endTime ? new Date(data.endTime) : null,
-        type: (data.type || "INTERVIEW").toUpperCase() as any,
+        type: Object.values(EventType).includes(data.type?.toUpperCase() as EventType)
+          ? data.type.toUpperCase() as EventType
+          : EventType.INTERVIEW,
         meetingUrl: data.meetingUrl || null,
         location: data.location || null,
         notes: data.notes || "",
@@ -95,7 +98,9 @@ export class CalendarService {
       })
       await this.notificationsService.createNotification(
         seekerUserId,
-        `📅 Interview scheduled: "${event.title}" on ${dateStr}`
+        `📅 Interview scheduled: "${event.title}" on ${dateStr}`,
+        NotificationType.INTERVIEW,
+        NotificationAction.CALENDAR
       )
     }
 

@@ -1,4 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common"
+import { AlertFrequency, ApplicationStatus } from "@prisma/client"
 import { createHash, randomBytes } from "crypto"
 import { AccessService, Actor } from "../core/access/access.service"
 import { PrismaService } from "../prisma/prisma.service"
@@ -156,7 +157,7 @@ export class TalentService {
         jobTypes: data.jobTypes || [],
         minSalary: data.minSalary,
         remoteOnly: !!data.remoteOnly,
-        frequency: data.frequency || "DAILY",
+        frequency: data.frequency || AlertFrequency.DAILY,
       },
     })
   }
@@ -240,7 +241,7 @@ export class TalentService {
       (result, app: any) => ({ ...result, [app.status]: (result[app.status] || 0) + 1 }),
       {}
     )
-    const hired = totals.OFFER || 0
+    const hired = totals[ApplicationStatus.OFFER] || 0
     return {
       totalApplications: applications.length,
       stages: totals,

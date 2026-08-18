@@ -26,15 +26,15 @@
   --color-txt-caption: #6b7280;
   --color-txt-disabled: #9ca3af;
 
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
-  --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.025);
+  --shadow-card-hover: 0 3px 10px rgba(15, 23, 42, 0.06);
   --shadow-floating: 0 10px 30px rgba(15, 23, 42, 0.1);
   --shadow-button: none;
 
-  --radius-window: 24px;
-  --radius-card: 16px;
-  --radius-button: 12px;
-  --radius-input: 12px;
+  --radius-window: 10px;
+  --radius-card: 8px;
+  --radius-button: 6px;
+  --radius-input: 6px;
 
   --font-sans:
     "Plus Jakarta Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
@@ -160,4 +160,14 @@
 .custom-scrollbar-none {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* The seeker workspace follows the supplied compact desktop design. */
+.ambient-glow-1,
+.ambient-glow-2 {
+  display: none;
+}
+
+#root {
+  min-width: 1024px;
 }

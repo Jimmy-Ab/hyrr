@@ -1,4 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException, Optional } from "@nestjs/common"
+import { ApplicationStatus, NotificationAction, NotificationType } from "@prisma/client"
 import { createHash, randomBytes } from "crypto"
 import { AccessService, Actor } from "../core/access/access.service"
 import { MessagesGateway } from "../messages/messages.gateway"
@@ -43,7 +44,7 @@ export class ApplicationsService {
         title: dto.title,
         location: dto.location,
         coverLetter: dto.coverLetter,
-        status: "APPLIED",
+        status: ApplicationStatus.APPLIED,
       },
       include: { job: { include: { company: true } } },
     })
@@ -51,7 +52,9 @@ export class ApplicationsService {
     if (app.job?.recruiterId) {
       await this.notificationsService.createNotification(
         app.job.recruiterId,
-        `New applicant ${dto.name} applied for ${app.job.title}`
+        `New applicant ${dto.name} applied for ${app.job.title}`,
+        NotificationType.APPLICATION,
+        NotificationAction.APPLICATIONS
       )
     }
 
@@ -84,7 +87,7 @@ export class ApplicationsService {
         email: dto.email,
         title: dto.title,
         location: dto.location,
-        status: "SAVED",
+        status: ApplicationStatus.SAVED,
         seekerBookmarked: true,
       },
       include: { job: { include: { company: true } } },
@@ -129,8 +132,8 @@ export class ApplicationsService {
         byJob.set(app.jobId, app)
       } else {
         // Keep whichever is NOT SAVED; if both are SAVED keep the newer one
-        const existingSaved = existing.status === "SAVED"
-        const currentSaved = app.status === "SAVED"
+        const existingSaved = existing.status === ApplicationStatus.SAVED
+        const currentSaved = app.status === ApplicationStatus.SAVED
         if (existingSaved && !currentSaved) {
           // Replace SAVED with the real application
           byJob.set(app.jobId, app)
@@ -215,11 +218,11 @@ export class ApplicationsService {
     // Auto-set tags when moving pipeline stages
     let tag = dto.tag
     if (!tag && dto.status) {
-      if (dto.status === "IN_PROCESS") tag = "In Review"
-      else if (dto.status === "INTERVIEWING") tag = "Interview Stage"
-      else if (dto.status === "OFFER") tag = "Offer Sent"
-      else if (dto.status === "ARCHIVED") tag = "Not a fit"
-      else if (dto.status === "SAVED" || dto.status === "APPLIED") tag = undefined
+      if (dto.status === ApplicationStatus.IN_PROCESS) tag = "In Review"
+      else if (dto.status === ApplicationStatus.INTERVIEWING) tag = "Interview Stage"
+      else if (dto.status === ApplicationStatus.OFFER) tag = "Offer Sent"
+      else if (dto.status === ApplicationStatus.ARCHIVED) tag = "Not a fit"
+      else if (dto.status === ApplicationStatus.SAVED || dto.status === ApplicationStatus.APPLIED) tag = undefined
     }
 
     const previous = await this.prisma.application.findUnique({
@@ -245,19 +248,21 @@ export class ApplicationsService {
 
     if (app.userId && dto.status) {
       const statusLabel =
-        dto.status === "IN_PROCESS"
+        dto.status === ApplicationStatus.IN_PROCESS
           ? "In Process"
-          : dto.status === "INTERVIEWING"
+          : dto.status === ApplicationStatus.INTERVIEWING
             ? "Interviewing"
-            : dto.status === "OFFER"
+            : dto.status === ApplicationStatus.OFFER
               ? "Offer Extended"
-              : dto.status === "ARCHIVED"
+              : dto.status === ApplicationStatus.ARCHIVED
                 ? "Archived"
                 : dto.status
       // DB notification
       await this.notificationsService.createNotification(
         app.userId,
-        `Your application for ${app.job.title} status updated to: ${statusLabel}`
+        `Your application for ${app.job.title} status updated to: ${statusLabel}`,
+        dto.status === ApplicationStatus.OFFER ? NotificationType.OFFER : NotificationType.APPLICATION,
+        NotificationAction.APPLICATIONS
       )
       // Real-time WebSocket update so seeker's Kanban board updates live
       if (this.messagesGateway) {

@@ -1,13 +1,14 @@
 import { ApiPropertyOptional } from "@nestjs/swagger"
 import { IsBoolean, IsEnum, IsOptional, IsString } from "class-validator"
+import { ApplicationStatus } from "@prisma/client"
 
 export class UpdateApplicationDto {
   @ApiPropertyOptional({
-    enum: ["SAVED", "APPLIED", "IN_PROCESS", "INTERVIEWING", "OFFER", "ARCHIVED"],
+    enum: ApplicationStatus,
   })
   @IsOptional()
-  @IsEnum(["SAVED", "APPLIED", "IN_PROCESS", "INTERVIEWING", "OFFER", "ARCHIVED"])
-  status?: string
+  @IsEnum(ApplicationStatus)
+  status?: ApplicationStatus
 
   @ApiPropertyOptional({ example: "Technical Interview", description: "Pipeline sub-stage tag" })
   @IsOptional()

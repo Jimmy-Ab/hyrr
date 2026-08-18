@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, UnauthorizedException } from "@nestjs/common"
+import { UserStatus } from "@prisma/client"
 import { JwtService } from "@nestjs/jwt"
 import * as bcrypt from "bcrypt"
 import { PrismaService } from "../prisma/prisma.service"
@@ -74,7 +75,7 @@ export class AuthService {
 
   async refreshTokens(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } })
-    if (!user || user.status !== "ACTIVE") throw new UnauthorizedException("Access denied")
+    if (!user || user.status !== UserStatus.ACTIVE) throw new UnauthorizedException("Access denied")
     return this.generateTokens(user)
   }
 

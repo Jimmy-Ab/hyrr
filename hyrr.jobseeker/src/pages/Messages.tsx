@@ -70,23 +70,21 @@ export function CandidateMessages() {
   )
 
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300 relative">
+    <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300 relative">
       {/* Ambient glows */}
       <div className="ambient-glow-1" />
       <div className="ambient-glow-2" />
       <div>
-        <h1 className="text-[36px] font-extrabold tracking-tight">
-          <span className="premium-gradient-text text-glow">Messages</span>
-        </h1>
-        <p className="text-body text-txt-body mt-1 font-medium">
+        <h1 className="text-[21px] font-bold tracking-tight text-txt-title">Messages</h1>
+        <p className="text-[11px] text-txt-caption mt-0.5 font-medium">
           Your conversations with recruiters and hiring teams.
         </p>
       </div>
 
-      <div className="flex gap-5 h-[600px]">
+      <div className="flex gap-3 h-[calc(100vh-150px)] min-h-[520px] max-h-[680px]">
         {/* Conversation list */}
-        <Card className="w-[300px] shrink-0 flex flex-col p-0 overflow-hidden">
-          <div className="p-4 border-b border-bg-border/40">
+        <Card className="w-[278px] shrink-0 flex flex-col p-0 overflow-hidden rounded-xl shadow-none">
+          <div className="p-3 border-b border-bg-border/40">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-txt-caption pointer-events-none" />
               <input
@@ -94,7 +92,7 @@ export function CandidateMessages() {
                 placeholder="Search conversations…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full h-9 pl-9 pr-3 rounded-[10px] border border-bg-border bg-bg-primary text-[12.5px] placeholder:text-txt-caption focus:outline-none focus:border-primary/30 transition-all"
+                className="w-full h-8 pl-9 pr-3 rounded-lg border border-bg-border bg-bg-primary text-[11px] placeholder:text-txt-caption focus:outline-none focus:border-primary/30 transition-all"
               />
             </div>
           </div>
@@ -114,7 +112,7 @@ export function CandidateMessages() {
                 <div
                   key={c.applicationId}
                   onClick={() => handleSelectConversation(c.applicationId)}
-                  className={`w-full text-left p-4 flex items-start gap-3 border-b border-bg-border/20 transition-colors cursor-pointer group relative ${
+                  className={`w-full text-left p-3 flex items-start gap-2.5 border-b border-bg-border/20 transition-colors cursor-pointer group relative ${
                     activeConv?.applicationId === c.applicationId
                       ? "bg-primary-light"
                       : "hover:bg-bg-hover"
@@ -163,10 +161,10 @@ export function CandidateMessages() {
         </Card>
 
         {/* Chat window */}
-        <Card className="flex-1 p-0 overflow-hidden">
+        <Card className="flex-1 p-0 overflow-hidden rounded-xl shadow-none">
           {activeConv ? (
             <div className="flex flex-col h-full">
-              <div className="flex items-center gap-3 p-4 border-b border-bg-border/40 shrink-0">
+              <div className="flex items-center gap-3 p-3 border-b border-bg-border/40 shrink-0">
                 <div className="relative">
                   <img
                     src={activeConv.candidateAvatar}
@@ -201,7 +199,7 @@ export function CandidateMessages() {
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {messagesLoading ? (
                   <div className="flex items-center justify-center h-full">
                     <Loader2 className="w-5 h-5 animate-spin text-primary" />
@@ -246,19 +244,19 @@ export function CandidateMessages() {
                 <div ref={messagesEndRef} />
               </div>
 
-              <div className="flex gap-2 p-4 border-t border-bg-border/40 shrink-0">
+              <div className="flex gap-2 p-3 border-t border-bg-border/40 shrink-0">
                 <input
                   type="text"
                   placeholder="Type your message…"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                  className="flex-1 h-10 px-4 rounded-[11px] border border-bg-border bg-bg-primary text-[13px] placeholder:text-txt-caption focus:outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/10 transition-all"
+                  className="flex-1 h-9 px-3 rounded-lg border border-bg-border bg-bg-primary text-[12px] placeholder:text-txt-caption focus:outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/10 transition-all"
                 />
                 <button
                   onClick={handleSend}
                   disabled={sending || !input.trim()}
-                  className="w-10 h-10 rounded-[11px] bg-primary flex items-center justify-center text-white disabled:opacity-50 hover:bg-primary-hover transition-all cursor-pointer shadow-button shrink-0"
+                  className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center text-white disabled:opacity-50 hover:bg-primary-hover transition-all cursor-pointer shadow-button shrink-0"
                 >
                   {sending ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -279,6 +277,28 @@ export function CandidateMessages() {
             </div>
           )}
         </Card>
+
+        <aside className="hidden w-[210px] shrink-0 xl:block">
+          <Card className="h-full rounded-xl p-4 shadow-none">
+            {activeConv ? (
+              <div className="flex h-full flex-col">
+                <div className="flex flex-col items-center border-b border-bg-border pb-4 text-center">
+                  <img src={activeConv.candidateAvatar} alt="" className="h-12 w-12 rounded-full object-cover" />
+                  <p className="mt-2 text-[12px] font-bold text-txt-heading">{activeConv.candidateName}</p>
+                  <p className="mt-0.5 text-[9px] text-txt-caption">Hiring contact</p>
+                </div>
+                <div className="space-y-3 py-4 text-[10px]">
+                  <div><p className="text-[9px] font-bold uppercase tracking-wider text-txt-caption">Company</p><p className="mt-1 font-medium text-txt-body">{activeConv.company}</p></div>
+                  <div><p className="text-[9px] font-bold uppercase tracking-wider text-txt-caption">Role</p><p className="mt-1 font-medium text-txt-body">{activeConv.jobTitle}</p></div>
+                  <div><p className="text-[9px] font-bold uppercase tracking-wider text-txt-caption">Conversation</p><p className="mt-1 font-medium text-sec-green">{activeConv.online ? "Available now" : "Messages saved"}</p></div>
+                </div>
+                <button onClick={() => deleteConversation(activeConv.applicationId)} className="mt-auto w-full rounded-md border border-bg-border py-2 text-[10px] font-semibold text-txt-caption hover:bg-bg-hover">Delete conversation</button>
+              </div>
+            ) : (
+              <div className="flex h-full items-center justify-center text-center text-[10px] text-txt-caption">Select a conversation to view its details.</div>
+            )}
+          </Card>
+        </aside>
       </div>
     </div>
   )

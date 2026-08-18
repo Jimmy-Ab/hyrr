@@ -1,5 +1,4 @@
 import {
-  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -13,7 +12,6 @@ import {
   Bell,
   ChevronDown,
   Command,
-  ExternalLink,
   LogOut,
   Moon,
   Search,
@@ -22,25 +20,6 @@ import {
   User,
 } from "lucide-react"
 import * as React from "react"
-
-function HyrrIcon({ size = 36 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 36 36"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-label="HYRR logo"
-    >
-      <rect width="36" height="36" rx="10" fill="#6C63FF" />
-      <rect x="8" y="9" width="4" height="18" rx="2" fill="white" />
-      <rect x="24" y="9" width="4" height="18" rx="2" fill="white" />
-      <rect x="8" y="15.5" width="20" height="4" rx="2" fill="white" />
-      <circle cx="28.5" cy="8.5" r="3" fill="#FFB547" />
-    </svg>
-  )
-}
 
 export function Header() {
   const {
@@ -73,21 +52,10 @@ export function Header() {
   }, [])
 
   return (
-    <div className="h-[68px] border-b border-bg-border bg-bg-secondary flex items-center justify-between px-6 select-none shrink-0 animate-in fade-in duration-200">
-      {/* Left: Logo */}
-      <div className="flex items-center gap-3">
-        <HyrrIcon size={36} />
-        <div className="flex flex-col">
-          <span className="font-bold text-[15px] text-txt-title leading-tight">HYRR</span>
-          <span className="text-[10px] font-bold text-primary tracking-wider uppercase">
-            Careers
-          </span>
-        </div>
-      </div>
-
+    <div className="relative h-12 border-b border-slate-100 bg-white flex items-center justify-center px-5 select-none shrink-0 animate-in fade-in duration-200">
       {/* Center: Search */}
       <div
-        className={`relative flex-1 max-w-sm mx-8 transition-all ${searchFocused ? "max-w-md" : ""}`}
+        className={`relative w-full max-w-[330px] transition-all ${searchFocused ? "max-w-md" : ""}`}
       >
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-txt-caption pointer-events-none" />
         <input
@@ -101,7 +69,7 @@ export function Header() {
           placeholder="Search jobs, companies, skills…"
           onFocus={() => setSearchFocused(true)}
           onBlur={() => setSearchFocused(false)}
-          className="w-full h-9 pl-9 pr-14 rounded-[11px] border border-bg-border bg-bg-primary text-[13px] text-txt-heading placeholder:text-txt-caption focus:outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/10 transition-all"
+          className="w-full h-7 pl-8 pr-12 rounded-md border border-slate-100 bg-slate-50 text-[9px] text-txt-heading placeholder:text-slate-400 focus:outline-none focus:border-primary/30 transition-all"
         />
         <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5 text-txt-caption pointer-events-none">
           <Command className="w-3 h-3" />
@@ -110,7 +78,7 @@ export function Header() {
       </div>
 
       {/* Right: Actions */}
-      <div className="flex items-center gap-2">
+      <div className="absolute right-5 flex items-center gap-2">
         {/* Theme */}
         <button
           onClick={toggleTheme}
@@ -183,23 +151,6 @@ export function Header() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-
-        {/* Recruiter switch */}
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() =>
-            window.open(
-              import.meta.env.VITE_RECRUITER_APP_URL || "http://localhost:5173",
-              "_blank",
-              "noopener,noreferrer"
-            )
-          }
-          className="h-8 px-3 rounded-[10px] text-[12px] gap-1.5 cursor-pointer"
-        >
-          <ExternalLink className="w-3.5 h-3.5" />
-          Recruiter
-        </Button>
 
         {/* Profile dropdown */}
         <DropdownMenu>

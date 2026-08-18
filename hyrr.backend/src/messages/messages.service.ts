@@ -1,5 +1,7 @@
 import { Inject, Injectable, Optional, forwardRef } from "@nestjs/common"
 import { AccessService, Actor } from "../core/access/access.service"
+import { NotificationsService } from "../notifications/notifications.service"
+import { NotificationAction, NotificationType } from "@prisma/client"
 import { PrismaService } from "../prisma/prisma.service"
 import { MessagesGateway } from "./messages.gateway"
 
@@ -8,7 +10,9 @@ export class MessagesService {
   constructor(
     private prisma: PrismaService,
     private access: AccessService,
-    @Optional() @Inject(forwardRef(() => MessagesGateway)) private messagesGateway?: MessagesGateway
+    @Optional() @Inject(forwardRef(() => MessagesGateway)) private messagesGateway?: MessagesGateway,
+    @Optional() @Inject(forwardRef(() => NotificationsService))
+    private notifications?: NotificationsService
   ) {}
 
   async getConversations(userId: string, role: string) {
@@ -126,7 +130,10 @@ export class MessagesService {
     await this.access.applicationFor(actor, applicationId, "view")
     const application: any = await this.prisma.application.findUnique({
       where: { id: applicationId },
-      include: { job: true },
+      include: {
+        job: { include: { company: { select: { name: true } } } },
+        user: { select: { name: true } },
+      },
     })
 
     let receiverId: string | null = null
@@ -171,6 +178,21 @@ export class MessagesService {
           .to(`user_${receiverId}`)
           .emit("unread_update", { applicationId })
       }
+    }
+
+    if (receiverId) {
+      const senderName =
+        senderType === "SEEKER"
+          ? application.name || application.user?.name || "An applicant"
+          : application.job?.company?.name || "Your recruiter"
+      this.notifications
+        ?.createNotification(
+          receiverId,
+          `New message from ${senderName} about ${application.job?.title || "your application"}`,
+          NotificationType.MESSAGE,
+          NotificationAction.MESSAGES
+        )
+        .catch(() => undefined)
     }
 
     return message

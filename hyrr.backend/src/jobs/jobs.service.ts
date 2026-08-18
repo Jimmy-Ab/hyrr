@@ -5,6 +5,13 @@ import { NotificationsService } from "../notifications/notifications.service"
 import { PrismaService } from "../prisma/prisma.service"
 import { CreateJobDto } from "./dtos/create-job.dto"
 import { UpdateJobDto } from "./dtos/update-job.dto"
+import {
+  ApplicationStatus,
+  EmploymentType,
+  JobStatus,
+  NotificationAction,
+  NotificationType,
+} from "@prisma/client"
 
 const JOB_COLORS = ["purple", "blue", "green", "orange"] as const
 const PUBLIC_JOBS_CACHE_KEY = "jobs:public"
@@ -92,16 +99,27 @@ export class JobsService {
             alert.locations.some((location: string) =>
               job.location.toLowerCase().includes(location.toLowerCase())
             )
-          const typeMatch = !alert.jobTypes.length || alert.jobTypes.includes(job.type)
+          const typeMatch = !alert.jobTypes.length || alert.jobTypes.includes(this.employmentTypeLabel(job.type))
           return keywordMatch && locationMatch && typeMatch && (!alert.remoteOnly || job.remote)
         })
         .map((alert: any) =>
           this.notifications.createNotification(
             alert.userId,
-            `New job alert match: ${job.title} at ${job.company?.name || "a company"}`
+            `New job alert match: ${job.title} at ${job.company?.name || "a company"}`,
+            NotificationType.JOB_ALERT,
+            NotificationAction.DISCOVER
           )
         )
     )
+  }
+
+  private employmentTypeLabel(type: EmploymentType) {
+    return {
+      FULL_TIME: "Full Time",
+      PART_TIME: "Part Time",
+      CONTRACT: "Contract",
+      REMOTE: "Remote",
+    }[type]
   }
 
   // ─── Recruiter: update / close a job ─────────────────────────────
@@ -125,14 +143,14 @@ export class JobsService {
   }
 
   // ─── Public: full-text search + filter (Redis cached) ────────────
-  async searchPublicJobs(query?: string, type?: string, categorySlug?: string, remote?: boolean) {
+  async searchPublicJobs(query?: string, type?: EmploymentType, categorySlug?: string, remote?: boolean) {
     const cacheKey = `${PUBLIC_JOBS_CACHE_KEY}:${query || ""}:${type || ""}:${categorySlug || ""}:${remote ?? ""}`
 
     const cached = await this.cache.get<any[]>(cacheKey)
     if (cached) return cached
 
-    const where: any = { status: "ACTIVE" }
-    if (type && type !== "All") where.type = type
+    const where: any = { status: JobStatus.ACTIVE }
+    if (type) where.type = type
     if (remote) where.remote = true
     if (categorySlug) {
       where.category = { slug: categorySlug }
@@ -185,11 +203,11 @@ export class JobsService {
 
     const total = applications.length
     const pipeline = {
-      Applied: applications.filter((a) => a.status === "APPLIED").length,
-      InProcess: applications.filter((a) => a.status === "IN_PROCESS").length,
-      Interviewing: applications.filter((a) => a.status === "INTERVIEWING").length,
-      Offer: applications.filter((a) => a.status === "OFFER").length,
-      Archived: applications.filter((a) => a.status === "ARCHIVED").length,
+      Applied: applications.filter((a) => a.status === ApplicationStatus.APPLIED).length,
+      InProcess: applications.filter((a) => a.status === ApplicationStatus.IN_PROCESS).length,
+      Interviewing: applications.filter((a) => a.status === ApplicationStatus.INTERVIEWING).length,
+      Offer: applications.filter((a) => a.status === ApplicationStatus.OFFER).length,
+      Archived: applications.filter((a) => a.status === ApplicationStatus.ARCHIVED).length,
     }
 
     const offerRate = total > 0 ? ((pipeline.Offer / total) * 100).toFixed(1) : "0.0"

@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client"
+import { EmploymentType, PrismaClient } from "@prisma/client"
 import * as bcrypt from "bcrypt"
 
 const prisma = new PrismaClient()
@@ -163,7 +163,7 @@ async function main() {
     {
       title: "Senior Frontend Engineer",
       location: "San Francisco, CA",
-      type: "Full Time",
+      type: EmploymentType.FULL_TIME,
       salary: "$140k – $180k",
       description:
         "Join our product engineering team building beautiful, performant web interfaces used by millions of users every day. You will own key product surfaces, mentor junior engineers, and collaborate closely with design and product.",
@@ -189,7 +189,7 @@ async function main() {
     {
       title: "ML Engineer – NLP",
       location: "Remote",
-      type: "Remote",
+      type: EmploymentType.REMOTE,
       salary: "$160k – $210k",
       description:
         "Work on cutting-edge large language model fine-tuning, inference optimization, and deployment pipelines powering our AI-first product suite.",
@@ -210,7 +210,7 @@ async function main() {
     {
       title: "Product Designer (UI/UX)",
       location: "New York, NY",
-      type: "Full Time",
+      type: EmploymentType.FULL_TIME,
       salary: "$110k – $145k",
       description:
         "Shape end-to-end experiences from discovery research to pixel-perfect Figma deliverables. You will own the design system and work across web and mobile surfaces.",
@@ -231,7 +231,7 @@ async function main() {
     {
       title: "DevOps / Platform Engineer",
       location: "Austin, TX",
-      type: "Full Time",
+      type: EmploymentType.FULL_TIME,
       salary: "$130k – $165k",
       description:
         "Own the reliability, scalability, and security of our cloud-native microservices platform running on AWS. You will build golden paths for developers and drive platform excellence.",
@@ -252,7 +252,7 @@ async function main() {
     {
       title: "Growth Marketing Manager",
       location: "Remote",
-      type: "Remote",
+      type: EmploymentType.REMOTE,
       salary: "$95k – $125k",
       description:
         "Lead paid acquisition, SEO, lifecycle marketing, and A/B experimentation across our B2B funnel. You will own MQL targets and work across channels to drive pipeline growth.",
@@ -273,7 +273,7 @@ async function main() {
     {
       title: "Data Analyst",
       location: "Chicago, IL",
-      type: "Full Time",
+      type: EmploymentType.FULL_TIME,
       salary: "$85k – $110k",
       description:
         "Turn raw data into actionable insights that drive product and business decisions. You will partner with product, engineering, and leadership to build dashboards and run analyses.",
@@ -294,7 +294,7 @@ async function main() {
     {
       title: "iOS Engineer",
       location: "Seattle, WA",
-      type: "Full Time",
+      type: EmploymentType.FULL_TIME,
       salary: "$150k – $185k",
       description:
         "Build a delightful, high-performance iOS app serving tens of thousands of daily active users. You will own core features end-to-end from design review through App Store delivery.",
@@ -315,7 +315,7 @@ async function main() {
     {
       title: "Technical Product Manager",
       location: "Remote",
-      type: "Remote",
+      type: EmploymentType.REMOTE,
       salary: "$125k – $155k",
       description:
         "Own the roadmap for our developer-facing API platform, collaborating tightly with engineering, design, and customers to ship features that developers love.",

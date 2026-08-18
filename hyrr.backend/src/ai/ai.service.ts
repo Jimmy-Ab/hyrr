@@ -1,4 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common"
+import { JobStatus } from "@prisma/client"
 import { PrismaService } from "../prisma/prisma.service"
 import { GeminiAdapter } from "./adapters/gemini.adapter"
 import { AiFactory } from "./ai.factory"
@@ -140,7 +141,7 @@ export class AiService {
     const interestIds = profile.interests.map((i) => i.id)
     const preFiltered = await this.prisma.job.findMany({
       where: {
-        status: "ACTIVE",
+        status: JobStatus.ACTIVE,
         OR: [{ categoryId: { in: interestIds } }, { remote: profile.preferredType === "Remote" }],
       },
       include: { company: true, category: true },
@@ -150,7 +151,7 @@ export class AiService {
 
     if (preFiltered.length === 0) {
       return this.prisma.job.findMany({
-        where: { status: "ACTIVE", featured: true },
+        where: { status: JobStatus.ACTIVE, featured: true },
         include: { company: true, category: true },
         take: 6,
       })

@@ -8,6 +8,13 @@ import {
   type CalendarEventType,
   type DocumentType,
   type JobType,
+  type NotificationType,
+  JOB_TYPE_OPTIONS,
+  type SeekerView,
+  employmentTypeCode,
+  employmentTypeLabel,
+  isSeekerView,
+  notificationActionView,
 } from "../lib/contracts"
 
 function decodeJwt(token: string) {
@@ -62,6 +69,8 @@ export interface NotificationItem {
   title: string
   time: string
   read: boolean
+  type: NotificationType
+  actionView?: SeekerView
 }
 
 export interface PublicJob {
@@ -161,6 +170,12 @@ export interface ChatMessage {
   text: string
   read: boolean
   createdAt: string
+}
+
+export interface SeekerDashboardData {
+  summary: { applications: number; inProcess: number; interviewing: number; saved: number; profileStrength: number }
+  pipeline: Record<ApplicationStatusCode, number>
+  activity: Array<{ date: string; updates: number }>
 }
 
 export interface AiChatMessage {
@@ -275,37 +290,19 @@ export interface JobState {
   setAddJobOpen: (open: boolean) => void
   setSelectedCandidateId: (id: string | null) => void
   fetchInitialData: () => Promise<void>
+  fetchSeekerDashboard: () => Promise<void>
 
   // ── Seeker workspace ─────────────────────────────────────────────────────
-  candidateActiveView:
-    | "Dashboard"
-    | "Discover"
-    | "Applications"
-    | "Messages"
-    | "Notifications"
-    | "Calendar"
-    | "Documents"
-    | "Profile"
-    | "Settings"
+  candidateActiveView: SeekerView
   publicJobs: PublicJob[]
   recommendedJobs: PublicJob[]
+  seekerDashboard: SeekerDashboardData | null
   publicJobsLoading: boolean
   jobApplications: JobApplication[]
   discoverSearch: string
   discoverTypeFilter: string
   seekerProfile: SeekerProfileData | null
-  setCandidateActiveView: (
-    view:
-      | "Dashboard"
-      | "Discover"
-      | "Applications"
-      | "Messages"
-      | "Notifications"
-      | "Calendar"
-      | "Documents"
-      | "Profile"
-      | "Settings"
-  ) => void
+  setCandidateActiveView: (view: SeekerView) => void
   toggleJobBookmark: (id: string) => Promise<boolean>
   applyFromDiscover: (publicJobId: string) => Promise<boolean>
   saveJobFromDiscover: (publicJobId: string) => Promise<boolean>
@@ -582,6 +579,8 @@ export const useJobStore = create<JobState>((set, get) => ({
             title: data.title || data.message || "New Notification",
             time: "Just now",
             read: false,
+            type: data.type || "SYSTEM",
+            actionView: notificationActionView(data.actionView) || (isSeekerView(data.actionView) ? data.actionView : undefined),
           },
           ...state.notifications,
         ],
@@ -615,6 +614,7 @@ export const useJobStore = create<JobState>((set, get) => ({
   profileUpdating: false,
   publicJobsLoading: false,
   recommendedJobs: [],
+  seekerDashboard: null,
   seekerProfile: null,
   setCandidateActiveView: (view) => set({ candidateActiveView: view }),
   setDiscoverSearch: (q) => set({ discoverSearch: q }),
@@ -717,7 +717,7 @@ export const useJobStore = create<JobState>((set, get) => ({
         body: JSON.stringify({
           title: jobData.title,
           location: jobData.location,
-          type: jobData.type,
+          type: employmentTypeCode(jobData.type),
           salary: jobData.salary,
           description: jobData.description,
           requirements: jobData.requirements,
@@ -732,7 +732,7 @@ export const useJobStore = create<JobState>((set, get) => ({
         id: dbJob.id,
         title: dbJob.title,
         location: dbJob.location,
-        type: dbJob.type,
+        type: employmentTypeLabel(dbJob.type),
         posted: "Just now",
         status: "Active",
         color: dbJob.color || "purple",
@@ -778,6 +778,8 @@ export const useJobStore = create<JobState>((set, get) => ({
         title: n.title,
         time: new Date(n.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         read: n.read,
+        type: n.type || "SYSTEM",
+        actionView: notificationActionView(n.actionView) || (isSeekerView(n.actionView) ? n.actionView : undefined),
       }))
       set({ notifications: mapped })
     } catch {}
@@ -832,6 +834,15 @@ export const useJobStore = create<JobState>((set, get) => ({
     }
   },
 
+  fetchSeekerDashboard: async () => {
+    try {
+      const dashboard = await apiFetch("/dashboard/seeker")
+      set({ seekerDashboard: dashboard })
+    } catch {
+      // The page retains its record-derived fallback when the dashboard API is unavailable.
+    }
+  },
+
   fetchInitialData: async () => {
     const role = get().user?.role
     if (!role) return
@@ -843,7 +854,7 @@ export const useJobStore = create<JobState>((set, get) => ({
           id: j.id,
           title: j.title,
           location: j.location,
-          type: j.type,
+          type: employmentTypeLabel(j.type),
           posted: "Posted " + new Date(j.createdAt).toLocaleDateString(),
           status: j.status === "ACTIVE" ? "Active" : "Closed",
           color: j.color || "purple",
@@ -926,7 +937,7 @@ export const useJobStore = create<JobState>((set, get) => ({
           title: a.job.title,
           companyColor: a.job.company.color || "purple",
           location: a.job.location,
-          type: a.job.type,
+          type: employmentTypeLabel(a.job.type),
           salary: a.job.salary || "Competitive",
           appliedDate: new Date(a.appliedAt).toLocaleDateString(),
           status: (Object.values(APPLICATION_STATUS).includes(a.status)
@@ -949,7 +960,7 @@ export const useJobStore = create<JobState>((set, get) => ({
           company: pj.company.name,
           companyColor: pj.company.color || "purple",
           location: pj.location,
-          type: pj.type,
+          type: employmentTypeLabel(pj.type),
           salary: pj.salary || "Competitive",
           posted: new Date(pj.createdAt).toLocaleDateString(),
           description: pj.description,
@@ -975,7 +986,7 @@ export const useJobStore = create<JobState>((set, get) => ({
               company: job.company.name,
               companyColor: job.company.color || "purple",
               location: job.location,
-              type: job.type,
+              type: employmentTypeLabel(job.type),
               salary: job.salary || "Competitive",
               posted: new Date(job.createdAt).toLocaleDateString(),
               description: job.description,
@@ -1018,7 +1029,7 @@ export const useJobStore = create<JobState>((set, get) => ({
                 skills: profileData.skills || [],
                 languages: profileData.languages || [],
                 expectedSalary: profileData.expectedSalary || "",
-                preferredType: profileData.preferredType || "Full Time",
+                preferredType: profileData.preferredType || JOB_TYPE_OPTIONS[0],
                 availability: profileData.availability || "",
                 preferredLocations: profileData.preferredLocations || [],
                 visibility: profileData.visibility || "public",
@@ -1037,6 +1048,7 @@ export const useJobStore = create<JobState>((set, get) => ({
         get().fetchConversations()
         get().fetchUnreadCount()
         get().fetchNotifications()
+        get().fetchSeekerDashboard()
       }
     } catch (e) {
       console.warn("Failed to load workspace data from backend API.", e)
@@ -1332,7 +1344,8 @@ export const useJobStore = create<JobState>((set, get) => ({
 
   sendMessage: async (applicationId, text) => {
     const userId = get().user?.id || null
-    const senderType = get().user?.role === "RECRUITER" ? "RECRUITER" : "SEEKER"
+    const senderType: ChatMessage["senderType"] =
+      get().user?.role === "RECRUITER" ? "RECRUITER" : "SEEKER"
     const tempId = `temp-${Date.now()}`
 
     // Optimistic update — shown immediately, replaced when server acks
@@ -1340,7 +1353,7 @@ export const useJobStore = create<JobState>((set, get) => ({
       id: tempId,
       applicationId,
       senderId: userId,
-      senderType: senderType as any,
+      senderType,
       text,
       read: false,
       createdAt: new Date().toISOString(),

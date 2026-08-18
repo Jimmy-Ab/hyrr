@@ -113,18 +113,12 @@ function AppContent() {
   }
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-bg-primary text-txt-body">
-      {/* Top Header */}
-      <Header />
-
-      {/* Main Container */}
-      <div className="flex flex-1 h-[calc(100vh-68px)] overflow-hidden">
-        {/* Left Sidebar */}
-        <Sidebar />
-
-        {/* Right Scrollable Content Area */}
-        <main className="flex-1 overflow-y-auto p-8 bg-bg-primary">
-          <div className="max-w-[1440px] mx-auto w-full h-full">{renderView()}</div>
+    <div className="flex h-screen w-screen overflow-hidden bg-[#fafafe] text-txt-body">
+      <Sidebar />
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <Header />
+        <main className="flex-1 overflow-y-auto bg-[#fafafe] p-4 lg:p-5">
+          <div className="mx-auto w-full max-w-[1480px]">{renderView()}</div>
         </main>
       </div>
 

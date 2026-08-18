@@ -56,6 +56,13 @@ enum EventType {
   OTHER
 }
 
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  REMOTE
+}
+
 enum CompanyMemberRole {
   OWNER
   RECRUITER
@@ -67,6 +74,22 @@ enum AlertFrequency {
   INSTANT
   DAILY
   WEEKLY
+}
+
+enum NotificationType {
+  APPLICATION
+  INTERVIEW
+  MESSAGE
+  OFFER
+  JOB_ALERT
+  SYSTEM
+}
+
+enum NotificationAction {
+  APPLICATIONS
+  DISCOVER
+  MESSAGES
+  CALENDAR
 }
 
 // ==========================================
@@ -214,7 +237,7 @@ model Job {
   
   title         String
   location      String
-  type          String      // Full Time, Part Time, Contract, Remote
+  type          EmploymentType
   salary        String?
   status        JobStatus   @default(ACTIVE)
   color         String      @default("purple")
@@ -346,12 +369,14 @@ model SystemSetting {
 }
 
 model Notification {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title     String
-  read      Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id         String           @id @default(uuid())
+  userId     String
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title      String
+  type       NotificationType @default(SYSTEM)
+  actionView NotificationAction?
+  read       Boolean          @default(false)
+  createdAt  DateTime         @default(now())
 }
 
 model Payment {

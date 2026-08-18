@@ -16,6 +16,7 @@ import { Roles } from "../auth/decorators/roles.decorator"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { OptionalJwtAuthGuard } from "../auth/guards/optional-jwt-auth.guard"
 import { RolesGuard } from "../auth/guards/roles.guard"
+import { ApplicationStatus } from "@prisma/client"
 import { ApplicationsService } from "./applications.service"
 import { CreateApplicationDto } from "./dtos/create-application.dto"
 import { UpdateApplicationDto } from "./dtos/update-application.dto"
@@ -116,7 +117,7 @@ export class ApplicationsController {
   ) {
     const updated = await this.applicationsService.updateApplication(id, dto, req.user)
     // Re-score on significant status changes
-    if (dto.status && dto.status !== "SAVED") {
+    if (dto.status && dto.status !== ApplicationStatus.SAVED) {
       this.aiService.scoreApplication(id).catch(() => {})
     }
     return updated

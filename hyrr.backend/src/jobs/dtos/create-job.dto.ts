@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger"
-import { IsArray, IsBoolean, IsNotEmpty, IsOptional, IsString } from "class-validator"
+import { IsArray, IsBoolean, IsEnum, IsNotEmpty, IsOptional, IsString } from "class-validator"
+import { EmploymentType } from "@prisma/client"
 
 export class CreateJobDto {
   @ApiProperty({ example: "Senior Frontend Developer", description: "Job title" })
@@ -12,10 +13,10 @@ export class CreateJobDto {
   @IsNotEmpty()
   location: string
 
-  @ApiProperty({ example: "Full Time", enum: ["Full Time", "Part Time", "Contract", "Remote"] })
-  @IsString()
+  @ApiProperty({ example: EmploymentType.FULL_TIME, enum: EmploymentType })
+  @IsEnum(EmploymentType)
   @IsNotEmpty()
-  type: string
+  type: EmploymentType
 
   @ApiPropertyOptional({ example: "$120k – $180k", description: "Salary range" })
   @IsOptional()

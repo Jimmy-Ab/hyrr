@@ -12,6 +12,10 @@ import {
 } from "lucide-react"
 import { type ElementType } from "react"
 
+function HyrrMark() {
+  return <div className="flex items-center gap-2 px-2"><span className="grid h-6 w-6 place-items-center rounded-md bg-primary text-sm font-black text-white">H</span><span className="leading-none"><b className="block text-[11px] text-slate-800">HYRR</b><small className="block text-[7px] font-bold tracking-wide text-primary">CAREERS</small></span></div>
+}
+
 export function Sidebar() {
   const {
     candidateActiveView,
@@ -56,9 +60,14 @@ export function Sidebar() {
   ]
 
   return (
-    <div className="w-[260px] shrink-0 bg-bg-sidebar border-r border-bg-border/60 flex flex-col h-[calc(100vh-68px)] p-5 justify-between select-none">
+    <aside className="w-[172px] shrink-0 bg-white border-r border-slate-100 flex flex-col h-screen p-3 justify-between select-none">
       <div className="flex flex-col gap-5">
-        {/* Nav */}
+        <HyrrMark />
+        <div className="px-2">
+          <p className="text-[16px] font-bold tracking-tight text-slate-900">Job Seeker</p>
+          <p className="mt-1 text-[10px] text-slate-500">Career workspace</p>
+        </div>
+        <p className="px-2.5 text-[8px] font-bold uppercase tracking-[0.12em] text-slate-400">Pages included</p>
         <nav className="flex flex-col gap-1">
           {navItems.map((item) => {
             const Icon = item.icon
@@ -68,7 +77,7 @@ export function Sidebar() {
                 key={item.id}
                 id={`seeker-nav-${item.id.toLowerCase()}`}
                 onClick={() => setCandidateActiveView(item.id)}
-                className={`flex items-center justify-between h-[40px] px-3.5 rounded-xl transition-colors duration-150 group text-left cursor-pointer outline-none w-full ${
+                className={`flex items-center justify-between h-[31px] px-2.5 rounded-md transition-colors duration-150 group text-left cursor-pointer outline-none w-full ${
                   isActive
                     ? "bg-primary-light text-primary font-semibold"
                     : "text-txt-body hover:bg-bg-hover hover:text-txt-heading font-medium"
@@ -78,7 +87,7 @@ export function Sidebar() {
                   <Icon
                     className={`w-[18px] h-[18px] shrink-0 transition-colors ${isActive ? "text-primary" : "text-txt-caption group-hover:text-txt-heading"}`}
                   />
-                  <span className="text-[13.5px]">{item.label}</span>
+                  <span className="text-[11px]">{item.label}</span>
                 </div>
                 {item.badge != null && (
                   <span className="flex items-center justify-center min-w-[20px] h-[20px] px-1.5 rounded-full bg-primary/15 text-primary text-[11px] font-bold">
@@ -91,8 +100,7 @@ export function Sidebar() {
         </nav>
       </div>
 
-      {/* Bottom: Profile snippet */}
-      <div className="flex items-center gap-3 p-3.5 rounded-[13px] bg-bg-primary border border-bg-border/40">
+      <div className="flex items-center gap-2 p-2.5 rounded-lg bg-slate-50 border border-slate-100">
         <img
           src={user?.avatar || "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150"}
           alt={user?.name || "User Avatar"}
@@ -108,6 +116,6 @@ export function Sidebar() {
         </div>
         <div className="w-2 h-2 rounded-full bg-sec-green shrink-0" title="Available" />
       </div>
-    </div>
+    </aside>
   )
 }

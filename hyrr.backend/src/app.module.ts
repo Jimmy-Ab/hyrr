@@ -5,6 +5,7 @@ import { ApplicationsModule } from "./applications/applications.module"
 import { AuthModule } from "./auth/auth.module"
 import { CacheModule } from "./cache/cache.module"
 import { CalendarModule } from "./calendar/calendar.module"
+import { DashboardModule } from "./dashboard/dashboard.module"
 import { DocumentsModule } from "./documents/documents.module"
 import { EngagementModule } from "./engagement/engagement.module"
 import { JobsModule } from "./jobs/jobs.module"
@@ -35,6 +36,7 @@ import { UploadsModule } from "./uploads/uploads.module"
     MessagesModule,
     DocumentsModule,
     CalendarModule,
+    DashboardModule,
     AiModule,
     ProfileModule,
     SettingsModule,
