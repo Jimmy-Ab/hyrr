@@ -23,7 +23,7 @@ import {
   Trash2,
   X,
 } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
 
 /* ══════════════════════════════════════════════════════════════
    Small reusable helpers
@@ -119,7 +119,7 @@ export function ProfilePage() {
   /* ═══════════════════════════════════════════════════════════
      Data loading
   ═══════════════════════════════════════════════════════════ */
-  const loadProfile = async () => {
+  const loadProfile = React.useCallback(async () => {
     try {
       setLoading(true)
       const data = await apiFetch("/profile")
@@ -154,11 +154,12 @@ export function ProfilePage() {
     } finally {
       setLoading(false)
     }
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     loadProfile()
-  }, [])
+  }, [loadProfile])
 
   /* ═══════════════════════════════════════════════════════════
      Avatar upload  →  auto-saves avatar to backend
