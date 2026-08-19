@@ -11,12 +11,12 @@ import {
   UseGuards,
 } from "@nestjs/common"
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from "@nestjs/swagger"
+import { ApplicationStatus } from "@prisma/client"
 import { AiService } from "../ai/ai.service"
 import { Roles } from "../auth/decorators/roles.decorator"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { OptionalJwtAuthGuard } from "../auth/guards/optional-jwt-auth.guard"
 import { RolesGuard } from "../auth/guards/roles.guard"
-import { ApplicationStatus } from "@prisma/client"
 import { ApplicationsService } from "./applications.service"
 import { CreateApplicationDto } from "./dtos/create-application.dto"
 import { UpdateApplicationDto } from "./dtos/update-application.dto"

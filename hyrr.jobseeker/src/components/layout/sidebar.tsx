@@ -13,7 +13,17 @@ import {
 import { type ElementType } from "react"
 
 function HyrrMark() {
-  return <div className="flex items-center gap-2 px-2"><span className="grid h-6 w-6 place-items-center rounded-md bg-primary text-sm font-black text-white">H</span><span className="leading-none"><b className="block text-[11px] text-slate-800">HYRR</b><small className="block text-[7px] font-bold tracking-wide text-primary">CAREERS</small></span></div>
+  return (
+    <div className="flex items-center gap-2 px-2">
+      <span className="grid h-6 w-6 place-items-center rounded-md bg-primary text-sm font-black text-white">
+        H
+      </span>
+      <span className="leading-none">
+        <b className="block text-[11px] text-slate-800">HYRR</b>
+        <small className="block text-[7px] font-bold tracking-wide text-primary">CAREERS</small>
+      </span>
+    </div>
+  )
 }
 
 export function Sidebar() {
@@ -67,7 +77,9 @@ export function Sidebar() {
           <p className="text-[16px] font-bold tracking-tight text-slate-900">Job Seeker</p>
           <p className="mt-1 text-[10px] text-slate-500">Career workspace</p>
         </div>
-        <p className="px-2.5 text-[8px] font-bold uppercase tracking-[0.12em] text-slate-400">Pages included</p>
+        <p className="px-2.5 text-[8px] font-bold uppercase tracking-[0.12em] text-slate-400">
+          Pages included
+        </p>
         <nav className="flex flex-col gap-1">
           {navItems.map((item) => {
             const Icon = item.icon

@@ -28,7 +28,7 @@ export class DocumentsService {
     // Normalize type to uppercase to match Prisma DocType enum
     const normalizedType = data.type?.toUpperCase()
     const docType = Object.values(DocType).includes(normalizedType as DocType)
-      ? normalizedType as DocType
+      ? (normalizedType as DocType)
       : DocType.OTHER
 
     // If uploading a new active resume, deactivate existing ones first

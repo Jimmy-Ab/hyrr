@@ -1,13 +1,13 @@
 import {
+  apiFetch,
   APPLICATION_STATUS,
   APPLICATION_STATUS_LABEL,
-  apiFetch,
   Badge,
   Button,
   Card,
   Input,
-  type ApplicationStatusCode,
   useJobStore,
+  type ApplicationStatusCode,
 } from "hyrr.shared"
 import {
   ArrowLeft,
@@ -131,7 +131,7 @@ export function TrackerPage() {
         company: a.job?.company?.name || "Company",
         location: a.job?.location || a.location || "Remote",
         status: Object.values(APPLICATION_STATUS).includes(a.status)
-          ? a.status as ApplicationStatusCode
+          ? (a.status as ApplicationStatusCode)
           : APPLICATION_STATUS.APPLIED,
         appliedAt: a.appliedAt ? new Date(a.appliedAt).toLocaleDateString() : "N/A",
         tag: a.tag,

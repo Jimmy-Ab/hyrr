@@ -1,3 +1,4 @@
+import { AlertFrequency, CompanyMemberRole } from "@prisma/client"
 import {
   ArrayMaxSize,
   IsArray,
@@ -9,7 +10,6 @@ import {
   IsString,
   MaxLength,
 } from "class-validator"
-import { AlertFrequency, CompanyMemberRole } from "@prisma/client"
 
 export class CreateScreeningQuestionDto {
   @IsString()

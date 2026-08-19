@@ -1,10 +1,4 @@
 import { Injectable } from "@nestjs/common"
-import { CacheService } from "../cache/cache.service"
-import { AccessService, Actor } from "../core/access/access.service"
-import { NotificationsService } from "../notifications/notifications.service"
-import { PrismaService } from "../prisma/prisma.service"
-import { CreateJobDto } from "./dtos/create-job.dto"
-import { UpdateJobDto } from "./dtos/update-job.dto"
 import {
   ApplicationStatus,
   EmploymentType,
@@ -12,6 +6,12 @@ import {
   NotificationAction,
   NotificationType,
 } from "@prisma/client"
+import { CacheService } from "../cache/cache.service"
+import { AccessService, Actor } from "../core/access/access.service"
+import { NotificationsService } from "../notifications/notifications.service"
+import { PrismaService } from "../prisma/prisma.service"
+import { CreateJobDto } from "./dtos/create-job.dto"
+import { UpdateJobDto } from "./dtos/update-job.dto"
 
 const JOB_COLORS = ["purple", "blue", "green", "orange"] as const
 const PUBLIC_JOBS_CACHE_KEY = "jobs:public"
@@ -99,7 +99,8 @@ export class JobsService {
             alert.locations.some((location: string) =>
               job.location.toLowerCase().includes(location.toLowerCase())
             )
-          const typeMatch = !alert.jobTypes.length || alert.jobTypes.includes(this.employmentTypeLabel(job.type))
+          const typeMatch =
+            !alert.jobTypes.length || alert.jobTypes.includes(this.employmentTypeLabel(job.type))
           return keywordMatch && locationMatch && typeMatch && (!alert.remoteOnly || job.remote)
         })
         .map((alert: any) =>
@@ -143,7 +144,12 @@ export class JobsService {
   }
 
   // ─── Public: full-text search + filter (Redis cached) ────────────
-  async searchPublicJobs(query?: string, type?: EmploymentType, categorySlug?: string, remote?: boolean) {
+  async searchPublicJobs(
+    query?: string,
+    type?: EmploymentType,
+    categorySlug?: string,
+    remote?: boolean
+  ) {
     const cacheKey = `${PUBLIC_JOBS_CACHE_KEY}:${query || ""}:${type || ""}:${categorySlug || ""}:${remote ?? ""}`
 
     const cached = await this.cache.get<any[]>(cacheKey)

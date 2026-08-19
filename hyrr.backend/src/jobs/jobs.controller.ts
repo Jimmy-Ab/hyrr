@@ -15,8 +15,8 @@ import { Roles } from "../auth/decorators/roles.decorator"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { RolesGuard } from "../auth/guards/roles.guard"
 import { CreateJobDto } from "./dtos/create-job.dto"
-import { UpdateJobDto } from "./dtos/update-job.dto"
 import { SearchPublicJobsDto } from "./dtos/search-public-jobs.dto"
+import { UpdateJobDto } from "./dtos/update-job.dto"
 import { JobsService } from "./jobs.service"
 
 @ApiTags("Jobs")

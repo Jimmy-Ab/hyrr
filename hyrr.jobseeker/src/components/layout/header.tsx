@@ -8,17 +8,7 @@ import {
   useJobStore,
   useToast,
 } from "hyrr.shared"
-import {
-  Bell,
-  ChevronDown,
-  Command,
-  LogOut,
-  Moon,
-  Search,
-  Settings,
-  Sun,
-  User,
-} from "lucide-react"
+import { Bell, ChevronDown, Command, LogOut, Moon, Search, Settings, Sun, User } from "lucide-react"
 import * as React from "react"
 
 export function Header() {

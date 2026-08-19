@@ -7,9 +7,9 @@ import {
   type ApplicationStatusLabel,
   type CalendarEventType,
   type DocumentType,
+  JOB_TYPE_OPTIONS,
   type JobType,
   type NotificationType,
-  JOB_TYPE_OPTIONS,
   type SeekerView,
   employmentTypeCode,
   employmentTypeLabel,
@@ -173,7 +173,13 @@ export interface ChatMessage {
 }
 
 export interface SeekerDashboardData {
-  summary: { applications: number; inProcess: number; interviewing: number; saved: number; profileStrength: number }
+  summary: {
+    applications: number
+    inProcess: number
+    interviewing: number
+    saved: number
+    profileStrength: number
+  }
   pipeline: Record<ApplicationStatusCode, number>
   activity: Array<{ date: string; updates: number }>
 }
@@ -580,7 +586,9 @@ export const useJobStore = create<JobState>((set, get) => ({
             time: "Just now",
             read: false,
             type: data.type || "SYSTEM",
-            actionView: notificationActionView(data.actionView) || (isSeekerView(data.actionView) ? data.actionView : undefined),
+            actionView:
+              notificationActionView(data.actionView) ||
+              (isSeekerView(data.actionView) ? data.actionView : undefined),
           },
           ...state.notifications,
         ],
@@ -779,7 +787,9 @@ export const useJobStore = create<JobState>((set, get) => ({
         time: new Date(n.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         read: n.read,
         type: n.type || "SYSTEM",
-        actionView: notificationActionView(n.actionView) || (isSeekerView(n.actionView) ? n.actionView : undefined),
+        actionView:
+          notificationActionView(n.actionView) ||
+          (isSeekerView(n.actionView) ? n.actionView : undefined),
       }))
       set({ notifications: mapped })
     } catch {}

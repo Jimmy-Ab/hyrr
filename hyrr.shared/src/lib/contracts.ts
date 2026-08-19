@@ -47,11 +47,15 @@ export type JobType = (typeof EMPLOYMENT_TYPE_LABEL)[EmploymentTypeCode]
 export const JOB_TYPES = ["All", ...Object.values(EMPLOYMENT_TYPE_LABEL)] as const
 export const JOB_TYPE_OPTIONS = Object.values(EMPLOYMENT_TYPE_LABEL) as JobType[]
 export function employmentTypeLabel(value: EmploymentTypeCode | JobType): JobType {
-  return value in EMPLOYMENT_TYPE_LABEL ? EMPLOYMENT_TYPE_LABEL[value as EmploymentTypeCode] : value as JobType
+  return value in EMPLOYMENT_TYPE_LABEL
+    ? EMPLOYMENT_TYPE_LABEL[value as EmploymentTypeCode]
+    : (value as JobType)
 }
 export function employmentTypeCode(value: EmploymentTypeCode | JobType): EmploymentTypeCode {
   if (value in EMPLOYMENT_TYPE) return value as EmploymentTypeCode
-  return Object.entries(EMPLOYMENT_TYPE_LABEL).find(([, label]) => label === value)?.[0] as EmploymentTypeCode
+  return Object.entries(EMPLOYMENT_TYPE_LABEL).find(
+    ([, label]) => label === value
+  )?.[0] as EmploymentTypeCode
 }
 
 export const CALENDAR_EVENT_TYPE = {

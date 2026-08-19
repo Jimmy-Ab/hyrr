@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, UnauthorizedException } from "@nestjs/common"
-import { UserStatus } from "@prisma/client"
 import { JwtService } from "@nestjs/jwt"
+import { UserStatus } from "@prisma/client"
 import * as bcrypt from "bcrypt"
 import { PrismaService } from "../prisma/prisma.service"
 import { LoginDto } from "./dtos/login.dto"

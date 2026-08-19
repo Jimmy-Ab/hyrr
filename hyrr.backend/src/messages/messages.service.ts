@@ -1,7 +1,7 @@
 import { Inject, Injectable, Optional, forwardRef } from "@nestjs/common"
+import { NotificationAction, NotificationType } from "@prisma/client"
 import { AccessService, Actor } from "../core/access/access.service"
 import { NotificationsService } from "../notifications/notifications.service"
-import { NotificationAction, NotificationType } from "@prisma/client"
 import { PrismaService } from "../prisma/prisma.service"
 import { MessagesGateway } from "./messages.gateway"
 
@@ -10,8 +10,11 @@ export class MessagesService {
   constructor(
     private prisma: PrismaService,
     private access: AccessService,
-    @Optional() @Inject(forwardRef(() => MessagesGateway)) private messagesGateway?: MessagesGateway,
-    @Optional() @Inject(forwardRef(() => NotificationsService))
+    @Optional()
+    @Inject(forwardRef(() => MessagesGateway))
+    private messagesGateway?: MessagesGateway,
+    @Optional()
+    @Inject(forwardRef(() => NotificationsService))
     private notifications?: NotificationsService
   ) {}
 

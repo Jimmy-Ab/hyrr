@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger"
-import { IsArray, IsBoolean, IsEnum, IsNotEmpty, IsOptional, IsString } from "class-validator"
 import { EmploymentType } from "@prisma/client"
+import { IsArray, IsBoolean, IsEnum, IsNotEmpty, IsOptional, IsString } from "class-validator"
 
 export class CreateJobDto {
   @ApiProperty({ example: "Senior Frontend Developer", description: "Job title" })

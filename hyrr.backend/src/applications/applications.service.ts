@@ -222,7 +222,8 @@ export class ApplicationsService {
       else if (dto.status === ApplicationStatus.INTERVIEWING) tag = "Interview Stage"
       else if (dto.status === ApplicationStatus.OFFER) tag = "Offer Sent"
       else if (dto.status === ApplicationStatus.ARCHIVED) tag = "Not a fit"
-      else if (dto.status === ApplicationStatus.SAVED || dto.status === ApplicationStatus.APPLIED) tag = undefined
+      else if (dto.status === ApplicationStatus.SAVED || dto.status === ApplicationStatus.APPLIED)
+        tag = undefined
     }
 
     const previous = await this.prisma.application.findUnique({
@@ -261,7 +262,9 @@ export class ApplicationsService {
       await this.notificationsService.createNotification(
         app.userId,
         `Your application for ${app.job.title} status updated to: ${statusLabel}`,
-        dto.status === ApplicationStatus.OFFER ? NotificationType.OFFER : NotificationType.APPLICATION,
+        dto.status === ApplicationStatus.OFFER
+          ? NotificationType.OFFER
+          : NotificationType.APPLICATION,
         NotificationAction.APPLICATIONS
       )
       // Real-time WebSocket update so seeker's Kanban board updates live

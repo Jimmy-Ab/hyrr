@@ -9,9 +9,13 @@ export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getSeekerDashboard(userId: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { email: true } })
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    })
     const profile = await this.prisma.seekerProfile.findUnique({
-      where: { userId }, include: { experiences: true, educations: true },
+      where: { userId },
+      include: { experiences: true, educations: true },
     })
     const applicationWhere = {
       OR: [{ userId }, ...(user?.email ? [{ email: user.email }] : [])],
@@ -21,7 +25,10 @@ export class DashboardService {
       include: { job: { include: { company: true } } },
       orderBy: { updatedAt: "desc" },
     })
-    const counts = Object.fromEntries(APPLICATION_STATUSES.map((status) => [status, 0])) as Record<ApplicationStatus, number>
+    const counts = Object.fromEntries(APPLICATION_STATUSES.map((status) => [status, 0])) as Record<
+      ApplicationStatus,
+      number
+    >
     for (const application of applications) counts[application.status] += 1
 
     const now = new Date()
@@ -36,17 +43,26 @@ export class DashboardService {
       const day = new Date(fourteenDaysAgo)
       day.setDate(fourteenDaysAgo.getDate() + index)
       const key = day.toISOString().slice(0, 10)
-      return { date: key, updates: events.filter((event) => event.createdAt.toISOString().slice(0, 10) === key).length }
+      return {
+        date: key,
+        updates: events.filter((event) => event.createdAt.toISOString().slice(0, 10) === key)
+          .length,
+      }
     })
     const upcomingInterviews = await this.prisma.calendarEvent.findMany({
       where: { application: applicationWhere, startTime: { gte: now } },
       include: { application: { include: { job: { include: { company: true } } } } },
-      orderBy: { startTime: "asc" }, take: 3,
+      orderBy: { startTime: "asc" },
+      take: 3,
     })
     const profileFields = [
-      Boolean(profile?.title), Boolean(profile?.bio), Boolean(profile?.skills.length),
-      Boolean(profile?.languages.length), Boolean(profile?.experiences.length),
-      Boolean(profile?.educations.length), Boolean(profile?.website || profile?.github || profile?.linkedin),
+      Boolean(profile?.title),
+      Boolean(profile?.bio),
+      Boolean(profile?.skills.length),
+      Boolean(profile?.languages.length),
+      Boolean(profile?.experiences.length),
+      Boolean(profile?.educations.length),
+      Boolean(profile?.website || profile?.github || profile?.linkedin),
       Boolean(profile?.expectedSalary),
     ]
     return {
@@ -55,7 +71,9 @@ export class DashboardService {
         inProcess: counts.IN_PROCESS,
         interviewing: counts.INTERVIEWING,
         saved: counts.SAVED,
-        profileStrength: Math.round((profileFields.filter(Boolean).length / profileFields.length) * 100),
+        profileStrength: Math.round(
+          (profileFields.filter(Boolean).length / profileFields.length) * 100
+        ),
       },
       pipeline: counts,
       activity,

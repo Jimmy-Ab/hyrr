@@ -72,7 +72,7 @@ export class CalendarService {
         startTime: new Date(data.startTime),
         endTime: data.endTime ? new Date(data.endTime) : null,
         type: Object.values(EventType).includes(data.type?.toUpperCase() as EventType)
-          ? data.type.toUpperCase() as EventType
+          ? (data.type.toUpperCase() as EventType)
           : EventType.INTERVIEW,
         meetingUrl: data.meetingUrl || null,
         location: data.location || null,

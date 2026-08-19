@@ -1,5 +1,5 @@
-import { IsDateString, IsEnum, IsOptional, IsString, MaxLength } from "class-validator"
 import { EventType } from "@prisma/client"
+import { IsDateString, IsEnum, IsOptional, IsString, MaxLength } from "class-validator"
 export class CreateCalendarEventDto {
   @IsOptional() @IsString() applicationId?: string
   @IsString() @MaxLength(200) title: string

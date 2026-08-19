@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from "@nestjs/swagger"
-import { IsEnum, IsOptional, IsString } from "class-validator"
 import { JobStatus } from "@prisma/client"
+import { IsEnum, IsOptional, IsString } from "class-validator"
 
 export class UpdateJobDto {
   @ApiPropertyOptional({ example: JobStatus.CLOSED, enum: JobStatus })

@@ -283,19 +283,49 @@ export function CandidateMessages() {
             {activeConv ? (
               <div className="flex h-full flex-col">
                 <div className="flex flex-col items-center border-b border-bg-border pb-4 text-center">
-                  <img src={activeConv.candidateAvatar} alt="" className="h-12 w-12 rounded-full object-cover" />
-                  <p className="mt-2 text-[12px] font-bold text-txt-heading">{activeConv.candidateName}</p>
+                  <img
+                    src={activeConv.candidateAvatar}
+                    alt=""
+                    className="h-12 w-12 rounded-full object-cover"
+                  />
+                  <p className="mt-2 text-[12px] font-bold text-txt-heading">
+                    {activeConv.candidateName}
+                  </p>
                   <p className="mt-0.5 text-[9px] text-txt-caption">Hiring contact</p>
                 </div>
                 <div className="space-y-3 py-4 text-[10px]">
-                  <div><p className="text-[9px] font-bold uppercase tracking-wider text-txt-caption">Company</p><p className="mt-1 font-medium text-txt-body">{activeConv.company}</p></div>
-                  <div><p className="text-[9px] font-bold uppercase tracking-wider text-txt-caption">Role</p><p className="mt-1 font-medium text-txt-body">{activeConv.jobTitle}</p></div>
-                  <div><p className="text-[9px] font-bold uppercase tracking-wider text-txt-caption">Conversation</p><p className="mt-1 font-medium text-sec-green">{activeConv.online ? "Available now" : "Messages saved"}</p></div>
+                  <div>
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-txt-caption">
+                      Company
+                    </p>
+                    <p className="mt-1 font-medium text-txt-body">{activeConv.company}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-txt-caption">
+                      Role
+                    </p>
+                    <p className="mt-1 font-medium text-txt-body">{activeConv.jobTitle}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-txt-caption">
+                      Conversation
+                    </p>
+                    <p className="mt-1 font-medium text-sec-green">
+                      {activeConv.online ? "Available now" : "Messages saved"}
+                    </p>
+                  </div>
                 </div>
-                <button onClick={() => deleteConversation(activeConv.applicationId)} className="mt-auto w-full rounded-md border border-bg-border py-2 text-[10px] font-semibold text-txt-caption hover:bg-bg-hover">Delete conversation</button>
+                <button
+                  onClick={() => deleteConversation(activeConv.applicationId)}
+                  className="mt-auto w-full rounded-md border border-bg-border py-2 text-[10px] font-semibold text-txt-caption hover:bg-bg-hover"
+                >
+                  Delete conversation
+                </button>
               </div>
             ) : (
-              <div className="flex h-full items-center justify-center text-center text-[10px] text-txt-caption">Select a conversation to view its details.</div>
+              <div className="flex h-full items-center justify-center text-center text-[10px] text-txt-caption">
+                Select a conversation to view its details.
+              </div>
             )}
           </Card>
         </aside>
