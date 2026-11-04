@@ -167,6 +167,10 @@ model Company {
   members     User[]
   teamMembers CompanyMember[]
   jobs        Job[]
+  wallet       CreditWallet?
+  transactions CreditTransaction[]
+  payments     Payment[]
+  subscription Subscription?
 }
 
 // ==========================================
@@ -264,9 +268,11 @@ model Job {
   requirements  String[]
   skills        String[]
   benefits      String[]
-  featured      Boolean     @default(false)
+  featured      Boolean     @default(false) // currently featured (kept in sync with featuredUntil)
+  featuredUntil DateTime?
+  publishedAt   DateTime? // first time the job went live (publishing is charged once)
   remote        Boolean     @default(false)
-  momentumCost  Int         @default(10)
+  momentumCost  Int         @default(0) // Momentum credits charged when it was published
   createdAt     DateTime    @default(now())
 
   // Relations
@@ -405,6 +411,7 @@ model UserSetting {
 model SystemSetting {
   id            String   @id @default("global-settings")
   activeModel   String   @default("gemini-2.5-flash")
+  momentumConfig Json? // Momentum pricing overrides (publish base, multipliers, feature cost/days, AI re-run cost)
   temperature   Float    @default(0.2)
   systemPrompt  String   @db.Text
   updatedAt     DateTime @updatedAt
@@ -422,17 +429,30 @@ model Notification {
   createdAt  DateTime         @default(now())
 }
 
+// A purchase through Stripe or Chapa. Credits are granted exactly once, when the provider
+// confirms the payment (idempotent on providerRef).
 model Payment {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  amount      Int
-  currency    String   @default("USD")
-  type        String
-  status      String
-  provider    String
+  id          String          @id @default(uuid())
+  companyId   String
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  provider    PaymentProvider
+  providerRef String          @unique // Stripe Checkout Session id / Chapa tx_ref
+  kind        PaymentKind     @default(CREDIT_PACK)
+  packageId   String?
+  package     CreditPackage?  @relation(fields: [packageId], references: [id], onDelete: SetNull)
+  credits     Int             @default(0)
+  amount      Int // minor units (cents / santim)
+  currency    String
+  status      PaymentStatus   @default(PENDING)
   description String
-  createdAt   DateTime @default(now())
+  metadata    Json?
+  paidAt      DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([companyId, createdAt])
 }
 
 model AuditLog {
@@ -565,15 +585,18 @@ model JobReport {
 }
 
 model Subscription {
-  id        String   @id @default(uuid())
-  companyId String   @unique
-  plan      String   @default("Starter")
-  status    String   @default("TRIAL")
-  provider  String?
-  providerCustomerId String?
-  renewsAt  DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                     String             @id @default(uuid())
+  companyId              String             @unique
+  company                Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  plan                   String             @default("STARTER") // Plan.code
+  status                 SubscriptionStatus @default(ACTIVE)
+  provider               PaymentProvider?
+  providerCustomerId     String?
+  providerSubscriptionId String?            @unique
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean            @default(false)
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
 }
 
 // One-time tokens for e-mail verification and password reset (only the hash is stored).
@@ -593,4 +616,92 @@ model AuthToken {
 enum AuthTokenType {
   VERIFY_EMAIL
   RESET_PASSWORD
+}
+
+// ─── Momentum credits ────────────────────────────────────────────────────────
+
+enum PaymentProvider {
+  STRIPE
+  CHAPA
+}
+
+enum PaymentKind {
+  CREDIT_PACK
+  SUBSCRIPTION
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELED
+}
+
+enum CreditTransactionType {
+  PURCHASE
+  SIGNUP_BONUS
+  PLAN_GRANT
+  JOB_PUBLISH
+  JOB_FEATURE
+  AI_ANALYSIS
+  REFUND
+  ADJUSTMENT
+}
+
+// One wallet per company, shared by the whole hiring team.
+model CreditWallet {
+  id        String   @id @default(uuid())
+  companyId String   @unique
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  balance   Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Append-only ledger: every balance change, with the balance right after it.
+model CreditTransaction {
+  id           String                @id @default(uuid())
+  companyId    String
+  company      Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  amount       Int // positive = credit, negative = debit
+  type         CreditTransactionType
+  balanceAfter Int
+  referenceId  String? // job id, application id, payment id …
+  actorId      String?
+  note         String?
+  createdAt    DateTime              @default(now())
+
+  @@index([companyId, createdAt])
+  @@index([type, referenceId])
+}
+
+model CreditPackage {
+  id            String    @id @default(uuid())
+  code          String    @unique
+  name          String
+  credits       Int
+  bonusCredits  Int       @default(0)
+  priceUsdCents Int
+  priceEtbCents Int
+  active        Boolean   @default(true)
+  sortOrder     Int       @default(0)
+  payments      Payment[]
+}
+
+model Plan {
+  id             String  @id @default(uuid())
+  code           String  @unique // STARTER | PRO | ENTERPRISE
+  name           String
+  monthlyCredits Int     @default(0)
+  seatLimit      Int? // null = unlimited
+  priceUsdCents  Int     @default(0) // per month; 0 = free
+  active         Boolean @default(true)
+  sortOrder      Int     @default(0)
 }
