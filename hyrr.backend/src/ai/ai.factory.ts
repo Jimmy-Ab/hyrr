@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common"
 import { ClaudeAdapter } from "./adapters/claude.adapter"
 import { GeminiAdapter } from "./adapters/gemini.adapter"
 import { OpenAIAdapter } from "./adapters/openai.adapter"
+import { providerFor } from "./ai.models"
 import { LLMAdapter } from "./interfaces/llm-adapter.interface"
 
 @Injectable()
@@ -13,10 +14,13 @@ export class AiFactory {
   ) {}
 
   getAdapter(modelName: string): LLMAdapter {
-    if (modelName.startsWith("gemini")) return this.gemini
-    if (modelName.startsWith("gpt")) return this.openai
-    if (modelName.startsWith("claude")) return this.claude
-    // Default fallback
-    return this.gemini
+    switch (providerFor(modelName)) {
+      case "claude":
+        return this.claude
+      case "openai":
+        return this.openai
+      default:
+        return this.gemini
+    }
   }
 }

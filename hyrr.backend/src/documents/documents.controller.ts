@@ -4,6 +4,7 @@ import { Roles } from "../auth/decorators/roles.decorator"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { RolesGuard } from "../auth/guards/roles.guard"
 import { DocumentsService } from "./documents.service"
+import { CreateDocumentDto } from "./dtos/create-document.dto"
 
 @ApiTags("Documents")
 @ApiBearerAuth()
@@ -24,10 +25,8 @@ export class DocumentsController {
   @Roles("SEEKER")
   @ApiOperation({ summary: "Log a new uploaded document" })
   @ApiResponse({ status: 201, description: "Document logged successfully" })
-  uploadDoc(
-    @Req() req: any,
-    @Body() body: { name: string; type: string; size: string; url: string }
-  ) {
+  @ApiResponse({ status: 400, description: "URL is not one of your uploads" })
+  uploadDoc(@Req() req: any, @Body() body: CreateDocumentDto) {
     return this.documentsService.createDocument(req.user.userId, body)
   }
 

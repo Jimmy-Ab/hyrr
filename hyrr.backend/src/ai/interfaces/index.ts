@@ -1,4 +1,10 @@
-import { AIMatchResult, LLMAdapter } from "./llm-adapter.interface"
+import {
+  AIMatchResult,
+  AiRecommendation,
+  CandidateAnalysisResult,
+  ChatTurn,
+  LLMAdapter,
+} from "./llm-adapter.interface"
 
 export interface AIFeaturedResult {
   jobId: string
@@ -6,4 +12,4 @@ export interface AIFeaturedResult {
   summary: string
 }
 
-export { AIMatchResult, LLMAdapter }
+export { AIMatchResult, AiRecommendation, CandidateAnalysisResult, ChatTurn, LLMAdapter }

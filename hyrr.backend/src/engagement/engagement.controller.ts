@@ -26,7 +26,7 @@ export class EngagementController {
     @Param("id") id: string,
     @Body() context: Record<string, string>
   ) {
-    return this.engagement.previewTemplate(req.user, id, context)
+    return this.engagement.previewTemplate(req.user, id, context || {})
   }
   @Post("templates/:id/send/:applicationId") @UseGuards(JwtAuthGuard) @ApiBearerAuth() send(
     @Req() req: any,

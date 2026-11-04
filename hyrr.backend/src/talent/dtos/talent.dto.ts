@@ -3,7 +3,9 @@ import {
   ArrayMaxSize,
   IsArray,
   IsBoolean,
+  IsEmail,
   IsEnum,
+  IsIn,
   IsNotEmpty,
   IsObject,
   IsOptional,
@@ -46,12 +48,18 @@ export class CreateApplicationNoteDto {
   body: string
 }
 
+export const ASSIGNABLE_TEAM_ROLES = [
+  CompanyMemberRole.RECRUITER,
+  CompanyMemberRole.HIRING_MANAGER,
+  CompanyMemberRole.VIEWER,
+] as const
+
 export class AddTeamMemberDto {
-  @IsString()
-  @IsNotEmpty()
-  userId: string
-  @IsEnum(CompanyMemberRole)
-  role: CompanyMemberRole
+  @IsEmail()
+  @MaxLength(254)
+  email: string
+  @IsIn(ASSIGNABLE_TEAM_ROLES as unknown as string[])
+  role: "RECRUITER" | "HIRING_MANAGER" | "VIEWER"
 }
 
 export class CreateJobAlertDto {

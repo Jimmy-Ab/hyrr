@@ -1,60 +1,453 @@
 import { Test, TestingModule } from "@nestjs/testing"
 import { PrismaClient } from "@prisma/client"
-import { DeepMockProxy, mockDeep } from "jest-mock-extended"
+import { mockDeep } from "jest-mock-extended"
+import { AiService } from "../ai/ai.service"
 import { AccessService } from "../core/access/access.service"
+import { MessagesGateway } from "../messages/messages.gateway"
+import { NotificationsService } from "../notifications/notifications.service"
 import { PrismaService } from "../prisma/prisma.service"
-import { ApplicationsService } from "./applications.service"
+import { ApplicationsService, SEEKER_APPLICATION_FIELDS } from "./applications.service"
+
+const flush = () => new Promise((resolve) => setImmediate(resolve))
 
 describe("ApplicationsService", () => {
   let service: ApplicationsService
-  let prismaMock: DeepMockProxy<PrismaClient>
+  let prismaMock: any
+  let access: any
+  let notifications: any
+  let ai: any
+  let gateway: any
+
+  const activeJob = { id: "job-1", status: "ACTIVE", title: "Engineer", recruiterId: "rec-1" }
+  const applyDto = {
+    name: "James Carter",
+    email: "james@example.com",
+    title: "Engineer",
+    location: "SF",
+  }
 
   beforeEach(async () => {
     prismaMock = mockDeep<PrismaClient>()
+    // Interactive transactions run against the same mock; batch transactions resolve the array.
+    prismaMock.$transaction.mockImplementation((arg: any) =>
+      typeof arg === "function" ? arg(prismaMock) : Promise.all(arg)
+    )
+    access = {
+      jobForManagement: jest.fn().mockResolvedValue({ id: "job-1" }),
+      jobForView: jest.fn().mockResolvedValue({ id: "job-1" }),
+      applicationFor: jest.fn(),
+      jobScopeWhere: jest.fn().mockResolvedValue({ OR: [{ companyId: { in: ["co-1"] } }] }),
+    }
+    notifications = { createNotification: jest.fn().mockResolvedValue({}) }
+    ai = {
+      scoreApplication: jest.fn().mockResolvedValue({ score: 80, summary: "ok" }),
+      resolveModel: jest.fn().mockResolvedValue({ model: "gpt-4o-mini", provider: "openai" }),
+    }
+    gateway = { emitAiScoreUpdate: jest.fn(), emitApplicationUpdate: jest.fn() }
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ApplicationsService,
         { provide: PrismaService, useValue: prismaMock },
-        {
-          provide: AccessService,
-          useValue: { jobForManagement: jest.fn(), applicationFor: jest.fn() },
-        },
+        { provide: AccessService, useValue: access },
+        { provide: NotificationsService, useValue: notifications },
+        { provide: AiService, useValue: ai },
+        { provide: MessagesGateway, useValue: gateway },
       ],
     }).compile()
 
     service = module.get<ApplicationsService>(ApplicationsService)
   })
 
-  it("should allow applying to a job", async () => {
-    prismaMock.application.findFirst.mockResolvedValue(null)
-    prismaMock.application.create.mockResolvedValue({
-      id: "app-123",
-      name: "James Carter",
-      email: "james@example.com",
-      status: "APPLIED",
-    } as any)
+  describe("applyToJob (C1)", () => {
+    it("should allow applying to a job", async () => {
+      prismaMock.job.findUnique.mockResolvedValue(activeJob)
+      prismaMock.application.findFirst.mockResolvedValue(null)
+      prismaMock.application.create.mockResolvedValue({ id: "app-123", status: "APPLIED" } as any)
+      prismaMock.application.findUnique.mockResolvedValue({ id: "app-123", status: "APPLIED" })
 
-    const result = await service.applyToJob("job-1", {
-      name: "James Carter",
-      email: "james@example.com",
-      title: "Engineer",
-      location: "SF",
+      const result: any = await service.applyToJob("job-1", applyDto, {
+        userId: "seeker-1",
+        role: "SEEKER",
+        email: "james@example.com",
+      })
+
+      expect(result.id).toBe("app-123")
+      expect(result.status).toBe("APPLIED")
+      expect(notifications.createNotification).toHaveBeenCalledWith(
+        "rec-1",
+        expect.any(String),
+        "APPLICATION",
+        "APPLICATIONS"
+      )
+      expect(ai.scoreApplication).toHaveBeenCalledWith("app-123")
     })
 
-    expect(result.id).toBe("app-123")
-    expect(result.status).toBe("APPLIED")
+    it("returns 404 JOB_NOT_FOUND for a non-ACTIVE job", async () => {
+      prismaMock.job.findUnique.mockResolvedValue({ ...activeJob, status: "CLOSED" })
+      await expect(service.applyToJob("job-1", applyDto, null)).rejects.toMatchObject({
+        status: 404,
+        errorCode: "JOB_NOT_FOUND",
+      })
+      expect(prismaMock.application.create).not.toHaveBeenCalled()
+    })
+
+    it("upgrades a SAVED application to APPLIED instead of creating a duplicate", async () => {
+      prismaMock.job.findUnique.mockResolvedValue(activeJob)
+      prismaMock.application.findFirst.mockResolvedValue({ id: "app-saved", status: "SAVED" })
+      prismaMock.application.update.mockResolvedValue({ id: "app-saved", status: "APPLIED" })
+      prismaMock.applicationStageEvent.create.mockResolvedValue({})
+      prismaMock.application.findUnique.mockResolvedValue({ id: "app-saved", status: "APPLIED" })
+
+      const result: any = await service.applyToJob(
+        "job-1",
+        { ...applyDto, coverLetter: "Hi", resumeUrl: "http://localhost:3000/api/uploads/a.pdf" },
+        { userId: "seeker-1", role: "SEEKER", email: "james@example.com" }
+      )
+
+      expect(prismaMock.application.create).not.toHaveBeenCalled()
+      expect(prismaMock.application.update).toHaveBeenCalledWith({
+        where: { id: "app-saved" },
+        data: expect.objectContaining({
+          status: "APPLIED",
+          coverLetter: "Hi",
+          resumeUrl: "http://localhost:3000/api/uploads/a.pdf",
+          appliedAt: expect.any(Date),
+        }),
+      })
+      expect(prismaMock.applicationStageEvent.create).toHaveBeenCalledTimes(1)
+      expect(prismaMock.applicationStageEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ fromStatus: "SAVED", toStatus: "APPLIED" }),
+      })
+      expect(result.id).toBe("app-saved")
+      expect(result.status).toBe("APPLIED")
+    })
+
+    it("seeker re-applying to a non-SAVED application gets 409 ALREADY_APPLIED", async () => {
+      prismaMock.job.findUnique.mockResolvedValue(activeJob)
+      prismaMock.application.findFirst.mockResolvedValue({ id: "app-1", status: "IN_PROCESS" })
+      await expect(
+        service.applyToJob("job-1", applyDto, { userId: "seeker-1", role: "SEEKER" })
+      ).rejects.toMatchObject({ status: 409, errorCode: "ALREADY_APPLIED" })
+    })
+
+    it("guest duplicate gets 409 without linking users, leaking data or creating tracking links", async () => {
+      prismaMock.job.findUnique.mockResolvedValue(activeJob)
+      prismaMock.application.findFirst.mockResolvedValue({ id: "existing-app" })
+
+      const error: any = await service.applyToJob("job-1", applyDto, null).catch((e) => e)
+
+      expect(error.status).toBe(409)
+      expect(error.errorCode).toBe("ALREADY_APPLIED")
+      expect(JSON.stringify(error.getResponse())).not.toContain("existing-app")
+      expect(prismaMock.user.findUnique).not.toHaveBeenCalled()
+      expect(prismaMock.applicationTrackingLink.create).not.toHaveBeenCalled()
+      expect(prismaMock.application.create).not.toHaveBeenCalled()
+    })
+
+    it("guest application never links to an existing user and returns only id/status/token", async () => {
+      prismaMock.job.findUnique.mockResolvedValue(activeJob)
+      prismaMock.application.findFirst.mockResolvedValue(null)
+      prismaMock.application.create.mockResolvedValue({ id: "app-guest", status: "APPLIED" })
+
+      const result = await service.applyToJob("job-1", applyDto, null)
+
+      expect(prismaMock.application.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ userId: null }) })
+      )
+      expect(Object.keys(result).sort()).toEqual(["id", "status", "trackingToken"])
+    })
+
+    it("recruiters cannot apply (403)", async () => {
+      await expect(
+        service.applyToJob("job-1", applyDto, { userId: "rec-1", role: "RECRUITER" })
+      ).rejects.toMatchObject({ status: 403 })
+    })
+
+    it("starts background AI analysis for a guest application", async () => {
+      prismaMock.job.findUnique.mockResolvedValue(activeJob)
+      prismaMock.application.findFirst.mockResolvedValue(null)
+      prismaMock.application.create.mockResolvedValue({ id: "app-guest", status: "APPLIED" })
+
+      await service.applyToJob("job-1", applyDto, null)
+      await flush()
+
+      expect(ai.scoreApplication).toHaveBeenCalledWith("app-guest")
+    })
+
+    it("seeker payload never selects any ai* field", async () => {
+      prismaMock.job.findUnique.mockResolvedValue(activeJob)
+      prismaMock.application.findFirst.mockResolvedValue(null)
+      prismaMock.application.create.mockResolvedValue({ id: "app-123", status: "APPLIED" } as any)
+      prismaMock.application.findUnique.mockResolvedValue({ id: "app-123", status: "APPLIED" })
+
+      await service.applyToJob("job-1", applyDto, {
+        userId: "seeker-1",
+        role: "SEEKER",
+        email: "james@example.com",
+      })
+
+      const select = prismaMock.application.findUnique.mock.calls[0][0].select
+      expect(Object.keys(select).filter((k) => /^ai/i.test(k))).toEqual([])
+      expect(Object.keys(SEEKER_APPLICATION_FIELDS).filter((k) => /^ai/i.test(k))).toEqual([])
+    })
   })
 
-  it("should fetch candidates for Kanban board", async () => {
-    prismaMock.application.findMany.mockResolvedValue([
-      { id: "app-1", status: "APPLIED" },
-      { id: "app-2", status: "IN_PROCESS" },
-    ] as any)
+  describe("createCandidate (C2)", () => {
+    it("creates a guest application for the job", async () => {
+      prismaMock.application.findFirst.mockResolvedValue(null)
+      prismaMock.application.create.mockResolvedValue({ id: "cand-1", status: "INTERVIEWING" })
 
-    const result = await service.getCandidatesForJob("job-1", {
-      userId: "recruiter-1",
-      role: "RECRUITER",
+      const result: any = await service.createCandidate(
+        "job-1",
+        { candidateName: "Ada", email: "ada@example.com", status: "INTERVIEWING" },
+        { userId: "rec-1", role: "RECRUITER" }
+      )
+
+      expect(access.jobForManagement).toHaveBeenCalled()
+      expect(prismaMock.application.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            userId: null,
+            name: "Ada",
+            status: "INTERVIEWING",
+            tag: "Interview Stage",
+          }),
+        })
+      )
+      expect(prismaMock.applicationStageEvent.create).toHaveBeenCalled()
+      expect(result.id).toBe("cand-1")
     })
-    expect(result).toHaveLength(2)
+
+    it("rejects a duplicate email with 409", async () => {
+      prismaMock.application.findFirst.mockResolvedValue({ id: "dup" })
+      await expect(
+        service.createCandidate(
+          "job-1",
+          { candidateName: "Ada", email: "ada@example.com" },
+          { userId: "rec-1", role: "RECRUITER" }
+        )
+      ).rejects.toMatchObject({ status: 409, errorCode: "ALREADY_APPLIED" })
+    })
+  })
+
+  describe("recruiter lists (C4)", () => {
+    it("should fetch candidates for Kanban board", async () => {
+      prismaMock.application.findMany.mockResolvedValue([
+        { id: "app-1", status: "APPLIED" },
+        { id: "app-2", status: "IN_PROCESS" },
+      ] as any)
+
+      const result = await service.getCandidatesForJob("job-1", {
+        userId: "recruiter-1",
+        role: "RECRUITER",
+      })
+      expect(result).toHaveLength(2)
+    })
+
+    it("excludes SAVED and paginates the job board", async () => {
+      prismaMock.application.findMany.mockResolvedValue([])
+      await service.getCandidatesForJob(
+        "job-1",
+        { userId: "rec-1", role: "RECRUITER" },
+        { take: 9999, skip: 10 }
+      )
+      expect(prismaMock.application.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { jobId: "job-1", status: { not: "SAVED" } },
+          take: 500,
+          skip: 10,
+        })
+      )
+    })
+
+    it("excludes SAVED from company candidates and scopes by company", async () => {
+      prismaMock.application.findMany.mockResolvedValue([])
+      await service.getAllCompanyCandidates({ userId: "rec-1", role: "RECRUITER" })
+      const args = prismaMock.application.findMany.mock.calls[0][0]
+      expect(args.where.AND).toEqual(
+        expect.arrayContaining([
+          { status: { not: "SAVED" } },
+          { job: { OR: [{ companyId: { in: ["co-1"] } }] } },
+        ])
+      )
+      expect(args.take).toBe(200)
+    })
+  })
+
+  describe("deleteApplication (C3)", () => {
+    const seeker = { userId: "seeker-1", role: "SEEKER" }
+
+    it("seeker unsaves a SAVED application (hard delete)", async () => {
+      access.applicationFor.mockResolvedValue({ id: "app-1", status: "SAVED", job: activeJob })
+      const result = await service.deleteApplication("app-1", seeker)
+      expect(prismaMock.application.delete).toHaveBeenCalledWith({ where: { id: "app-1" } })
+      expect(result).toEqual({ id: "app-1", deleted: true })
+    })
+
+    it("seeker withdraws an active application", async () => {
+      access.applicationFor.mockResolvedValue({
+        id: "app-1",
+        name: "James",
+        status: "INTERVIEWING",
+        job: activeJob,
+      })
+      const result = await service.deleteApplication("app-1", seeker)
+
+      expect(prismaMock.application.delete).not.toHaveBeenCalled()
+      expect(prismaMock.application.update).toHaveBeenCalledWith({
+        where: { id: "app-1" },
+        data: expect.objectContaining({ status: "WITHDRAWN" }),
+      })
+      expect(prismaMock.applicationStageEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ fromStatus: "INTERVIEWING", toStatus: "WITHDRAWN" }),
+      })
+      expect(notifications.createNotification).toHaveBeenCalledWith(
+        "rec-1",
+        expect.stringContaining("withdrew"),
+        "APPLICATION",
+        "APPLICATIONS"
+      )
+      expect(result).toEqual({ id: "app-1", status: "WITHDRAWN" })
+    })
+
+    it("withdrawing twice is a 409", async () => {
+      access.applicationFor.mockResolvedValue({ id: "app-1", status: "WITHDRAWN", job: activeJob })
+      await expect(service.deleteApplication("app-1", seeker)).rejects.toMatchObject({
+        status: 409,
+      })
+    })
+
+    it("recruiter hard-deletes with manage access", async () => {
+      access.applicationFor.mockResolvedValue({ id: "app-1", status: "APPLIED", job: activeJob })
+      const result = await service.deleteApplication("app-1", { userId: "rec-1", role: "RECRUITER" })
+      expect(access.applicationFor).toHaveBeenCalledWith(expect.anything(), "app-1", "manage")
+      expect(result).toEqual({ id: "app-1", deleted: true })
+    })
+  })
+
+  describe("updateApplication (C5)", () => {
+    const recruiter = { userId: "rec-1", role: "RECRUITER" }
+
+    it("WITHDRAWN applications cannot change status (409)", async () => {
+      access.applicationFor.mockResolvedValue({ id: "app-1", status: "WITHDRAWN", job: activeJob })
+      await expect(
+        service.updateApplication("app-1", { status: "OFFER" }, recruiter)
+      ).rejects.toMatchObject({ status: 409, errorCode: "APPLICATION_WITHDRAWN" })
+      expect(prismaMock.application.update).not.toHaveBeenCalled()
+    })
+
+    it("recruiters cannot set SAVED or WITHDRAWN", async () => {
+      access.applicationFor.mockResolvedValue({ id: "app-1", status: "APPLIED", job: activeJob })
+      await expect(
+        service.updateApplication("app-1", { status: "WITHDRAWN" }, recruiter)
+      ).rejects.toMatchObject({ status: 400 })
+      await expect(
+        service.updateApplication("app-1", { status: "SAVED" }, recruiter)
+      ).rejects.toMatchObject({ status: 400 })
+    })
+
+    it("updates status, writes a stage event, notifies and returns the candidate with tag", async () => {
+      access.applicationFor.mockResolvedValue({ id: "app-1", status: "APPLIED", job: activeJob })
+      prismaMock.application.update.mockResolvedValue({
+        id: "app-1",
+        userId: "seeker-1",
+        status: "OFFER",
+        tag: "Offer Sent",
+        aiScore: 70,
+        job: { title: "Engineer" },
+      })
+
+      const result: any = await service.updateApplication("app-1", { status: "OFFER" }, recruiter)
+
+      expect(prismaMock.$transaction).toHaveBeenCalled()
+      expect(prismaMock.application.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { status: "OFFER", tag: "Offer Sent" } })
+      )
+      expect(prismaMock.applicationStageEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ fromStatus: "APPLIED", toStatus: "OFFER" }),
+      })
+      expect(notifications.createNotification).toHaveBeenCalledWith(
+        "seeker-1",
+        expect.stringContaining("Offer Extended"),
+        "OFFER",
+        "APPLICATIONS"
+      )
+      expect(result.tag).toBe("Offer Sent")
+    })
+
+    it("does not re-run AI analysis on ordinary updates (even when unscored)", async () => {
+      access.applicationFor.mockResolvedValue({ id: "app-1", status: "APPLIED", job: activeJob })
+      prismaMock.application.update.mockResolvedValue({
+        id: "app-1",
+        userId: null,
+        status: "APPLIED",
+        aiScore: null,
+        job: { title: "Engineer" },
+      })
+      await service.updateApplication("app-1", { notes: "call back" } as any, recruiter)
+      await flush()
+      expect(ai.scoreApplication).not.toHaveBeenCalled()
+    })
+
+    it("seekers may only toggle seekerBookmarked", async () => {
+      access.applicationFor.mockResolvedValue({ id: "app-1", status: "APPLIED", job: activeJob })
+      await expect(
+        service.updateApplication("app-1", { status: "OFFER" }, { userId: "s", role: "SEEKER" })
+      ).rejects.toMatchObject({ status: 403 })
+    })
+  })
+  describe("analyzeApplication (A1)", () => {
+    const recruiter = { userId: "rec-1", role: "RECRUITER" }
+
+    it("requires manage access", async () => {
+      access.applicationFor.mockRejectedValue(Object.assign(new Error("Forbidden"), { status: 403 }))
+      await expect(service.analyzeApplication("app-1", recruiter)).rejects.toMatchObject({
+        status: 403,
+      })
+      expect(access.applicationFor).toHaveBeenCalledWith(recruiter, "app-1", "manage")
+      expect(ai.scoreApplication).not.toHaveBeenCalled()
+    })
+
+    it("returns 503 AI_DISABLED and marks the application when no provider is configured", async () => {
+      access.applicationFor.mockResolvedValue({ id: "app-1", status: "APPLIED", job: activeJob })
+      ai.resolveModel.mockResolvedValue(null)
+      prismaMock.application.update.mockResolvedValue({})
+      await expect(service.analyzeApplication("app-1", recruiter)).rejects.toMatchObject({
+        status: 503,
+        errorCode: "AI_DISABLED",
+      })
+      expect(prismaMock.application.update).toHaveBeenCalledWith({
+        where: { id: "app-1" },
+        data: { aiStatus: "DISABLED" },
+      })
+      expect(ai.scoreApplication).not.toHaveBeenCalled()
+    })
+
+    it("returns 409 AI_ALREADY_RUNNING while a recent analysis is pending", async () => {
+      access.applicationFor.mockResolvedValue({ id: "app-1", aiStatus: "PENDING", job: activeJob })
+      prismaMock.application.updateMany.mockResolvedValue({ count: 0 })
+      await expect(service.analyzeApplication("app-1", recruiter)).rejects.toMatchObject({
+        status: 409,
+        errorCode: "AI_ALREADY_RUNNING",
+      })
+      const where = prismaMock.application.updateMany.mock.calls[0][0].where
+      expect(where.id).toBe("app-1")
+      const stale = where.OR.find((c: any) => c.updatedAt)
+      expect(Date.now() - stale.updatedAt.lt.getTime()).toBeGreaterThanOrEqual(2 * 60 * 1000 - 50)
+      expect(ai.scoreApplication).not.toHaveBeenCalled()
+    })
+
+    it("claims the run, kicks off analysis and returns PENDING", async () => {
+      access.applicationFor.mockResolvedValue({ id: "app-1", aiStatus: "FAILED", job: activeJob })
+      prismaMock.application.updateMany.mockResolvedValue({ count: 1 })
+      const result = await service.analyzeApplication("app-1", recruiter)
+      await flush()
+      expect(result).toEqual({ applicationId: "app-1", aiStatus: "PENDING" })
+      expect(prismaMock.application.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { aiStatus: "PENDING", aiError: null } })
+      )
+      expect(ai.scoreApplication).toHaveBeenCalledWith("app-1")
+    })
   })
 })

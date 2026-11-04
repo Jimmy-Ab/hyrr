@@ -1,5 +1,40 @@
 import { Injectable, NotFoundException } from "@nestjs/common"
+import { Prisma } from "@prisma/client"
 import { PrismaService } from "../prisma/prisma.service"
+import { UpdateProfileDto } from "./dtos/profile.dto"
+
+/** Public user fields embedded in profile responses — never passwordHash or OAuth ids. */
+const PROFILE_USER_SELECT = {
+  id: true,
+  name: true,
+  email: true,
+  avatar: true,
+  role: true,
+  status: true,
+  joinedAt: true,
+} satisfies Prisma.UserSelect
+
+const PROFILE_INCLUDE = {
+  experiences: true,
+  educations: true,
+  interests: true,
+  user: { select: PROFILE_USER_SELECT },
+} satisfies Prisma.SeekerProfileInclude
+
+/** Scalar profile fields that PUT /profile persists, grouped by how `null` is stored. */
+const REQUIRED_TEXT_FIELDS = ["title", "location"] as const // non-nullable columns: null → ""
+const NULLABLE_TEXT_FIELDS = [
+  "website",
+  "github",
+  "linkedin",
+  "bio",
+  "expectedSalary",
+  "preferredType",
+  "availability",
+  "phone",
+  "yearsOfExperience",
+] as const
+const LIST_FIELDS = ["skills", "languages", "preferredLocations"] as const // null → []
 
 @Injectable()
 export class ProfileService {
@@ -27,12 +62,7 @@ export class ProfileService {
   async getProfile(userId: string) {
     let profile = await this.prisma.seekerProfile.findUnique({
       where: { userId },
-      include: {
-        experiences: true,
-        educations: true,
-        interests: true,
-        user: true,
-      },
+      include: PROFILE_INCLUDE,
     })
 
     if (!profile) {
@@ -43,47 +73,35 @@ export class ProfileService {
           title: "",
           location: "",
         },
-        include: {
-          experiences: true,
-          educations: true,
-          interests: true,
-          user: true,
-        },
+        include: PROFILE_INCLUDE,
       })
     }
 
     return profile
   }
 
-  async updateProfile(userId: string, data: any) {
-    const profile = await this.prisma.seekerProfile.findUnique({
-      where: { userId },
-    })
-    if (!profile) throw new NotFoundException("Profile not found")
+  async updateProfile(userId: string, data: UpdateProfileDto) {
+    // Lazily creates the profile for seekers who never opened it
+    const profile = await this.getProfile(userId)
 
     const { experiences, educations, interests, name } = data
 
-    // Filter valid fields for profile update
-    const updateData: any = {}
-    const allowedFields = [
-      "title",
-      "location",
-      "website",
-      "github",
-      "linkedin",
-      "bio",
-      "expectedSalary",
-      "preferredType",
-      "availability",
-      "visibility",
-      "skills",
-      "languages",
-      "preferredLocations",
-      "phone",
-      "yearsOfExperience",
-    ]
-    for (const key of allowedFields) {
-      if (data[key] !== undefined) updateData[key] = data[key]
+    // `undefined` = leave unchanged; `null` / "" (normalised to null by the DTO) = clear
+    const updateData: Prisma.SeekerProfileUpdateInput = {}
+    for (const key of REQUIRED_TEXT_FIELDS) {
+      if (data[key] !== undefined) updateData[key] = data[key] ?? ""
+    }
+    for (const key of NULLABLE_TEXT_FIELDS) {
+      if (data[key] === undefined) continue
+      const value = typeof data[key] === "string" ? data[key].trim() : data[key]
+      updateData[key] = value === "" ? null : value
+    }
+    for (const key of LIST_FIELDS) {
+      if (data[key] === undefined) continue
+      updateData[key] = (data[key] ?? []).map((v: string) => v.trim()).filter(Boolean)
+    }
+    if (data.visibility !== undefined && data.visibility !== null) {
+      updateData.visibility = data.visibility
     }
 
     // Handle nested interests relation update if interest slugs are provided
@@ -96,10 +114,14 @@ export class ProfileService {
     // Transaction to update profile and sync experiences/educations
     return this.prisma.$transaction(async (tx) => {
       // Update user name or avatar if provided
-      if (name !== undefined || data.avatar !== undefined) {
-        const userData: any = {}
-        if (name !== undefined) userData.name = name
-        if (data.avatar !== undefined) userData.avatar = data.avatar
+      if ((name !== undefined && name !== null) || data.avatar !== undefined) {
+        const userData: Prisma.UserUpdateInput = {}
+        if (name !== undefined && name !== null && name.trim()) userData.name = name.trim()
+        // User.avatar is non-nullable: clearing falls back to a generated initials avatar
+        if (data.avatar !== undefined)
+          userData.avatar =
+            data.avatar ||
+            `https://ui-avatars.com/api/?name=${encodeURIComponent(name || "User")}`
         await tx.user.update({
           where: { id: userId },
           data: userData,
@@ -138,12 +160,7 @@ export class ProfileService {
       return tx.seekerProfile.update({
         where: { userId },
         data: updateData,
-        include: {
-          experiences: true,
-          educations: true,
-          interests: true,
-          user: true,
-        },
+        include: PROFILE_INCLUDE,
       })
     })
   }

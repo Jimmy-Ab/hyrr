@@ -1,5 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger"
-import { IsEmail, IsNotEmpty, IsOptional, IsString } from "class-validator"
+import { IsEmail, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from "class-validator"
+
+/** Only files uploaded through our own POST /api/uploads endpoint are accepted as resumes. */
+export const UPLOAD_URL_PATTERN =
+  /^https?:\/\/[^\s/]+(?:\/[^\s]*)?\/api\/uploads\/[A-Za-z0-9._%-]+(?:\?[^\s]*)?$/
+export const UPLOAD_URL_MESSAGE = "resumeUrl must be a file uploaded through /api/uploads"
 
 export class CreateApplicationDto {
   @ApiProperty({ example: "Emily Carter", description: "Applicant full name" })
@@ -30,4 +35,11 @@ export class CreateApplicationDto {
   @IsOptional()
   @IsString()
   coverLetter?: string
+
+  @ApiPropertyOptional({ example: "http://localhost:3000/api/uploads/3f0c...pdf" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  @Matches(UPLOAD_URL_PATTERN, { message: UPLOAD_URL_MESSAGE })
+  resumeUrl?: string
 }

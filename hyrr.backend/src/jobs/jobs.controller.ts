@@ -27,7 +27,11 @@ export class JobsController {
   // ─── Public Endpoints ──────────────────────────────────────────────
   @Get("public")
   @ApiOperation({ summary: "Search and filter active public job listings" })
-  @ApiQuery({ name: "q", required: false, description: "Full-text search query" })
+  @ApiQuery({
+    name: "q",
+    required: false,
+    description: "Case-insensitive search on title, description, location and company name",
+  })
   @ApiQuery({ name: "type", required: false, description: "Employment type enum code" })
   @ApiQuery({ name: "category", required: false, description: "Category slug filter" })
   @ApiQuery({ name: "remote", required: false, type: Boolean })
@@ -64,17 +68,17 @@ export class JobsController {
   @ApiOperation({ summary: "Get real-time hiring funnel analytics for the recruiter" })
   @ApiResponse({ status: 200, description: "Returns pipeline statistics" })
   getAnalytics(@Req() req: any) {
-    return this.jobsService.getAnalytics(req.user.userId)
+    return this.jobsService.getAnalytics(req.user)
   }
 
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("RECRUITER", "ADMIN")
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Get all jobs posted by the recruiter (Recruiter only)" })
+  @ApiOperation({ summary: "Get all jobs of the recruiter's company (Recruiter only)" })
   @ApiResponse({ status: 200, description: "Returns list of posted jobs with candidate counts" })
   getMyJobs(@Req() req: any) {
-    return this.jobsService.getRecruiterJobs(req.user.userId)
+    return this.jobsService.getRecruiterJobs(req.user)
   }
 
   @Post()

@@ -1,8 +1,27 @@
 import { Injectable, Optional } from "@nestjs/common"
-import { NotificationAction, NotificationType } from "@prisma/client"
+import { NotificationAction, NotificationType, UserSetting } from "@prisma/client"
 import { EmailDeliveryService } from "../core/delivery/email-delivery.service"
 import { MessagesGateway } from "../messages/messages.gateway"
 import { PrismaService } from "../prisma/prisma.service"
+
+type PreferenceField = keyof Pick<
+  UserSetting,
+  | "applicationUpdates"
+  | "interviewReminders"
+  | "messageNotifications"
+  | "offerNotifications"
+  | "jobRecommendations"
+>
+
+/** Which per-user preference controls each notification type (SYSTEM is always delivered). */
+export const NOTIFICATION_PREFERENCE: Record<NotificationType, PreferenceField | null> = {
+  [NotificationType.APPLICATION]: "applicationUpdates",
+  [NotificationType.INTERVIEW]: "interviewReminders",
+  [NotificationType.MESSAGE]: "messageNotifications",
+  [NotificationType.OFFER]: "offerNotifications",
+  [NotificationType.JOB_ALERT]: "jobRecommendations",
+  [NotificationType.SYSTEM]: null,
+}
 
 @Injectable()
 export class NotificationsService {
@@ -14,24 +33,52 @@ export class NotificationsService {
 
   async getNotifications(userId: string) {
     return this.prisma.notification.findMany({
-      where: { userId },
+      // Chat messages surface on the Messages badge only, never in the notification bell
+      // (also hides MESSAGE rows created before this rule existed).
+      where: { userId, type: { not: NotificationType.MESSAGE } },
       orderBy: { createdAt: "desc" },
       take: 50,
     })
   }
 
+  /**
+   * Creates an in-app notification (+ socket push + e-mail) unless the user's preferences opt out.
+   * Returns the notification, or null when the user disabled this notification type.
+   */
   async createNotification(
     userId: string,
     title: string,
     type: NotificationType = NotificationType.SYSTEM,
-    actionView?: NotificationAction
+    actionView?: NotificationAction,
+    /** Entity the notification points at (e.g. the applicationId of a message thread). */
+    targetId?: string | null,
+    /** inApp: false → only the e-mail copy (used for chat messages, which have their own badge). */
+    options: { inApp?: boolean } = {}
   ) {
+    const [user, setting] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: userId }, select: { email: true } }),
+      this.prisma.userSetting.findUnique({ where: { userId } }),
+    ])
+    if (!user) return null
+
+    // Missing settings row → schema defaults (all type preferences on, e-mail on).
+    const preference = NOTIFICATION_PREFERENCE[type]
+    if (preference && setting && setting[preference] === false) return null
+
+    if (options.inApp === false) {
+      if (user.email && setting?.emailNotifications !== false) {
+        this.emailDelivery.send(user.email, "Hyrr notification", title).catch(() => undefined)
+      }
+      return null
+    }
+
     const notification = await this.prisma.notification.create({
       data: {
         userId,
         title,
         type,
         actionView,
+        targetId: targetId ?? null,
       },
     })
 
@@ -43,14 +90,7 @@ export class NotificationsService {
       }
     }
 
-    const [user, setting] = await Promise.all([
-      this.prisma.user.findUnique({ where: { id: userId }, select: { email: true } }),
-      this.prisma.userSetting.findUnique({
-        where: { userId },
-        select: { emailNotifications: true },
-      }),
-    ])
-    if (user?.email && setting?.emailNotifications !== false) {
+    if (user.email && setting?.emailNotifications !== false) {
       this.emailDelivery.send(user.email, "Hyrr notification", title).catch(() => undefined)
     }
 

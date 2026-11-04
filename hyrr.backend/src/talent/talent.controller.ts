@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from "@nestjs/common"
+import { Body, Controller, Delete, Get, Param, Post, Req, UseGuards } from "@nestjs/common"
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import {
@@ -73,6 +73,12 @@ export class TalentController {
     @Body() dto: AddTeamMemberDto
   ) {
     return this.talent.addTeamMember(req.user, dto)
+  }
+  @Delete("team/:memberId") @UseGuards(JwtAuthGuard) @ApiBearerAuth() removeTeamMember(
+    @Req() req: any,
+    @Param("memberId") memberId: string
+  ) {
+    return this.talent.removeTeamMember(req.user, memberId)
   }
   @Post("applications/:id/tracking-link") @UseGuards(JwtAuthGuard) @ApiBearerAuth() trackingLink(
     @Req() req: any,

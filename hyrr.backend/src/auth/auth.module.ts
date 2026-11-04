@@ -19,6 +19,7 @@ import { LinkedinStrategy } from "./strategies/linkedin.strategy"
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, GithubStrategy, GoogleStrategy, LinkedinStrategy],
+  // JwtModule is exported so other modules (e.g. the socket gateway) can use verifyAccessToken().
   exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

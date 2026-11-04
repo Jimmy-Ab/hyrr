@@ -18,7 +18,16 @@ import { diskStorage } from "multer"
 import * as path from "path"
 import { extname } from "path"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
-import { UploadsService } from "./uploads.service"
+import {
+  ALLOWED_UPLOAD_TYPES,
+  MAX_UPLOAD_BYTES,
+  PUBLIC_IMAGE_EXTENSIONS,
+  resolveUploadDir,
+  UploadsService,
+} from "./uploads.service"
+
+// Stateless helper for multer's filename callback (runs outside DI).
+const namer = new UploadsService()
 
 @ApiTags("Uploads")
 @Controller("uploads")
@@ -44,28 +53,24 @@ export class UploadsController {
     FileInterceptor("file", {
       storage: diskStorage({
         destination: (req, file, cb) => {
-          cb(null, "./uploads")
+          cb(null, resolveUploadDir())
         },
-        filename: (req, file, cb) => {
-          const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9)
-          const ext = extname(file.originalname)
-          cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`)
+        filename: (req: any, file, cb) => {
+          const userId = req.user?.userId
+          if (!userId) return cb(new UnauthorizedException("Authentication required"), "")
+          cb(null, namer.buildFilename(userId, file.originalname))
         },
       }),
       limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB limit
+        fileSize: MAX_UPLOAD_BYTES,
       },
       fileFilter: (req, file, cb) => {
-        const allowed = {
-          "image/jpeg": [".jpg", ".jpeg"],
-          "image/png": [".png"],
-          "application/pdf": [".pdf"],
-          "application/msword": [".doc"],
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
-        } as Record<string, string[]>
         const extension = extname(file.originalname).toLowerCase()
-        if (!allowed[file.mimetype]?.includes(extension)) {
-          return cb(new BadRequestException("Only image and document files are allowed!"), false)
+        if (!ALLOWED_UPLOAD_TYPES[file.mimetype]?.includes(extension)) {
+          return cb(
+            new BadRequestException("Only PDF, DOC, DOCX, JPG, PNG and WEBP files are allowed"),
+            false
+          )
         }
         cb(null, true)
       },
@@ -97,7 +102,7 @@ export class UploadsController {
   ) {
     const safeFilename = path.basename(filename)
     const extension = path.extname(safeFilename).toLowerCase()
-    const isPublicImage = [".jpg", ".jpeg", ".png"].includes(extension)
+    const isPublicImage = PUBLIC_IMAGE_EXTENSIONS.includes(extension)
     if (!isPublicImage && !this.uploadsService.verifyAccessToken(safeFilename, token)) {
       throw new UnauthorizedException("A valid document link is required")
     }

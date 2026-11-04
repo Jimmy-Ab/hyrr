@@ -1,7 +1,14 @@
-import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common"
-import { AlertFrequency, ApplicationStatus } from "@prisma/client"
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common"
+import { AlertFrequency, ApplicationStatus, CompanyMemberRole, UserRole } from "@prisma/client"
 import { createHash, randomBytes } from "crypto"
 import { AccessService, Actor } from "../core/access/access.service"
+import { requireCompanyWriter, resolveCompanyMembership } from "../core/access/company-membership"
 import { PrismaService } from "../prisma/prisma.service"
 
 @Injectable()
@@ -20,11 +27,36 @@ export class TalentService {
     return actor.companyId
   }
 
+  private membership(actor: Actor) {
+    return resolveCompanyMembership(this.prisma, actor)
+  }
+
+  /** Mutations need a RECRUITER or OWNER membership (ADMIN bypasses). */
+  private async requireWriter(actor: Actor) {
+    if (actor.role === "ADMIN") return null
+    return requireCompanyWriter(this.prisma, actor)
+  }
+
+  private async requireOwner(actor: Actor) {
+    const member = await this.membership(actor)
+    if (member.role !== CompanyMemberRole.OWNER)
+      throw new ForbiddenException("Only the company owner can manage the team")
+    return member.companyId
+  }
+
+  /** Recruiter-side actions on an application (seekers never pass). */
+  private async requireRecruiterWriteOn(actor: Actor) {
+    if (actor.role !== "ADMIN" && actor.role !== "RECRUITER")
+      throw new ForbiddenException("Recruiter access required")
+    await this.requireWriter(actor)
+  }
+
   async addScreeningQuestion(
     actor: Actor,
     jobId: string,
     data: { question: string; required?: boolean }
   ) {
+    await this.requireRecruiterWriteOn(actor)
     await this.access.jobForManagement(actor, jobId)
     const count = await this.db().screeningQuestion.count({ where: { jobId } })
     return this.db().screeningQuestion.create({
@@ -51,7 +83,7 @@ export class TalentService {
   }
 
   async createLabel(actor: Actor, data: { name: string; color?: string }) {
-    const companyId = this.requireCompany(actor)
+    const { companyId } = await requireCompanyWriter(this.prisma, actor)
     return this.db().candidateLabel.upsert({
       where: { companyId_name: { companyId, name: data.name } },
       update: { color: data.color || "purple" },
@@ -63,10 +95,12 @@ export class TalentService {
     return this.db().candidateLabel.findMany({
       where: { companyId: this.requireCompany(actor) },
       orderBy: { name: "asc" },
+      take: 500,
     })
   }
 
   async attachLabel(actor: Actor, applicationId: string, labelId: string) {
+    await this.requireRecruiterWriteOn(actor)
     const application = await this.access.applicationFor(actor, applicationId, "manage")
     const label = await this.db().candidateLabel.findUnique({ where: { id: labelId } })
     if (!label || label.companyId !== application.job.companyId)
@@ -79,6 +113,7 @@ export class TalentService {
   }
 
   async addNote(actor: Actor, applicationId: string, body: string) {
+    await this.requireRecruiterWriteOn(actor)
     await this.access.applicationFor(actor, applicationId, "manage")
     return this.db().applicationNote.create({
       data: { applicationId, authorId: actor.userId, body },
@@ -86,35 +121,118 @@ export class TalentService {
   }
 
   async listNotes(actor: Actor, applicationId: string) {
-    await this.access.applicationFor(actor, applicationId, "manage")
+    if (actor.role !== "ADMIN" && actor.role !== "RECRUITER")
+      throw new ForbiddenException("Recruiter access required")
+    await this.access.applicationFor(actor, applicationId, "view")
     return this.db().applicationNote.findMany({
       where: { applicationId },
       orderBy: { createdAt: "desc" },
     })
   }
 
-  async addTeamMember(actor: Actor, data: { userId: string; role: string }) {
-    const companyId = this.requireCompany(actor)
-    if (data.userId === actor.userId)
-      throw new ForbiddenException("Owner membership already exists")
-    const user = await this.prisma.user.findUnique({ where: { id: data.userId } })
-    if (!user) throw new NotFoundException("User not found")
-    const member = await this.db().companyMember.upsert({
-      where: { companyId_userId: { companyId, userId: data.userId } },
-      update: { role: data.role },
-      create: { companyId, userId: data.userId, role: data.role },
+  private presentMember(member: any) {
+    return {
+      id: member.id,
+      userId: member.userId,
+      role: member.role,
+      user: member.user
+        ? {
+            id: member.user.id,
+            name: member.user.name,
+            email: member.user.email,
+            avatar: member.user.avatar,
+          }
+        : null,
+    }
+  }
+
+  /** C13: OWNER adds an existing recruiter (who has no company yet) by e-mail. Never grants OWNER. */
+  async addTeamMember(actor: Actor, data: { email: string; role: string }) {
+    const companyId = await this.requireOwner(actor)
+    const role = data.role as CompanyMemberRole
+    if (role === CompanyMemberRole.OWNER || !Object.values(CompanyMemberRole).includes(role))
+      throw new BadRequestException("Role must be RECRUITER, HIRING_MANAGER or VIEWER")
+
+    const target = await this.prisma.user.findFirst({
+      where: { email: { equals: data.email.trim(), mode: "insensitive" } },
     })
-    await this.prisma.user.update({ where: { id: data.userId }, data: { companyId } })
-    return member
+    if (!target || target.role !== UserRole.RECRUITER)
+      throw new NotFoundException("No recruiter account exists with this e-mail")
+    if (target.id === actor.userId) throw new ConflictException("You are already on this team")
+
+    // Every recruiter gets a personal company at sign-up. They may join a team only while that
+    // company is still "empty": they are its only member and it has no jobs. That placeholder
+    // company is removed when they join. Anyone in a real company must leave it first.
+    const memberships = await this.prisma.companyMember.findMany({ where: { userId: target.id } })
+    const previousCompanyIds = Array.from(
+      new Set([
+        ...memberships.map((m) => m.companyId),
+        ...(target.companyId ? [target.companyId] : []),
+      ])
+    )
+    if (previousCompanyIds.includes(companyId))
+      throw new ConflictException("This recruiter is already on your team")
+    for (const previousId of previousCompanyIds) {
+      const [otherMembers, jobs] = await Promise.all([
+        this.prisma.companyMember.count({
+          where: { companyId: previousId, userId: { not: target.id } },
+        }),
+        this.prisma.job.count({ where: { companyId: previousId } }),
+      ])
+      if (otherMembers > 0 || jobs > 0)
+        throw new ConflictException("This recruiter already belongs to a company")
+    }
+
+    const member = await this.prisma.$transaction(async (tx) => {
+      for (const previousId of previousCompanyIds) {
+        await tx.companyMember.deleteMany({ where: { companyId: previousId } })
+        await tx.interviewAvailability.deleteMany({ where: { companyId: previousId } })
+        await tx.companyEmailTemplate.deleteMany({ where: { companyId: previousId } })
+        await tx.candidateLabel.deleteMany({ where: { companyId: previousId } })
+        await tx.subscription.deleteMany({ where: { companyId: previousId } })
+        await tx.user.updateMany({ where: { companyId: previousId }, data: { companyId: null } })
+        await tx.company.deleteMany({ where: { id: previousId } })
+      }
+      const created = await tx.companyMember.create({
+        data: { companyId, userId: target.id, role },
+        include: { user: { select: { id: true, name: true, email: true, avatar: true } } },
+      })
+      await tx.user.update({ where: { id: target.id }, data: { companyId } })
+      return created
+    })
+    return this.presentMember(member)
+  }
+
+  /** C13: OWNER removes a (non-owner) member; owners cannot remove themselves. */
+  async removeTeamMember(actor: Actor, memberId: string) {
+    const companyId = await this.requireOwner(actor)
+    const member = await this.prisma.companyMember.findUnique({ where: { id: memberId } })
+    if (!member || member.companyId !== companyId)
+      throw new NotFoundException("Team member not found")
+    if (member.userId === actor.userId)
+      throw new BadRequestException("You cannot remove yourself from the team")
+    if (member.role === CompanyMemberRole.OWNER)
+      throw new ForbiddenException("Owners cannot be removed")
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.companyMember.delete({ where: { id: memberId } })
+      await tx.user.updateMany({
+        where: { id: member.userId, companyId },
+        data: { companyId: null },
+      })
+    })
+    return { id: memberId, deleted: true }
   }
 
   async listTeam(actor: Actor) {
-    const companyId = this.requireCompany(actor)
-    return this.db().companyMember.findMany({
+    const { companyId } = await this.membership(actor)
+    const members = await this.prisma.companyMember.findMany({
       where: { companyId },
       include: { user: { select: { id: true, name: true, email: true, avatar: true } } },
       orderBy: { createdAt: "asc" },
+      take: 500,
     })
+    return members.map((member) => this.presentMember(member))
   }
 
   async createTrackingLink(actor: Actor, applicationId: string) {
@@ -207,6 +325,7 @@ export class TalentService {
     return this.db().jobAlert.findMany({
       where: { userId: actor.userId },
       orderBy: { createdAt: "desc" },
+      take: 100,
     })
   }
   async createSavedSearch(actor: Actor, data: any) {
@@ -218,6 +337,7 @@ export class TalentService {
     return this.db().savedSearch.findMany({
       where: { userId: actor.userId },
       orderBy: { createdAt: "desc" },
+      take: 100,
     })
   }
 
@@ -233,19 +353,22 @@ export class TalentService {
 
   async analytics(actor: Actor) {
     const companyId = this.requireCompany(actor)
-    const applications = await this.prisma.application.findMany({
-      where: { job: { companyId } },
-      select: { status: true, appliedAt: true, updatedAt: true },
+    const grouped = await this.prisma.application.groupBy({
+      by: ["status"],
+      where: { job: { companyId }, status: { not: ApplicationStatus.SAVED } },
+      _count: { _all: true },
     })
-    const totals = applications.reduce<Record<string, number>>(
-      (result, app: any) => ({ ...result, [app.status]: (result[app.status] || 0) + 1 }),
-      {}
-    )
+    const totals: Record<string, number> = {}
+    let total = 0
+    for (const row of grouped) {
+      totals[row.status] = row._count._all
+      total += row._count._all
+    }
     const hired = totals[ApplicationStatus.OFFER] || 0
     return {
-      totalApplications: applications.length,
+      totalApplications: total,
       stages: totals,
-      offerRate: applications.length ? Number(((hired / applications.length) * 100).toFixed(1)) : 0,
+      offerRate: total ? Number(((hired / total) * 100).toFixed(1)) : 0,
     }
   }
 

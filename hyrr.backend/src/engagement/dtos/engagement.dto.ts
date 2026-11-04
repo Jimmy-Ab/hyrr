@@ -1,4 +1,12 @@
-import { IsDateString, IsNotEmpty, IsOptional, IsString, MaxLength } from "class-validator"
+import {
+  IsDateString,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUrl,
+  IsUUID,
+  MaxLength,
+} from "class-validator"
 
 export class CreateEmailTemplateDto {
   @IsString() @IsNotEmpty() @MaxLength(80) name: string
@@ -10,9 +18,12 @@ export class CreateEmailTemplateDto {
 export class CreateAvailabilityDto {
   @IsDateString() startTime: string
   @IsDateString() endTime: string
-  @IsOptional() @IsString() @MaxLength(1000) meetingUrl?: string
+  @IsOptional()
+  @IsUrl({ protocols: ["http", "https"], require_protocol: true })
+  @MaxLength(1000)
+  meetingUrl?: string
 }
 
 export class ReserveAvailabilityDto {
-  @IsString() @IsNotEmpty() applicationId: string
+  @IsUUID() applicationId: string
 }
