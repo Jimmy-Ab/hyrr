@@ -705,3 +705,23 @@ model Plan {
   active         Boolean @default(true)
   sortOrder      Int     @default(0)
 }
+
+enum EmbeddingKind {
+  JOB
+  PROFILE
+}
+
+/// Semantic vectors for "For you" matching. Plain float arrays (no pgvector needed);
+/// similarity is computed in the app over the active-job set.
+model Embedding {
+  id          String        @id @default(uuid())
+  kind        EmbeddingKind
+  refId       String // Job.id or Profile.userId
+  model       String
+  contentHash String
+  vector      Float[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([kind, refId])
+}
