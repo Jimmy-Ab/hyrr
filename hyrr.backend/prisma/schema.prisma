@@ -295,7 +295,6 @@ model Application {
   
   // Offer info if extended
   offerAmount        String?
-  notes              String?           @db.Text
 
   // Relations
   messages           Message[]
@@ -304,7 +303,6 @@ model Application {
   recruiterNotes     ApplicationNote[]
   answers            ScreeningAnswer[]
   stageEvents        ApplicationStageEvent[]
-  trackingLinks      ApplicationTrackingLink[]
   conversationStates ConversationState[]
 }
 
@@ -323,9 +321,6 @@ model Message {
   text          String      @db.Text
   createdAt     DateTime    @default(now())
   read          Boolean     @default(false)
-  // Legacy per-side delete flags; per-user state now lives in ConversationState.
-  deletedBySeeker    Boolean @default(false)
-  deletedByRecruiter Boolean @default(false)
   // Client-generated id so a retried send (socket timeout -> REST) is idempotent.
   clientId      String?
 
@@ -506,14 +501,6 @@ model ApplicationStageEvent {
   createdAt     DateTime          @default(now())
 }
 
-model ApplicationTrackingLink {
-  id            String      @id @default(uuid())
-  applicationId String
-  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  tokenHash     String      @unique
-  expiresAt     DateTime
-  createdAt     DateTime    @default(now())
-}
 
 // ==========================================
 // 10. Seeker discovery, trust and billing foundations
@@ -567,26 +554,4 @@ model Subscription {
   updatedAt DateTime @updatedAt
 }
 
-model CompanyEmailTemplate {
-  id        String   @id @default(uuid())
-  companyId String
-  name      String
-  kind      String
-  subject   String
-  body      String   @db.Text
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  @@unique([companyId, name])
-}
 
-model InterviewAvailability {
-  id                  String   @id @default(uuid())
-  companyId           String
-  jobId               String
-  createdById         String
-  startTime           DateTime
-  endTime             DateTime
-  meetingUrl          String?
-  bookedApplicationId String?  @unique
-  createdAt           DateTime @default(now())
-}

@@ -27,15 +27,6 @@ import { UpdateApplicationDto } from "./dtos/update-application.dto"
 export class ApplicationsController {
   constructor(private readonly applicationsService: ApplicationsService) {}
 
-  // ─── Public: tracker by email (no auth required) ──────────────────
-  @Get("tracker")
-  @ApiOperation({ summary: "Track application status by email (public tracker page)" })
-  @ApiQuery({ name: "token", required: true, description: "Tracking token returned when applying" })
-  @ApiResponse({ status: 200, description: "Returns the tracked application" })
-  getByEmail(@Query("token") token: string) {
-    return this.applicationsService.getApplicationsByTrackingToken(token)
-  }
-
   // ─── Public/Logged-in: apply to a job (career site or logged-in seeker) ──────
   @Post("jobs/:jobId/apply")
   @UseGuards(OptionalJwtAuthGuard)
@@ -133,7 +124,7 @@ export class ApplicationsController {
   @Put(":id")
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Update application (move pipeline column, bookmark, add notes)" })
+  @ApiOperation({ summary: "Update application (move pipeline column, bookmark, offer)" })
   @ApiResponse({ status: 200, description: "Application updated" })
   @ApiResponse({ status: 409, description: "APPLICATION_WITHDRAWN" })
   updateApplication(@Param("id") id: string, @Body() dto: UpdateApplicationDto, @Req() req: any) {

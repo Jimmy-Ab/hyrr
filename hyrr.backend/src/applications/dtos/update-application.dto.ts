@@ -31,9 +31,4 @@ export class UpdateApplicationDto {
   @IsOptional()
   @IsString()
   offerAmount?: string
-
-  @ApiPropertyOptional({ example: "Strong React skills..." })
-  @IsOptional()
-  @IsString()
-  notes?: string
 }

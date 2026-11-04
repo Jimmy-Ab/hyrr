@@ -261,8 +261,6 @@ export class AuthService {
         if (others.length === 0) {
           // Nobody else uses this company: remove it and everything hanging off it.
           if (isOwner || memberships.length === 0) {
-            await tx.interviewAvailability.deleteMany({ where: { companyId } })
-            await tx.companyEmailTemplate.deleteMany({ where: { companyId } })
             await tx.candidateLabel.deleteMany({ where: { companyId } })
             await tx.subscription.deleteMany({ where: { companyId } })
             await tx.company.delete({ where: { id: companyId } })

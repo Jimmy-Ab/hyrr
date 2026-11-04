@@ -9,7 +9,6 @@ import {
   CreateSavedSearchDto,
   CreateScreeningQuestionDto,
   ReportJobDto,
-  ResumeSuggestionDto,
   SubmitScreeningAnswerDto,
 } from "./dtos/talent.dto"
 import { TalentService } from "./talent.service"
@@ -80,15 +79,6 @@ export class TalentController {
   ) {
     return this.talent.removeTeamMember(req.user, memberId)
   }
-  @Post("applications/:id/tracking-link") @UseGuards(JwtAuthGuard) @ApiBearerAuth() trackingLink(
-    @Req() req: any,
-    @Param("id") id: string
-  ) {
-    return this.talent.createTrackingLink(req.user, id)
-  }
-  @Get("tracking/:token") tracking(@Param("token") token: string) {
-    return this.talent.publicTrackingStatus(token)
-  }
   @Get("alerts") @UseGuards(JwtAuthGuard) @ApiBearerAuth() alerts(@Req() req: any) {
     return this.talent.listAlerts(req.user)
   }
@@ -97,12 +87,6 @@ export class TalentController {
     @Body() dto: CreateJobAlertDto
   ) {
     return this.talent.createAlert(req.user, dto)
-  }
-  @Post("resume-suggestions") @UseGuards(JwtAuthGuard) @ApiBearerAuth() resumeSuggestions(
-    @Req() req: any,
-    @Body() dto: ResumeSuggestionDto
-  ) {
-    return this.talent.resumeSuggestions(req.user, dto.resumeText)
   }
   @Get("saved-searches") @UseGuards(JwtAuthGuard) @ApiBearerAuth() searches(@Req() req: any) {
     return this.talent.listSavedSearches(req.user)
@@ -119,11 +103,5 @@ export class TalentController {
     @Body() dto: ReportJobDto
   ) {
     return this.talent.reportJob(req.user, jobId, dto)
-  }
-  @Get("analytics") @UseGuards(JwtAuthGuard) @ApiBearerAuth() analytics(@Req() req: any) {
-    return this.talent.analytics(req.user)
-  }
-  @Get("subscription") @UseGuards(JwtAuthGuard) @ApiBearerAuth() subscription(@Req() req: any) {
-    return this.talent.subscription(req.user)
   }
 }

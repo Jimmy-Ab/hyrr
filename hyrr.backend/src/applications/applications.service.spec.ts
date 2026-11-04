@@ -141,11 +141,10 @@ describe("ApplicationsService", () => {
       expect(error.errorCode).toBe("ALREADY_APPLIED")
       expect(JSON.stringify(error.getResponse())).not.toContain("existing-app")
       expect(prismaMock.user.findUnique).not.toHaveBeenCalled()
-      expect(prismaMock.applicationTrackingLink.create).not.toHaveBeenCalled()
       expect(prismaMock.application.create).not.toHaveBeenCalled()
     })
 
-    it("guest application never links to an existing user and returns only id/status/token", async () => {
+    it("guest application never links to an existing user and returns only id/status", async () => {
       prismaMock.job.findUnique.mockResolvedValue(activeJob)
       prismaMock.application.findFirst.mockResolvedValue(null)
       prismaMock.application.create.mockResolvedValue({ id: "app-guest", status: "APPLIED" })
@@ -155,7 +154,7 @@ describe("ApplicationsService", () => {
       expect(prismaMock.application.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ userId: null }) })
       )
-      expect(Object.keys(result).sort()).toEqual(["id", "status", "trackingToken"])
+      expect(Object.keys(result).sort()).toEqual(["id", "status"])
     })
 
     it("recruiters cannot apply (403)", async () => {

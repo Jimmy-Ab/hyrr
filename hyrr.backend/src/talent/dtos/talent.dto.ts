@@ -117,9 +117,3 @@ export class ReportJobDto {
   details?: string
 }
 
-export class ResumeSuggestionDto {
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(50000)
-  resumeText: string
-}

@@ -7,7 +7,6 @@ import { CacheModule } from "./cache/cache.module"
 import { CalendarModule } from "./calendar/calendar.module"
 import { DashboardModule } from "./dashboard/dashboard.module"
 import { DocumentsModule } from "./documents/documents.module"
-import { EngagementModule } from "./engagement/engagement.module"
 import { JobsModule } from "./jobs/jobs.module"
 import { MessagesModule } from "./messages/messages.module"
 import { PrismaModule } from "./prisma/prisma.module"
@@ -41,7 +40,6 @@ import { UploadsModule } from "./uploads/uploads.module"
     ProfileModule,
     SettingsModule,
     TalentModule,
-    EngagementModule,
   ],
 })
 export class AppModule {}

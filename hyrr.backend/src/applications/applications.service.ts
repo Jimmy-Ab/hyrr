@@ -1,6 +1,5 @@
 import { BadRequestException, HttpStatus, Injectable, Logger, Optional } from "@nestjs/common"
 import { ApplicationStatus, NotificationAction, NotificationType, Prisma } from "@prisma/client"
-import { createHash, randomBytes } from "crypto"
 import { AiService } from "../ai/ai.service"
 import { AccessService, Actor } from "../core/access/access.service"
 import {
@@ -180,11 +179,8 @@ export class ApplicationsService {
         select: { id: true, status: true },
       })
       await this.afterSubmitted(app.id, job, dto.name, null)
-      return {
-        id: app.id,
-        status: app.status,
-        trackingToken: await this.createTrackingLink(app.id),
-      }
+      // Guests get status updates by e-mail; nothing else is returned to an anonymous caller.
+      return { id: app.id, status: app.status }
     }
 
     // Authenticated seeker
@@ -243,10 +239,7 @@ export class ApplicationsService {
       where: { id: applicationId },
       select: { ...SEEKER_APPLICATION_FIELDS, job: SEEKER_JOB_INCLUDE },
     })
-    return {
-      ...this.signResume(application),
-      trackingToken: await this.createTrackingLink(applicationId),
-    }
+    return this.signResume(application)
   }
 
   private applicantData(dto: CreateApplicationDto) {
@@ -333,18 +326,6 @@ export class ApplicationsService {
     return { applicationId: id, aiStatus: "PENDING" as const }
   }
 
-  private async createTrackingLink(applicationId: string) {
-    const token = randomBytes(32).toString("base64url")
-    const tokenHash = createHash("sha256").update(token).digest("hex")
-    await this.prisma.applicationTrackingLink.create({
-      data: {
-        applicationId,
-        tokenHash,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      },
-    })
-    return token
-  }
 
   // ─── Recruiter: add a candidate manually (C2) ─────────────────────
   async createCandidate(jobId: string, dto: CreateCandidateDto, actor: Actor) {
@@ -453,28 +434,6 @@ export class ApplicationsService {
         : a.messages
       return this.signResume({ ...a, messages })
     })
-  }
-
-  // ─── Public tracker by token ─────────────────────────────────────
-  async getApplicationsByTrackingToken(token: string) {
-    if (!token) throw new NotFoundAppException("Tracking link is invalid or expired")
-    const tokenHash = createHash("sha256").update(token).digest("hex")
-    const link = await this.prisma.applicationTrackingLink.findUnique({
-      where: { tokenHash },
-      include: { application: { include: { job: { include: { company: true } } } } },
-    })
-    if (!link || link.expiresAt < new Date())
-      throw new NotFoundAppException("Tracking link is invalid or expired")
-    const app = link.application
-    // Public tracking never exposes messages, contact details, notes, or applicant profile data.
-    return [
-      {
-        id: app.id,
-        status: app.status,
-        appliedAt: app.appliedAt,
-        job: { title: app.job.title, company: { name: app.job.company.name } },
-      },
-    ]
   }
 
   // ─── Recruiter: candidates for one job (Kanban board) ────────────

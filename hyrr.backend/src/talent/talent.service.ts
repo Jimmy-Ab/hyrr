@@ -5,8 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common"
-import { AlertFrequency, ApplicationStatus, CompanyMemberRole, UserRole } from "@prisma/client"
-import { createHash, randomBytes } from "crypto"
+import { AlertFrequency, CompanyMemberRole, UserRole } from "@prisma/client"
 import { AccessService, Actor } from "../core/access/access.service"
 import { requireCompanyWriter, resolveCompanyMembership } from "../core/access/company-membership"
 import { PrismaService } from "../prisma/prisma.service"
@@ -186,8 +185,6 @@ export class TalentService {
     const member = await this.prisma.$transaction(async (tx) => {
       for (const previousId of previousCompanyIds) {
         await tx.companyMember.deleteMany({ where: { companyId: previousId } })
-        await tx.interviewAvailability.deleteMany({ where: { companyId: previousId } })
-        await tx.companyEmailTemplate.deleteMany({ where: { companyId: previousId } })
         await tx.candidateLabel.deleteMany({ where: { companyId: previousId } })
         await tx.subscription.deleteMany({ where: { companyId: previousId } })
         await tx.user.updateMany({ where: { companyId: previousId }, data: { companyId: null } })
@@ -235,35 +232,6 @@ export class TalentService {
     return members.map((member) => this.presentMember(member))
   }
 
-  async createTrackingLink(actor: Actor, applicationId: string) {
-    await this.access.applicationFor(actor, applicationId, "view")
-    const token = randomBytes(32).toString("base64url")
-    const tokenHash = createHash("sha256").update(token).digest("hex")
-    await this.db().applicationTrackingLink.create({
-      data: {
-        applicationId,
-        tokenHash,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      },
-    })
-    return { token, expiresInDays: 30 }
-  }
-
-  async publicTrackingStatus(token: string) {
-    const tokenHash = createHash("sha256").update(token).digest("hex")
-    const link = await this.db().applicationTrackingLink.findUnique({
-      where: { tokenHash },
-      include: { application: { include: { job: { include: { company: true } } } } },
-    })
-    if (!link || link.expiresAt < new Date())
-      throw new NotFoundException("Tracking link is invalid or expired")
-    return {
-      status: link.application.status,
-      appliedAt: link.application.appliedAt,
-      job: { title: link.application.job.title, company: link.application.job.company.name },
-    }
-  }
-
   async createAlert(actor: Actor, data: any) {
     if (actor.role !== "SEEKER") throw new ForbiddenException("Only seekers can create job alerts")
     return this.db().jobAlert.create({
@@ -281,46 +249,6 @@ export class TalentService {
   }
 
   /** Produces review-only suggestions; it never mutates a seeker profile automatically. */
-  async resumeSuggestions(actor: Actor, resumeText: string) {
-    if (actor.role !== "SEEKER") throw new ForbiddenException("Only seekers can parse a resume")
-    const lines = resumeText
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-    const email = resumeText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0]
-    const phone = resumeText.match(/(?:\+?\d[\d\s().-]{7,}\d)/)?.[0]
-    const urlMatches = resumeText.match(/https?:\/\/[^\s]+/g) || []
-    const skills = [
-      "JavaScript",
-      "TypeScript",
-      "React",
-      "Node.js",
-      "Python",
-      "Java",
-      "SQL",
-      "PostgreSQL",
-      "AWS",
-      "Docker",
-      "Figma",
-      "Excel",
-    ].filter((skill) => new RegExp(`\\b${skill.replace(".", "\\.")}\\b`, "i").test(resumeText))
-    return {
-      suggested: {
-        title:
-          lines.find((line) =>
-            /engineer|designer|developer|manager|analyst|specialist/i.test(line)
-          ) || undefined,
-        email,
-        phone,
-        website: urlMatches.find((url) => !/github\.com|linkedin\.com/i.test(url)),
-        github: urlMatches.find((url) => /github\.com/i.test(url)),
-        linkedin: urlMatches.find((url) => /linkedin\.com/i.test(url)),
-        skills,
-      },
-      requiresConfirmation: true,
-    }
-  }
-
   async listAlerts(actor: Actor) {
     return this.db().jobAlert.findMany({
       where: { userId: actor.userId },
@@ -351,33 +279,4 @@ export class TalentService {
     })
   }
 
-  async analytics(actor: Actor) {
-    const companyId = this.requireCompany(actor)
-    const grouped = await this.prisma.application.groupBy({
-      by: ["status"],
-      where: { job: { companyId }, status: { not: ApplicationStatus.SAVED } },
-      _count: { _all: true },
-    })
-    const totals: Record<string, number> = {}
-    let total = 0
-    for (const row of grouped) {
-      totals[row.status] = row._count._all
-      total += row._count._all
-    }
-    const hired = totals[ApplicationStatus.OFFER] || 0
-    return {
-      totalApplications: total,
-      stages: totals,
-      offerRate: total ? Number(((hired / total) * 100).toFixed(1)) : 0,
-    }
-  }
-
-  async subscription(actor: Actor) {
-    const companyId = this.requireCompany(actor)
-    return this.db().subscription.upsert({
-      where: { companyId },
-      update: {},
-      create: { companyId },
-    })
-  }
 }
