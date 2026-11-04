@@ -1,4 +1,11 @@
 {
   "files": [],
-  "references": [{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.node.json" }]
+  "references": [
+    { "path": "./hyrr.shared" },
+    { "path": "./hyrr.recruiter" },
+    { "path": "./hyrr.jobseeker" },
+    { "path": "./hyrr.admin" },
+    { "path": "./hyrr.backend" }
+  ]
 }
+
