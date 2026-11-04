@@ -71,6 +71,12 @@ enum CompanyMemberRole {
   VIEWER
 }
 
+enum ApplicationSource {
+  DIRECT          // a signed-in job seeker applied
+  GUEST           // applied without an account
+  RECRUITER_ADDED // added manually by the hiring team
+}
+
 enum AlertFrequency {
   INSTANT
   DAILY
@@ -289,6 +295,7 @@ model Application {
   
   // Pipeline tracking
   status             ApplicationStatus @default(APPLIED)
+  source             ApplicationSource @default(DIRECT)
   tag                String?           // Substatus e.g. "Technical Test", "Offer Sent", "Not a fit"
   seekerBookmarked   Boolean           @default(false)
   recruiterBookmarked Boolean          @default(false)
@@ -500,6 +507,9 @@ model ApplicationNote {
   authorId      String
   body          String      @db.Text
   createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @default(now()) @updatedAt
+
+  @@index([applicationId, createdAt])
 }
 
 model ApplicationStageEvent {
@@ -528,6 +538,7 @@ model JobAlert {
   remoteOnly Boolean        @default(false)
   frequency  AlertFrequency @default(DAILY)
   active     Boolean        @default(true)
+  lastSentAt DateTime? // last digest sent; digests only include jobs posted after it
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
 }
