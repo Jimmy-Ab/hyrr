@@ -8,14 +8,7 @@ import {
   NotFoundException,
   Optional,
 } from "@nestjs/common"
-import {
-  AlertFrequency,
-  CompanyMemberRole,
-  JobStatus,
-  NotificationType,
-  Prisma,
-  UserRole,
-} from "@prisma/client"
+import { CompanyMemberRole, JobStatus, NotificationType, Prisma, UserRole } from "@prisma/client"
 import { CacheService } from "../cache/cache.service"
 import { AccessService, Actor } from "../core/access/access.service"
 import { requireCompanyWriter, resolveCompanyMembership } from "../core/access/company-membership"
@@ -72,85 +65,6 @@ export class TalentService {
     if (actor.role !== "ADMIN" && actor.role !== "RECRUITER")
       throw new ForbiddenException("Recruiter access required")
     await this.requireWriter(actor)
-  }
-
-  async addScreeningQuestion(
-    actor: Actor,
-    jobId: string,
-    data: { question: string; required?: boolean }
-  ) {
-    await this.requireRecruiterWriteOn(actor)
-    await this.access.jobForManagement(actor, jobId)
-    const count = await this.db().screeningQuestion.count({ where: { jobId } })
-    return this.db().screeningQuestion.create({
-      data: { jobId, question: data.question, required: !!data.required, position: count },
-    })
-  }
-
-  getScreeningQuestions(jobId: string) {
-    return this.db().screeningQuestion.findMany({ where: { jobId }, orderBy: { position: "asc" } })
-  }
-
-  async submitAnswer(actor: Actor, applicationId: string, questionId: string, answer: string) {
-    const application = await this.access.applicationFor(actor, applicationId, "view")
-    if (actor.role !== "SEEKER")
-      throw new ForbiddenException("Only the applicant can answer screening questions")
-    const question = await this.db().screeningQuestion.findUnique({ where: { id: questionId } })
-    if (!question || question.jobId !== application.jobId)
-      throw new NotFoundException("Screening question not found")
-    return this.db().screeningAnswer.upsert({
-      where: { applicationId_questionId: { applicationId, questionId } },
-      update: { answer },
-      create: { applicationId, questionId, answer },
-    })
-  }
-
-  async createLabel(actor: Actor, data: { name: string; color?: string }) {
-    const { companyId } = await requireCompanyWriter(this.prisma, actor)
-    return this.db().candidateLabel.upsert({
-      where: { companyId_name: { companyId, name: data.name } },
-      update: { color: data.color || "purple" },
-      create: { companyId, name: data.name, color: data.color || "purple" },
-    })
-  }
-
-  async listLabels(actor: Actor) {
-    return this.db().candidateLabel.findMany({
-      where: { companyId: this.requireCompany(actor) },
-      orderBy: { name: "asc" },
-      take: 500,
-    })
-  }
-
-  async attachLabel(actor: Actor, applicationId: string, labelId: string) {
-    await this.requireRecruiterWriteOn(actor)
-    const application = await this.access.applicationFor(actor, applicationId, "manage")
-    const label = await this.db().candidateLabel.findUnique({ where: { id: labelId } })
-    if (!label || label.companyId !== application.job.companyId)
-      throw new ForbiddenException("Label is not available for this application")
-    return this.db().applicationLabel.upsert({
-      where: { applicationId_labelId: { applicationId, labelId } },
-      update: {},
-      create: { applicationId, labelId },
-    })
-  }
-
-  async addNote(actor: Actor, applicationId: string, body: string) {
-    await this.requireRecruiterWriteOn(actor)
-    await this.access.applicationFor(actor, applicationId, "manage")
-    return this.db().applicationNote.create({
-      data: { applicationId, authorId: actor.userId, body },
-    })
-  }
-
-  async listNotes(actor: Actor, applicationId: string) {
-    if (actor.role !== "ADMIN" && actor.role !== "RECRUITER")
-      throw new ForbiddenException("Recruiter access required")
-    await this.access.applicationFor(actor, applicationId, "view")
-    return this.db().applicationNote.findMany({
-      where: { applicationId },
-      orderBy: { createdAt: "desc" },
-    })
   }
 
   private presentMember(member: any) {
@@ -256,48 +170,6 @@ export class TalentService {
     return members.map((member) => this.presentMember(member))
   }
 
-  async createAlert(actor: Actor, data: any) {
-    if (actor.role !== "SEEKER") throw new ForbiddenException("Only seekers can create job alerts")
-    return this.db().jobAlert.create({
-      data: {
-        userId: actor.userId,
-        name: data.name,
-        keywords: data.keywords || [],
-        locations: data.locations || [],
-        jobTypes: data.jobTypes || [],
-        minSalary: data.minSalary,
-        remoteOnly: !!data.remoteOnly,
-        frequency: data.frequency || AlertFrequency.DAILY,
-      },
-    })
-  }
-
-  /** Produces review-only suggestions; it never mutates a seeker profile automatically. */
-  async listAlerts(actor: Actor) {
-    return this.db().jobAlert.findMany({
-      where: { userId: actor.userId },
-      orderBy: { createdAt: "desc" },
-      take: 100,
-    })
-  }
-  async createSavedSearch(actor: Actor, data: any) {
-    return this.db().savedSearch.create({
-      data: { userId: actor.userId, name: data.name, query: data.query, filters: data.filters },
-    })
-  }
-  async listSavedSearches(actor: Actor) {
-    return this.db().savedSearch.findMany({
-      where: { userId: actor.userId },
-      orderBy: { createdAt: "desc" },
-      take: 100,
-    })
-  }
-
-  /**
-   * Seekers and recruiters of other companies can report a public job once (idempotent). When
-   * the number of unique reporters reaches the threshold, a live job becomes FLAGGED: hidden from
-   * search, detail, recommendations and alerts, and its poster is told it is under review.
-   */
   async reportJob(
     actor: Actor,
     jobId: string,
