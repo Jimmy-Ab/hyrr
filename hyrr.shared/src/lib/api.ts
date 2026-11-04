@@ -1,18 +1,53 @@
 import { useJobStore } from "../store/useJobStore"
+import { API_URL } from "./config"
 
-const BASE_URL = (import.meta as any).env?.VITE_API_URL || "http://localhost:3000/api"
+export { API_URL }
 
 interface RequestOptions extends RequestInit {
   skipAuth?: boolean
 }
 
+/** Error thrown for every non-2xx API response. `err.message` is always human readable. */
+export class ApiError extends Error {
+  readonly status: number
+  readonly errorCode: string
+  readonly details: unknown
+  readonly timestamp: string
+
+  constructor(init: {
+    status: number
+    errorCode?: string
+    message: string
+    details?: unknown
+    timestamp?: string
+  }) {
+    super(init.message)
+    this.name = "ApiError"
+    this.status = init.status
+    this.errorCode = init.errorCode || "HTTP_ERROR"
+    this.details = init.details ?? null
+    this.timestamp = init.timestamp || new Date().toISOString()
+  }
+}
+
+export function isApiError(err: unknown): err is ApiError {
+  return err instanceof ApiError
+}
+
+/** Best-effort readable message for any thrown value. */
+export function errorMessage(err: unknown, fallback = "Something went wrong"): string {
+  if (err instanceof Error && err.message) return err.message
+  if (typeof err === "string" && err) return err
+  return fallback
+}
+
 let isRefreshing = false
 let failedQueue: Array<{
   resolve: (token: string | null) => void
-  reject: (err: any) => void
+  reject: (err: unknown) => void
 }> = []
 
-const processQueue = (error: any, token: string | null = null) => {
+const processQueue = (error: unknown, token: string | null = null) => {
   failedQueue.forEach((prom) => {
     if (error) prom.reject(error)
     else prom.resolve(token)
@@ -20,16 +55,29 @@ const processQueue = (error: any, token: string | null = null) => {
   failedQueue = []
 }
 
-export async function apiFetch(path: string, options: RequestOptions = {}): Promise<any> {
-  const url = `${BASE_URL}${path}`
-  const headers = new Headers(options.headers || {})
+async function doFetch(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init)
+  } catch {
+    throw new ApiError({
+      status: 0,
+      errorCode: "NETWORK_ERROR",
+      message: "Could not reach the server. Check your connection and try again.",
+    })
+  }
+}
 
-  if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
+export async function apiFetch(path: string, options: RequestOptions = {}): Promise<any> {
+  const url = `${API_URL}${path}`
+  const { skipAuth, ...rest } = options
+  const headers = new Headers(rest.headers || {})
+
+  if (!headers.has("Content-Type") && !(rest.body instanceof FormData)) {
     headers.set("Content-Type", "application/json")
   }
 
   // Inject Bearer access token
-  if (!options.skipAuth) {
+  if (!skipAuth) {
     const token = useJobStore.getState().accessToken
     if (token) {
       headers.set("Authorization", `Bearer ${token}`)
@@ -37,53 +85,55 @@ export async function apiFetch(path: string, options: RequestOptions = {}): Prom
   }
 
   const finalOptions: RequestInit = {
-    ...options,
+    ...rest,
     headers,
     credentials: "include",
   }
 
-  const response = await fetch(url, finalOptions)
+  const response = await doFetch(url, finalOptions)
 
-  if (response.status === 401 && !options.skipAuth) {
-    // Access token expired, attempt silent token refresh
+  if (response.status === 401 && !skipAuth) {
+    // Access token expired, attempt silent token refresh (single flight)
     if (isRefreshing) {
-      return new Promise<string | null>((resolve, reject) => {
+      const token = await new Promise<string | null>((resolve, reject) => {
         failedQueue.push({ resolve, reject })
-      }).then((token) => {
-        if (token) {
-          headers.set("Authorization", `Bearer ${token}`)
-          return fetch(url, finalOptions).then(handleResponse)
-        }
-        throw new Error("Unauthorized")
       })
+      if (!token) {
+        throw new ApiError({ status: 401, errorCode: "UNAUTHORIZED", message: "Unauthorized" })
+      }
+      headers.set("Authorization", `Bearer ${token}`)
+      return doFetch(url, finalOptions).then(handleResponse)
     }
 
     isRefreshing = true
-
+    let newToken: string
     try {
-      const refreshResponse = await fetch(`${BASE_URL}/auth/refresh`, {
+      const refreshResponse = await doFetch(`${API_URL}/auth/refresh`, {
         method: "POST",
         credentials: "include",
       })
-
       if (!refreshResponse.ok) {
-        throw new Error("Refresh failed")
+        throw new ApiError({
+          status: 401,
+          errorCode: "SESSION_EXPIRED",
+          message: "Your session has expired. Please sign in again.",
+        })
       }
-
       const data = await refreshResponse.json()
-      useJobStore.getState().setAccessToken(data.accessToken)
-
-      processQueue(null, data.accessToken)
-      isRefreshing = false
-
-      headers.set("Authorization", `Bearer ${data.accessToken}`)
-      return fetch(url, finalOptions).then(handleResponse)
+      newToken = data.accessToken
+      // Silent refresh: only swaps the token, never reloads workspace data.
+      useJobStore.getState().setAccessToken(newToken)
+      processQueue(null, newToken)
     } catch (err) {
       processQueue(err, null)
-      isRefreshing = false
       useJobStore.getState().logout()
       throw err
+    } finally {
+      isRefreshing = false
     }
+
+    headers.set("Authorization", `Bearer ${newToken}`)
+    return doFetch(url, finalOptions).then(handleResponse)
   }
 
   return handleResponse(response)
@@ -93,23 +143,26 @@ async function handleResponse(response: Response): Promise<any> {
   const contentType = response.headers.get("content-type")
   let data: any = null
   if (contentType && contentType.includes("application/json")) {
-    data = await response.json()
+    data = await response.json().catch(() => null)
   } else {
-    data = await response.text()
+    data = await response.text().catch(() => "")
   }
 
   if (!response.ok) {
-    const errorObj = {
+    let message: string =
+      (Array.isArray(data?.message) ? data.message.join(", ") : data?.message) ||
+      (typeof data === "string" && data ? data : response.statusText) ||
+      "Request failed"
+    if (response.status === 403 && !data?.message) {
+      message = "You do not have permission to perform this action."
+    }
+    throw new ApiError({
       status: response.status,
       errorCode: data?.errorCode || "HTTP_ERROR",
-      message:
-        data?.message ||
-        (typeof data === "string" ? data : response.statusText) ||
-        "Request failed",
-      details: data?.details || null,
-      timestamp: data?.timestamp || new Date().toISOString(),
-    }
-    throw errorObj
+      message,
+      details: data?.details ?? null,
+      timestamp: data?.timestamp,
+    })
   }
 
   return data

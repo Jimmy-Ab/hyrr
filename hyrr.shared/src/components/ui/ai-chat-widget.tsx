@@ -1,6 +1,11 @@
 import { Bot, ChevronDown, Loader2, Send, Sparkles, Trash2, X } from "lucide-react"
 import * as React from "react"
+import { escapeHtml, sanitizeHtml } from "../../lib/sanitize"
 import { useJobStore } from "../../store/useJobStore"
+
+function formatBold(text: string): string {
+  return sanitizeHtml(escapeHtml(text).replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>"))
+}
 
 function MarkdownText({ text }: { text: string }) {
   // Simple markdown renderer for bold and bullets
@@ -21,7 +26,7 @@ function MarkdownText({ text }: { text: string }) {
               <span className="shrink-0 mt-0.5">•</span>
               <span
                 dangerouslySetInnerHTML={{
-                  __html: line.slice(2).replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>"),
+                  __html: formatBold(line.slice(2)),
                 }}
               />
             </div>
@@ -32,7 +37,7 @@ function MarkdownText({ text }: { text: string }) {
           <p
             key={i}
             dangerouslySetInnerHTML={{
-              __html: line.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>"),
+              __html: formatBold(line),
             }}
           />
         )

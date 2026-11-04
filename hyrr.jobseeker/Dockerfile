@@ -1,28 +1,70 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
 
-COPY package*.json ./
-COPY tsconfig*.json ./
-COPY hyrr.jobseeker ./hyrr.jobseeker
-COPY hyrr.shared ./hyrr.shared
+# Build-time API endpoints baked into the bundle by Vite
+ARG VITE_API_URL=http://localhost:3000/api
+ARG VITE_SOCKET_URL=http://localhost:3000
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_SOCKET_URL=$VITE_SOCKET_URL
 
-# Install dependencies and build shared + jobseeker
-RUN npm ci --include=dev
+# Copy every workspace manifest first so `npm ci` can resolve the root lockfile
+# (and this layer stays cached until dependencies change)
+COPY package.json package-lock.json ./
+COPY hyrr.shared/package.json ./hyrr.shared/
+COPY hyrr.recruiter/package.json ./hyrr.recruiter/
+COPY hyrr.jobseeker/package.json ./hyrr.jobseeker/
+COPY hyrr.admin/package.json ./hyrr.admin/
+COPY hyrr.backend/package.json ./hyrr.backend/
+# Install only what this app needs (root + shared + jobseeker), not the backend's heavy deps.
+# Retries + a BuildKit cache make flaky networks survivable and rebuilds fast.
+ENV NPM_CONFIG_FETCH_RETRIES=5 \
+    NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000 \
+    NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000 \
+    NPM_CONFIG_MAXSOCKETS=8 \
+    NPM_CONFIG_AUDIT=false \
+    NPM_CONFIG_FUND=false \
+    NPM_CONFIG_UPDATE_NOTIFIER=false
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --include=dev --ignore-scripts --include-workspace-root \
+      --workspace=hyrr.shared --workspace=hyrr.jobseeker
+
+# Then only the sources this app needs
+COPY tsconfig*.json ./
+COPY hyrr.shared ./hyrr.shared
+COPY hyrr.jobseeker ./hyrr.jobseeker
 RUN npm run build --workspace=hyrr.jobseeker
 
 # Stage 2: Serve using Nginx
 FROM nginx:alpine
 COPY --from=builder /app/hyrr.jobseeker/dist /usr/share/nginx/html
 
-# Simple custom Nginx config to support SPA routing
-RUN echo 'server { \
-    listen 5174; \
-    location / { \
-        root /usr/share/nginx/html; \
-        index index.html index.htm; \
-        try_files $uri $uri/ /index.html; \
-    } \
-}' > /etc/nginx/conf.d/default.conf
+# SPA routing + gzip + long-lived caching for hashed assets
+RUN printf '%s\n' \
+  'server {' \
+  '    listen 5174;' \
+  '    root /usr/share/nginx/html;' \
+  '    index index.html;' \
+  '' \
+  '    gzip on;' \
+  '    gzip_comp_level 6;' \
+  '    gzip_min_length 1024;' \
+  '    gzip_vary on;' \
+  '    gzip_types text/plain text/css application/javascript application/json image/svg+xml application/manifest+json;' \
+  '' \
+  '    location /assets/ {' \
+  '        expires 1y;' \
+  '        add_header Cache-Control "public, max-age=31536000, immutable";' \
+  '        try_files $uri =404;' \
+  '    }' \
+  '' \
+  '    location = /index.html {' \
+  '        add_header Cache-Control "no-cache";' \
+  '    }' \
+  '' \
+  '    location / {' \
+  '        try_files $uri $uri/ /index.html;' \
+  '    }' \
+  '}' > /etc/nginx/conf.d/default.conf
 
 EXPOSE 5174
 CMD ["nginx", "-g", "daemon off;"]

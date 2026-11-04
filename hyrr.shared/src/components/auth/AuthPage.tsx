@@ -1,5 +1,6 @@
 import { ArrowRight, CheckCircle2, Eye, EyeOff, Lock, Mail, User } from "lucide-react"
 import * as React from "react"
+import { getOAuthUrl } from "../../lib/config"
 import { useJobStore } from "../../store/useJobStore"
 import { Button } from "../ui/button"
 import { Input } from "../ui/input"
@@ -94,8 +95,8 @@ export function AuthPage({ forcedRole }: AuthPageProps) {
     }
   }
 
-  const handleOAuth = (provider: string) => {
-    window.location.href = `http://localhost:3000/api/auth/${provider}`
+  const handleOAuth = (provider: "google" | "github" | "linkedin") => {
+    window.location.assign(getOAuthUrl(provider, forcedRole))
   }
 
   const isSeeker = forcedRole === "SEEKER"
@@ -261,11 +262,6 @@ export function AuthPage({ forcedRole }: AuthPageProps) {
                   <label className="auth-label" htmlFor="auth-password">
                     Password
                   </label>
-                  {mode === "login" && (
-                    <button type="button" className="auth-forgot">
-                      Forgot password?
-                    </button>
-                  )}
                 </div>
                 <div className="auth-input-wrap">
                   <Lock className="auth-input-icon" />
@@ -283,6 +279,7 @@ export function AuthPage({ forcedRole }: AuthPageProps) {
                     className="auth-eye-btn"
                     onClick={() => setShowPassword((v) => !v)}
                     tabIndex={-1}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -319,14 +316,8 @@ export function AuthPage({ forcedRole }: AuthPageProps) {
 
             <p className="auth-terms">
               By continuing you agree to our{" "}
-              <a href="#" className="auth-terms-link">
-                Terms of Service
-              </a>{" "}
-              and{" "}
-              <a href="#" className="auth-terms-link">
-                Privacy Policy
-              </a>
-              .
+              <span className="auth-terms-link">Terms of Service</span> and{" "}
+              <span className="auth-terms-link">Privacy Policy</span>.
             </p>
           </div>
         </div>

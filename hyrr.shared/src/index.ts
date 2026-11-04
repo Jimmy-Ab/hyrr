@@ -1,4 +1,5 @@
 // Export UI components
+export * from "./components/messages/messages-view"
 export * from "./components/ui/ai-chat-widget"
 export * from "./components/ui/badge"
 export * from "./components/ui/button"
@@ -20,7 +21,9 @@ export * from "./store/useJobStore"
 
 // Export Utils
 export * from "./lib/api"
+export * from "./lib/config"
 export * from "./lib/contracts"
+export * from "./lib/sanitize"
 export * from "./lib/utils"
 
 // Export Auth Views

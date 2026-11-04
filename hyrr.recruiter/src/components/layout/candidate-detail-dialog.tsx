@@ -1,21 +1,36 @@
 import {
+  Badge,
+  Button,
+  Card,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+  toIsoFromLocal,
+  useToast,
+} from "hyrr.shared"
+import {
   Bookmark,
   Calendar,
+  ExternalLink,
   FileText,
   Loader2,
   Mail,
   MapPin,
   MessageSquare,
   Phone,
-  Sparkles,
-  X,
 } from "lucide-react"
 import { useEffect, useState } from "react"
+import {
+  avatarFallback,
+  errorMessage,
+  isWithdrawn,
+  PIPELINE_STATUSES,
+  statusBadgeVariant,
+} from "../../lib/recruiter"
 import { useJobStore, type Candidate } from "../../store/useJobStore"
-import { Button } from "../ui/button"
-import { Card } from "../ui/card"
-import { Dialog, DialogContent, DialogFooter } from "../ui/dialog"
-import { useToast } from "../ui/toast"
+import { AiAnalysisPanel } from "../ai/ai-analysis-panel"
 
 export function CandidateDetailDialog() {
   const {
@@ -25,7 +40,7 @@ export function CandidateDetailDialog() {
     moveCandidate,
     toggleBookmark,
     createEvent,
-    setActiveConversation,
+    openConversation,
     setActiveView,
   } = useJobStore()
   const { toast } = useToast()
@@ -37,6 +52,7 @@ export function CandidateDetailDialog() {
   const [meetingDate, setMeetingDate] = useState("")
   const [meetingTime, setMeetingTime] = useState("10:00")
   const [scheduling, setScheduling] = useState(false)
+  const [statusUpdating, setStatusUpdating] = useState(false)
 
   // Find candidate details
   const candidate = candidates.find((c) => c.id === selectedCandidateId) || null
@@ -53,9 +69,27 @@ export function CandidateDetailDialog() {
 
   if (!candidate) return null
 
+  const withdrawn = isWithdrawn(candidate)
+
   const handleStatusChange = async (newStatus: Candidate["status"]) => {
-    await moveCandidate(candidate.id, newStatus)
-    toast("Pipeline Updated", `${candidate.name} moved to ${newStatus}.`, "success")
+    if (newStatus === candidate.status) return
+    setStatusUpdating(true)
+    try {
+      await moveCandidate(candidate.id, newStatus)
+      toast("Pipeline Updated", `${candidate.name} moved to ${newStatus}.`, "success")
+    } catch (err) {
+      toast("Could not update status", errorMessage(err), "error")
+    } finally {
+      setStatusUpdating(false)
+    }
+  }
+
+  const handleToggleBookmark = async () => {
+    try {
+      await toggleBookmark(candidate.id)
+    } catch (err) {
+      toast("Could not update bookmark", errorMessage(err), "error")
+    }
   }
 
   const handleScheduleSubmit = async (e: React.FormEvent) => {
@@ -68,7 +102,7 @@ export function CandidateDetailDialog() {
     try {
       await createEvent({
         title: `${meetingTitle} - ${candidate.name}`,
-        startTime: `${meetingDate}T${meetingTime}:00`,
+        startTime: toIsoFromLocal(meetingDate, meetingTime),
         type: "interview",
         applicationId: candidate.id,
         notes: `Interview scheduled by recruiter.`,
@@ -77,18 +111,11 @@ export function CandidateDetailDialog() {
       setMeetingTitle("")
       setMeetingDate("")
       setActiveTab("details")
-    } catch {
-      toast("Error", "Could not schedule interview. Please try again.", "error")
+    } catch (err) {
+      toast("Could not schedule interview", errorMessage(err), "error")
     } finally {
       setScheduling(false)
     }
-  }
-
-  // Determine colors based on AI Score
-  const getAiScoreColor = (score: number) => {
-    if (score >= 85) return "bg-[#34C759] text-white shadow-[0_0_12px_rgba(52,199,89,0.3)]"
-    if (score >= 60) return "bg-[#FFB547] text-white shadow-[0_0_12px_rgba(255,181,71,0.3)]"
-    return "bg-[#6C63FF] text-white"
   }
 
   return (
@@ -96,21 +123,24 @@ export function CandidateDetailDialog() {
       open={!!selectedCandidateId}
       onOpenChange={(open) => !open && setSelectedCandidateId(null)}
     >
-      <DialogContent className="max-w-2xl overflow-hidden p-0 rounded-[20px] bg-bg-secondary border border-bg-border/60 shadow-[0_20px_60px_rgba(0,0,0,0.15)] flex flex-col max-h-[90vh]">
+      <DialogContent className="max-w-2xl overflow-hidden p-0 rounded-[20px] bg-bg-secondary border border-bg-border/60 shadow-floating flex flex-col max-h-[90vh]">
         {/* Banner with profile summary */}
-        <div className="relative p-6 bg-gradient-to-r from-primary-light/50 via-primary-light/20 to-transparent flex gap-5 border-b border-bg-border/40 shrink-0">
+        <div className="relative p-4 sm:p-6 pr-12 bg-gradient-to-r from-primary-light/50 via-primary-light/20 to-transparent flex flex-col sm:flex-row gap-4 sm:gap-5 border-b border-bg-border/40 shrink-0">
           <img
-            src={candidate.avatar}
-            alt={candidate.name}
-            className="w-16 h-16 rounded-[18px] object-cover border border-bg-border/60 shadow-button transition-transform duration-250 hover:scale-105"
+            src={candidate.avatar || avatarFallback(candidate.name)}
+            alt=""
+            className="w-16 h-16 rounded-[18px] object-cover border border-bg-border/60 shrink-0"
           />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="text-[20px] font-extrabold text-txt-heading truncate">
+              <DialogTitle className="text-[20px] font-extrabold text-txt-heading truncate">
                 {candidate.name}
-              </h2>
+              </DialogTitle>
               <button
-                onClick={() => toggleBookmark(candidate.id)}
+                type="button"
+                onClick={handleToggleBookmark}
+                aria-label={candidate.bookmarked ? "Remove bookmark" : "Bookmark candidate"}
+                aria-pressed={candidate.bookmarked}
                 className={`p-1 rounded-full hover:bg-bg-hover transition-colors cursor-pointer outline-none ${
                   candidate.bookmarked ? "text-primary" : "text-txt-caption"
                 }`}
@@ -121,51 +151,72 @@ export function CandidateDetailDialog() {
                 />
               </button>
             </div>
-            <p className="text-[13.5px] font-semibold text-txt-body mt-0.5">{candidate.title}</p>
-            <div className="flex items-center gap-1 text-[11.5px] text-txt-caption mt-2 font-medium">
-              <MapPin className="w-3.5 h-3.5" />
-              <span>{candidate.location}</span>
-            </div>
+            <DialogDescription className="text-[13.5px] font-semibold text-txt-body mt-0.5">
+              {candidate.title || "No title provided"}
+            </DialogDescription>
+            {candidate.location && (
+              <div className="flex items-center gap-1 text-[11.5px] text-txt-caption mt-2 font-medium">
+                <MapPin className="w-3.5 h-3.5" />
+                <span>{candidate.location}</span>
+              </div>
+            )}
           </div>
 
-          <div className="flex flex-col gap-2 items-end justify-between">
-            <button
-              onClick={() => setSelectedCandidateId(null)}
-              className="p-1.5 rounded-full hover:bg-bg-hover text-txt-caption hover:text-txt-heading transition-colors cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-            <div className="flex gap-2 items-center">
+          <div className="flex flex-col gap-2 sm:items-end justify-end">
+            <div className="flex flex-wrap gap-2 items-center">
               <Button
                 size="sm"
                 onClick={() => {
                   if (!candidate) return
+                  const id = candidate.id
                   setSelectedCandidateId(null)
-                  setActiveConversation(candidate.id)
                   setActiveView("Messages")
+                  openConversation(id).catch((err: unknown) =>
+                    toast("Could not open conversation", errorMessage(err), "error")
+                  )
                 }}
                 className="gap-1.5 text-[12.5px] cursor-pointer shadow-button"
               >
                 <MessageSquare className="w-3.5 h-3.5" />
                 Send Message
               </Button>
-              <select
-                value={candidate.status}
-                onChange={(e) => handleStatusChange(e.target.value as Candidate["status"])}
-                className="h-9 px-3.5 rounded-[12px] border border-bg-border bg-bg-secondary text-[12.5px] font-bold text-txt-heading focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer shadow-button"
-              >
-                <option value="Applied">Applied</option>
-                <option value="In Process">In Process</option>
-                <option value="Interviewing">Interviewing</option>
-                <option value="Offer">Offer</option>
-                <option value="Archived">Archived</option>
-              </select>
+              {withdrawn ? (
+                <Badge
+                  variant={statusBadgeVariant(candidate.status)}
+                  title="The candidate withdrew this application"
+                >
+                  Withdrawn
+                </Badge>
+              ) : (
+                <>
+                  <label htmlFor="candidate-status" className="sr-only">
+                    Pipeline status
+                  </label>
+                  <select
+                    id="candidate-status"
+                    value={candidate.status}
+                    disabled={statusUpdating}
+                    onChange={(e) => handleStatusChange(e.target.value as Candidate["status"])}
+                    className="h-9 px-3.5 rounded-[12px] border border-bg-border bg-bg-secondary text-[12.5px] font-bold text-txt-heading focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer disabled:opacity-60"
+                  >
+                    {PIPELINE_STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
             </div>
           </div>
         </div>
 
         {/* Tab triggers */}
-        <div className="flex border-b border-bg-border/30 px-6 bg-bg-primary/20 shrink-0">
+        <div
+          role="tablist"
+          aria-label="Candidate sections"
+          className="flex border-b border-bg-border/30 px-2 sm:px-6 bg-bg-primary/20 shrink-0 overflow-x-auto custom-scrollbar-none"
+        >
           {[
             { id: "details", label: "Profile Details" },
             { id: "ai", label: "AI Screening Match" },
@@ -173,8 +224,11 @@ export function CandidateDetailDialog() {
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`py-3.5 px-4 text-[12.5px] font-bold transition-all relative border-b-2 cursor-pointer ${
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              onClick={() => setActiveTab(tab.id as "details" | "ai" | "schedule")}
+              className={`py-3.5 px-3 sm:px-4 whitespace-nowrap text-[12.5px] font-bold transition-all relative border-b-2 cursor-pointer ${
                 activeTab === tab.id
                   ? "border-primary text-primary"
                   : "border-transparent text-txt-caption hover:text-txt-heading"
@@ -193,14 +247,14 @@ export function CandidateDetailDialog() {
           {activeTab === "details" && (
             <div className="space-y-6">
               {/* Contact info */}
-              <div className="grid grid-cols-2 gap-4">
-                <Card className="p-4 flex items-center gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Card className="p-4 flex items-center gap-3 min-w-0">
                   <Mail className="w-4.5 h-4.5 text-txt-caption" />
                   <div>
                     <p className="text-[11px] text-txt-caption font-bold uppercase tracking-wider">
                       Email Address
                     </p>
-                    <p className="text-[13px] text-txt-heading font-semibold mt-0.5">
+                    <p className="text-[13px] text-txt-heading font-semibold mt-0.5 break-all">
                       {candidate.email || "Not provided"}
                     </p>
                   </div>
@@ -235,142 +289,90 @@ export function CandidateDetailDialog() {
                 <h4 className="text-[12.5px] font-bold text-txt-heading uppercase tracking-wider mb-2.5">
                   Candidate Documents
                 </h4>
-                <Card className="p-4 flex items-center justify-between border border-bg-border bg-bg-secondary hover:border-primary/20 transition-all group">
+                <Card className="p-4 flex items-center justify-between gap-3 border border-bg-border bg-bg-secondary">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-10 h-10 rounded-[12px] bg-primary-light border border-primary-border/20 flex items-center justify-center shrink-0">
                       <FileText className="w-5 h-5 text-primary" />
                     </div>
                     <div className="min-w-0">
                       <p className="text-[13px] font-semibold text-txt-heading truncate">
-                        {candidate.name.replace(/\s+/g, "_")}_Resume.pdf
+                        {candidate.resumeUrl ? "Resume" : "No resume"}
                       </p>
                       <p className="text-[11px] text-txt-caption mt-0.5 font-medium">
-                        Primary Resume Document
+                        {candidate.resumeUrl
+                          ? "Uploaded with the application"
+                          : "This candidate hasn't attached a resume."}
                       </p>
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="font-semibold text-[12px] cursor-pointer"
-                    onClick={() => {
-                      if (candidate.resumeUrl) {
-                        window.open(candidate.resumeUrl, "_blank")
-                      } else {
-                        toast("Preview", "Opening candidate resume PDF...", "success")
-                      }
-                    }}
-                  >
-                    View File
-                  </Button>
+                  {candidate.resumeUrl && (
+                    <a
+                      href={candidate.resumeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 h-9 px-4 rounded-[14px] border border-bg-border bg-bg-secondary text-[12px] font-semibold text-txt-heading hover:bg-bg-hover shrink-0"
+                    >
+                      Open <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  )}
                 </Card>
               </div>
             </div>
           )}
 
-          {activeTab === "ai" && (
-            <div className="space-y-6">
-              {candidate.aiScore != null ? (
-                <div className="space-y-6">
-                  {/* Score circle */}
-                  <div className="flex items-center gap-5 p-5 bg-gradient-to-r from-bg-secondary to-bg-primary/30 border border-bg-border/60 rounded-[18px]">
-                    <div
-                      className={`w-16 h-16 rounded-full flex items-center justify-center text-[22px] font-extrabold select-none shrink-0 ${getAiScoreColor(candidate.aiScore)}`}
-                    >
-                      {candidate.aiScore}%
-                    </div>
-                    <div>
-                      <h4 className="text-[14.5px] font-bold text-txt-heading">
-                        Gemini Smart Match Fit
-                      </h4>
-                      <p className="text-[12.5px] text-txt-caption mt-1 font-medium">
-                        {candidate.aiScore >= 80
-                          ? "Exceptional match! Candidate has matching experience and skills."
-                          : candidate.aiScore >= 60
-                            ? "Good match potential. Some minor gaps identified in requirements."
-                            : "Lower match alignment. Skill sets might not be an exact fit."}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Summary analysis */}
-                  <div className="space-y-2.5">
-                    <div className="flex items-center gap-1.5 text-primary">
-                      <Sparkles className="w-4 h-4" />
-                      <h4 className="text-[12.5px] font-bold uppercase tracking-wider">
-                        AI Evaluation Analysis
-                      </h4>
-                    </div>
-                    <div className="p-5 rounded-[18px] border border-bg-border/60 bg-bg-secondary text-[13px] text-txt-body leading-relaxed font-medium">
-                      {candidate.aiSummary ||
-                        "AI assessment summary data is being populated. Please re-open the window in a few moments."}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-12 text-center gap-4">
-                  <div className="w-14 h-14 rounded-2xl bg-primary-light flex items-center justify-center">
-                    <Sparkles className="w-7 h-7 text-primary animate-pulse" />
-                  </div>
-                  <div>
-                    <h4 className="text-[15px] font-bold text-txt-heading">Run AI Fit Analysis</h4>
-                    <p className="text-[12.5px] text-txt-caption mt-1 max-w-sm leading-relaxed">
-                      Evaluate this candidate's resume and details against the job requirements
-                      using Gemini AI.
-                    </p>
-                  </div>
-                  <Button
-                    onClick={async () => {
-                      toast("Triggered AI", "Starting evaluation in backend...", "info")
-                      await moveCandidate(candidate.id, candidate.status) // updates pipeline status to trigger scoring
-                    }}
-                    className="font-bold shadow-button flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Sparkles className="w-4 h-4" /> Evaluate Profile
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
+          {activeTab === "ai" && <AiAnalysisPanel candidate={candidate} />}
 
           {activeTab === "schedule" && (
             <form onSubmit={handleScheduleSubmit} className="space-y-4">
               <div>
-                <label className="text-[11px] font-bold text-txt-caption uppercase tracking-wider block mb-1.5">
+                <label
+                  htmlFor="schedule-title"
+                  className="text-[11px] font-bold text-txt-caption uppercase tracking-wider block mb-1.5"
+                >
                   Interview Stage / Meeting Title
                 </label>
                 <input
+                  id="schedule-title"
                   type="text"
                   placeholder="e.g. Technical Round 1"
                   value={meetingTitle}
                   onChange={(e) => setMeetingTitle(e.target.value)}
                   required
-                  className="w-full h-10 px-3.5 rounded-[12px] border border-bg-border bg-bg-secondary text-[13px] placeholder:text-txt-caption focus:outline-none focus:border-primary/30 transition-all font-medium"
+                  className="w-full h-10 px-3.5 rounded-[12px] border border-bg-border bg-bg-secondary text-txt-heading text-[13px] placeholder:text-txt-caption focus:outline-none focus:border-primary/30 transition-all font-medium"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[11px] font-bold text-txt-caption uppercase tracking-wider block mb-1.5">
+                  <label
+                    htmlFor="schedule-date"
+                    className="text-[11px] font-bold text-txt-caption uppercase tracking-wider block mb-1.5"
+                  >
                     Meeting Date
                   </label>
                   <input
+                    id="schedule-date"
                     type="date"
                     value={meetingDate}
                     onChange={(e) => setMeetingDate(e.target.value)}
                     required
-                    className="w-full h-10 px-3.5 rounded-[12px] border border-bg-border bg-bg-secondary text-[13px] focus:outline-none focus:border-primary/30 transition-all cursor-pointer font-medium"
+                    className="w-full h-10 px-3.5 rounded-[12px] border border-bg-border bg-bg-secondary text-txt-heading text-[13px] focus:outline-none focus:border-primary/30 transition-all cursor-pointer font-medium"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-txt-caption uppercase tracking-wider block mb-1.5">
+                  <label
+                    htmlFor="schedule-time"
+                    className="text-[11px] font-bold text-txt-caption uppercase tracking-wider block mb-1.5"
+                  >
                     Meeting Time
                   </label>
                   <input
+                    id="schedule-time"
                     type="time"
+                    required
                     value={meetingTime}
                     onChange={(e) => setMeetingTime(e.target.value)}
-                    className="w-full h-10 px-3.5 rounded-[12px] border border-bg-border bg-bg-secondary text-[13px] focus:outline-none focus:border-primary/30 transition-all cursor-pointer font-medium"
+                    className="w-full h-10 px-3.5 rounded-[12px] border border-bg-border bg-bg-secondary text-txt-heading text-[13px] focus:outline-none focus:border-primary/30 transition-all cursor-pointer font-medium"
                   />
                 </div>
               </div>
@@ -379,7 +381,7 @@ export function CandidateDetailDialog() {
                 <Button
                   type="submit"
                   disabled={scheduling}
-                  className="w-full h-10 font-bold shadow-button cursor-pointer"
+                  className="w-full h-10 font-bold cursor-pointer"
                 >
                   {scheduling ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                   Schedule and Send Invite <Calendar className="w-4 h-4 ml-1.5" />

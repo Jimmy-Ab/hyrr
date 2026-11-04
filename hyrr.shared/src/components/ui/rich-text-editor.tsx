@@ -16,6 +16,7 @@ import {
   Underline,
 } from "lucide-react"
 import React, { useCallback, useEffect, useRef, useState } from "react"
+import { htmlTextLength, sanitizeHtml } from "../../lib/sanitize"
 
 export interface RichTextEditorProps {
   value: string
@@ -74,8 +75,9 @@ export function RichTextEditor({
   // Sync internal editor content with incoming value prop if changed externally
   useEffect(() => {
     if (editorRef.current && !isInternalUpdate.current) {
-      if (editorRef.current.innerHTML !== value) {
-        editorRef.current.innerHTML = value || ""
+      const safe = sanitizeHtml(value || "")
+      if (editorRef.current.innerHTML !== safe) {
+        editorRef.current.innerHTML = safe
       }
     }
     setRawText(value || "")
@@ -103,7 +105,7 @@ export function RichTextEditor({
   const insertTemplate = () => {
     const template = TEMPLATES[0].content
     if (editorRef.current) {
-      editorRef.current.innerHTML = template
+      editorRef.current.innerHTML = sanitizeHtml(template)
       handleInput()
     }
   }
@@ -111,11 +113,13 @@ export function RichTextEditor({
   const toggleRawMode = () => {
     if (isRawMode) {
       // Switching from raw mode back to visual editor
+      const safe = sanitizeHtml(rawText)
       if (editorRef.current) {
-        editorRef.current.innerHTML = rawText
+        editorRef.current.innerHTML = safe
       }
       isInternalUpdate.current = true
-      onChange(rawText)
+      setRawText(safe)
+      onChange(safe)
       setIsRawMode(false)
     } else {
       // Switching to raw mode
@@ -132,9 +136,7 @@ export function RichTextEditor({
 
   // Calculate plain text char count for indicator
   const getCharCount = () => {
-    const tmp = document.createElement("DIV")
-    tmp.innerHTML = value || ""
-    return (tmp.textContent || tmp.innerText || "").length
+    return htmlTextLength(value || "")
   }
 
   const isEmpty = !value || value.trim() === "" || value === "<br>" || value === "<div><br></div>"

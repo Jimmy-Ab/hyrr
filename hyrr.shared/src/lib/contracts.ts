@@ -9,25 +9,51 @@ export const APPLICATION_STATUS = {
   INTERVIEWING: "INTERVIEWING",
   OFFER: "OFFER",
   ARCHIVED: "ARCHIVED",
+  WITHDRAWN: "WITHDRAWN",
 } as const
 
 export type ApplicationStatusCode = (typeof APPLICATION_STATUS)[keyof typeof APPLICATION_STATUS]
 
-export const APPLICATION_STATUS_LABEL: Record<ApplicationStatusCode, string> = {
+export const APPLICATION_STATUS_LABEL = {
   SAVED: "Saved",
   APPLIED: "Applied",
   IN_PROCESS: "In Process",
   INTERVIEWING: "Interviewing",
   OFFER: "Offer",
   ARCHIVED: "Archived",
-}
+  WITHDRAWN: "Withdrawn",
+} as const
 
 export type ApplicationStatusLabel = (typeof APPLICATION_STATUS_LABEL)[ApplicationStatusCode]
 
-export const APPLICATION_STATUS_COLUMNS = Object.values(APPLICATION_STATUS)
+/** Label -> API code (inverse of APPLICATION_STATUS_LABEL). */
+export const APPLICATION_STATUS_BY_LABEL = Object.fromEntries(
+  Object.entries(APPLICATION_STATUS_LABEL).map(([code, label]) => [label, code])
+) as Record<ApplicationStatusLabel, ApplicationStatusCode>
 
-export function applicationStatusLabel(status: ApplicationStatusCode): string {
-  return APPLICATION_STATUS_LABEL[status]
+/** Board columns. WITHDRAWN applications are shown in the Archived column with a badge. */
+export const APPLICATION_STATUS_COLUMNS: ApplicationStatusCode[] = [
+  APPLICATION_STATUS.SAVED,
+  APPLICATION_STATUS.APPLIED,
+  APPLICATION_STATUS.IN_PROCESS,
+  APPLICATION_STATUS.INTERVIEWING,
+  APPLICATION_STATUS.OFFER,
+  APPLICATION_STATUS.ARCHIVED,
+]
+
+export function isApplicationStatus(value: unknown): value is ApplicationStatusCode {
+  return typeof value === "string" && value in APPLICATION_STATUS_LABEL
+}
+
+export function applicationStatusLabel(status: ApplicationStatusCode): ApplicationStatusLabel {
+  return APPLICATION_STATUS_LABEL[status] ?? "Applied"
+}
+
+export function applicationStatusCode(
+  label: ApplicationStatusLabel | string
+): ApplicationStatusCode {
+  if (isApplicationStatus(label)) return label
+  return APPLICATION_STATUS_BY_LABEL[label as ApplicationStatusLabel] ?? APPLICATION_STATUS.APPLIED
 }
 
 export const EMPLOYMENT_TYPE = {
@@ -145,3 +171,48 @@ export type ProfileVisibility = (typeof PROFILE_VISIBILITY)[keyof typeof PROFILE
 
 export const USER_THEME = { LIGHT: "light", DARK: "dark", SYSTEM: "system" } as const
 export type UserTheme = (typeof USER_THEME)[keyof typeof USER_THEME]
+
+// ─── AI candidate analysis ─────────────────────────────────────────────────────
+
+export const AI_STATUS = {
+  PENDING: "PENDING",
+  DONE: "DONE",
+  FAILED: "FAILED",
+  DISABLED: "DISABLED",
+} as const
+export type AiStatus = (typeof AI_STATUS)[keyof typeof AI_STATUS]
+
+export function isAiStatus(value: unknown): value is AiStatus {
+  return typeof value === "string" && value in AI_STATUS
+}
+
+export const AI_RECOMMENDATION = {
+  STRONG_FIT: "STRONG_FIT",
+  POSSIBLE_FIT: "POSSIBLE_FIT",
+  NOT_A_FIT: "NOT_A_FIT",
+} as const
+export type AiRecommendation = (typeof AI_RECOMMENDATION)[keyof typeof AI_RECOMMENDATION]
+
+export const AI_RECOMMENDATION_LABEL: Record<AiRecommendation, string> = {
+  STRONG_FIT: "Strong fit",
+  POSSIBLE_FIT: "Possible fit",
+  NOT_A_FIT: "Not a fit",
+}
+
+export interface AiAnalysis {
+  recommendation: AiRecommendation
+  summary: string
+  matchedSkills: string[]
+  missingSkills: string[]
+  strengths: string[]
+  concerns: string[]
+  experienceFit: string
+  cvUsed: boolean
+  cvNote?: string
+}
+
+// ─── Messaging ─────────────────────────────────────────────────────────────────
+
+export type ConversationClosedReason = "WITHDRAWN" | "SAVED"
+export type MessageSenderType = "SEEKER" | "RECRUITER" | "ADMIN" | "SYSTEM"
+export type MessageDeliveryStatus = "sending" | "sent" | "failed"

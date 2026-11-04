@@ -1,5 +1,7 @@
 @import "tailwindcss";
 @import "../../hyrr.shared/src/styles/index.css";
+/* Shared components live outside this app: make Tailwind generate their classes too. */
+@source "../../hyrr.shared/src";
 
 @theme {
   --color-primary: #7c5cfc;

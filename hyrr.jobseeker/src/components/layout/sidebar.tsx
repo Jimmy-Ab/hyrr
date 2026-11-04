@@ -9,8 +9,9 @@ import {
   MessageSquare,
   Settings,
   User,
+  X,
 } from "lucide-react"
-import { type ElementType } from "react"
+import { type ElementType, useEffect } from "react"
 
 function HyrrMark() {
   return (
@@ -19,14 +20,20 @@ function HyrrMark() {
         H
       </span>
       <span className="leading-none">
-        <b className="block text-[11px] text-slate-800">HYRR</b>
-        <small className="block text-[7px] font-bold tracking-wide text-primary">CAREERS</small>
+        <b className="block text-[15px] text-txt-title">HYRR</b>
+        <small className="block text-[9px] font-bold tracking-wide text-primary">CAREERS</small>
       </span>
     </div>
   )
 }
 
-export function Sidebar() {
+interface SidebarProps {
+  /** Off-canvas drawer state below the `lg` breakpoint */
+  open: boolean
+  onClose: () => void
+}
+
+export function Sidebar({ open, onClose }: SidebarProps) {
   const {
     candidateActiveView,
     setCandidateActiveView,
@@ -41,6 +48,15 @@ export function Sidebar() {
   const offerCount = jobApplications.filter((a) => a.status === APPLICATION_STATUS.OFFER).length
 
   type CandidateView = typeof candidateActiveView
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [open, onClose])
 
   const navItems: { id: CandidateView; label: string; icon: ElementType; badge?: number }[] = [
     { id: "Dashboard", label: "Dashboard", icon: Home },
@@ -70,64 +86,89 @@ export function Sidebar() {
   ]
 
   return (
-    <aside className="w-[172px] shrink-0 bg-white border-r border-slate-100 flex flex-col h-screen p-3 justify-between select-none">
-      <div className="flex flex-col gap-5">
-        <HyrrMark />
-        <div className="px-2">
-          <p className="text-[16px] font-bold tracking-tight text-slate-900">Job Seeker</p>
-          <p className="mt-1 text-[10px] text-slate-500">Career workspace</p>
-        </div>
-        <p className="px-2.5 text-[8px] font-bold uppercase tracking-[0.12em] text-slate-400">
-          Pages included
-        </p>
-        <nav className="flex flex-col gap-1">
-          {navItems.map((item) => {
-            const Icon = item.icon
-            const isActive = candidateActiveView === item.id
-            return (
-              <button
-                key={item.id}
-                id={`seeker-nav-${item.id.toLowerCase()}`}
-                onClick={() => setCandidateActiveView(item.id)}
-                className={`flex items-center justify-between h-[31px] px-2.5 rounded-md transition-colors duration-150 group text-left cursor-pointer outline-none w-full ${
-                  isActive
-                    ? "bg-primary-light text-primary font-semibold"
-                    : "text-txt-body hover:bg-bg-hover hover:text-txt-heading font-medium"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Icon
-                    className={`w-[18px] h-[18px] shrink-0 transition-colors ${isActive ? "text-primary" : "text-txt-caption group-hover:text-txt-heading"}`}
-                  />
-                  <span className="text-[11px]">{item.label}</span>
-                </div>
-                {item.badge != null && (
-                  <span className="flex items-center justify-center min-w-[20px] h-[20px] px-1.5 rounded-full bg-primary/15 text-primary text-[11px] font-bold">
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            )
-          })}
-        </nav>
-      </div>
-
-      <div className="flex items-center gap-2 p-2.5 rounded-lg bg-slate-50 border border-slate-100">
-        <img
-          src={user?.avatar || "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150"}
-          alt={user?.name || "User Avatar"}
-          className="w-8 h-8 rounded-full object-cover border border-bg-border/50 shrink-0"
+    <>
+      {open && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+          onClick={onClose}
+          aria-hidden="true"
         />
-        <div className="flex-1 min-w-0">
-          <p className="text-[12.5px] font-semibold text-txt-heading truncate">
-            {user?.name || "Job Seeker"}
-          </p>
-          <p className="text-[10.5px] text-txt-caption truncate">
-            {seekerProfile?.title || "Candidate"}
-          </p>
+      )}
+      <aside
+        id="seeker-sidebar"
+        aria-label="Main navigation"
+        className={`fixed inset-y-0 left-0 z-50 w-[260px] max-w-[85vw] transform transition-transform duration-200 lg:static lg:z-auto lg:w-[260px] lg:max-w-none lg:translate-x-0 ${
+          open ? "translate-x-0 shadow-floating" : "-translate-x-full"
+        } shrink-0 bg-bg-sidebar border-r border-bg-border flex flex-col h-dvh p-3 justify-between select-none overflow-y-auto`}
+      >
+        <div className="flex flex-col gap-5">
+          <div className="flex items-center justify-between">
+            <HyrrMark />
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close navigation"
+              className="grid h-8 w-8 place-items-center rounded-md text-txt-caption hover:bg-bg-hover hover:text-txt-heading lg:hidden"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="px-2">
+            <p className="text-[16px] font-bold tracking-tight text-txt-title">Job Seeker</p>
+            <p className="mt-1 text-[11px] text-txt-caption">Career workspace</p>
+          </div>
+          <nav className="flex flex-col gap-1">
+            {navItems.map((item) => {
+              const Icon = item.icon
+              const isActive = candidateActiveView === item.id
+              return (
+                <button
+                  key={item.id}
+                  id={`seeker-nav-${item.id.toLowerCase()}`}
+                  onClick={() => setCandidateActiveView(item.id)}
+                  aria-current={isActive ? "page" : undefined}
+                  className={`flex items-center justify-between h-[40px] px-3.5 rounded-xl transition-colors duration-150 group text-left cursor-pointer outline-none w-full ${
+                    isActive
+                      ? "bg-primary-light text-primary font-semibold"
+                      : "text-txt-body hover:bg-bg-hover hover:text-txt-heading font-medium"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Icon
+                      className={`w-[18px] h-[18px] shrink-0 transition-colors ${isActive ? "text-primary" : "text-txt-caption group-hover:text-txt-heading"}`}
+                    />
+                    <span className="text-[13.5px]">{item.label}</span>
+                  </div>
+                  {item.badge != null && (
+                    <span className="flex items-center justify-center min-w-[20px] h-[20px] px-1.5 rounded-full bg-primary/15 text-primary text-[11px] font-bold">
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </nav>
         </div>
-        <div className="w-2 h-2 rounded-full bg-sec-green shrink-0" title="Available" />
-      </div>
-    </aside>
+
+        <div className="flex items-center gap-2 p-2.5 rounded-lg bg-bg-primary border border-bg-border">
+          <img
+            src={
+              user?.avatar ||
+              `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || "User")}`
+            }
+            alt={user?.name || "User Avatar"}
+            className="w-8 h-8 rounded-full object-cover border border-bg-border/50 shrink-0"
+          />
+          <div className="flex-1 min-w-0">
+            <p className="text-[13.5px] font-semibold text-txt-heading truncate">
+              {user?.name || "Job Seeker"}
+            </p>
+            <p className="text-[11.5px] text-txt-caption truncate">
+              {seekerProfile?.title || "Candidate"}
+            </p>
+          </div>
+        </div>
+      </aside>
+    </>
   )
 }

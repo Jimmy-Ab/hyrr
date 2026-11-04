@@ -1,79 +1,128 @@
-import { BarChart3, Kanban, List, MoreHorizontal } from "lucide-react"
+import { Badge, Button } from "hyrr.shared"
+import { BarChart3, Kanban, List, Plus } from "lucide-react"
 import { KanbanBoard } from "../components/kanban/kanban-board"
-import { Badge } from "../components/ui/badge"
-import { useToast } from "../components/ui/toast"
 import { useJobStore } from "../store/useJobStore"
 
 export function Applications() {
-  const { jobs, selectedJobId, setActiveView } = useJobStore()
-  const { toast } = useToast()
+  const {
+    jobs,
+    candidates,
+    selectedJobId,
+    selectJob,
+    setActiveView,
+    setAddCandidateOpen,
+    setAddJobOpen,
+  } = useJobStore()
 
-  const currentJob = jobs.find((j) => j.id === selectedJobId) || jobs[0]
+  // No (or an unknown) selection means "All jobs": the board shows every candidate.
+  const currentJob = jobs.find((j) => j.id === selectedJobId) || null
 
-  if (!currentJob) {
+  if (jobs.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center p-12">
-        <p className="text-body text-txt-body font-semibold">No active job selected.</p>
+      <div className="flex-1 flex flex-col items-center justify-center gap-4 p-12 text-center">
+        <p className="text-body text-txt-body font-semibold">
+          You don't have any jobs yet. Create one to start tracking candidates.
+        </p>
+        <Button onClick={() => setAddJobOpen(true)} className="gap-1.5">
+          <Plus className="w-4 h-4" />
+          Create Job Listing
+        </Button>
       </div>
     )
   }
 
+  const isActive = currentJob?.status === "Active"
+  const jobIds = new Set(jobs.map((j) => j.id))
+  const totalCandidates = candidates.filter((c) => jobIds.has(c.jobId)).length
+
   return (
-    <div className="flex flex-col gap-5 animate-in fade-in duration-200 select-none relative">
+    <div className="flex flex-col gap-5 animate-in fade-in duration-200 relative min-w-0">
       {/* Job Title & Sub-header */}
-      <div className="flex items-center justify-between pb-2 shrink-0">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-[22px] font-bold text-[#111827] tracking-tight leading-none">
-              {currentJob.title}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 shrink-0">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-[22px] font-bold text-txt-title tracking-tight leading-tight break-words">
+              {currentJob ? currentJob.title : "All applications"}
             </h1>
-            <Badge
-              variant="success"
-              className="bg-[#E6F8ED] text-[#16A34A] hover:bg-[#E6F8ED] border-0 font-semibold px-2.5 py-0.5 rounded-md text-xs"
-            >
-              Active
-            </Badge>
+            {currentJob && (
+              <Badge variant={isActive ? "success" : "secondary"} className="rounded-md text-xs">
+                {currentJob.status}
+              </Badge>
+            )}
           </div>
-          <p className="text-[13px] text-slate-400 mt-1.5 font-normal">
-            {currentJob.location} • {currentJob.type} • Posted 5 days ago
+          <p className="text-[13px] text-txt-caption mt-1.5 font-normal">
+            {currentJob
+              ? [currentJob.location, currentJob.type, currentJob.posted]
+                  .filter(Boolean)
+                  .join(" • ")
+              : `${totalCandidates} candidate${totalCandidates === 1 ? "" : "s"} across ${jobs.length} job${jobs.length === 1 ? "" : "s"}`}
           </p>
         </div>
 
-        {/* View Switchers & Dots */}
-        <div className="flex items-center gap-2">
-          <div className="flex gap-1 bg-white p-1 border border-slate-200 rounded-xl shadow-xs shrink-0">
-            <button className="h-8 rounded-lg gap-1.5 font-semibold text-xs cursor-pointer px-3 flex items-center bg-primary-light text-primary border border-primary-border/40">
+        {/* Job filter + View Switchers */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <label htmlFor="board-job-filter" className="sr-only">
+            Show candidates for
+          </label>
+          <select
+            id="board-job-filter"
+            value={currentJob?.id ?? ""}
+            onChange={(e) => selectJob(e.target.value)}
+            className="h-10 max-w-[240px] truncate rounded-xl border border-bg-border bg-bg-secondary px-3 text-[13px] font-medium text-txt-heading cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
+          >
+            <option value="">All jobs</option>
+            {jobs.map((job) => (
+              <option key={job.id} value={job.id}>
+                {job.title}
+              </option>
+            ))}
+          </select>
+          <div
+            role="group"
+            aria-label="Pipeline view"
+            className="flex gap-1 bg-bg-secondary p-1 border border-bg-border rounded-xl shrink-0"
+          >
+            <button
+              type="button"
+              aria-current="page"
+              className="h-8 rounded-lg gap-1.5 font-semibold text-xs cursor-default px-3 flex items-center bg-primary-light text-primary border border-primary-border/40"
+            >
               <Kanban className="w-3.5 h-3.5 text-primary" />
               Board
             </button>
             <button
+              type="button"
               onClick={() => setActiveView("Candidates")}
-              className="h-8 rounded-lg gap-1.5 font-medium text-xs cursor-pointer px-3 flex items-center text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors"
+              className="h-8 rounded-lg gap-1.5 font-medium text-xs cursor-pointer px-3 flex items-center text-txt-body hover:text-txt-heading hover:bg-bg-hover transition-colors"
             >
               <List className="w-3.5 h-3.5" />
               List
             </button>
             <button
+              type="button"
               onClick={() => setActiveView("Analytics")}
-              className="h-8 rounded-lg gap-1.5 font-medium text-xs cursor-pointer px-3 flex items-center text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors"
+              className="h-8 rounded-lg gap-1.5 font-medium text-xs cursor-pointer px-3 flex items-center text-txt-body hover:text-txt-heading hover:bg-bg-hover transition-colors"
             >
               <BarChart3 className="w-3.5 h-3.5" />
               Analytics
             </button>
           </div>
 
-          <button
-            onClick={() => toast("Menu Clicked", "Contextual actions triggered.", "info")}
-            className="w-8 h-8 border border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50 transition-colors cursor-pointer rounded-xl flex items-center justify-center shrink-0 text-slate-400"
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => setAddCandidateOpen(true, "Applied")}
+            className="gap-1.5"
           >
-            <MoreHorizontal className="w-4 h-4" />
-          </button>
+            <Plus className="w-4 h-4" />
+            Add candidate
+          </Button>
         </div>
       </div>
 
-      {/* Kanban Board Container */}
-      <div className="flex-1 overflow-x-auto custom-scrollbar-none">
-        <KanbanBoard />
+      {/* Kanban Board Container (scrolls horizontally inside itself) */}
+      <div className="flex-1 min-w-0">
+        <KanbanBoard jobId={currentJob?.id} />
       </div>
     </div>
   )

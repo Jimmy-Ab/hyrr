@@ -1,18 +1,22 @@
-import { apiFetch, JOB_TYPE_OPTIONS, RichTextEditor, type JobType } from "hyrr.shared"
-import { Briefcase, ChevronLeft, ChevronRight, FileText, Plus, Sparkles, X } from "lucide-react"
-import { useEffect, useState, type FormEvent } from "react"
-import { useJobStore } from "../../store/useJobStore"
-import { Button } from "../ui/button"
 import {
+  apiFetch,
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "../ui/dialog"
-import { Input } from "../ui/input"
-import { useToast } from "../ui/toast"
+  Input,
+  JOB_TYPE_OPTIONS,
+  RichTextEditor,
+  useToast,
+  type JobType,
+} from "hyrr.shared"
+import { Briefcase, ChevronLeft, ChevronRight, FileText, Plus, Sparkles, X } from "lucide-react"
+import { useEffect, useState, type FormEvent } from "react"
+import { errorMessage } from "../../lib/recruiter"
+import { useJobStore } from "../../store/useJobStore"
 
 interface Category {
   id: string
@@ -22,41 +26,6 @@ interface Category {
 
 const WORK_TYPES = JOB_TYPE_OPTIONS
 
-const FALLBACK_CATEGORIES: Category[] = [
-  { id: "software-development", name: "Software Development", slug: "software-development" },
-  {
-    id: "data-science-analytics",
-    name: "Data Science & Analytics",
-    slug: "data-science-analytics",
-  },
-  { id: "design-creative", name: "Design & Creative", slug: "design-creative" },
-  { id: "product-management", name: "Product Management", slug: "product-management" },
-  { id: "devops-infrastructure", name: "DevOps & Infrastructure", slug: "devops-infrastructure" },
-  { id: "cybersecurity", name: "Cybersecurity", slug: "cybersecurity" },
-  { id: "marketing-growth", name: "Marketing & Growth", slug: "marketing-growth" },
-  { id: "sales-business-dev", name: "Sales & Business Dev", slug: "sales-business-dev" },
-  { id: "finance-accounting", name: "Finance & Accounting", slug: "finance-accounting" },
-  { id: "human-resources", name: "Human Resources", slug: "human-resources" },
-  { id: "customer-success", name: "Customer Success", slug: "customer-success" },
-  { id: "legal-compliance", name: "Legal & Compliance", slug: "legal-compliance" },
-  { id: "operations-logistics", name: "Operations & Logistics", slug: "operations-logistics" },
-  { id: "healthcare-medical", name: "Healthcare & Medical", slug: "healthcare-medical" },
-  { id: "education-training", name: "Education & Training", slug: "education-training" },
-  { id: "content-copywriting", name: "Content & Copywriting", slug: "content-copywriting" },
-  { id: "machine-learning-ai", name: "Machine Learning & AI", slug: "machine-learning-ai" },
-  { id: "mobile-development", name: "Mobile Development", slug: "mobile-development" },
-  { id: "qa-testing", name: "QA & Testing", slug: "qa-testing" },
-  { id: "project-management", name: "Project Management", slug: "project-management" },
-  { id: "cloud-architecture", name: "Cloud Architecture", slug: "cloud-architecture" },
-  { id: "blockchain-web3", name: "Blockchain & Web3", slug: "blockchain-web3" },
-  { id: "research-development", name: "Research & Development", slug: "research-development" },
-  {
-    id: "administration-support",
-    name: "Administration & Support",
-    slug: "administration-support",
-  },
-]
-
 const selectCls =
   "w-full h-11 px-3.5 rounded-input border border-bg-border bg-bg-secondary text-[13px] text-txt-heading focus:outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/10 transition-all duration-200 cursor-pointer"
 const labelCls = "text-[12px] font-semibold text-txt-heading uppercase tracking-wider block mb-1.5"
@@ -64,12 +33,14 @@ const tagCls =
   "inline-flex items-center gap-1 text-[11.5px] font-bold px-2.5 py-1 rounded-full transition-colors"
 
 function TagInput({
+  id,
   tags,
   onAdd,
   onRemove,
   placeholder,
   colorClass = "bg-primary-light text-primary border border-primary-border/30",
 }: {
+  id: string
   tags: string[]
   onAdd: (v: string) => void
   onRemove: (v: string) => void
@@ -93,6 +64,7 @@ function TagInput({
             <button
               type="button"
               onClick={() => onRemove(t)}
+              aria-label={`Remove ${t}`}
               className="hover:opacity-70 cursor-pointer"
             >
               <X className="w-3 h-3" />
@@ -102,6 +74,7 @@ function TagInput({
       </div>
       <div className="flex gap-2">
         <Input
+          id={id}
           value={val}
           onChange={(e) => setVal(e.target.value)}
           onKeyDown={(e) => {
@@ -118,6 +91,7 @@ function TagInput({
           variant="secondary"
           size="sm"
           onClick={commit}
+          aria-label="Add"
           className="h-9 px-3 cursor-pointer shrink-0"
         >
           <Plus className="w-4 h-4" />
@@ -128,9 +102,11 @@ function TagInput({
 }
 
 function RequirementsList({
+  id,
   items,
   onChange,
 }: {
+  id: string
   items: string[]
   onChange: (v: string[]) => void
 }) {
@@ -154,7 +130,8 @@ function RequirementsList({
             <button
               type="button"
               onClick={() => onChange(items.filter((_, idx) => idx !== i))}
-              className="text-txt-disabled hover:text-sec-red cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+              aria-label={`Remove requirement: ${req}`}
+              className="text-txt-disabled hover:text-sec-red cursor-pointer opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -163,6 +140,7 @@ function RequirementsList({
       </ul>
       <div className="flex gap-2">
         <Input
+          id={id}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
@@ -179,6 +157,7 @@ function RequirementsList({
           variant="secondary"
           size="sm"
           onClick={add}
+          aria-label="Add requirement"
           className="h-9 px-3 cursor-pointer shrink-0"
         >
           <Plus className="w-4 h-4" />
@@ -200,14 +179,16 @@ export function AddJobDialog() {
 
   const [step, setStep] = useState(0)
   const [loading, setLoading] = useState(false)
-  const [categories, setCategories] = useState<Category[]>(FALLBACK_CATEGORIES)
+  const [categories, setCategories] = useState<Category[]>([])
+  const [categoriesLoading, setCategoriesLoading] = useState(false)
+  const [categoriesError, setCategoriesError] = useState<string | null>(null)
 
   // Step 1 – Basics
   const [title, setTitle] = useState("")
   const [location, setLocation] = useState("")
   const [type, setType] = useState<JobType>(JOB_TYPE_OPTIONS[0])
   const [salary, setSalary] = useState("")
-  const [categoryId, setCategoryId] = useState(FALLBACK_CATEGORIES[0].id)
+  const [categoryId, setCategoryId] = useState("")
   const [remote, setRemote] = useState(false)
   const [featured, setFeatured] = useState(false)
 
@@ -219,27 +200,24 @@ export function AddJobDialog() {
   const [requirements, setRequirements] = useState<string[]>([])
   const [benefits, setBenefits] = useState<string[]>([])
 
-  useEffect(() => {
-    if (isAddJobOpen) {
-      // Pre-select the first fallback immediately so dialog opens ready
-      if (!categoryId) setCategoryId(FALLBACK_CATEGORIES[0].id)
-      // Then load real DB IDs in the background
-      apiFetch("/jobs/categories")
-        .then((cats: Category[]) => {
-          if (cats?.length) {
-            setCategories(cats)
-            // Re-map selection if current ID was a fallback slug
-            setCategoryId((prev) => {
-              const real = cats.find((c) => c.slug === prev || c.id === prev)
-              return real ? real.id : cats[0].id
-            })
-          }
-        })
-        .catch(() => {
-          /* keep fallbacks */
-        })
+  const loadCategories = async () => {
+    setCategoriesLoading(true)
+    setCategoriesError(null)
+    try {
+      const cats: Category[] = await apiFetch("/jobs/categories")
+      setCategories(cats ?? [])
+      setCategoryId((prev) => (cats?.some((c) => c.id === prev) ? prev : (cats?.[0]?.id ?? "")))
+      if (!cats?.length) setCategoriesError("No job categories are configured.")
+    } catch (err) {
+      setCategoriesError(errorMessage(err, "Could not load job categories."))
+    } finally {
+      setCategoriesLoading(false)
     }
-  }, [isAddJobOpen]) // eslint-disable-line
+  }
+
+  useEffect(() => {
+    if (isAddJobOpen && (categories.length === 0 || categoriesError)) loadCategories()
+  }, [isAddJobOpen]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const reset = () => {
     setStep(0)
@@ -247,7 +225,7 @@ export function AddJobDialog() {
     setLocation("")
     setType(JOB_TYPE_OPTIONS[0])
     setSalary("")
-    setCategoryId(categories[0]?.id || FALLBACK_CATEGORIES[0].id)
+    setCategoryId(categories[0]?.id || "")
     setRemote(false)
     setFeatured(false)
     setDescription("")
@@ -266,7 +244,7 @@ export function AddJobDialog() {
       toast("Error", "Job Title is required.", "error")
       return false
     }
-    if (step === 0 && !categoryId) {
+    if (step === 0 && (!categoryId || categoriesError)) {
       toast("Error", "Please select a category.", "error")
       return false
     }
@@ -308,18 +286,18 @@ export function AddJobDialog() {
         featured,
         remote,
       })
-      toast("Job Created! 🎉", `"${title}" is now live in your job board.`, "success")
+      toast("Job created", `"${title}" is now live in your job board.`, "success")
       handleClose()
-    } catch {
-      toast("Error", "Failed to create job. Please try again.", "error")
+    } catch (err) {
+      toast("Could not create job", errorMessage(err), "error")
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <Dialog open={isAddJobOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl">
+    <Dialog open={isAddJobOpen} onOpenChange={(open) => !open && !loading && handleClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create Job Listing</DialogTitle>
           <DialogDescription>
@@ -371,10 +349,13 @@ export function AddJobDialog() {
           {/* ── Step 0: Basics ─────────────────────────────────────────────── */}
           {step === 0 && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <label className={labelCls}>Job Title *</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <label htmlFor="job-title" className={labelCls}>
+                    Job Title *
+                  </label>
                   <Input
+                    id="job-title"
                     placeholder="e.g. Senior Frontend Developer"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
@@ -382,24 +363,33 @@ export function AddJobDialog() {
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Location</label>
+                  <label htmlFor="job-location" className={labelCls}>
+                    Location
+                  </label>
                   <Input
+                    id="job-location"
                     placeholder="e.g. San Francisco, CA"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Salary Range</label>
+                  <label htmlFor="job-salary" className={labelCls}>
+                    Salary Range
+                  </label>
                   <Input
+                    id="job-salary"
                     placeholder="e.g. $120k – $180k"
                     value={salary}
                     onChange={(e) => setSalary(e.target.value)}
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Job Type</label>
+                  <label htmlFor="job-type" className={labelCls}>
+                    Job Type
+                  </label>
                   <select
+                    id="job-type"
                     value={type}
                     onChange={(e) => setType(e.target.value)}
                     className={selectCls}
@@ -412,21 +402,46 @@ export function AddJobDialog() {
                   </select>
                 </div>
                 <div>
-                  <label className={labelCls}>Work Field / Category *</label>
+                  <label htmlFor="job-category" className={labelCls}>
+                    Work Field / Category *
+                  </label>
                   <select
+                    id="job-category"
                     value={categoryId}
                     onChange={(e) => setCategoryId(e.target.value)}
-                    className={selectCls}
+                    disabled={categoriesLoading || !!categoriesError}
+                    aria-invalid={!!categoriesError}
+                    aria-describedby={categoriesError ? "job-category-error" : undefined}
+                    className={`${selectCls} disabled:opacity-60 disabled:cursor-not-allowed`}
                   >
+                    {categoriesLoading && categories.length === 0 && (
+                      <option value="">Loading…</option>
+                    )}
                     {categories.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
                       </option>
                     ))}
                   </select>
+                  {categoriesError && (
+                    <p
+                      id="job-category-error"
+                      role="alert"
+                      className="mt-1.5 text-[12px] text-sec-red flex items-center gap-2"
+                    >
+                      {categoriesError}
+                      <button
+                        type="button"
+                        onClick={loadCategories}
+                        className="font-semibold text-primary hover:underline cursor-pointer"
+                      >
+                        Retry
+                      </button>
+                    </p>
+                  )}
                 </div>
               </div>
-              <div className="flex items-center gap-6 pt-2">
+              <div className="flex flex-wrap items-center gap-6 pt-2">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
@@ -453,7 +468,7 @@ export function AddJobDialog() {
           {step === 1 && (
             <div className="space-y-4">
               <div>
-                <label className={labelCls}>Job Description (Rich Text) *</label>
+                <span className={labelCls}>Job Description (Rich Text) *</span>
                 <p className="text-[11.5px] text-txt-caption mb-2.5">
                   Use formatting tools below to add section headings, bullet lists, bold text, or
                   click <strong className="text-primary font-bold">✨ AI Template</strong> to
@@ -473,11 +488,14 @@ export function AddJobDialog() {
           {step === 2 && (
             <div className="space-y-5 max-h-[60vh] overflow-y-auto pr-1">
               <div>
-                <label className={labelCls}>Required Skills *</label>
+                <label htmlFor="job-skills" className={labelCls}>
+                  Required Skills *
+                </label>
                 <p className="text-[11.5px] text-txt-caption mb-2">
                   Press Enter or click + to add. At least one required.
                 </p>
                 <TagInput
+                  id="job-skills"
                   tags={skills}
                   onAdd={(v) => setSkills([...skills, v])}
                   onRemove={(v) => setSkills(skills.filter((s) => s !== v))}
@@ -485,18 +503,27 @@ export function AddJobDialog() {
                 />
               </div>
               <div>
-                <label className={labelCls}>Requirements *</label>
+                <label htmlFor="job-requirements" className={labelCls}>
+                  Requirements *
+                </label>
                 <p className="text-[11.5px] text-txt-caption mb-2">
                   Add hiring requirements one by one. At least one required.
                 </p>
-                <RequirementsList items={requirements} onChange={setRequirements} />
+                <RequirementsList
+                  id="job-requirements"
+                  items={requirements}
+                  onChange={setRequirements}
+                />
               </div>
               <div>
-                <label className={labelCls}>Benefits & Perks</label>
+                <label htmlFor="job-benefits" className={labelCls}>
+                  Benefits & Perks
+                </label>
                 <p className="text-[11.5px] text-txt-caption mb-2">
                   Optional — helps attract candidates.
                 </p>
                 <TagInput
+                  id="job-benefits"
                   tags={benefits}
                   onAdd={(v) => setBenefits([...benefits, v])}
                   onRemove={(v) => setBenefits(benefits.filter((b) => b !== v))}
@@ -529,18 +556,14 @@ export function AddJobDialog() {
               </Button>
             </div>
             {step < STEPS.length - 1 ? (
-              <Button
-                type="button"
-                onClick={handleNext}
-                className="cursor-pointer gap-1 shadow-button"
-              >
+              <Button type="button" onClick={handleNext} className="cursor-pointer gap-1">
                 Next <ChevronRight className="w-4 h-4" />
               </Button>
             ) : (
               <Button
                 type="submit"
                 disabled={loading}
-                className="cursor-pointer gap-1.5 shadow-button min-w-[140px]"
+                className="cursor-pointer gap-1.5 min-w-[140px]"
               >
                 {loading ? (
                   <>

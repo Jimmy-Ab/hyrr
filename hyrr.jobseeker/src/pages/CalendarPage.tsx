@@ -1,5 +1,5 @@
 import type { CalendarEvent } from "hyrr.shared"
-import { Button, Card, useJobStore, useToast } from "hyrr.shared"
+import { Button, Card, errorMessage, toIsoFromLocal, useJobStore, useToast } from "hyrr.shared"
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -9,7 +9,8 @@ import {
   Plus,
   X,
 } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useState } from "react"
+import { ConfirmDialog } from "../components/ui/confirm-dialog"
 
 const typeStyle = (type: string) => {
   if (type === "interview") return "bg-primary-light border-primary-border/30 text-primary"
@@ -23,27 +24,44 @@ function AddEventModal({
   onAdd,
 }: {
   onClose: () => void
-  onAdd: (e: Omit<CalendarEvent, "id">) => void
+  onAdd: (e: Omit<CalendarEvent, "id">) => Promise<void>
 }) {
   const [title, setTitle] = useState("")
   const [date, setDate] = useState("")
   const [time, setTime] = useState("10:00")
   const [type, setType] = useState<CalendarEvent["type"]>("interview")
+  const [saving, setSaving] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!title || !date) return
-    onAdd({ title, startTime: `${date}T${time}:00`, type, notes: undefined })
-    onClose()
+    if (!title.trim() || !date) return
+    setSaving(true)
+    try {
+      await onAdd({ title: title.trim(), startTime: toIsoFromLocal(date, time), type })
+      onClose()
+    } catch {
+      // Error toast is raised by the caller; keep the form open.
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-bg-secondary border border-bg-border/60 rounded-[20px] shadow-[0_20px_60px_rgba(0,0,0,0.15)] w-full max-w-sm p-6 space-y-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-event-title"
+        className="bg-bg-secondary border border-bg-border/60 rounded-[20px] shadow-[0_20px_60px_rgba(0,0,0,0.15)] w-full max-w-sm max-h-[90dvh] overflow-y-auto p-6 space-y-4"
+      >
         <div className="flex items-center justify-between">
-          <h3 className="text-[15px] font-bold text-txt-heading">Add Calendar Event</h3>
+          <h3 id="add-event-title" className="text-[15px] font-bold text-txt-heading">
+            Add Calendar Event
+          </h3>
           <button
+            type="button"
             onClick={onClose}
+            aria-label="Close"
             className="p-1 rounded-full hover:bg-bg-hover text-txt-caption cursor-pointer"
           >
             <X className="w-4 h-4" />
@@ -51,10 +69,15 @@ function AddEventModal({
         </div>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
+            <label
+              htmlFor="event-title"
+              className="text-[12.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1"
+            >
               Title
             </label>
             <input
+              id="event-title"
+              maxLength={200}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Technical Interview · Stripe"
@@ -64,10 +87,14 @@ function AddEventModal({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
+              <label
+                htmlFor="event-date"
+                className="text-[12.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1"
+              >
                 Date
               </label>
               <input
+                id="event-date"
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
@@ -76,10 +103,14 @@ function AddEventModal({
               />
             </div>
             <div>
-              <label className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
+              <label
+                htmlFor="event-time"
+                className="text-[12.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1"
+              >
                 Time
               </label>
               <input
+                id="event-time"
                 type="time"
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
@@ -88,10 +119,14 @@ function AddEventModal({
             </div>
           </div>
           <div>
-            <label className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
+            <label
+              htmlFor="event-type"
+              className="text-[12.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1"
+            >
               Type
             </label>
             <select
+              id="event-type"
               value={type}
               onChange={(e) => setType(e.target.value as CalendarEvent["type"])}
               className="w-full h-9 px-3 rounded-[10px] border border-bg-border bg-bg-primary text-[13px] focus:outline-none focus:border-primary/30 transition-all"
@@ -111,8 +146,13 @@ function AddEventModal({
             >
               Cancel
             </Button>
-            <Button type="submit" variant="primary" className="flex-1 cursor-pointer shadow-button">
-              Add Event
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={saving}
+              className="flex-1 cursor-pointer shadow-button"
+            >
+              {saving ? "Saving…" : "Add Event"}
             </Button>
           </div>
         </form>
@@ -123,13 +163,21 @@ function AddEventModal({
 
 export function CandidateCalendar() {
   const { toast } = useToast()
-  const { events, eventsLoading, fetchEvents, createEvent, deleteEvent } = useJobStore()
+  const { events, eventsLoading, createEvent, deleteEvent } = useJobStore()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [addModalOpen, setAddModalOpen] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<CalendarEvent | null>(null)
 
-  useEffect(() => {
-    fetchEvents()
-  }, []) // eslint-disable-line
+  const handleDelete = async () => {
+    if (!pendingDelete) return
+    try {
+      await deleteEvent(pendingDelete.id)
+      toast("Event deleted", `${pendingDelete.title} was removed.`, "success")
+    } catch (err) {
+      toast("Couldn't delete event", errorMessage(err), "error")
+      throw err
+    }
+  }
 
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
@@ -173,15 +221,28 @@ export function CandidateCalendar() {
         <AddEventModal
           onClose={() => setAddModalOpen(false)}
           onAdd={async (data) => {
-            await createEvent(data)
-            toast("Event Added", "Calendar event saved successfully.", "success")
+            try {
+              await createEvent(data)
+              toast("Event added", "Calendar event saved successfully.", "success")
+            } catch (err) {
+              toast("Couldn't add event", errorMessage(err), "error")
+              throw err
+            }
           }}
         />
       )}
+      <ConfirmDialog
+        open={!!pendingDelete}
+        onOpenChange={(open) => !open && setPendingDelete(null)}
+        title="Delete event?"
+        description={`${pendingDelete?.title ?? "This event"} will be removed from your calendar.`}
+        confirmLabel="Delete"
+        onConfirm={handleDelete}
+      />
 
-      <div className="flex items-start justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-[36px] font-extrabold tracking-tight">
+          <h1 className="text-[28px] sm:text-[36px] font-extrabold tracking-tight">
             <span className="premium-gradient-text text-glow">Calendar</span>
           </h1>
           <p className="text-body text-txt-body mt-1 font-medium">
@@ -207,6 +268,8 @@ export function CandidateCalendar() {
             </div>
             <div className="flex gap-1">
               <button
+                type="button"
+                aria-label="Previous month"
                 onClick={() => setCurrentDate(new Date(year, month - 1))}
                 className="w-8 h-8 rounded-[8px] flex items-center justify-center hover:bg-bg-hover transition-colors cursor-pointer"
               >
@@ -214,11 +277,13 @@ export function CandidateCalendar() {
               </button>
               <button
                 onClick={() => setCurrentDate(new Date())}
-                className="px-3 h-8 rounded-[8px] text-[11.5px] font-semibold hover:bg-bg-hover transition-colors cursor-pointer text-txt-caption"
+                className="px-3 h-8 rounded-[8px] text-[12.5px] font-semibold hover:bg-bg-hover transition-colors cursor-pointer text-txt-caption"
               >
                 Today
               </button>
               <button
+                type="button"
+                aria-label="Next month"
                 onClick={() => setCurrentDate(new Date(year, month + 1))}
                 className="w-8 h-8 rounded-[8px] flex items-center justify-center hover:bg-bg-hover transition-colors cursor-pointer"
               >
@@ -231,7 +296,7 @@ export function CandidateCalendar() {
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
               <div
                 key={d}
-                className="text-center text-[11px] font-bold text-txt-caption uppercase tracking-wider py-2"
+                className="text-center text-[12px] font-bold text-txt-caption uppercase tracking-wider py-2"
               >
                 {d}
               </div>
@@ -246,12 +311,15 @@ export function CandidateCalendar() {
               const hasEvent = dayEvts.length > 0
 
               return (
-                <div
+                <button
+                  type="button"
                   key={day}
+                  disabled={!hasEvent}
+                  aria-label={`${day}${hasEvent ? `: ${dayEvts.map((e) => e.title).join(", ")}` : ""}`}
                   onClick={() =>
                     hasEvent && toast("Events", dayEvts.map((e) => e.title).join(" | "), "info")
                   }
-                  className={`relative aspect-square flex flex-col items-center justify-start pt-2 rounded-[10px] cursor-pointer transition-all group ${
+                  className={`relative aspect-square flex flex-col items-center justify-start pt-2 rounded-[10px] transition-all group disabled:cursor-default ${hasEvent ? "cursor-pointer" : ""} ${
                     isToday
                       ? "bg-primary text-white shadow-button"
                       : hasEvent
@@ -274,7 +342,7 @@ export function CandidateCalendar() {
                       ))}
                     </div>
                   )}
-                </div>
+                </button>
               )
             })}
           </div>
@@ -287,7 +355,7 @@ export function CandidateCalendar() {
               <h3 className="text-[14px] font-bold text-txt-heading">Upcoming Events</h3>
               <button
                 onClick={() => setAddModalOpen(true)}
-                className="text-[11px] text-primary font-semibold hover:underline cursor-pointer flex items-center gap-1"
+                className="text-[12px] text-primary font-semibold hover:underline cursor-pointer flex items-center gap-1"
               >
                 <Plus className="w-3 h-3" /> Add
               </button>
@@ -296,7 +364,7 @@ export function CandidateCalendar() {
               {upcoming.length === 0 ? (
                 <p className="text-caption text-txt-caption text-center py-4">No upcoming events</p>
               ) : (
-                upcoming.map((e, i) => {
+                upcoming.map((e) => {
                   const type = e.type
                   const label = e.title
                   const timeStr = new Date(e.startTime).toLocaleString([], {
@@ -308,17 +376,32 @@ export function CandidateCalendar() {
 
                   return (
                     <div
-                      key={i}
+                      key={e.id}
                       className={`p-3 rounded-[12px] border ${typeStyle(type)} group relative`}
                     >
-                      <p className="text-[13px] font-semibold pr-6">{label}</p>
-                      <div className="flex items-center gap-1.5 mt-1.5 text-[11.5px] opacity-75">
+                      <p className="text-[13px] font-semibold pr-6 break-words">{label}</p>
+                      <div className="flex items-center gap-1.5 mt-1.5 text-[12.5px] opacity-75">
                         <Clock className="w-3.5 h-3.5" />
                         <span>{timeStr}</span>
                       </div>
+                      {e.location && (
+                        <p className="mt-1 text-[12.5px] opacity-75 break-words">{e.location}</p>
+                      )}
+                      {e.meetingUrl && /^https?:\/\//i.test(e.meetingUrl) && (
+                        <a
+                          href={e.meetingUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-1 inline-block text-[12.5px] font-semibold underline"
+                        >
+                          Join meeting
+                        </a>
+                      )}
                       <button
-                        onClick={() => deleteEvent(e.id)}
-                        className="absolute top-2 right-2 p-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:text-sec-red"
+                        type="button"
+                        onClick={() => setPendingDelete(e)}
+                        aria-label={`Delete ${label}`}
+                        className="absolute top-2 right-2 p-0.5 rounded opacity-100 lg:opacity-0 lg:group-hover:opacity-100 focus:opacity-100 transition-opacity cursor-pointer hover:text-sec-red"
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -337,7 +420,7 @@ export function CandidateCalendar() {
                 { color: "bg-sec-orange", label: "Deadline" },
                 { color: "bg-sec-green", label: "Offer / Onboarding" },
               ].map((l) => (
-                <div key={l.label} className="flex items-center gap-2 text-[12.5px] text-txt-body">
+                <div key={l.label} className="flex items-center gap-2 text-[13.5px] text-txt-body">
                   <div className={`w-2.5 h-2.5 rounded-full ${l.color}`} />
                   {l.label}
                 </div>

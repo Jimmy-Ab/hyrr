@@ -3,8 +3,16 @@ import {
   Badge,
   Button,
   Card,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   JOB_TYPES,
   RichTextRenderer,
+  errorMessage,
+  isApiError,
   useJobStore,
   useToast,
   type PublicJob,
@@ -20,7 +28,7 @@ import {
   Search,
   Star,
 } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 const colorBg: Record<string, string> = {
   purple: "bg-primary text-white",
@@ -59,15 +67,21 @@ export function DiscoverJobs() {
     applyFromDiscover,
     saveJobFromDiscover,
     setCandidateActiveView,
-    fetchInitialData,
+    seekerProfile,
+    documents,
+    fetchApplications,
   } = useJobStore()
   const { toast } = useToast()
 
   const [selectedJob, setSelectedJob] = useState<PublicJob | null>(null)
+  const [applyJob, setApplyJob] = useState<PublicJob | null>(null)
+  const [resumeId, setResumeId] = useState<string>("")
+  const [coverLetter, setCoverLetter] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const detailRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    fetchInitialData()
-  }, []) // eslint-disable-line
+  const resumes = documents.filter((d) => d.type === "resume")
 
   useEffect(() => {
     if (publicJobs.length > 0 && !selectedJob) {
@@ -86,29 +100,69 @@ export function DiscoverJobs() {
     return matchType && matchSearch
   })
 
-  const isApplied = (id: string) =>
-    jobApplications.some((a) => a.publicJobId === id && a.status !== APPLICATION_STATUS.SAVED)
-  const isSaved = (id: string) => jobApplications.some((a) => a.publicJobId === id)
+  const applicationFor = (id: string) => jobApplications.find((a) => a.publicJobId === id)
+  const isApplied = (id: string) => {
+    const app = applicationFor(id)
+    return !!app && app.status !== APPLICATION_STATUS.SAVED
+  }
+  const isSaved = (id: string) => applicationFor(id)?.status === APPLICATION_STATUS.SAVED
+  const isWithdrawn = (id: string) => applicationFor(id)?.status === APPLICATION_STATUS.WITHDRAWN
 
-  const handleApply = async (job: PublicJob) => {
+  const selectJob = (job: PublicJob) => {
+    setSelectedJob(job)
+    // On narrow screens the detail pane is below the list.
+    if (window.matchMedia?.("(max-width: 1023px)").matches) {
+      requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: "smooth" }))
+    }
+  }
+
+  const openApply = (job: PublicJob) => {
     if (isApplied(job.id)) return
-    const applied = await applyFromDiscover(job.id)
-    if (applied) {
-      toast("Applied!", `Your application to ${job.company} has been submitted.`, "success")
+    const active = resumes.find((d) => d.active) ?? resumes[0]
+    setResumeId(active?.id ?? "")
+    setCoverLetter("")
+    setApplyJob(job)
+  }
+
+  const submitApplication = async () => {
+    if (!applyJob) return
+    const resume = resumes.find((d) => d.id === resumeId)
+    setSubmitting(true)
+    try {
+      await applyFromDiscover(applyJob.id, {
+        resumeUrl: resume?.url || undefined,
+        coverLetter: coverLetter.trim() || undefined,
+      })
+      toast("Applied!", `Your application to ${applyJob.company} has been submitted.`, "success")
+      setApplyJob(null)
       setCandidateActiveView("Applications")
-    } else {
-      toast(
-        "Application failed",
-        "We could not submit your application. Please try again.",
-        "error"
-      )
+    } catch (err) {
+      if (isApiError(err) && err.errorCode === "ALREADY_APPLIED") {
+        toast("Already applied", "You have already applied to this job.", "info")
+        setApplyJob(null)
+        fetchApplications().catch(() => {})
+      } else {
+        toast("Application failed", errorMessage(err, "Please try again."), "error")
+      }
+    } finally {
+      setSubmitting(false)
     }
   }
 
   const handleSave = async (job: PublicJob) => {
-    const saved = await saveJobFromDiscover(job.id)
-    if (saved) toast("Saved", `${job.title} at ${job.company} added to your Saved list.`, "success")
-    else toast("Could not save job", "Please try again.", "error")
+    if (isSaved(job.id) || isApplied(job.id)) {
+      setCandidateActiveView("Applications")
+      return
+    }
+    setSaving(true)
+    try {
+      await saveJobFromDiscover(job.id)
+      toast("Saved", `${job.title} at ${job.company} added to your Saved list.`, "success")
+    } catch (err) {
+      toast("Could not save job", errorMessage(err, "Please try again."), "error")
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -118,7 +172,7 @@ export function DiscoverJobs() {
       <div className="ambient-glow-2" />
 
       <div className="relative z-10">
-        <h1 className="text-[36px] font-extrabold tracking-tight">
+        <h1 className="text-[28px] sm:text-[36px] font-extrabold tracking-tight">
           <span className="premium-gradient-text text-glow">Discover Jobs</span>
         </h1>
         <p className="text-body text-txt-body mt-1 font-semibold opacity-90">
@@ -134,17 +188,20 @@ export function DiscoverJobs() {
             <input
               type="text"
               placeholder="Search roles, companies, skills…"
+              aria-label="Search roles"
               value={discoverSearch}
               onChange={(e) => setDiscoverSearch(e.target.value)}
               className="w-full h-10 pl-10 pr-4 rounded-input border border-bg-border bg-bg-primary text-[13px] text-txt-heading placeholder:text-txt-caption focus:outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/15 transition-all"
             />
           </div>
-          <div className="flex gap-1 bg-bg-primary p-1 border border-bg-border rounded-[13px] shrink-0">
+          <div className="flex gap-1 bg-bg-primary p-1 border border-bg-border rounded-[13px] shrink-0 overflow-x-auto custom-scrollbar-none">
             {JOB_TYPES.map((t) => (
               <button
                 key={t}
+                type="button"
+                aria-pressed={discoverTypeFilter === t}
                 onClick={() => setDiscoverTypeFilter(t)}
-                className={`px-3 py-1.5 rounded-[10px] text-[12px] font-bold cursor-pointer transition-all ${
+                className={`shrink-0 whitespace-nowrap px-3 py-1.5 rounded-[10px] text-[13px] font-bold cursor-pointer transition-all ${
                   discoverTypeFilter === t
                     ? "bg-primary text-white shadow-[0_2px_8px_rgba(108,99,255,0.35)]"
                     : "text-txt-body hover:bg-bg-hover hover:text-txt-heading font-semibold"
@@ -158,9 +215,9 @@ export function DiscoverJobs() {
       </Card>
 
       {/* Split Pane */}
-      <div className="flex gap-5 flex-1">
+      <div className="flex flex-col lg:flex-row gap-5 flex-1 min-w-0">
         {/* Job List */}
-        <div className="w-[360px] shrink-0 flex flex-col gap-3">
+        <div className="w-full lg:w-[360px] shrink-0 flex flex-col gap-3">
           {publicJobsLoading ? (
             Array.from({ length: 5 }).map((_, i) => <JobSkeleton key={i} />)
           ) : filtered.length === 0 ? (
@@ -177,7 +234,9 @@ export function DiscoverJobs() {
               return (
                 <button
                   key={job.id}
-                  onClick={() => setSelectedJob(job)}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => selectJob(job)}
                   className={`w-full text-left p-4 rounded-card border transition-all cursor-pointer block ${
                     active
                       ? "border-primary bg-bg-secondary ring-2 ring-primary/10 shadow-card"
@@ -199,19 +258,35 @@ export function DiscoverJobs() {
                           <Star className="w-3.5 h-3.5 text-sec-orange shrink-0 fill-current" />
                         )}
                       </div>
-                      <p className="text-[12px] text-txt-body mt-0.5">{job.company}</p>
+                      <p className="text-[13px] text-txt-body mt-0.5">{job.company}</p>
                       <div className="flex items-center gap-2 mt-2 flex-wrap">
-                        <span className="text-[11px] text-txt-caption flex items-center gap-0.5">
+                        <span className="text-[12px] text-txt-caption flex items-center gap-0.5">
                           <MapPin className="w-3 h-3" />
                           {job.location}
                         </span>
-                        <span className="text-[11px] font-semibold text-primary">{job.salary}</span>
+                        <span className="text-[12px] font-semibold text-primary">{job.salary}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-2">
-                        <Badge variant={applied ? "success" : saved ? "primary" : "secondary"}>
-                          {applied ? "Applied" : saved ? "Saved" : job.type}
+                        <Badge
+                          variant={
+                            isWithdrawn(job.id)
+                              ? "secondary"
+                              : applied
+                                ? "success"
+                                : saved
+                                  ? "primary"
+                                  : "secondary"
+                          }
+                        >
+                          {isWithdrawn(job.id)
+                            ? "Withdrawn"
+                            : applied
+                              ? "Applied"
+                              : saved
+                                ? "Saved"
+                                : job.type}
                         </Badge>
-                        <span className="text-[10.5px] text-txt-caption">{job.posted}</span>
+                        <span className="text-[11.5px] text-txt-caption">{job.posted}</span>
                       </div>
                     </div>
                   </div>
@@ -223,19 +298,19 @@ export function DiscoverJobs() {
 
         {/* Job Detail */}
         {selectedJob && (
-          <div className="flex-1 min-w-0">
-            <Card className="p-8 sticky top-0">
+          <div className="flex-1 min-w-0 scroll-mt-4" ref={detailRef}>
+            <Card className="p-5 sm:p-8 lg:sticky lg:top-0">
               {/* Header */}
-              <div className="flex items-start gap-5 pb-6 border-b border-bg-border/40">
+              <div className="flex items-start gap-4 sm:gap-5 pb-6 border-b border-bg-border/40">
                 <div
-                  className={`w-16 h-16 rounded-[18px] flex items-center justify-center text-white font-black text-[24px] shrink-0 ${colorBg[selectedJob.companyColor] ?? "bg-primary"}`}
+                  className={`hidden sm:flex w-16 h-16 rounded-[18px] flex items-center justify-center text-white font-black text-[24px] shrink-0 ${colorBg[selectedJob.companyColor] ?? "bg-primary"}`}
                 >
                   {selectedJob.company[0]}
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <h2 className="text-[22px] font-extrabold text-txt-title">
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-start justify-between gap-2 sm:gap-4">
+                    <div className="min-w-0">
+                      <h2 className="text-[20px] sm:text-[22px] font-extrabold text-txt-title break-words">
                         {selectedJob.title}
                       </h2>
                       <p className="text-[14px] text-txt-body font-medium mt-0.5">
@@ -249,7 +324,7 @@ export function DiscoverJobs() {
                       </Badge>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3 text-[12.5px] text-txt-caption font-medium">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3 text-[13.5px] text-txt-caption font-medium">
                     <span className="flex items-center gap-1">
                       <MapPin className="w-3.5 h-3.5" />
                       {selectedJob.location}
@@ -281,7 +356,7 @@ export function DiscoverJobs() {
                 {selectedJob.skills.map((s) => (
                   <span
                     key={s}
-                    className="text-[11.5px] font-bold text-primary bg-primary-light border border-primary-border/30 px-2.5 py-0.5 rounded-full"
+                    className="text-[12.5px] font-bold text-primary bg-primary-light border border-primary-border/30 px-2.5 py-0.5 rounded-full"
                   >
                     {s}
                   </span>
@@ -314,7 +389,7 @@ export function DiscoverJobs() {
                   {selectedJob.benefits.map((b) => (
                     <span
                       key={b}
-                      className="text-[12px] font-semibold text-sec-green bg-sec-green/10 border border-sec-green/20 px-2.5 py-1 rounded-full"
+                      className="text-[13px] font-semibold text-sec-green bg-sec-green/10 border border-sec-green/20 px-2.5 py-1 rounded-full"
                     >
                       {b}
                     </span>
@@ -323,26 +398,37 @@ export function DiscoverJobs() {
               </div>
 
               {/* CTA */}
-              <div className="flex gap-3 mt-2">
+              <div className="flex flex-wrap gap-3 mt-2">
                 <Button
                   variant={isApplied(selectedJob.id) ? "secondary" : "primary"}
-                  onClick={() => handleApply(selectedJob)}
-                  disabled={isApplied(selectedJob.id)}
-                  className={`flex-1 h-11 text-[14px] font-bold cursor-pointer ${isApplied(selectedJob.id) ? "" : "shadow-button"}`}
+                  onClick={() => openApply(selectedJob)}
+                  disabled={isApplied(selectedJob.id) || !seekerProfile}
+                  title={!seekerProfile ? "Loading your profile…" : undefined}
+                  className={`flex-1 min-w-[160px] h-11 text-[14px] font-bold cursor-pointer ${isApplied(selectedJob.id) ? "" : "shadow-button"}`}
                 >
-                  {isApplied(selectedJob.id) ? "✓ Applied" : "Apply Now"}
+                  {isWithdrawn(selectedJob.id)
+                    ? "Application withdrawn"
+                    : isApplied(selectedJob.id)
+                      ? "✓ Applied"
+                      : "Apply Now"}
                 </Button>
                 {!isApplied(selectedJob.id) && (
                   <Button
                     variant="secondary"
                     onClick={() => handleSave(selectedJob)}
-                    disabled={isSaved(selectedJob.id)}
+                    disabled={saving}
                     className="h-11 px-4 cursor-pointer"
-                    title={isSaved(selectedJob.id) ? "Saved in Applications" : "Save Job"}
+                    aria-label={
+                      isSaved(selectedJob.id) ? "Saved — view in Applications" : "Save job"
+                    }
+                    title={isSaved(selectedJob.id) ? "Saved — view in Applications" : "Save job"}
                   >
                     <Bookmark
                       className={`w-4.5 h-4.5 ${isSaved(selectedJob.id) ? "fill-current text-primary" : ""}`}
                     />
+                    <span className="text-[13px] font-semibold">
+                      {isSaved(selectedJob.id) ? "Saved" : "Save"}
+                    </span>
                   </Button>
                 )}
               </div>
@@ -350,6 +436,86 @@ export function DiscoverJobs() {
           </div>
         )}
       </div>
+
+      {/* Apply dialog */}
+      <Dialog open={!!applyJob} onOpenChange={(open) => !open && !submitting && setApplyJob(null)}>
+        <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Apply to {applyJob?.title}</DialogTitle>
+            <DialogDescription>
+              {applyJob?.company} · {applyJob?.location}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4 flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor="apply-resume"
+                className="text-[13.5px] font-semibold text-txt-heading"
+              >
+                Resume
+              </label>
+              {resumes.length > 0 ? (
+                <select
+                  id="apply-resume"
+                  value={resumeId}
+                  onChange={(e) => setResumeId(e.target.value)}
+                  className="h-10 w-full rounded-input border border-bg-border bg-bg-primary px-3 text-[13px] text-txt-heading focus:outline-none focus:border-primary/40"
+                >
+                  {resumes.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                      {d.active ? " (active)" : ""}
+                    </option>
+                  ))}
+                  <option value="">Apply without a resume</option>
+                </select>
+              ) : (
+                <p className="text-[13.5px] text-txt-caption">
+                  You have no resumes yet.{" "}
+                  <button
+                    type="button"
+                    className="font-semibold text-primary hover:underline"
+                    onClick={() => {
+                      setApplyJob(null)
+                      setCandidateActiveView("Documents")
+                    }}
+                  >
+                    Upload one in Documents
+                  </button>{" "}
+                  or apply without it.
+                </p>
+              )}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="apply-cover" className="text-[13.5px] font-semibold text-txt-heading">
+                Cover letter <span className="font-normal text-txt-caption">(optional)</span>
+              </label>
+              <textarea
+                id="apply-cover"
+                value={coverLetter}
+                onChange={(e) => setCoverLetter(e.target.value)}
+                rows={6}
+                maxLength={5000}
+                placeholder="Tell the hiring team why you're a great fit…"
+                className="w-full rounded-input border border-bg-border bg-bg-primary p-3 text-[13px] text-txt-heading placeholder:text-txt-caption focus:outline-none focus:border-primary/40"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setApplyJob(null)}
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+            <Button size="sm" onClick={submitApplication} disabled={submitting}>
+              {submitting ? "Submitting…" : "Submit application"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -1,4 +1,13 @@
-import { apiFetch, Button, Card, Input, useJobStore, useToast } from "hyrr.shared"
+import {
+  apiFetch,
+  Button,
+  Card,
+  errorMessage,
+  Input,
+  PROFILE_VISIBILITY,
+  useJobStore,
+  useToast,
+} from "hyrr.shared"
 import {
   Briefcase,
   Calendar,
@@ -32,7 +41,7 @@ import React, { useEffect, useRef, useState } from "react"
 function InfoRow({ icon, text }: { icon: React.ReactNode; text: string }) {
   if (!text) return null
   return (
-    <div className="flex items-center gap-2.5 text-[12.5px] text-txt-body">
+    <div className="flex items-center gap-2.5 text-[13.5px] text-txt-body">
       <span className="text-txt-caption shrink-0">{icon}</span>
       <span className="truncate font-medium">{text}</span>
     </div>
@@ -55,7 +64,7 @@ function SectionTitle({
         <h3 className="text-[14px] font-bold text-txt-title">{title}</h3>
       </div>
       {badge !== undefined && (
-        <span className="text-[11px] font-semibold text-txt-caption">{badge}</span>
+        <span className="text-[12px] font-semibold text-txt-caption">{badge}</span>
       )}
     </div>
   )
@@ -66,13 +75,13 @@ function SectionTitle({
 ══════════════════════════════════════════════════════════════ */
 export function ProfilePage() {
   const { toast } = useToast()
-  const { documents, setCandidateActiveView, fetchInitialData } = useJobStore()
+  const { documents, setCandidateActiveView, updateProfile } = useJobStore()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   /* ── Loading / saving flags ─────────────────────────────── */
   const [loading, setLoading] = useState(true)
-  const [savingProfile, setSavingProfile] = useState(false)
-  const [savingPrefs, setSavingPrefs] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [addingExp, setAddingExp] = useState(false)
   const [addingEdu, setAddingEdu] = useState(false)
@@ -100,7 +109,10 @@ export function ProfilePage() {
     preferredType: "Full Time",
     availability: "",
     yearsOfExperience: "",
+    preferredLocations: [] as string[],
+    visibility: PROFILE_VISIBILITY.PUBLIC as string,
   })
+  const [newLocation, setNewLocation] = useState("")
 
   /* ── Lists ──────────────────────────────────────────────── */
   const [experience, setExperience] = useState<any[]>([])
@@ -123,7 +135,7 @@ export function ProfilePage() {
     try {
       setLoading(true)
       const data = await apiFetch("/profile")
-      setProfile({
+      const loadedProfile = {
         name: data.user?.name || "",
         email: data.user?.email || "",
         phone: data.phone || "",
@@ -137,20 +149,34 @@ export function ProfilePage() {
           data.user?.avatar ||
           `https://ui-avatars.com/api/?name=${encodeURIComponent(data.user?.name || "User")}&background=7c5cfc&color=fff`,
         joinedAt: data.user?.joinedAt || data.user?.createdAt || "",
-      })
-      setPrefs({
+      }
+      const loadedPrefs = {
         expectedSalary: data.expectedSalary || "",
         preferredType: data.preferredType || "Full Time",
         availability: data.availability || "",
         yearsOfExperience: data.yearsOfExperience || "",
-      })
+        preferredLocations: (data.preferredLocations || []) as string[],
+        visibility: (data.visibility || PROFILE_VISIBILITY.PUBLIC) as string,
+      }
+      const loadedSkills: string[] = data.skills || []
+      const loadedLanguages: string[] = data.languages || []
+      setProfile(loadedProfile)
+      setPrefs(loadedPrefs)
       setExperience(data.experiences || [])
       setEducation(data.educations || [])
-      setSkills(data.skills || [])
-      setLanguages(data.languages || [])
+      setSkills(loadedSkills)
+      setLanguages(loadedLanguages)
+      setSavedSnapshot(
+        JSON.stringify({
+          profile: loadedProfile,
+          prefs: loadedPrefs,
+          skills: loadedSkills,
+          languages: loadedLanguages,
+        })
+      )
     } catch (err) {
       console.warn("Failed to load profile", err)
-      toast("Load Error", "Could not load profile data.", "error")
+      toast("Couldn't load profile", errorMessage(err, "Could not load profile data."), "error")
     } finally {
       setLoading(false)
     }
@@ -169,76 +195,78 @@ export function ProfilePage() {
     if (!file) return
     e.target.value = "" // allow re-selecting same file
 
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      toast("Unsupported image", "Please choose a JPG, PNG or WEBP image.", "error")
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast("Image too large", "Profile photos can be at most 10 MB.", "error")
+      return
+    }
+
     setUploadingAvatar(true)
     try {
-      // 1. Upload file
       const formData = new FormData()
       formData.append("file", file)
       const result = await apiFetch("/uploads", { method: "POST", body: formData })
-
-      // 2. Persist avatar URL to profile
-      await apiFetch("/profile", {
-        method: "PUT",
-        body: JSON.stringify({ avatar: result.url }),
-      })
-
+      await updateProfile({ avatar: result.url })
       setProfile((p) => ({ ...p, avatar: result.url }))
-      await fetchInitialData()
-      toast("Photo Updated", "Profile picture updated successfully!", "success")
-    } catch (err: any) {
-      toast("Upload Error", err?.message || "Failed to upload photo.", "error")
+      toast("Photo updated", "Profile picture updated successfully!", "success")
+    } catch (err) {
+      toast("Upload failed", errorMessage(err, "Failed to upload photo."), "error")
     } finally {
       setUploadingAvatar(false)
     }
   }
 
   /* ═══════════════════════════════════════════════════════════
-     Save basic profile (name, title, location, contacts, bio)
+     One save for everything editable on this page
   ═══════════════════════════════════════════════════════════ */
-  const handleSaveProfile = async () => {
-    try {
-      setSavingProfile(true)
-      await apiFetch("/profile", {
-        method: "PUT",
-        body: JSON.stringify({
-          name: profile.name,
-          title: profile.title,
-          location: profile.location,
-          phone: profile.phone,
-          website: profile.website,
-          github: profile.github,
-          linkedin: profile.linkedin,
-          bio: profile.bio,
-        }),
-      })
-      await fetchInitialData()
-      toast("Profile Saved", "Your profile has been updated.", "success")
-    } catch (err: any) {
-      toast("Save Error", err?.message || "Failed to save profile.", "error")
-    } finally {
-      setSavingProfile(false)
-    }
-  }
+  const editableSnapshot = JSON.stringify({ profile, prefs, skills, languages })
+  const isDirty = savedSnapshot !== null && editableSnapshot !== savedSnapshot
 
-  /* ═══════════════════════════════════════════════════════════
-     Save career preferences + skills + languages
-  ═══════════════════════════════════════════════════════════ */
-  const handleSavePrefs = async () => {
+  // Warn before leaving the page (reload/close) with unsaved edits.
+  useEffect(() => {
+    if (!isDirty) return
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+    }
+    window.addEventListener("beforeunload", onBeforeUnload)
+    return () => window.removeEventListener("beforeunload", onBeforeUnload)
+  }, [isDirty])
+
+  const handleSaveAll = async () => {
+    if (!profile.name.trim()) {
+      toast("Name required", "Please enter your full name.", "error")
+      return
+    }
     try {
-      setSavingPrefs(true)
-      await apiFetch("/profile", {
-        method: "PUT",
-        body: JSON.stringify({
-          ...prefs,
-          skills,
-          languages,
-        }),
+      setSaving(true)
+      await updateProfile({
+        name: profile.name.trim(),
+        title: profile.title.trim(),
+        location: profile.location.trim(),
+        phone: profile.phone.trim(),
+        // Empty strings clear the stored links.
+        website: profile.website.trim(),
+        github: profile.github.trim(),
+        linkedin: profile.linkedin.trim(),
+        bio: profile.bio,
+        expectedSalary: prefs.expectedSalary.trim(),
+        preferredType: prefs.preferredType,
+        availability: prefs.availability.trim(),
+        yearsOfExperience: prefs.yearsOfExperience.trim(),
+        preferredLocations: prefs.preferredLocations,
+        visibility: prefs.visibility,
+        skills,
+        languages,
       })
-      toast("Preferences Saved", "Career preferences updated.", "success")
-    } catch (err: any) {
-      toast("Save Error", err?.message || "Failed to save preferences.", "error")
+      setSavedSnapshot(editableSnapshot)
+      toast("Profile saved", "Your profile has been updated.", "success")
+    } catch (err) {
+      toast("Couldn't save profile", errorMessage(err, "Failed to save profile."), "error")
     } finally {
-      setSavingPrefs(false)
+      setSaving(false)
     }
   }
 
@@ -364,7 +392,7 @@ export function ProfilePage() {
      RENDER
   ══════════════════════════════════════════════════════════ */
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300 select-none">
+    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
       {/* Hidden file input */}
       <input
         type="file"
@@ -375,25 +403,32 @@ export function ProfilePage() {
       />
 
       {/* ── Page Header ──────────────────────────────────── */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-[28px] font-extrabold tracking-tight text-txt-title">My Profile</h1>
           <p className="text-[13px] text-txt-caption font-medium mt-0.5">
             Build your professional identity and let top opportunities find you.
           </p>
         </div>
-        <Button
-          onClick={handleSaveProfile}
-          disabled={savingProfile}
-          className="gap-2 cursor-pointer font-bold"
-        >
-          {savingProfile ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          ) : (
-            <Save className="w-3.5 h-3.5" />
+        <div className="flex items-center gap-3">
+          {isDirty && (
+            <span role="status" className="text-[13px] font-semibold text-sec-orange">
+              Unsaved changes
+            </span>
           )}
-          {savingProfile ? "Saving…" : "Save Profile"}
-        </Button>
+          <Button
+            onClick={handleSaveAll}
+            disabled={saving || !isDirty}
+            className="gap-2 cursor-pointer font-bold"
+          >
+            {saving ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Save className="w-3.5 h-3.5" />
+            )}
+            {saving ? "Saving…" : "Save Profile"}
+          </Button>
+        </div>
       </div>
 
       {/* ── Stats Row ────────────────────────────────────── */}
@@ -404,7 +439,7 @@ export function ProfilePage() {
             <CheckCircle2 className="w-5 h-5 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider">
+            <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider">
               Profile Completeness
             </p>
             <p className="text-[19px] font-black text-txt-title leading-none mt-0.5">
@@ -419,7 +454,7 @@ export function ProfilePage() {
                 }}
               />
             </div>
-            <p className="text-[10.5px] text-txt-caption mt-1">Keep going! Add more details.</p>
+            <p className="text-[11.5px] text-txt-caption mt-1">Keep going! Add more details.</p>
           </div>
         </Card>
 
@@ -429,13 +464,13 @@ export function ProfilePage() {
             <span className="text-[14px] font-black text-sec-blue">&lt;/&gt;</span>
           </div>
           <div>
-            <p className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider">
+            <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider">
               Skills Listed
             </p>
             <p className="text-[22px] font-black text-txt-title leading-none mt-0.5">
               {skills.length}
             </p>
-            <p className="text-[10.5px] text-txt-caption">proficiencies</p>
+            <p className="text-[11.5px] text-txt-caption">proficiencies</p>
           </div>
         </Card>
 
@@ -445,13 +480,13 @@ export function ProfilePage() {
             <Briefcase className="w-5 h-5 text-sec-green" />
           </div>
           <div>
-            <p className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider">
+            <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider">
               Work History
             </p>
             <p className="text-[22px] font-black text-txt-title leading-none mt-0.5">
               {experience.length}
             </p>
-            <p className="text-[10.5px] text-txt-caption">recorded positions</p>
+            <p className="text-[11.5px] text-txt-caption">recorded positions</p>
           </div>
         </Card>
 
@@ -461,13 +496,13 @@ export function ProfilePage() {
             <FileText className="w-5 h-5 text-sec-orange" />
           </div>
           <div>
-            <p className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider">
+            <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider">
               Resume
             </p>
             <p className="text-[22px] font-black text-txt-title leading-none mt-0.5">
               {activeResume ? 1 : 0}
             </p>
-            <p className="text-[10.5px] text-txt-caption">
+            <p className="text-[11.5px] text-txt-caption">
               {activeResume ? "active resume" : "no resume yet"}
             </p>
           </div>
@@ -528,7 +563,7 @@ export function ProfilePage() {
                   value={profile.title}
                   onChange={(e) => setProfile((p) => ({ ...p, title: e.target.value }))}
                   placeholder="Professional title…"
-                  className="w-full text-center text-[12px] text-txt-caption bg-transparent border-b border-transparent hover:border-bg-border focus:border-primary/50 focus:outline-none transition-colors pb-0.5"
+                  className="w-full text-center text-[13px] text-txt-caption bg-transparent border-b border-transparent hover:border-bg-border focus:border-primary/50 focus:outline-none transition-colors pb-0.5"
                 />
               </div>
 
@@ -564,7 +599,7 @@ export function ProfilePage() {
                       onChange={(e) => setProfile((p) => ({ ...p, [key]: e.target.value }))}
                       placeholder={placeholder}
                       disabled={disabled}
-                      className="flex-1 text-[12px] font-medium text-txt-body bg-transparent border-b border-transparent hover:border-bg-border focus:border-primary/50 focus:outline-none transition-colors pb-0.5 disabled:opacity-60 disabled:cursor-not-allowed min-w-0"
+                      className="flex-1 text-[13px] font-medium text-txt-body bg-transparent border-b border-transparent hover:border-bg-border focus:border-primary/50 focus:outline-none transition-colors pb-0.5 disabled:opacity-60 disabled:cursor-not-allowed min-w-0"
                     />
                   </div>
                 ))}
@@ -578,8 +613,8 @@ export function ProfilePage() {
           {/* Profile Checklist */}
           <Card className="p-5">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-[12.5px] font-bold text-txt-title">Profile Checklist</h3>
-              <span className="text-[11px] font-bold text-primary">{completionPct}% Complete</span>
+              <h3 className="text-[13.5px] font-bold text-txt-title">Profile Checklist</h3>
+              <span className="text-[12px] font-bold text-primary">{completionPct}% Complete</span>
             </div>
             <div className="space-y-2">
               {completionItems.map((item) => (
@@ -592,7 +627,7 @@ export function ProfilePage() {
                     {item.done && <CheckCircle2 className="w-3 h-3" />}
                   </div>
                   <span
-                    className={`text-[12px] font-medium transition-colors ${
+                    className={`text-[13px] font-medium transition-colors ${
                       item.done
                         ? "text-txt-body line-through decoration-sec-green/50"
                         : "text-txt-caption"
@@ -613,11 +648,12 @@ export function ProfilePage() {
               />
             </div>
             <button
-              onClick={handleSaveProfile}
-              disabled={savingProfile}
-              className="mt-3 w-full py-2 rounded-[12px] border border-primary/30 text-primary text-[12px] font-bold hover:bg-primary/5 transition-colors cursor-pointer disabled:opacity-50"
+              type="button"
+              onClick={handleSaveAll}
+              disabled={saving || !isDirty}
+              className="mt-3 w-full py-2 rounded-[12px] border border-primary/30 text-primary text-[13px] font-bold hover:bg-primary/5 transition-colors cursor-pointer disabled:opacity-50"
             >
-              {savingProfile ? "Saving…" : "Improve Profile →"}
+              {saving ? "Saving…" : isDirty ? "Save changes" : "All changes saved"}
             </button>
           </Card>
         </div>
@@ -647,12 +683,12 @@ export function ProfilePage() {
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <p className="text-[13px] font-bold text-txt-heading">{exp.role}</p>
-                          <p className="text-[12px] text-txt-caption font-medium">
+                          <p className="text-[13px] text-txt-caption font-medium">
                             {exp.company}
                             {exp.duration ? ` · ${exp.duration}` : ""}
                           </p>
                           {exp.desc && (
-                            <p className="text-[12px] text-txt-body mt-1 leading-relaxed">
+                            <p className="text-[13px] text-txt-body mt-1 leading-relaxed">
                               {exp.desc}
                             </p>
                           )}
@@ -685,7 +721,7 @@ export function ProfilePage() {
                 <p className="text-[13px] font-semibold text-txt-heading mb-1">
                   Add Your Work Experience
                 </p>
-                <p className="text-[12px] text-txt-caption max-w-[280px]">
+                <p className="text-[13px] text-txt-caption max-w-[280px]">
                   Share your work history to help employers understand your background.
                 </p>
               </div>
@@ -694,44 +730,44 @@ export function ProfilePage() {
             {/* Inline add form */}
             {showExpForm ? (
               <div className="p-4 rounded-[14px] bg-bg-primary border border-bg-border/60 space-y-3 mt-2">
-                <p className="text-[12px] font-bold text-txt-heading">New Position</p>
+                <p className="text-[13px] font-bold text-txt-heading">New Position</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
+                    <label className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
                       Job Title *
                     </label>
                     <Input
                       placeholder="e.g. Senior Developer"
                       value={expForm.role}
                       onChange={(e) => setExpForm((f) => ({ ...f, role: e.target.value }))}
-                      className="h-8 text-[12px]"
+                      className="h-8 text-[13px]"
                     />
                   </div>
                   <div>
-                    <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
+                    <label className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
                       Company *
                     </label>
                     <Input
                       placeholder="e.g. Google"
                       value={expForm.company}
                       onChange={(e) => setExpForm((f) => ({ ...f, company: e.target.value }))}
-                      className="h-8 text-[12px]"
+                      className="h-8 text-[13px]"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
+                  <label className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
                     Duration
                   </label>
                   <Input
                     placeholder="e.g. Jan 2022 – Present"
                     value={expForm.duration}
                     onChange={(e) => setExpForm((f) => ({ ...f, duration: e.target.value }))}
-                    className="h-8 text-[12px]"
+                    className="h-8 text-[13px]"
                   />
                 </div>
                 <div>
-                  <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
+                  <label className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
                     Description
                   </label>
                   <textarea
@@ -739,7 +775,7 @@ export function ProfilePage() {
                     placeholder="Key achievements or responsibilities…"
                     value={expForm.desc}
                     onChange={(e) => setExpForm((f) => ({ ...f, desc: e.target.value }))}
-                    className="w-full p-2.5 rounded-[10px] border border-bg-border bg-bg-secondary text-[12px] text-txt-body placeholder:text-txt-caption resize-none focus:outline-none focus:border-primary/40 transition-all"
+                    className="w-full p-2.5 rounded-[10px] border border-bg-border bg-bg-secondary text-[13px] text-txt-body placeholder:text-txt-caption resize-none focus:outline-none focus:border-primary/40 transition-all"
                   />
                 </div>
                 <div className="flex gap-2 justify-end">
@@ -748,7 +784,7 @@ export function ProfilePage() {
                       setShowExpForm(false)
                       setExpForm({ role: "", company: "", duration: "", desc: "" })
                     }}
-                    className="px-3 py-1.5 rounded-[10px] text-[12px] font-semibold text-txt-caption hover:bg-bg-hover transition-colors cursor-pointer"
+                    className="px-3 py-1.5 rounded-[10px] text-[13px] font-semibold text-txt-caption hover:bg-bg-hover transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -797,7 +833,7 @@ export function ProfilePage() {
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <p className="text-[13px] font-bold text-txt-heading">{edu.school}</p>
-                          <p className="text-[12px] text-txt-caption font-medium">
+                          <p className="text-[13px] text-txt-caption font-medium">
                             {edu.degree}
                             {edu.duration ? ` · ${edu.duration}` : ""}
                           </p>
@@ -830,7 +866,7 @@ export function ProfilePage() {
                 <p className="text-[13px] font-semibold text-txt-heading mb-1">
                   Add Your Education
                 </p>
-                <p className="text-[12px] text-txt-caption max-w-[280px]">
+                <p className="text-[13px] text-txt-caption max-w-[280px]">
                   Add your degrees, certifications, and relevant coursework.
                 </p>
               </div>
@@ -839,40 +875,40 @@ export function ProfilePage() {
             {/* Inline add form */}
             {showEduForm ? (
               <div className="p-4 rounded-[14px] bg-bg-primary border border-bg-border/60 space-y-3 mt-2">
-                <p className="text-[12px] font-bold text-txt-heading">New Education</p>
+                <p className="text-[13px] font-bold text-txt-heading">New Education</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
+                    <label className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
                       Institution *
                     </label>
                     <Input
                       placeholder="e.g. MIT"
                       value={eduForm.school}
                       onChange={(e) => setEduForm((f) => ({ ...f, school: e.target.value }))}
-                      className="h-8 text-[12px]"
+                      className="h-8 text-[13px]"
                     />
                   </div>
                   <div>
-                    <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
+                    <label className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
                       Degree *
                     </label>
                     <Input
                       placeholder="e.g. B.S. Computer Science"
                       value={eduForm.degree}
                       onChange={(e) => setEduForm((f) => ({ ...f, degree: e.target.value }))}
-                      className="h-8 text-[12px]"
+                      className="h-8 text-[13px]"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
+                  <label className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
                     Duration
                   </label>
                   <Input
                     placeholder="e.g. 2018 – 2022"
                     value={eduForm.duration}
                     onChange={(e) => setEduForm((f) => ({ ...f, duration: e.target.value }))}
-                    className="h-8 text-[12px]"
+                    className="h-8 text-[13px]"
                   />
                 </div>
                 <div className="flex gap-2 justify-end">
@@ -881,7 +917,7 @@ export function ProfilePage() {
                       setShowEduForm(false)
                       setEduForm({ school: "", degree: "", duration: "" })
                     }}
-                    className="px-3 py-1.5 rounded-[10px] text-[12px] font-semibold text-txt-caption hover:bg-bg-hover transition-colors cursor-pointer"
+                    className="px-3 py-1.5 rounded-[10px] text-[13px] font-semibold text-txt-caption hover:bg-bg-hover transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -917,7 +953,7 @@ export function ProfilePage() {
             {/* Core Technical Skills */}
             <Card className="p-5 flex flex-col gap-3">
               <SectionTitle
-                icon={<span className="text-[12px] font-black">&lt;/&gt;</span>}
+                icon={<span className="text-[13px] font-black">&lt;/&gt;</span>}
                 title="Core Technical Skills"
                 badge={`${skills.length} skills`}
               />
@@ -927,10 +963,12 @@ export function ProfilePage() {
                   {skills.map((sk) => (
                     <span
                       key={sk}
-                      className="inline-flex items-center gap-1 text-[11px] font-bold text-primary bg-primary/10 border border-primary/20 px-2.5 py-0.5 rounded-full"
+                      className="inline-flex items-center gap-1 text-[12px] font-bold text-primary bg-primary/10 border border-primary/20 px-2.5 py-0.5 rounded-full"
                     >
                       {sk}
                       <button
+                        type="button"
+                        aria-label={`Remove ${sk}`}
                         onClick={() => setSkills(skills.filter((s) => s !== sk))}
                         className="text-primary hover:text-sec-red cursor-pointer ml-0.5"
                       >
@@ -944,8 +982,8 @@ export function ProfilePage() {
                   <div className="w-8 h-8 rounded-full bg-bg-primary border border-dashed border-bg-border flex items-center justify-center mb-1.5">
                     <Plus className="w-4 h-4 text-txt-caption" />
                   </div>
-                  <p className="text-[11.5px] font-semibold text-txt-heading">Add Your Skills</p>
-                  <p className="text-[11px] text-txt-caption">
+                  <p className="text-[12.5px] font-semibold text-txt-heading">Add Your Skills</p>
+                  <p className="text-[12px] text-txt-caption">
                     Technologies and tools you work with.
                   </p>
                 </div>
@@ -962,7 +1000,7 @@ export function ProfilePage() {
                       setNewSkill("")
                     }
                   }}
-                  className="h-7 text-[11.5px] flex-1"
+                  className="h-7 text-[12.5px] flex-1"
                 />
                 <Button
                   size="sm"
@@ -994,8 +1032,10 @@ export function ProfilePage() {
                       key={lang}
                       className="flex items-center justify-between px-2.5 py-1 rounded-[8px] bg-bg-primary border border-bg-border/40"
                     >
-                      <span className="text-[12px] font-semibold text-txt-heading">{lang}</span>
+                      <span className="text-[13px] font-semibold text-txt-heading">{lang}</span>
                       <button
+                        type="button"
+                        aria-label={`Remove ${lang}`}
                         onClick={() => setLanguages(languages.filter((l) => l !== lang))}
                         className="text-txt-caption hover:text-sec-red cursor-pointer transition-colors"
                       >
@@ -1009,8 +1049,8 @@ export function ProfilePage() {
                   <div className="w-8 h-8 rounded-full bg-bg-primary border border-dashed border-bg-border flex items-center justify-center mb-1.5">
                     <Plus className="w-4 h-4 text-txt-caption" />
                   </div>
-                  <p className="text-[11.5px] font-semibold text-txt-heading">Add Languages</p>
-                  <p className="text-[11px] text-txt-caption">Languages you speak.</p>
+                  <p className="text-[12.5px] font-semibold text-txt-heading">Add Languages</p>
+                  <p className="text-[12px] text-txt-caption">Languages you speak.</p>
                 </div>
               )}
 
@@ -1029,7 +1069,7 @@ export function ProfilePage() {
                       setNewLang("")
                     }
                   }}
-                  className="h-7 text-[11.5px] flex-1"
+                  className="h-7 text-[12.5px] flex-1"
                 />
                 <Button
                   size="sm"
@@ -1059,12 +1099,12 @@ export function ProfilePage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p
-                          className="text-[11.5px] font-semibold text-txt-heading truncate"
+                          className="text-[12.5px] font-semibold text-txt-heading truncate"
                           title={activeResume.name}
                         >
                           {activeResume.name}
                         </p>
-                        <p className="text-[10.5px] text-txt-caption">
+                        <p className="text-[11.5px] text-txt-caption">
                           {activeResume.size} · Updated{" "}
                           {new Date(activeResume.createdAt).toLocaleDateString()}
                         </p>
@@ -1075,14 +1115,14 @@ export function ProfilePage() {
                         href={activeResume.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex-1 text-center py-1.5 rounded-[8px] bg-bg-secondary border border-bg-border text-[11px] font-bold text-txt-heading hover:bg-bg-hover transition-colors"
+                        className="flex-1 text-center py-1.5 rounded-[8px] bg-bg-secondary border border-bg-border text-[12px] font-bold text-txt-heading hover:bg-bg-hover transition-colors"
                       >
                         Preview
                       </a>
                       <Button
                         variant="secondary"
                         size="sm"
-                        className="flex-1 text-[11px] cursor-pointer h-7"
+                        className="flex-1 text-[12px] cursor-pointer h-7"
                         onClick={() => setCandidateActiveView("Documents")}
                       >
                         Manage
@@ -1092,7 +1132,7 @@ export function ProfilePage() {
                   <Button
                     variant="secondary"
                     size="sm"
-                    className="w-full cursor-pointer text-[11.5px] gap-1.5"
+                    className="w-full cursor-pointer text-[12.5px] gap-1.5"
                     onClick={() => setCandidateActiveView("Documents")}
                   >
                     <Plus className="w-3.5 h-3.5" /> Upload New Resume
@@ -1103,13 +1143,13 @@ export function ProfilePage() {
                   <div className="w-9 h-9 rounded-full bg-bg-primary border border-dashed border-bg-border flex items-center justify-center mb-2">
                     <FileText className="w-4 h-4 text-txt-caption" />
                   </div>
-                  <p className="text-[11.5px] font-semibold text-txt-heading mb-0.5">
+                  <p className="text-[12.5px] font-semibold text-txt-heading mb-0.5">
                     No Active Resume
                   </p>
-                  <p className="text-[11px] text-txt-caption mb-3">Upload to apply to jobs.</p>
+                  <p className="text-[12px] text-txt-caption mb-3">Upload to apply to jobs.</p>
                   <Button
                     size="sm"
-                    className="cursor-pointer text-[11px] gap-1.5 w-full"
+                    className="cursor-pointer text-[12px] gap-1.5 w-full"
                     onClick={() => setCandidateActiveView("Documents")}
                   >
                     <Plus className="w-3.5 h-3.5" /> Upload Resume
@@ -1117,23 +1157,6 @@ export function ProfilePage() {
                 </div>
               )}
             </Card>
-          </div>
-
-          {/* Save skills + languages button */}
-          <div className="flex justify-end">
-            <Button
-              onClick={handleSavePrefs}
-              disabled={savingPrefs}
-              variant="secondary"
-              className="gap-2 cursor-pointer font-semibold"
-            >
-              {savingPrefs ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Save className="w-3.5 h-3.5" />
-              )}
-              {savingPrefs ? "Saving…" : "Save Skills & Languages"}
-            </Button>
           </div>
         </div>
 
@@ -1146,19 +1169,11 @@ export function ProfilePage() {
                 <DollarSign className="w-4 h-4 text-primary" />
                 <h3 className="text-[13px] font-bold text-txt-title">Career Preferences</h3>
               </div>
-              <button
-                onClick={handleSavePrefs}
-                disabled={savingPrefs}
-                className="text-[11px] font-bold text-primary hover:text-primary-hover cursor-pointer transition-colors disabled:opacity-50 flex items-center gap-1"
-              >
-                {savingPrefs ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                {savingPrefs ? "Saving…" : "Save"}
-              </button>
             </div>
 
             <div className="space-y-3.5">
               <div>
-                <p className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider mb-1">
+                <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider mb-1">
                   Expected Salary (Annual)
                 </p>
                 <div className="relative">
@@ -1167,13 +1182,13 @@ export function ProfilePage() {
                     value={prefs.expectedSalary}
                     onChange={(e) => setPrefs((p) => ({ ...p, expectedSalary: e.target.value }))}
                     placeholder="e.g. $140,000 – $160,000"
-                    className="w-full pl-7 pr-3 py-1.5 rounded-[10px] border border-bg-border bg-bg-primary text-[12px] text-txt-body placeholder:text-txt-caption focus:outline-none focus:border-primary/40 transition-all font-medium"
+                    className="w-full pl-7 pr-3 py-1.5 rounded-[10px] border border-bg-border bg-bg-primary text-[13px] text-txt-body placeholder:text-txt-caption focus:outline-none focus:border-primary/40 transition-all font-medium"
                   />
                 </div>
               </div>
 
               <div>
-                <p className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider mb-1">
+                <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider mb-1">
                   Years of Experience
                 </p>
                 <div className="relative">
@@ -1182,13 +1197,13 @@ export function ProfilePage() {
                     value={prefs.yearsOfExperience}
                     onChange={(e) => setPrefs((p) => ({ ...p, yearsOfExperience: e.target.value }))}
                     placeholder="e.g. 5+ years"
-                    className="w-full pl-7 pr-3 py-1.5 rounded-[10px] border border-bg-border bg-bg-primary text-[12px] text-txt-body placeholder:text-txt-caption focus:outline-none focus:border-primary/40 transition-all font-medium"
+                    className="w-full pl-7 pr-3 py-1.5 rounded-[10px] border border-bg-border bg-bg-primary text-[13px] text-txt-body placeholder:text-txt-caption focus:outline-none focus:border-primary/40 transition-all font-medium"
                   />
                 </div>
               </div>
 
               <div>
-                <p className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider mb-1.5">
+                <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider mb-1.5">
                   Work Arrangement
                 </p>
                 <div className="flex flex-wrap gap-1.5">
@@ -1197,7 +1212,7 @@ export function ProfilePage() {
                       key={t}
                       type="button"
                       onClick={() => setPrefs((p) => ({ ...p, preferredType: t }))}
-                      className={`px-2.5 py-1 rounded-[8px] text-[11px] font-semibold cursor-pointer border transition-all ${
+                      className={`px-2.5 py-1 rounded-[8px] text-[12px] font-semibold cursor-pointer border transition-all ${
                         prefs.preferredType === t
                           ? "bg-primary text-white border-primary"
                           : "bg-bg-primary text-txt-body border-bg-border hover:border-primary/30"
@@ -1210,15 +1225,93 @@ export function ProfilePage() {
               </div>
 
               <div>
-                <p className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider mb-1">
+                <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider mb-1">
                   Availability
                 </p>
                 <input
                   value={prefs.availability}
                   onChange={(e) => setPrefs((p) => ({ ...p, availability: e.target.value }))}
                   placeholder="e.g. Immediate / 2 weeks notice"
-                  className="w-full px-3 py-1.5 rounded-[10px] border border-bg-border bg-bg-primary text-[12px] text-txt-body placeholder:text-txt-caption focus:outline-none focus:border-primary/40 transition-all font-medium"
+                  className="w-full px-3 py-1.5 rounded-[10px] border border-bg-border bg-bg-primary text-[13px] text-txt-body placeholder:text-txt-caption focus:outline-none focus:border-primary/40 transition-all font-medium"
                 />
+              </div>
+
+              <div>
+                <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider mb-1.5">
+                  Preferred Locations
+                </p>
+                {prefs.preferredLocations.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {prefs.preferredLocations.map((loc) => (
+                      <span
+                        key={loc}
+                        className="inline-flex items-center gap-1 text-[12px] font-semibold text-txt-heading bg-bg-primary border border-bg-border px-2 py-0.5 rounded-full"
+                      >
+                        {loc}
+                        <button
+                          type="button"
+                          aria-label={`Remove ${loc}`}
+                          onClick={() =>
+                            setPrefs((p) => ({
+                              ...p,
+                              preferredLocations: p.preferredLocations.filter((l) => l !== loc),
+                            }))
+                          }
+                          className="text-txt-caption hover:text-sec-red cursor-pointer"
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <input
+                  value={newLocation}
+                  onChange={(e) => setNewLocation(e.target.value)}
+                  onKeyDown={(e) => {
+                    const v = newLocation.trim()
+                    if (e.key === "Enter" && v && !prefs.preferredLocations.includes(v)) {
+                      e.preventDefault()
+                      setPrefs((p) => ({ ...p, preferredLocations: [...p.preferredLocations, v] }))
+                      setNewLocation("")
+                    }
+                  }}
+                  aria-label="Add preferred location"
+                  placeholder="Add a city or Remote, press Enter"
+                  className="w-full px-3 py-1.5 rounded-[10px] border border-bg-border bg-bg-primary text-[13px] text-txt-body placeholder:text-txt-caption focus:outline-none focus:border-primary/40 transition-all font-medium"
+                />
+              </div>
+
+              <div>
+                <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider mb-1.5">
+                  Profile Visibility
+                </p>
+                <div role="radiogroup" aria-label="Profile visibility" className="flex gap-1.5">
+                  {[
+                    { value: PROFILE_VISIBILITY.PUBLIC, label: "Public" },
+                    { value: PROFILE_VISIBILITY.PRIVATE, label: "Private" },
+                  ].map((v) => (
+                    <button
+                      key={v.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={prefs.visibility === v.value}
+                      onClick={() => setPrefs((p) => ({ ...p, visibility: v.value }))}
+                      className={`px-2.5 py-1 rounded-[8px] text-[12px] font-semibold cursor-pointer border transition-all ${
+                        prefs.visibility === v.value
+                          ? "bg-primary text-white border-primary"
+                          : "bg-bg-primary text-txt-body border-bg-border hover:border-primary/30"
+                      }`}
+                    >
+                      {v.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11.5px] text-txt-caption mt-1">
+                  {prefs.visibility === PROFILE_VISIBILITY.PRIVATE
+                    ? "Only recruiters you apply to can see your profile."
+                    : "Recruiters can discover your profile."}
+                </p>
               </div>
             </div>
           </Card>
@@ -1227,21 +1320,13 @@ export function ProfilePage() {
           <Card className="p-5">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-[13px] font-bold text-txt-title">About Me</h3>
-              <button
-                onClick={handleSaveProfile}
-                disabled={savingProfile}
-                className="text-[11px] font-bold text-primary hover:text-primary-hover cursor-pointer transition-colors disabled:opacity-50 flex items-center gap-1"
-              >
-                {savingProfile ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                {savingProfile ? "Saving…" : "Save"}
-              </button>
             </div>
             <textarea
               rows={5}
               value={profile.bio}
               onChange={(e) => setProfile((p) => ({ ...p, bio: e.target.value }))}
               placeholder="Briefly describe your background, tech stack, and what you excel at…"
-              className="w-full p-3 rounded-[12px] border border-bg-border bg-bg-primary text-[12.5px] text-txt-body placeholder:text-txt-caption resize-none focus:outline-none focus:border-primary/40 transition-all font-medium leading-relaxed"
+              className="w-full p-3 rounded-[12px] border border-bg-border bg-bg-primary text-[13.5px] text-txt-body placeholder:text-txt-caption resize-none focus:outline-none focus:border-primary/40 transition-all font-medium leading-relaxed"
             />
             {/* Social links */}
             <div className="mt-3 space-y-2">
@@ -1251,7 +1336,9 @@ export function ProfilePage() {
                   value={profile.github}
                   onChange={(e) => setProfile((p) => ({ ...p, github: e.target.value }))}
                   placeholder="GitHub URL"
-                  className="flex-1 text-[12px] text-txt-body bg-transparent border-b border-transparent hover:border-bg-border focus:border-primary/50 focus:outline-none transition-colors pb-0.5 placeholder:text-txt-caption"
+                  aria-label="GitHub URL"
+                  type="url"
+                  className="flex-1 text-[13px] text-txt-body bg-transparent border-b border-transparent hover:border-bg-border focus:border-primary/50 focus:outline-none transition-colors pb-0.5 placeholder:text-txt-caption"
                 />
               </div>
               <div className="flex items-center gap-2">
@@ -1260,7 +1347,9 @@ export function ProfilePage() {
                   value={profile.linkedin}
                   onChange={(e) => setProfile((p) => ({ ...p, linkedin: e.target.value }))}
                   placeholder="LinkedIn URL"
-                  className="flex-1 text-[12px] text-txt-body bg-transparent border-b border-transparent hover:border-bg-border focus:border-primary/50 focus:outline-none transition-colors pb-0.5 placeholder:text-txt-caption"
+                  aria-label="LinkedIn URL"
+                  type="url"
+                  className="flex-1 text-[13px] text-txt-body bg-transparent border-b border-transparent hover:border-bg-border focus:border-primary/50 focus:outline-none transition-colors pb-0.5 placeholder:text-txt-caption"
                 />
               </div>
             </div>
@@ -1287,7 +1376,7 @@ export function ProfilePage() {
                 {
                   icon: <Heart className="w-3.5 h-3.5" />,
                   label: "Saved Jobs",
-                  action: () => setCandidateActiveView("Discover"),
+                  action: () => setCandidateActiveView("Applications"),
                 },
                 {
                   icon: <FileText className="w-3.5 h-3.5" />,
@@ -1301,6 +1390,7 @@ export function ProfilePage() {
                 },
               ].map((link) => (
                 <button
+                  type="button"
                   key={link.label}
                   onClick={link.action}
                   className="w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] hover:bg-bg-primary text-left transition-colors group cursor-pointer"
@@ -1309,7 +1399,7 @@ export function ProfilePage() {
                     <span className="text-txt-caption group-hover:text-primary transition-colors">
                       {link.icon}
                     </span>
-                    <span className="text-[12.5px] font-medium text-txt-body group-hover:text-txt-heading transition-colors">
+                    <span className="text-[13.5px] font-medium text-txt-body group-hover:text-txt-heading transition-colors">
                       {link.label}
                     </span>
                   </div>

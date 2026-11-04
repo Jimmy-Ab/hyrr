@@ -2,110 +2,108 @@ import {
   defaultDropAnimationSideEffects,
   DndContext,
   DragOverlay,
+  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core"
+import { useToast } from "hyrr.shared"
 import { useState } from "react"
+import { columnForStatus, errorMessage, isWithdrawn, PIPELINE_STATUSES } from "../../lib/recruiter"
 import { useJobStore, type Candidate } from "../../store/useJobStore"
-import { useToast } from "../ui/toast"
 import { ApplicationCard } from "./application-card"
 import { KanbanColumn } from "./kanban-column"
 
-export function KanbanBoard() {
-  const { candidates, selectedJobId, moveCandidate, searchQuery, setAddCandidateOpen } =
-    useJobStore()
+/** Pipeline board for one job, or for every job when `jobId` is omitted. */
+export function KanbanBoard({ jobId }: { jobId?: string }) {
+  const { candidates, jobs, moveCandidate, searchQuery, setAddCandidateOpen } = useJobStore()
+  const jobTitles = jobId ? undefined : Object.fromEntries(jobs.map((j) => [j.id, j.title]))
   const { toast } = useToast()
 
   const [activeId, setActiveId] = useState<string | null>(null)
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    })
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor)
   )
 
   const activeCandidate = candidates.find((c) => c.id === activeId)
 
-  // Filter candidates for selected job and query
+  const query = searchQuery.trim().toLowerCase()
   const filteredCandidates = candidates.filter((c) => {
-    if (c.jobId !== selectedJobId) return false
-    if (!searchQuery) return true
-
-    const query = searchQuery.toLowerCase()
+    if (jobId && c.jobId !== jobId) return false
+    if (!query) return true
     return (
       c.name.toLowerCase().includes(query) ||
-      c.title.toLowerCase().includes(query) ||
-      c.location.toLowerCase().includes(query)
+      (c.title || "").toLowerCase().includes(query) ||
+      (c.location || "").toLowerCase().includes(query)
     )
   })
 
-  const columns: { id: Candidate["status"]; title: string }[] = [
-    { id: "Saved", title: "Saved" },
-    { id: "Applied", title: "Applied" },
-    { id: "In Process", title: "In Process" },
-    { id: "Offer", title: "Offer" },
-    { id: "Archived", title: "Archived" },
-  ]
-
   const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string)
+    setActiveId(String(event.active.id))
   }
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
     setActiveId(null)
-
     if (!over) return
 
-    const candidateId = active.id as string
-    const targetStatus = over.id as Candidate["status"]
-
+    const candidateId = String(active.id)
+    const targetStatus = String(over.id) as Candidate["status"]
     const candidate = candidates.find((c) => c.id === candidateId)
-    if (candidate && candidate.status !== targetStatus) {
-      moveCandidate(candidateId, targetStatus)
-      toast("Status Updated", `${candidate.name} has been moved to ${targetStatus}.`, "success")
+    if (!candidate || isWithdrawn(candidate) || candidate.status === targetStatus) return
+
+    try {
+      await moveCandidate(candidateId, targetStatus)
+      toast("Status updated", `${candidate.name} moved to ${targetStatus}.`, "success")
+    } catch (err) {
+      toast("Could not move candidate", errorMessage(err), "error")
     }
   }
 
-  const handleOpenAddModal = (column: Candidate["status"]) => {
-    setAddCandidateOpen(true, column)
-  }
-
   return (
-    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="flex gap-6 overflow-x-auto pb-6 pt-2 custom-scrollbar-none min-h-[640px]">
-        {columns.map((col) => {
-          const colCandidates = filteredCandidates.filter((c) => c.status === col.id)
-          return (
-            <KanbanColumn
-              key={col.id}
-              id={col.id}
-              title={col.title}
-              candidates={colCandidates}
-              onAddCandidate={handleOpenAddModal}
-            />
-          )
-        })}
+    <DndContext
+      sensors={sensors}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragCancel={() => setActiveId(null)}
+      accessibility={{
+        screenReaderInstructions: {
+          draggable:
+            "To move a candidate, press space or enter, use the arrow keys to move to another column, then press space or enter again to drop. Press escape to cancel.",
+        },
+      }}
+    >
+      <div className="flex gap-4 md:gap-6 overflow-x-auto pb-6 pt-2 min-h-[520px]">
+        {PIPELINE_STATUSES.map((status) => (
+          <KanbanColumn
+            key={status}
+            id={status}
+            title={status}
+            candidates={filteredCandidates.filter((c) => columnForStatus(c.status) === status)}
+            onAddCandidate={(column) => setAddCandidateOpen(true, column)}
+            jobTitles={jobTitles}
+          />
+        ))}
       </div>
 
-      {/* Drag Overlay */}
       <DragOverlay
         dropAnimation={{
           sideEffects: defaultDropAnimationSideEffects({
-            styles: {
-              active: {
-                opacity: "0.4",
-              },
-            },
+            styles: { active: { opacity: "0.4" } },
           }),
         }}
       >
-        {activeCandidate ? <ApplicationCard candidate={activeCandidate} isOverlay /> : null}
+        {activeCandidate ? (
+          <ApplicationCard
+            candidate={activeCandidate}
+            isOverlay
+            jobTitle={jobTitles?.[activeCandidate.jobId]}
+          />
+        ) : null}
       </DragOverlay>
     </DndContext>
   )
