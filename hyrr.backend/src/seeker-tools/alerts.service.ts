@@ -28,6 +28,7 @@ const DIGEST_JOB_POOL = 2000
 type DigestJob = AlertJob & {
   id: string
   createdAt: Date
+  publishedAt: Date | null
   recruiterId: string
   company: { name: string } | null
 }
@@ -42,9 +43,14 @@ const JOB_SELECT = {
   remote: true,
   type: true,
   createdAt: true,
+  publishedAt: true,
   recruiterId: true,
   company: { select: { name: true } },
 } satisfies Prisma.JobSelect
+
+/** When a job went live: `publishedAt`, or `createdAt` for rows published before it existed. */
+const publishedAtOf = (job: { publishedAt: Date | null; createdAt: Date }) =>
+  job.publishedAt ?? job.createdAt
 
 /** Only live seekers receive alerts. */
 const RECIPIENT_WHERE = { role: "SEEKER", status: "ACTIVE" } satisfies Prisma.UserWhereInput
@@ -164,7 +170,7 @@ export class AlertsService {
   }
 
   /**
-   * DAILY / WEEKLY digest: per alert, ACTIVE jobs created after `lastSentAt` (or the alert's
+   * DAILY / WEEKLY digest: per alert, ACTIVE jobs published (`publishedAt`, else created) after `lastSentAt` (or the alert's
    * createdAt) that match it; one e-mail + one in-app notification per user (max 20 jobs, merged
    * across the user's alerts of that frequency). Every processed alert gets `lastSentAt = run start`
    * (also when nothing matched, so the window never grows). Returns users notified.
@@ -187,10 +193,16 @@ export class AlertsService {
 
       const since = (alert: JobAlert) => alert.lastSentAt ?? alert.createdAt
       const oldest = page.reduce((min, a) => (since(a) < min ? since(a) : min), since(page[0]))
+      // A job enters digests when it is published (a draft published later counts then);
+      // legacy rows without publishedAt fall back to createdAt.
+      const liveWindow = { gt: oldest, lte: runStartedAt }
       const jobs: DigestJob[] = await this.prisma.job.findMany({
-        where: { status: JobStatus.ACTIVE, createdAt: { gt: oldest, lte: runStartedAt } },
+        where: {
+          status: JobStatus.ACTIVE,
+          OR: [{ publishedAt: liveWindow }, { publishedAt: null, createdAt: liveWindow }],
+        },
         select: JOB_SELECT,
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ publishedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
         take: DIGEST_JOB_POOL,
       })
 
@@ -198,7 +210,7 @@ export class AlertsService {
       for (const alert of page) {
         const from = since(alert)
         for (const job of jobs) {
-          if (job.createdAt <= from || job.recruiterId === alert.userId) continue
+          if (publishedAtOf(job) <= from || job.recruiterId === alert.userId) continue
           if (!jobMatchesAlert(job, alert)) continue
           const list = byUser.get(alert.userId) ?? []
           if (!list.some((j) => j.id === job.id)) list.push(job)
@@ -209,7 +221,7 @@ export class AlertsService {
         byUser.set(
           userId,
           list
-            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+            .sort((a, b) => publishedAtOf(b).getTime() - publishedAtOf(a).getTime())
             .slice(0, DIGEST_MAX_JOBS)
         )
       }

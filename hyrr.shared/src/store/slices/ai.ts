@@ -27,6 +27,10 @@ export const createAiSlice: StateCreator<JobState, [], [], AiSlice> = (set, get)
     patch({ aiStatus: "PENDING", aiError: null })
     try {
       await apiFetch(`/applications/${candidateId}/analyze`, { method: "POST" })
+      // Manual runs spend Momentum credits.
+      get()
+        .fetchWallet()
+        .catch(() => {})
     } catch (err) {
       if (err instanceof ApiError && err.errorCode === "AI_DISABLED") {
         patch({ aiStatus: "DISABLED", aiError: null })

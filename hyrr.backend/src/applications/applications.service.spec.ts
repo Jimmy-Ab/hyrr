@@ -2,6 +2,8 @@ import { Test, TestingModule } from "@nestjs/testing"
 import { PrismaClient } from "@prisma/client"
 import { mockDeep } from "jest-mock-extended"
 import { AiService } from "../ai/ai.service"
+import { PricingService } from "../billing/pricing.service"
+import { WalletService } from "../billing/wallet.service"
 import { AccessService } from "../core/access/access.service"
 import { CaptchaService } from "../core/security/captcha.service"
 import { MessagesGateway } from "../messages/messages.gateway"
@@ -19,6 +21,7 @@ describe("ApplicationsService", () => {
   let ai: any
   let gateway: any
   let captcha: any
+  let wallet: any
 
   const activeJob = { id: "job-1", status: "ACTIVE", title: "Engineer", recruiterId: "rec-1" }
   const applyDto = {
@@ -50,6 +53,11 @@ describe("ApplicationsService", () => {
       isEnabled: jest.fn().mockReturnValue(false),
       verify: jest.fn().mockResolvedValue(undefined),
     }
+    wallet = {
+      debit: jest.fn().mockResolvedValue({ balanceAfter: 18, transactionId: "t1" }),
+      credit: jest.fn().mockResolvedValue({ balanceAfter: 20, transactionId: "t2" }),
+      hasCharge: jest.fn(async (type: string) => type === "AI_ANALYSIS"),
+    }
     // Seekers in these tests have a verified e-mail unless a test says otherwise.
     prismaMock.user.findUnique.mockResolvedValue({ emailVerifiedAt: new Date() })
 
@@ -62,6 +70,11 @@ describe("ApplicationsService", () => {
         { provide: AiService, useValue: ai },
         { provide: MessagesGateway, useValue: gateway },
         { provide: CaptchaService, useValue: captcha },
+        { provide: WalletService, useValue: wallet },
+        {
+          provide: PricingService,
+          useValue: { getConfig: jest.fn().mockResolvedValue({ aiRerunCost: 2 }) },
+        },
       ],
     }).compile()
 
@@ -492,6 +505,84 @@ describe("ApplicationsService", () => {
         expect.objectContaining({ data: { aiStatus: "PENDING", aiError: null } })
       )
       expect(ai.scoreApplication).toHaveBeenCalledWith("app-1")
+    })
+
+    describe("Momentum charge", () => {
+      const paidJob = { ...activeJob, companyId: "co-1" }
+      beforeEach(() => {
+        access.applicationFor.mockResolvedValue({ id: "app-1", aiStatus: "DONE", job: paidJob })
+        prismaMock.application.updateMany.mockResolvedValue({ count: 1 })
+      })
+
+      it("debits aiRerunCost in the claim transaction and keeps it when the run succeeds", async () => {
+        ai.scoreApplication.mockResolvedValue({ score: 70, summary: "ok", status: "DONE" })
+        await service.analyzeApplication("app-1", recruiter)
+        await flush()
+        await flush()
+        expect(wallet.debit).toHaveBeenCalledWith(
+          expect.objectContaining({
+            companyId: "co-1",
+            amount: 2,
+            type: "AI_ANALYSIS",
+            referenceId: expect.stringMatching(/^app-1:\d+$/),
+          }),
+          prismaMock
+        )
+        expect(wallet.credit).not.toHaveBeenCalled()
+      })
+
+      it.each(["FAILED", "DISABLED"])("refunds once when the run ends %s", async (status) => {
+        ai.scoreApplication.mockResolvedValue({ score: null, summary: null, status })
+        await service.analyzeApplication("app-1", recruiter)
+        await flush()
+        await flush()
+        const runId = wallet.debit.mock.calls[0][0].referenceId
+        expect(wallet.credit).toHaveBeenCalledTimes(1)
+        expect(wallet.credit).toHaveBeenCalledWith(
+          expect.objectContaining({
+            companyId: "co-1",
+            amount: 2,
+            type: "REFUND",
+            referenceId: runId,
+          })
+        )
+      })
+
+      it("a refund is never written twice for the same run", async () => {
+        wallet.hasCharge.mockResolvedValue(true) // AI_ANALYSIS and REFUND both exist
+        await service.refundAnalysis("co-1", 2, "app-1:1", "rec-1", "FAILED")
+        expect(wallet.credit).not.toHaveBeenCalled()
+      })
+
+      it("402 INSUFFICIENT_CREDITS: no run starts and the claim rolls back with the transaction", async () => {
+        wallet.debit.mockRejectedValue(
+          Object.assign(new Error("Not enough"), { status: 402, errorCode: "INSUFFICIENT_CREDITS" })
+        )
+        await expect(service.analyzeApplication("app-1", recruiter)).rejects.toMatchObject({
+          status: 402,
+        })
+        expect(ai.scoreApplication).not.toHaveBeenCalled()
+      })
+
+      it("503 AI_DISABLED and 409 AI_ALREADY_RUNNING are never charged", async () => {
+        ai.resolveModel.mockResolvedValueOnce(null)
+        prismaMock.application.update.mockResolvedValue({})
+        await expect(service.analyzeApplication("app-1", recruiter)).rejects.toMatchObject({
+          status: 503,
+        })
+        prismaMock.application.updateMany.mockResolvedValue({ count: 0 })
+        await expect(service.analyzeApplication("app-1", recruiter)).rejects.toMatchObject({
+          status: 409,
+        })
+        expect(wallet.debit).not.toHaveBeenCalled()
+      })
+
+      it("admins re-run for free; automatic first analysis after applying is free", async () => {
+        await service.analyzeApplication("app-1", { userId: "a", role: "ADMIN" })
+        expect(wallet.debit).not.toHaveBeenCalled()
+        service.scoreInBackground("app-1")
+        expect(wallet.debit).not.toHaveBeenCalled()
+      })
     })
   })
 })

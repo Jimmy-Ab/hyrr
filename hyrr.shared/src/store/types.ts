@@ -32,6 +32,16 @@ export interface Job {
   requirements: string[]
   /** The posting company passed domain verification */
   companyVerified: boolean
+  remote?: boolean
+  salary?: string
+  categoryId?: string
+  /** Paid feature flag; currently featured when featuredUntil is in the future */
+  featured?: boolean
+  featuredUntil?: string | null
+  /** First publish time (null = never published, so publishing will cost credits) */
+  publishedAt?: string | null
+  /** Credits charged when the job was first published */
+  momentumCost?: number
 }
 
 /** UI label for a job status ("Flagged" reads as "Under review"). */
@@ -505,6 +515,7 @@ export type RecruiterView =
   | "Calendar"
   | "Messages"
   | "Analytics"
+  | "Momentum"
   | "Careers"
   | "Team"
   | "Settings"
@@ -529,6 +540,128 @@ export interface ProfileUpdateInput {
   preferredLocations?: string[]
   experiences?: { role: string; company: string; duration: string; desc?: string }[]
   educations?: { school: string; degree: string; duration: string }[]
+}
+
+// ─── Momentum (credits & billing) ─────────────────────────────────────────────
+
+export type PlanCode = "STARTER" | "PRO" | "ENTERPRISE"
+
+export interface BillingPlan {
+  code: PlanCode
+  name: string
+  monthlyCredits: number
+  /** null = unlimited seats */
+  seatLimit: number | null
+  priceUsdCents: number
+}
+
+export type SubscriptionStatus = "ACTIVE" | "TRIALING" | "PAST_DUE" | "CANCELED"
+export type PaymentProviderCode = "STRIPE" | "CHAPA"
+/** Provider names accepted by POST /billing/checkout */
+export type CheckoutProvider = "stripe" | "chapa"
+
+export interface WalletSubscription {
+  status: SubscriptionStatus
+  currentPeriodEnd: string | null
+  cancelAtPeriodEnd: boolean
+  provider: PaymentProviderCode | null
+}
+
+export interface Wallet {
+  balance: number
+  plan: BillingPlan
+  subscription: WalletSubscription | null
+  /** limit null = unlimited */
+  seats: { used: number; limit: number | null }
+}
+
+export interface CreditPackage {
+  id: string
+  code: string
+  name: string
+  credits: number
+  bonusCredits: number
+  totalCredits: number
+  /** Minor units (cents). etb null/0 = no ETB price */
+  prices: { usd: number; etb: number | null }
+}
+
+export interface BillingProviders {
+  stripe: boolean
+  chapa: boolean
+}
+
+export interface MomentumPricing {
+  publishBase: number
+  featureCost: number
+  featureDays: number
+  aiRerunCost: number
+}
+
+export type CreditTransactionType =
+  | "PURCHASE"
+  | "SIGNUP_BONUS"
+  | "PLAN_GRANT"
+  | "JOB_PUBLISH"
+  | "JOB_FEATURE"
+  | "AI_ANALYSIS"
+  | "REFUND"
+  | "ADJUSTMENT"
+
+export const CREDIT_TRANSACTION_LABEL: Record<CreditTransactionType, string> = {
+  PURCHASE: "Credit purchase",
+  SIGNUP_BONUS: "Sign-up bonus",
+  PLAN_GRANT: "Monthly plan credits",
+  JOB_PUBLISH: "Job published",
+  JOB_FEATURE: "Job featured",
+  AI_ANALYSIS: "AI analysis",
+  REFUND: "Refund",
+  ADJUSTMENT: "Adjustment",
+}
+
+export interface CreditTransaction {
+  id: string
+  /** Signed: + credit, - debit */
+  amount: number
+  type: CreditTransactionType
+  balanceAfter: number
+  referenceId: string | null
+  note: string | null
+  actor: { id: string; name: string } | null
+  createdAt: string
+}
+
+export type PaymentStatus = "PENDING" | "SUCCEEDED" | "FAILED" | "REFUNDED"
+
+export interface BillingPayment {
+  id: string
+  provider: PaymentProviderCode
+  kind: "CREDIT_PACK" | "SUBSCRIPTION"
+  description: string
+  credits: number
+  /** Minor units */
+  amount: number
+  currency: string
+  status: PaymentStatus
+  createdAt: string
+  paidAt: string | null
+}
+
+export interface PublishCostInput {
+  remote?: boolean
+  salary?: string
+  categoryId?: string
+}
+
+export interface PublishCost {
+  cost: number
+  balance: number
+  breakdown: { base: number; multipliers: { name: string; factor: number }[] }
+}
+
+export interface FeatureJobResult {
+  featuredUntil: string
+  balance: number
 }
 
 // ─── State Interface ───────────────────────────────────────────────────────────
@@ -616,7 +749,6 @@ export interface JobState {
     skills: string[]
     benefits?: string[]
     categoryId: string
-    featured?: boolean
     remote?: boolean
     /** Defaults to ACTIVE on the server; DRAFT saves without publishing. */
     status?: "ACTIVE" | "DRAFT"
@@ -776,4 +908,31 @@ export interface JobState {
   companyProfile: CompanyProfile | null
   fetchCompanyProfile: () => Promise<void>
   updateCompanyProfile: (patch: CompanyProfilePatch) => Promise<void>
+
+  // ── Momentum (credits & billing, recruiter) ──────────────────────────────
+  wallet: Wallet | null
+  creditPackages: CreditPackage[]
+  plans: BillingPlan[]
+  billingProviders: BillingProviders | null
+  pricing: MomentumPricing | null
+  transactions: CreditTransaction[]
+  /** null = no more pages (or not loaded yet) */
+  transactionsCursor: string | null
+  payments: BillingPayment[]
+  fetchWallet: () => Promise<void>
+  /** Packages + plans + configured providers + pricing. */
+  fetchBillingCatalog: () => Promise<void>
+  /** reset=true reloads the first page; otherwise appends the next page. */
+  fetchTransactions: (reset?: boolean) => Promise<void>
+  fetchPayments: () => Promise<void>
+  /** Creates a checkout and redirects the browser to the provider. */
+  startCheckout: (packageId: string, provider: CheckoutProvider) => Promise<void>
+  /** OWNER only; redirects to Stripe Checkout. */
+  subscribeToPlan: (planCode: PlanCode) => Promise<void>
+  /** OWNER only; redirects to the Stripe billing portal. */
+  openBillingPortal: () => Promise<void>
+  /** Re-checks a pending payment with the provider; refreshes the wallet when it succeeded. */
+  confirmPayment: (paymentId: string) => Promise<BillingPayment>
+  getPublishCost: (input: PublishCostInput) => Promise<PublishCost>
+  featureJob: (jobId: string, days: number) => Promise<FeatureJobResult>
 }

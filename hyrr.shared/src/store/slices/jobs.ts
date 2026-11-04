@@ -9,6 +9,13 @@ export type JobsSlice = Pick<
   "jobs" | "selectedJobId" | "selectJob" | "addJob" | "updateJob" | "deleteJob"
 >
 
+/** Publishing spends Momentum credits: refresh the balance in the background. */
+function refreshWallet(get: () => JobState) {
+  get()
+    .fetchWallet()
+    .catch(() => {})
+}
+
 export const createJobsSlice: StateCreator<JobState, [], [], JobsSlice> = (set, get) => ({
   jobs: [],
   selectedJobId: "",
@@ -28,7 +35,6 @@ export const createJobsSlice: StateCreator<JobState, [], [], JobsSlice> = (set, 
         skills: jobData.skills,
         benefits: jobData.benefits ?? [],
         categoryId: jobData.categoryId,
-        featured: jobData.featured ?? false,
         remote: jobData.remote ?? false,
         ...(jobData.status ? { status: jobData.status } : {}),
       }),
@@ -40,6 +46,8 @@ export const createJobsSlice: StateCreator<JobState, [], [], JobsSlice> = (set, 
     })
     // Keep the board's current filter: jumping to the new (empty) job hid every candidate.
     set((state) => ({ jobs: [...state.jobs, newJob] }))
+    // Publishing spends Momentum credits.
+    if (jobData.status !== "DRAFT") refreshWallet(get)
     return newJob
   },
 
@@ -85,6 +93,7 @@ export const createJobsSlice: StateCreator<JobState, [], [], JobsSlice> = (set, 
           ),
         }))
       }
+      if (patch.status === "ACTIVE") refreshWallet(get)
     } catch (err) {
       if (previous) {
         set((state) => ({ jobs: state.jobs.map((j) => (j.id === jobId ? previous : j)) }))

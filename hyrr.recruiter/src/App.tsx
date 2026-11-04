@@ -27,6 +27,7 @@ import { Candidates } from "./pages/Candidates"
 import { Dashboard } from "./pages/Dashboard"
 import { Jobs } from "./pages/Jobs"
 import { Messages } from "./pages/Messages"
+import { Momentum } from "./pages/Momentum"
 import { Settings } from "./pages/Settings"
 import { useJobStore } from "./store/useJobStore"
 
@@ -200,6 +201,8 @@ function AppContent() {
         return <Messages />
       case "Analytics":
         return <Analytics />
+      case "Momentum":
+        return <Momentum />
       case "Settings":
         return <Settings />
       default:

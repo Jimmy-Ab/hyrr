@@ -209,7 +209,10 @@ describe("AlertsService", () => {
       const alertWhere = prisma.jobAlert.findMany.mock.calls[0][0].where
       expect(alertWhere).toMatchObject({ active: true, frequency: "DAILY" })
       expect(prisma.job.findMany.mock.calls[0][0].where.status).toBe("ACTIVE")
-      expect(prisma.job.findMany.mock.calls[0][0].where.createdAt.gt).toEqual(lastSentAt)
+      expect(prisma.job.findMany.mock.calls[0][0].where.OR).toEqual([
+        { publishedAt: { gt: lastSentAt, lte: expect.any(Date) } },
+        { publishedAt: null, createdAt: { gt: lastSentAt, lte: expect.any(Date) } },
+      ])
 
       const notifications = prisma.notification.createManyAndReturn.mock.calls[0][0].data
       expect(notifications).toHaveLength(1)
@@ -220,6 +223,42 @@ describe("AlertsService", () => {
       const update = prisma.jobAlert.updateMany.mock.calls[0][0]
       expect(update.where).toEqual({ id: { in: ["a1"] } })
       expect(update.data.lastSentAt).toBeInstanceOf(Date)
+    })
+
+    it("selects by publishedAt (a draft published later counts then), createdAt as fallback", async () => {
+      const lastSentAt = new Date("2026-11-03T08:00:00Z")
+      prisma.jobAlert.findMany.mockResolvedValueOnce([alert({ lastSentAt, keywords: ["react"] })])
+      prisma.job.findMany.mockResolvedValue([
+        // created long ago as a draft, published today → included
+        job({
+          id: "published-draft",
+          title: "React Published Draft",
+          createdAt: new Date("2026-10-01T00:00:00Z"),
+          publishedAt: new Date("2026-11-04T07:00:00Z"),
+        }),
+        // created today but published before the window (impossible in practice) → excluded
+        job({
+          id: "stale",
+          title: "React Stale",
+          createdAt: new Date("2026-11-04T07:00:00Z"),
+          publishedAt: new Date("2026-11-02T07:00:00Z"),
+        }),
+        // legacy row without publishedAt → createdAt
+        job({
+          id: "legacy",
+          title: "React Legacy",
+          createdAt: new Date("2026-11-04T06:00:00Z"),
+          publishedAt: null,
+        }),
+      ])
+      await service.runDigest("DAILY")
+      const notifications = prisma.notification.createManyAndReturn.mock.calls[0][0].data
+      expect(notifications).toHaveLength(1)
+      expect(notifications[0].title).toBe("2 new jobs match your job alerts")
+      const text = email.send.mock.calls[0][0].text as string
+      expect(text).toContain("React Published Draft")
+      expect(text).toContain("React Legacy")
+      expect(text).not.toContain("React Stale")
     })
 
     it("merges a user's alerts into one digest of max 20 jobs", async () => {

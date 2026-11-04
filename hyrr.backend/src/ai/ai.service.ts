@@ -44,7 +44,8 @@ Be precise and neutral. Never invent platform data you were not given. Use bulle
 export type ChatRole = keyof typeof CHAT_SYSTEM_PROMPTS
 
 /** Result of scoring an application. `score: null` means scoring failed / was not possible. */
-export type ScoreResult = { score: number | null; summary: string | null }
+/** `status` is the run's outcome (callers refund paid re-runs that did not end DONE). */
+export type ScoreResult = { score: number | null; summary: string | null; status: AiStatus }
 
 export type AiStatus = "PENDING" | "DONE" | "FAILED" | "DISABLED"
 
@@ -108,14 +109,14 @@ export class AiService implements OnModuleInit {
           answers: { include: { question: true } },
         },
       })
-      if (!application) return { score: null, summary: null }
+      if (!application) return { score: null, summary: null, status: "FAILED" }
       target = { companyId: application.job.companyId, recruiterId: application.job.recruiterId }
 
       const settings = await this.getSettings()
       const resolved = resolveActiveModel(settings.activeModel)
       if (!resolved) {
         await this.setStatus(applicationId, target, "DISABLED")
-        return { score: null, summary: null }
+        return { score: null, summary: null, status: "DISABLED" }
       }
       await this.setStatus(applicationId, target, "PENDING")
 
@@ -194,7 +195,7 @@ export class AiService implements OnModuleInit {
         },
         target.recruiterId
       )
-      return { score, summary: result.summary }
+      return { score, summary: result.summary, status: "DONE" }
     } catch (err) {
       this.logger.error(
         `AI scoring failed for application ${applicationId}: ${(err as Error)?.message || err}`
@@ -204,7 +205,7 @@ export class AiService implements OnModuleInit {
           this.logger.warn(`Could not record AI failure for ${applicationId}: ${e?.message}`)
         )
       }
-      return { score: null, summary: null }
+      return { score: null, summary: null, status: "FAILED" }
     }
   }
 

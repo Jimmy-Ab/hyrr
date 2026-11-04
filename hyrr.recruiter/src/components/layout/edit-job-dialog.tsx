@@ -8,6 +8,7 @@ import {
   DialogTitle,
   employmentTypeCode,
   Input,
+  insufficientCreditsDetails,
   JOB_TYPE_OPTIONS,
   RichTextEditor,
   useToast,
@@ -18,6 +19,11 @@ import { Loader2, Plus, X } from "lucide-react"
 import { useEffect, useState, type FormEvent } from "react"
 import { errorMessage, jobPublishError, type JobPublishError } from "../../lib/recruiter"
 import { useJobStore } from "../../store/useJobStore"
+import {
+  InsufficientCreditsNotice,
+  PublishCostNote,
+  usePublishCost,
+} from "../billing/momentum-cost"
 import { JobPublishErrorNotice } from "../jobs/job-publish-error"
 import {
   ScreeningQuestionsEditor,
@@ -48,6 +54,8 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
   const [saving, setSaving] = useState(false)
   const [savingDraft, setSavingDraft] = useState(false)
   const [publishError, setPublishError] = useState<JobPublishError | null>(null)
+  const [publishing, setPublishing] = useState(false)
+  const [creditError, setCreditError] = useState<{ required: number; balance: number } | null>(null)
   const [questions, setQuestions] = useState<DraftQuestion[]>([])
   const [questionsLoading, setQuestionsLoading] = useState(false)
   const [questionsError, setQuestionsError] = useState<string | null>(null)
@@ -86,6 +94,7 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
       setRequirements(job.requirements ?? [])
       setDraftReq("")
       setPublishError(null)
+      setCreditError(null)
     }
   }, [job])
 
@@ -120,13 +129,22 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
 
   /** Content-policy / unverified-email errors stay inline in the dialog; others toast. */
   const handleError = (err: unknown) => {
+    const credits = insufficientCreditsDetails(err)
+    if (credits) {
+      setCreditError(credits)
+      return
+    }
     const inline = jobPublishError(err)
     if (inline) setPublishError(inline)
     else toast("Could not update job", errorMessage(err), "error")
   }
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
+    void saveChanges()
+  }
+
+  const saveChanges = async () => {
     if (!job) return
     if (!title.trim()) {
       toast("Missing title", "Job title is required.", "error")
@@ -162,7 +180,36 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
     }
   }
 
-  const busy = saving || savingDraft
+  // Drafts that were never published cost credits to publish; republishing is free.
+  const isDraft = job?.status === "Draft"
+  const chargesOnPublish = isDraft && !job?.publishedAt
+  const publishCost = usePublishCost(
+    { remote: job?.remote, salary: job?.salary || undefined, categoryId: job?.categoryId },
+    !!job && chargesOnPublish
+  )
+
+  const handlePublish = async () => {
+    if (!job) return
+    if (!title.trim()) {
+      toast("Missing title", "Job title is required.", "error")
+      return
+    }
+    setPublishing(true)
+    setPublishError(null)
+    setCreditError(null)
+    try {
+      await updateJob(job.id, { ...patch(), status: "ACTIVE" })
+      if (!(await persistQuestions(job.id))) return
+      toast("Job published", `"${title.trim()}" is now accepting applications.`, "success")
+      onOpenChange(false)
+    } catch (err) {
+      handleError(err)
+    } finally {
+      setPublishing(false)
+    }
+  }
+
+  const busy = saving || savingDraft || publishing
 
   return (
     <Dialog open={!!job} onOpenChange={(o) => !busy && onOpenChange(o)}>
@@ -281,6 +328,36 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
             />
           </div>
 
+          {isDraft && !creditError && (
+            <div className="pt-1">
+              {chargesOnPublish ? (
+                <PublishCostNote
+                  quote={publishCost.quote}
+                  loading={publishCost.loading}
+                  error={publishCost.error}
+                  onRetry={publishCost.retry}
+                />
+              ) : (
+                <p className="text-[12.5px] text-txt-caption">
+                  This job was published before, so publishing it again is free.
+                </p>
+              )}
+            </div>
+          )}
+
+          {creditError && (
+            <InsufficientCreditsNotice
+              required={creditError.required}
+              balance={creditError.balance}
+              onBuy={() => onOpenChange(false)}
+              onSaveDraft={() => {
+                setCreditError(null)
+                void saveChanges()
+              }}
+              savingDraft={saving}
+            />
+          )}
+
           {publishError && (
             <JobPublishErrorNotice
               error={publishError}
@@ -298,10 +375,23 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={busy} className="gap-1.5">
+            <Button
+              type="submit"
+              variant={isDraft ? "secondary" : "primary"}
+              disabled={busy}
+              className="gap-1.5"
+            >
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-              Save changes
+              {isDraft ? "Save draft" : "Save changes"}
             </Button>
+            {isDraft && (
+              <Button type="button" onClick={handlePublish} disabled={busy} className="gap-1.5">
+                {publishing && <Loader2 className="w-4 h-4 animate-spin" />}
+                {chargesOnPublish && publishCost.quote
+                  ? `Publish · ${publishCost.quote.cost} credits`
+                  : "Publish"}
+              </Button>
+            )}
           </DialogFooter>
         </form>
       </DialogContent>

@@ -9,6 +9,7 @@ import {
   Optional,
 } from "@nestjs/common"
 import { CompanyMemberRole, JobStatus, NotificationType, Prisma, UserRole } from "@prisma/client"
+import { assertSeatAvailable } from "../billing/seats"
 import { CacheService } from "../cache/cache.service"
 import { AccessService, Actor } from "../core/access/access.service"
 import { requireCompanyWriter, resolveCompanyMembership } from "../core/access/company-membership"
@@ -119,6 +120,8 @@ export class TalentService {
       if (otherMembers > 0 || jobs > 0)
         throw new ConflictException("This recruiter already belongs to a company")
     }
+    // Plan seat limit (Starter 3, Pro 10, Enterprise unlimited) → 402 SEAT_LIMIT_REACHED.
+    await assertSeatAvailable(this.prisma, companyId)
 
     const member = await this.prisma.$transaction(async (tx) => {
       for (const previousId of previousCompanyIds) {

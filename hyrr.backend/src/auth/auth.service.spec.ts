@@ -6,6 +6,8 @@ import * as bcrypt from "bcrypt"
 import { plainToInstance } from "class-transformer"
 import { validate } from "class-validator"
 import { mockDeep } from "jest-mock-extended"
+import { PricingService } from "../billing/pricing.service"
+import { WalletService } from "../billing/wallet.service"
 import { CaptchaService } from "../core/security/captcha.service"
 import { PrismaService } from "../prisma/prisma.service"
 import { AccountEmailService } from "./account-email.service"
@@ -14,6 +16,13 @@ import { RegisterDto } from "./dtos/register.dto"
 import { jwtSecret, verifyAccessToken } from "./jwt.config"
 import { LoginAttemptsService } from "./login-attempts.service"
 import { TwoFactorService } from "./two-factor.service"
+
+/** Wallet/pricing doubles: the sign-up bonus is 20 credits. */
+const walletMock = () => ({
+  ensureWallet: jest.fn().mockResolvedValue({ balance: 0 }),
+  credit: jest.fn().mockResolvedValue({ balanceAfter: 20, transactionId: "t1" }),
+})
+const pricingMock = () => ({ getConfig: jest.fn().mockResolvedValue({ signupBonus: 20 }) })
 
 /** Minimal stand-in for CacheService (in-memory, no TTL handling needed for these tests). */
 function memoryCache() {
@@ -35,8 +44,10 @@ describe("AuthService", () => {
     notifyPasswordChanged: jest.Mock
     refreshCompanyVerification: jest.Mock
   }
+  let wallet: ReturnType<typeof walletMock>
 
   beforeEach(async () => {
+    wallet = walletMock()
     captcha = { isEnabled: jest.fn().mockReturnValue(false), verify: jest.fn() }
     twoFactor = { verifyCode: jest.fn() }
     accountEmail = {
@@ -61,6 +72,8 @@ describe("AuthService", () => {
         { provide: LoginAttemptsService, useValue: new LoginAttemptsService(memoryCache() as any) },
         { provide: TwoFactorService, useValue: twoFactor },
         { provide: AccountEmailService, useValue: accountEmail },
+        { provide: WalletService, useValue: wallet },
+        { provide: PricingService, useValue: pricingMock() },
       ],
     }).compile()
 
@@ -114,6 +127,30 @@ describe("AuthService", () => {
     expect(prismaMock.companyMember.create).toHaveBeenCalledWith({
       data: { companyId: "co-1", userId: "rec-1", role: "OWNER" },
     })
+    // Sign-up bonus lands in the new company's wallet inside the same transaction.
+    expect(wallet.credit).toHaveBeenCalledTimes(1)
+    expect(wallet.credit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: "co-1",
+        amount: 20,
+        type: "SIGNUP_BONUS",
+        referenceId: "co-1",
+      }),
+      prismaMock
+    )
+  })
+
+  it("seekers get no wallet or bonus", async () => {
+    prismaMock.user.findUnique.mockResolvedValue(null)
+    prismaMock.user.create.mockResolvedValue({ id: "s-1", email: "s@x.io", role: "SEEKER" })
+    await service.register({
+      name: "Sam",
+      email: "s@x.io",
+      password: "password123",
+      role: "SEEKER",
+    })
+    expect(wallet.credit).not.toHaveBeenCalled()
+    expect(wallet.ensureWallet).not.toHaveBeenCalled()
   })
 
   it("should throw ConflictException if email already exists during registration", async () => {
@@ -247,6 +284,10 @@ describe("AuthService", () => {
       expect(prismaMock.companyMember.create).toHaveBeenCalledWith({
         data: { companyId: "co-9", userId: "n1", role: "OWNER" },
       })
+      expect(wallet.credit).toHaveBeenCalledWith(
+        expect.objectContaining({ companyId: "co-9", amount: 20, type: "SIGNUP_BONUS" }),
+        prismaMock
+      )
     })
   })
 
@@ -339,7 +380,9 @@ describe("AuthService account security", () => {
       captcha as any,
       new LoginAttemptsService(memoryCache() as any),
       twoFactor as any,
-      accountEmail
+      accountEmail,
+      walletMock() as any,
+      pricingMock() as any
     )
   })
 

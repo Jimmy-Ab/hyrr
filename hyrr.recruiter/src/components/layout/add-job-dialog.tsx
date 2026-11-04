@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
+  insufficientCreditsDetails,
   JOB_TYPE_OPTIONS,
   RichTextEditor,
   useToast,
@@ -17,6 +18,11 @@ import { Briefcase, ChevronLeft, ChevronRight, FileText, Plus, Sparkles, X } fro
 import { useEffect, useState, type FormEvent } from "react"
 import { errorMessage, jobPublishError, type JobPublishError } from "../../lib/recruiter"
 import { useJobStore } from "../../store/useJobStore"
+import {
+  InsufficientCreditsNotice,
+  PublishCostNote,
+  usePublishCost,
+} from "../billing/momentum-cost"
 import { JobPublishErrorNotice } from "../jobs/job-publish-error"
 import {
   ScreeningQuestionsEditor,
@@ -198,7 +204,7 @@ export function AddJobDialog() {
   const [salary, setSalary] = useState("")
   const [categoryId, setCategoryId] = useState("")
   const [remote, setRemote] = useState(false)
-  const [featured, setFeatured] = useState(false)
+  const [creditError, setCreditError] = useState<{ required: number; balance: number } | null>(null)
 
   // Step 2 – Description
   const [description, setDescription] = useState("")
@@ -236,7 +242,7 @@ export function AddJobDialog() {
     setSalary("")
     setCategoryId(categories[0]?.id || "")
     setRemote(false)
-    setFeatured(false)
+    setCreditError(null)
     setDescription("")
     setSkills([])
     setRequirements([])
@@ -289,9 +295,13 @@ export function AddJobDialog() {
     skills,
     benefits,
     categoryId,
-    featured,
     remote,
   })
+
+  const publishCost = usePublishCost(
+    { remote, salary: salary.trim() || undefined, categoryId: categoryId || undefined },
+    isAddJobOpen && !!categoryId
+  )
 
   /** Creates the job, then saves its screening questions. false = questions failed (job exists). */
   const createJob = async (input: Parameters<typeof addJob>[0]) => {
@@ -313,6 +323,11 @@ export function AddJobDialog() {
 
   /** Shows content-policy / unverified-email errors inline; anything else is a toast. */
   const handleError = (err: unknown, failTitle: string) => {
+    const credits = insufficientCreditsDetails(err)
+    if (credits) {
+      setCreditError(credits)
+      return
+    }
     const inline = jobPublishError(err)
     if (inline) setPublishError(inline)
     else toast(failTitle, errorMessage(err), "error")
@@ -323,9 +338,10 @@ export function AddJobDialog() {
     if (!validateStep()) return
     setLoading(true)
     setPublishError(null)
+    setCreditError(null)
     try {
       if (await createJob(jobInput())) {
-        toast("Job created", `"${title}" is now live in your job board.`, "success")
+        toast("Job published", `"${title}" is now live in your job board.`, "success")
       }
       handleClose()
     } catch (err) {
@@ -338,6 +354,7 @@ export function AddJobDialog() {
   // Drafts aren't visible to candidates, so they don't need a verified e-mail.
   const handleSaveDraft = async () => {
     setSavingDraft(true)
+    setCreditError(null)
     try {
       const draft = { ...jobInput(), status: "DRAFT" as const }
       if (await createJob(draft)) {
@@ -513,15 +530,6 @@ export function AddJobDialog() {
                   />
                   <span className="text-[13px] font-medium text-txt-heading">Remote Friendly</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={featured}
-                    onChange={(e) => setFeatured(e.target.checked)}
-                    className="w-4 h-4 accent-primary rounded cursor-pointer"
-                  />
-                  <span className="text-[13px] font-medium text-txt-heading">Featured Listing</span>
-                </label>
               </div>
             </div>
           )}
@@ -607,6 +615,27 @@ export function AddJobDialog() {
             </div>
           )}
 
+          {step === STEPS.length - 1 && !creditError && (
+            <div className="mt-4">
+              <PublishCostNote
+                quote={publishCost.quote}
+                loading={publishCost.loading}
+                error={publishCost.error}
+                onRetry={publishCost.retry}
+              />
+            </div>
+          )}
+
+          {creditError && (
+            <InsufficientCreditsNotice
+              required={creditError.required}
+              balance={creditError.balance}
+              onBuy={handleClose}
+              onSaveDraft={handleSaveDraft}
+              savingDraft={savingDraft}
+            />
+          )}
+
           {publishError && (
             <JobPublishErrorNotice
               error={publishError}
@@ -652,8 +681,10 @@ export function AddJobDialog() {
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />{" "}
                     Creating…
                   </>
+                ) : publishCost.quote ? (
+                  `Publish · ${publishCost.quote.cost} credits`
                 ) : (
-                  "Post Job Listing"
+                  "Publish job"
                 )}
               </Button>
             )}

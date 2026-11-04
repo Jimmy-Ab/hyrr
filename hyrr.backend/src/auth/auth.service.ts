@@ -9,6 +9,8 @@ import {
 import { JwtService } from "@nestjs/jwt"
 import { CompanyMemberRole, Prisma, User, UserRole, UserStatus } from "@prisma/client"
 import * as bcrypt from "bcrypt"
+import { PricingService } from "../billing/pricing.service"
+import { WalletService } from "../billing/wallet.service"
 import { AppException } from "../core/exceptions/app-exception"
 import { CaptchaService } from "../core/security/captcha.service"
 import { PrismaService } from "../prisma/prisma.service"
@@ -78,8 +80,15 @@ export class AuthService {
     private captcha: CaptchaService,
     private attempts: LoginAttemptsService,
     private twoFactor: TwoFactorService,
-    private accountEmail: AccountEmailService
+    private accountEmail: AccountEmailService,
+    private wallet: WalletService,
+    private pricing: PricingService
   ) {}
+
+  /** Momentum credits a new recruiter company starts with (read before the signup transaction). */
+  private async signupBonusFor(role: SignupRole): Promise<number> {
+    return role === "RECRUITER" ? (await this.pricing.getConfig()).signupBonus : 0
+  }
 
   async register(dto: RegisterDto, ip?: string) {
     await this.captcha.verify(dto.captchaToken, ip)
@@ -88,6 +97,7 @@ export class AuthService {
     if (existing) throw new ConflictException("Email already registered")
 
     const passwordHash = await bcrypt.hash(dto.password, 12)
+    const signupBonus = await this.signupBonusFor(dto.role)
     const user = await this.prisma.$transaction((tx) =>
       this.createAccount(tx, {
         name: dto.name,
@@ -95,6 +105,7 @@ export class AuthService {
         passwordHash,
         avatar: avatarFor(dto.name),
         role: dto.role,
+        signupBonus,
       })
     )
     void this.accountEmail
@@ -115,6 +126,8 @@ export class AuthService {
       providerField?: "googleId" | "githubId" | "linkedinId"
       providerId?: string
       emailVerifiedAt?: Date
+      /** SIGNUP_BONUS credited to a new recruiter company's wallet. */
+      signupBonus?: number
     }
   ): Promise<User> {
     const role = data.role === "RECRUITER" ? UserRole.RECRUITER : UserRole.SEEKER
@@ -144,6 +157,19 @@ export class AuthService {
       await tx.companyMember.create({
         data: { companyId: company.id, userId: user.id, role: CompanyMemberRole.OWNER },
       })
+      await this.wallet.ensureWallet(company.id, tx)
+      if (data.signupBonus && data.signupBonus > 0)
+        await this.wallet.credit(
+          {
+            companyId: company.id,
+            amount: data.signupBonus,
+            type: "SIGNUP_BONUS",
+            referenceId: company.id,
+            actorId: user.id,
+            note: "Welcome bonus",
+          },
+          tx
+        )
     }
     return user
   }
@@ -301,15 +327,18 @@ export class AuthService {
         }
       } else {
         const name = profile.name?.trim() || email.split("@")[0]
+        const signupRole: SignupRole = role === "RECRUITER" ? "RECRUITER" : "SEEKER"
+        const signupBonus = await this.signupBonusFor(signupRole)
         user = await this.prisma.$transaction((tx) =>
           this.createAccount(tx, {
             name,
             email,
             avatar: profile.avatar || avatarFor(name),
-            role: role === "RECRUITER" ? "RECRUITER" : "SEEKER",
+            role: signupRole,
             providerField,
             providerId,
             emailVerifiedAt: new Date(),
+            signupBonus,
           })
         )
       }

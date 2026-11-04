@@ -18,6 +18,7 @@ import { RolesGuard } from "../auth/guards/roles.guard"
 import { ReplaceQuestionsDto } from "../pipeline/dtos/questions.dto"
 import { ScreeningService } from "../pipeline/screening.service"
 import { CreateJobDto } from "./dtos/create-job.dto"
+import { FeatureJobDto, PublishCostQueryDto } from "./dtos/momentum.dto"
 import { SearchPublicJobsDto } from "./dtos/search-public-jobs.dto"
 import { UpdateJobDto } from "./dtos/update-job.dto"
 import { JobsService } from "./jobs.service"
@@ -81,6 +82,32 @@ export class JobsController {
     )
   }
 
+  // ─── Momentum (credits) ───────────────────────────────────────────
+  @Get("publish-cost")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("RECRUITER", "ADMIN")
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Preview the Momentum cost of publishing a job" })
+  @ApiResponse({
+    status: 200,
+    description: "{ cost, balance, breakdown: { base, multipliers: [{ name, factor }] } }",
+  })
+  getPublishCost(@Req() req: any, @Query() query: PublishCostQueryDto) {
+    return this.jobsService.getPublishCost(req.user, query)
+  }
+
+  @Post(":id/feature")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("RECRUITER", "ADMIN")
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Feature an ACTIVE job for 7/14/30 days (charges Momentum, extends)" })
+  @ApiResponse({ status: 201, description: "{ featuredUntil, balance }" })
+  @ApiResponse({ status: 402, description: "INSUFFICIENT_CREDITS" })
+  @ApiResponse({ status: 409, description: "JOB_NOT_ACTIVE" })
+  featureJob(@Param("id") id: string, @Body() dto: FeatureJobDto, @Req() req: any) {
+    return this.jobsService.featureJob(id, dto.days, req.user)
+  }
+
   // ─── Screening questions (R1) ─────────────────────────────────────
   @Get(":jobId/questions")
   @UseGuards(OptionalJwtAuthGuard)
@@ -120,6 +147,7 @@ export class JobsController {
   @ApiOperation({ summary: "Create a new job posting (Recruiter only)" })
   @ApiResponse({ status: 201, description: "Job created successfully" })
   @ApiResponse({ status: 401, description: "Unauthorized" })
+  @ApiResponse({ status: 402, description: "INSUFFICIENT_CREDITS (publishing costs Momentum)" })
   createJob(@Req() req: any, @Body() dto: CreateJobDto) {
     return this.jobsService.createJob(req.user.userId, dto)
   }

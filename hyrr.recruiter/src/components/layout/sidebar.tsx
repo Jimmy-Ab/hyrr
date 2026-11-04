@@ -10,6 +10,7 @@ import {
   ShieldAlert,
   Users,
   X,
+  Zap,
 } from "lucide-react"
 import { useEffect, type ElementType } from "react"
 import { FLAGGED_JOB_TOOLTIP, isFlaggedJob, type RecruiterView } from "../../lib/recruiter"
@@ -51,6 +52,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       badge: unreadMessageCount > 0 ? unreadMessageCount : undefined,
     },
     { id: "Analytics", label: "Analytics", icon: BarChart2 },
+    { id: "Momentum", label: "Momentum", icon: Zap },
   ]
 
   // Escape closes the mobile drawer

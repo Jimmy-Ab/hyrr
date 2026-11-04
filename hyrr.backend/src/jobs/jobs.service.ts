@@ -1,6 +1,8 @@
 import { HttpStatus, Injectable, Logger, Optional } from "@nestjs/common"
 import { ApplicationStatus, EmploymentType, JobStatus, Prisma } from "@prisma/client"
 import { assertEmailVerified, requireVerifiedEmail } from "../auth/email-verification"
+import { PricingService, PublishCostInput } from "../billing/pricing.service"
+import { WalletService } from "../billing/wallet.service"
 import { CacheService } from "../cache/cache.service"
 import { AccessService, Actor } from "../core/access/access.service"
 import { EmailService } from "../core/delivery/email.service"
@@ -17,6 +19,7 @@ import { PUBLIC_COMPANY_SELECT } from "./public-company"
 
 const JOB_COLORS = ["purple", "blue", "green", "orange"] as const
 const PUBLIC_JOBS_CACHE_KEY = "jobs:public"
+const PUBLIC_SEARCH_LIMIT = 50
 /** Statuses a recruiter may set; FLAGGED is reserved for admins (moderation). */
 const RECRUITER_JOB_STATUSES: JobStatus[] = [JobStatus.ACTIVE, JobStatus.CLOSED, JobStatus.DRAFT]
 
@@ -26,6 +29,10 @@ const ANALYTICS_MAX_EVENTS = 100_000
 const ANALYTICS_MAX_JOBS = 500
 
 /** Applications counted on recruiter job cards: SAVED bookmarks are not applicants. */
+/** Feature durations a recruiter may buy (days). */
+export const FEATURE_DAY_OPTIONS = [7, 14, 30] as const
+const DAY_MS = 24 * 60 * 60 * 1000
+
 const APPLICANT_COUNT = {
   _count: { select: { applications: { where: { status: { not: ApplicationStatus.SAVED } } } } },
 } as const
@@ -39,6 +46,8 @@ export class JobsService {
     private cache: CacheService,
     private access: AccessService,
     private notifications: NotificationsService,
+    private wallet: WalletService,
+    private pricing: PricingService,
     @Optional() private email?: EmailService,
     @Optional() private messagesGateway?: MessagesGateway,
     @Optional() private alerts?: AlertsService
@@ -83,26 +92,8 @@ export class JobsService {
     const count = await this.prisma.job.count({ where: { recruiterId } })
     const color = JOB_COLORS[count % JOB_COLORS.length]
 
-    let companyId = user?.companyId
-    if (!companyId) {
-      const company = await this.prisma.company.create({
-        data: {
-          name: user?.name ? `${user.name}'s Company` : "Hyrr Hiring Co",
-          logo: user?.name ? user.name.charAt(0).toUpperCase() : "H",
-          country: "United States",
-        },
-      })
-      companyId = company.id
-      if (user) {
-        await this.prisma.user.update({
-          where: { id: recruiterId },
-          data: { companyId: company.id },
-        })
-        await this.prisma.companyMember.create({
-          data: { companyId: company.id, userId: recruiterId, role: "OWNER" },
-        })
-      }
-    } else {
+    let companyId = user?.companyId ?? null
+    if (companyId) {
       const scope = await this.access.companyScope(recruiterId)
       if (!scope.manageCompanyIds.includes(companyId)) {
         throw new AppException(
@@ -113,25 +104,56 @@ export class JobsService {
       }
     }
 
-    const job = await this.prisma.job.create({
-      data: {
-        title: dto.title,
-        location: dto.location,
-        type: dto.type,
-        salary: dto.salary,
-        description: dto.description,
-        requirements: dto.requirements ?? [],
-        skills: dto.skills,
-        benefits: dto.benefits ?? [],
-        featured: dto.featured ?? false,
-        remote: dto.remote ?? false,
-        color,
-        companyId,
-        recruiterId,
-        categoryId: dto.categoryId,
-        status,
-      },
-      include: { company: true, category: true },
+    // Price + config are read before the transaction (cached, outside the row locks).
+    const publishing = status === JobStatus.ACTIVE
+    const cost = publishing
+      ? await this.pricing.publishCost({
+          remote: dto.remote ?? false,
+          salary: dto.salary,
+          categoryId: dto.categoryId,
+        })
+      : 0
+    const signupBonus = companyId ? 0 : (await this.pricing.getConfig()).signupBonus
+
+    // One transaction: auto-created company (+ sign-up bonus), the job and its publish charge.
+    // 402 INSUFFICIENT_CREDITS rolls everything back, so nothing is written.
+    const job = await this.prisma.$transaction(async (tx) => {
+      if (!companyId) companyId = await this.createCompanyFor(tx, recruiterId, user, signupBonus)
+      const created = await tx.job.create({
+        data: {
+          title: dto.title,
+          location: dto.location,
+          type: dto.type,
+          salary: dto.salary,
+          description: dto.description,
+          requirements: dto.requirements ?? [],
+          skills: dto.skills,
+          benefits: dto.benefits ?? [],
+          // `featured` is bought via POST /jobs/:id/feature; the DTO flag is ignored.
+          featured: false,
+          remote: dto.remote ?? false,
+          color,
+          companyId,
+          recruiterId,
+          categoryId: dto.categoryId,
+          status,
+          ...(publishing ? { publishedAt: new Date(), momentumCost: cost } : {}),
+        },
+        include: { company: true, category: true },
+      })
+      if (publishing)
+        await this.wallet.debit(
+          {
+            companyId,
+            amount: cost,
+            type: "JOB_PUBLISH",
+            referenceId: created.id,
+            actorId: recruiterId,
+            note: `Published "${created.title}"`,
+          },
+          tx
+        )
+      return created
     })
 
     // Invalidate cached public listings
@@ -142,6 +164,42 @@ export class JobsService {
         ?.onJobPublished(job.id)
         .catch((err) => this.logger.warn(`Job alert fan-out failed for ${job.id}: ${err?.message}`))
     return this.withRequirements(job)
+  }
+
+  /** Company + OWNER membership for a recruiter without one, plus its wallet and sign-up bonus. */
+  private async createCompanyFor(
+    tx: Prisma.TransactionClient,
+    recruiterId: string,
+    user: { name?: string | null } | null,
+    signupBonus: number
+  ): Promise<string> {
+    const company = await tx.company.create({
+      data: {
+        name: user?.name ? `${user.name}'s Company` : "Hyrr Hiring Co",
+        logo: user?.name ? user.name.charAt(0).toUpperCase() : "H",
+        country: "United States",
+      },
+    })
+    if (user) {
+      await tx.user.update({ where: { id: recruiterId }, data: { companyId: company.id } })
+      await tx.companyMember.create({
+        data: { companyId: company.id, userId: recruiterId, role: "OWNER" },
+      })
+    }
+    await this.wallet.ensureWallet(company.id, tx)
+    if (signupBonus > 0)
+      await this.wallet.credit(
+        {
+          companyId: company.id,
+          amount: signupBonus,
+          type: "SIGNUP_BONUS",
+          referenceId: company.id,
+          actorId: user ? recruiterId : null,
+          note: "Welcome bonus",
+        },
+        tx
+      )
+    return company.id
   }
 
   // ─── Recruiter: update / close a job ─────────────────────────────
@@ -195,19 +253,133 @@ export class JobsService {
             : `Up to ${fmt(salaryMax)}`
     }
 
-    const job = await this.prisma.job.update({
-      where: { id: jobId },
-      data,
-      include: { company: true, category: true, ...APPLICANT_COUNT },
+    // First publication (publishedAt still null) is charged once; reopening a published job is free.
+    const firstPublish =
+      data.status === JobStatus.ACTIVE &&
+      current.status !== JobStatus.ACTIVE &&
+      !current.publishedAt
+    const isAdmin = actor.role === "ADMIN"
+    const cost =
+      firstPublish && !isAdmin
+        ? await this.pricing.publishCost({
+            remote: (data.remote as boolean | undefined) ?? current.remote,
+            salary: (data.salary as string | undefined) ?? current.salary,
+            categoryId: (data.categoryId as string | undefined) ?? current.categoryId,
+          })
+        : 0
+
+    let published = false
+    const job = await this.prisma.$transaction(async (tx) => {
+      if (firstPublish) {
+        // Atomic claim: of two concurrent publishes only one sees publishedAt = null.
+        const claimed = await tx.job.updateMany({
+          where: { id: jobId, publishedAt: null },
+          data: { publishedAt: new Date(), momentumCost: cost },
+        })
+        published = claimed.count === 1
+        if (published && cost > 0)
+          await this.wallet.debit(
+            {
+              companyId: current.companyId,
+              amount: cost,
+              type: "JOB_PUBLISH",
+              referenceId: jobId,
+              actorId: actor.userId,
+              note: `Published "${(data.title as string | undefined) ?? current.title}"`,
+            },
+            tx
+          )
+      }
+      return tx.job.update({
+        where: { id: jobId },
+        data,
+        include: { company: true, category: true, ...APPLICANT_COUNT },
+      })
     })
     await this.cache.delByPattern("jobs:public*")
-    // A draft going live is its first publication: announce it like a newly created job.
-    // (Reopening a CLOSED job is not re-announced.)
-    if (current.status === JobStatus.DRAFT && job.status === JobStatus.ACTIVE)
+    // The first publication is announced like a newly created job (reopening is not).
+    if (published && job.status === JobStatus.ACTIVE)
       this.alerts
         ?.onJobPublished(job.id)
         .catch((err) => this.logger.warn(`Job alert fan-out failed for ${job.id}: ${err?.message}`))
     return this.withRequirements(job)
+  }
+
+  // ─── Recruiter: Momentum publish-cost preview ─────────────────────
+  async getPublishCost(actor: Actor, input: PublishCostInput) {
+    const [{ cost, base, multipliers }, balance] = await Promise.all([
+      this.pricing.publishCostBreakdown(input),
+      actor.companyId ? this.wallet.getBalance(actor.companyId) : Promise.resolve(0),
+    ])
+    return { cost, balance, breakdown: { base, multipliers } }
+  }
+
+  // ─── Recruiter: feature a job (Momentum) ──────────────────────────
+  /**
+   * Charges featureCost × days / featureDays (JOB_FEATURE, referenceId = job id) and extends
+   * `featuredUntil` from max(now, featuredUntil). Admins feature for free.
+   */
+  async featureJob(jobId: string, days: number | undefined, actor: Actor) {
+    const current = await this.access.jobForManagement(actor, jobId)
+    if (current.status !== JobStatus.ACTIVE)
+      throw new AppException(
+        "Only active jobs can be featured",
+        HttpStatus.CONFLICT,
+        "JOB_NOT_ACTIVE"
+      )
+    const config = await this.pricing.getConfig()
+    const span = days ?? config.featureDays
+    if (!FEATURE_DAY_OPTIONS.includes(span as (typeof FEATURE_DAY_OPTIONS)[number]))
+      throw new AppException(
+        `days must be one of ${FEATURE_DAY_OPTIONS.join(", ")}`,
+        HttpStatus.BAD_REQUEST,
+        "INVALID_FEATURE_DAYS"
+      )
+    const cost =
+      actor.role === "ADMIN"
+        ? 0
+        : Math.max(1, Math.round((config.featureCost * span) / config.featureDays))
+
+    const job = await this.prisma.$transaction(async (tx) => {
+      // Debit first: it locks the company's wallet row, which serialises concurrent feature
+      // purchases so each extension starts from the committed featuredUntil.
+      if (cost > 0)
+        await this.wallet.debit(
+          {
+            companyId: current.companyId,
+            amount: cost,
+            type: "JOB_FEATURE",
+            referenceId: jobId,
+            actorId: actor.userId,
+            note: `Featured "${current.title}" for ${span} days`,
+          },
+          tx
+        )
+      const fresh = await tx.job.findUnique({
+        where: { id: jobId },
+        select: { featuredUntil: true },
+      })
+      const now = Date.now()
+      const from = Math.max(now, fresh?.featuredUntil?.getTime() ?? 0)
+      return tx.job.update({
+        where: { id: jobId },
+        data: { featured: true, featuredUntil: new Date(from + span * DAY_MS) },
+        select: { featuredUntil: true },
+      })
+    })
+    await this.cache.delByPattern("jobs:public*")
+    const balance = await this.wallet.getBalance(current.companyId)
+    return { featuredUntil: job.featuredUntil, balance }
+  }
+
+  /** Clears `featured` on jobs whose window ended (run by FeaturedJobsScheduler). */
+  async expireFeatured(): Promise<number> {
+    const { count } = await this.prisma.job.updateMany({
+      where: { featured: true, featuredUntil: { lte: new Date() } },
+      data: { featured: false },
+    })
+    if (count) await this.cache.delByPattern("jobs:public*")
+    return count
   }
 
   // ─── Recruiter: delete a job ──────────────────────────────────────
@@ -253,13 +425,31 @@ export class JobsService {
       ]
     }
 
-    const jobs = await this.prisma.job.findMany({
-      where,
-      include: { company: { select: PUBLIC_COMPANY_SELECT }, category: true },
-      orderBy: [{ featured: "desc" }, { createdAt: "desc" }],
-      take: 50,
+    // Currently featured jobs (featuredUntil > now) first, then the newest publications.
+    const now = new Date()
+    const include = { company: { select: PUBLIC_COMPANY_SELECT }, category: true }
+    const newest: Prisma.JobOrderByWithRelationInput[] = [
+      { publishedAt: { sort: "desc", nulls: "last" } },
+      { createdAt: "desc" },
+    ]
+    const featuredJobs = await this.prisma.job.findMany({
+      where: { AND: [where, { featuredUntil: { gt: now } }] },
+      include,
+      orderBy: newest,
+      take: PUBLIC_SEARCH_LIMIT,
     })
-    const results = jobs.map((job) => this.withRequirements(job))
+    const otherJobs =
+      featuredJobs.length < PUBLIC_SEARCH_LIMIT
+        ? await this.prisma.job.findMany({
+            where: {
+              AND: [where, { OR: [{ featuredUntil: null }, { featuredUntil: { lte: now } }] }],
+            },
+            include,
+            orderBy: newest,
+            take: PUBLIC_SEARCH_LIMIT - featuredJobs.length,
+          })
+        : []
+    const results = [...featuredJobs, ...otherJobs].map((job) => this.withRequirements(job))
 
     await this.cache.set(cacheKey, results, 120) // 2-minute TTL
     return results

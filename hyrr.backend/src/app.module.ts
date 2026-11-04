@@ -3,6 +3,7 @@ import { ConfigModule } from "@nestjs/config"
 import { AiModule } from "./ai/ai.module"
 import { ApplicationsModule } from "./applications/applications.module"
 import { AuthModule } from "./auth/auth.module"
+import { BillingModule } from "./billing/billing.module"
 import { CacheModule } from "./cache/cache.module"
 import { CalendarModule } from "./calendar/calendar.module"
 import { DashboardModule } from "./dashboard/dashboard.module"
@@ -38,6 +39,7 @@ import { UploadsModule } from "./uploads/uploads.module"
     NotificationsModule,
     CacheModule,
     PrismaModule,
+    BillingModule,
     AuthModule,
     JobsModule,
     ApplicationsModule,

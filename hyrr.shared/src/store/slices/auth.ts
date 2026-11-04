@@ -21,6 +21,7 @@ import type {
   TeamMember,
   TypingState,
 } from "../types"
+import { emptyBillingState } from "./billing"
 
 export type AuthSlice = Pick<
   JobState,
@@ -86,6 +87,7 @@ const emptyWorkspace = {
   labelFilter: null,
   funnelAnalytics: null,
   companyProfile: null,
+  ...emptyBillingState,
 }
 
 /** Stores a login/register/2FA response and starts loading the workspace. */

@@ -15,6 +15,8 @@ import {
 } from "@prisma/client"
 import { AiService } from "../ai/ai.service"
 import { assertEmailVerified } from "../auth/email-verification"
+import { PricingService } from "../billing/pricing.service"
+import { WalletService } from "../billing/wallet.service"
 import { CacheService } from "../cache/cache.service"
 import { AccessService, Actor } from "../core/access/access.service"
 import { EmailService } from "../core/delivery/email.service"
@@ -155,7 +157,9 @@ export class ApplicationsService {
     @Optional() private screening?: ScreeningService,
     @Optional() private labels?: LabelsService,
     @Optional() private messages?: MessagesService,
-    @Optional() private cache?: CacheService
+    @Optional() private cache?: CacheService,
+    @Optional() private wallet?: WalletService,
+    @Optional() private pricing?: PricingService
   ) {}
 
   /** The seeker's "For you" list hides jobs they applied to or saved: drop their cached matches. */
@@ -378,8 +382,14 @@ export class ApplicationsService {
   }
 
   // ─── Recruiter: (re-)run AI analysis (A1) ────────────────────────
+  /**
+   * Manual (re-)run. Costs `aiRerunCost` Momentum credits (AI_ANALYSIS, referenceId = run id),
+   * debited in the same transaction as the PENDING claim, so 402 / 409 change nothing. A run that
+   * ends FAILED or DISABLED is refunded once (REFUND, same run id). Admins run for free; the
+   * automatic first analysis after applying is never charged.
+   */
   async analyzeApplication(id: string, actor: Actor) {
-    await this.access.applicationFor(actor, id, "manage")
+    const application = await this.access.applicationFor(actor, id, "manage")
     const resolved = this.aiService ? await this.aiService.resolveModel() : null
     if (!resolved) {
       await this.prisma.application
@@ -391,24 +401,89 @@ export class ApplicationsService {
         "AI_DISABLED"
       )
     }
-    // Atomic claim so two clicks cannot start two runs.
+    const companyId = application.job?.companyId
+    const cost =
+      actor.role !== "ADMIN" && companyId && this.wallet && this.pricing
+        ? (await this.pricing.getConfig()).aiRerunCost
+        : 0
+    const runId = `${id}:${Date.now()}`
+
+    // Atomic claim so two clicks cannot start two runs; the debit rolls back with it.
     const cutoff = new Date(Date.now() - AI_PENDING_STALE_MS)
-    const claimed = await this.prisma.application.updateMany({
-      where: {
-        id,
-        OR: [{ aiStatus: null }, { aiStatus: { not: "PENDING" } }, { updatedAt: { lt: cutoff } }],
-      },
-      data: { aiStatus: "PENDING", aiError: null },
+    await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.application.updateMany({
+        where: {
+          id,
+          OR: [{ aiStatus: null }, { aiStatus: { not: "PENDING" } }, { updatedAt: { lt: cutoff } }],
+        },
+        data: { aiStatus: "PENDING", aiError: null },
+      })
+      if (claimed.count === 0) {
+        throw new AppException(
+          "An AI analysis for this candidate is already running",
+          HttpStatus.CONFLICT,
+          "AI_ALREADY_RUNNING"
+        )
+      }
+      if (cost > 0)
+        await this.wallet!.debit(
+          {
+            companyId: companyId!,
+            amount: cost,
+            type: "AI_ANALYSIS",
+            referenceId: runId,
+            actorId: actor.userId,
+            note: "AI candidate analysis re-run",
+          },
+          tx
+        )
     })
-    if (claimed.count === 0) {
-      throw new AppException(
-        "An AI analysis for this candidate is already running",
-        HttpStatus.CONFLICT,
-        "AI_ALREADY_RUNNING"
-      )
-    }
-    this.scoreInBackground(id)
+    if (cost > 0) this.runPaidAnalysis(id, companyId!, cost, runId, actor.userId)
+    else this.scoreInBackground(id)
     return { applicationId: id, aiStatus: "PENDING" as const }
+  }
+
+  /** Background paid run: refunds the charge exactly once when it does not end DONE. */
+  private runPaidAnalysis(
+    applicationId: string,
+    companyId: string,
+    cost: number,
+    runId: string,
+    actorId: string
+  ) {
+    const run = this.aiService
+      ? this.aiService.scoreApplication(applicationId).then((r) => r.status)
+      : Promise.resolve("DISABLED" as const)
+    run
+      .catch(() => "FAILED" as const)
+      .then(async (status) => {
+        if (status === "DONE") return
+        await this.refundAnalysis(companyId, cost, runId, actorId, status)
+      })
+      .catch((err) =>
+        this.logger.error(`AI re-run refund failed for ${runId}: ${err?.message || err}`)
+      )
+  }
+
+  /** Idempotent: a REFUND with this run id is written at most once. */
+  async refundAnalysis(
+    companyId: string,
+    cost: number,
+    runId: string,
+    actorId: string | null,
+    status: string
+  ) {
+    if (!this.wallet) return
+    if (!(await this.wallet.hasCharge("AI_ANALYSIS", runId))) return
+    if (await this.wallet.hasCharge("REFUND", runId)) return
+    await this.wallet.credit({
+      companyId,
+      amount: cost,
+      type: "REFUND",
+      referenceId: runId,
+      actorId,
+      note: `AI analysis ${status.toLowerCase()}: credits returned`,
+    })
   }
 
   // ─── Recruiter: add a candidate manually (C2) ─────────────────────

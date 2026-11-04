@@ -260,14 +260,43 @@ export function paymentReceipt(input: {
   description: string
   date?: Date | string
   url?: string | null
+  /** Momentum credits added by this payment. */
+  credits?: number | null
+  /** Wallet balance right after the credits were added. */
+  balance?: number | null
+  /** Payment id shown as the receipt reference. */
+  reference?: string | null
+  /** "Stripe" / "Chapa". */
+  provider?: string | null
 }): EmailContent {
   const blocks: Block[] = [
     { kind: "p", text: greeting(input.name) },
     { kind: "p", text: `Thanks for your payment of ${input.amount} for ${input.description}.` },
   ]
-  if (input.date) blocks.push({ kind: "muted", text: `Date: ${new Date(input.date).toUTCString()}` })
-  if (input.url) blocks.push({ kind: "button", label: "View receipt", url: input.url })
-  return build(`Your ${BRAND} receipt`, "Payment received", blocks)
+  if (input.credits && input.credits > 0) {
+    const balance =
+      typeof input.balance === "number" ? ` Your balance is now ${input.balance} credits.` : ""
+    blocks.push({
+      kind: "p",
+      text: `${input.credits} Momentum credits have been added to your company wallet.${balance}`,
+    })
+  }
+  const details: { title: string; meta?: string }[] = [
+    { title: input.description, meta: `Amount paid: ${input.amount}` },
+  ]
+  blocks.push({ kind: "list", items: details })
+  const facts = [
+    input.date ? `Date: ${new Date(input.date).toUTCString()}` : null,
+    input.provider ? `Paid with: ${input.provider}` : null,
+    input.reference ? `Reference: ${input.reference}` : null,
+  ].filter(Boolean) as string[]
+  if (facts.length) blocks.push({ kind: "muted", text: facts.join(" · ") })
+  if (input.url) blocks.push({ kind: "button", label: "View billing history", url: input.url })
+  blocks.push({
+    kind: "muted",
+    text: "Keep this e-mail for your records. Questions about a charge? Reply to this e-mail.",
+  })
+  return build(`Your ${BRAND} receipt: ${input.amount}`, "Payment received", blocks)
 }
 
 /** Generic notification e-mail (used for in-app notification copies). */

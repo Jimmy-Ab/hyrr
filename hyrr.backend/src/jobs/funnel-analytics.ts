@@ -44,7 +44,8 @@ export type FunnelAnalytics = {
 }
 
 const round1 = (n: number) => Math.round(n * 10) / 10
-const average = (xs: number[]) => (xs.length ? round1(xs.reduce((a, b) => a + b, 0) / xs.length) : null)
+const average = (xs: number[]) =>
+  xs.length ? round1(xs.reduce((a, b) => a + b, 0) / xs.length) : null
 function median(xs: number[]) {
   if (!xs.length) return null
   const s = [...xs].sort((a, b) => a - b)

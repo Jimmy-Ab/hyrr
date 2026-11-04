@@ -32,6 +32,7 @@ import {
   Trash2,
   User,
   Users,
+  Zap,
 } from "lucide-react"
 import { useEffect, useState, type FormEvent } from "react"
 import {
@@ -301,6 +302,7 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
     user,
     logout,
     workspaceName,
+    wallet,
   } = useJobStore()
   const companyVerified = useCompanyVerified()
   const { toast } = useToast()
@@ -372,6 +374,19 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
 
       {/* ─── Right: Actions ─── */}
       <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+        {/* Momentum balance */}
+        {wallet && (
+          <button
+            type="button"
+            onClick={() => setActiveView("Momentum")}
+            aria-label={`Momentum balance: ${wallet.balance.toLocaleString()} credits. Open Momentum`}
+            title="Momentum credits"
+            className="flex items-center gap-1.5 h-9 px-3 rounded-full border border-primary-border/40 bg-primary-light text-primary text-[13px] font-semibold hover:bg-primary/15 transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+          >
+            <Zap className="w-4 h-4" aria-hidden="true" />
+            <span className="tabular-nums">{wallet.balance.toLocaleString()}</span>
+          </button>
+        )}
         {/* Quick Add */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

@@ -130,6 +130,13 @@ export function mapJob(j: any): Job {
     description: j.description || "",
     requirements: Array.isArray(j.requirements) ? j.requirements : [],
     companyVerified: j.company?.verified === true,
+    remote: !!j.remote,
+    salary: j.salary ?? undefined,
+    categoryId: j.categoryId ?? j.category?.id ?? undefined,
+    featured: !!j.featured,
+    featuredUntil: j.featuredUntil ?? null,
+    publishedAt: j.publishedAt ?? null,
+    momentumCost: typeof j.momentumCost === "number" ? j.momentumCost : undefined,
   }
 }
 

@@ -56,6 +56,9 @@ const loadRecruiter = async (set: StoreSet, get: StoreGet) => {
     get()
       .fetchTeam()
       .catch((e) => console.warn("Failed to load team.", e)),
+    get()
+      .fetchWallet()
+      .catch((e) => console.warn("Failed to load Momentum wallet.", e)),
     get().fetchConversations(),
     get().fetchUnreadCount(),
     get().fetchEvents(),

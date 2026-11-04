@@ -72,7 +72,7 @@ describe("AiService.scoreApplication", () => {
   it("persists the structured result with DONE and emits the full payload", async () => {
     const result = await service.scoreApplication("app-1")
 
-    expect(result).toEqual({ score: 77, summary: "Good fit." })
+    expect(result).toEqual({ score: 77, summary: "Good fit.", status: "DONE" })
     expect(cvText.extract).toHaveBeenCalledWith(application.resumeUrl)
     expect(adapter.analyzeCandidate.mock.calls[0][3]).toContain("CV TEXT")
     expect(prisma.application.update).toHaveBeenNthCalledWith(1, {
@@ -139,7 +139,7 @@ describe("AiService.scoreApplication", () => {
 
     const result = await service.scoreApplication("app-1")
 
-    expect(result).toEqual({ score: null, summary: null })
+    expect(result).toEqual({ score: null, summary: null, status: "FAILED" })
     const writes = prisma.application.update.mock.calls.map((c: any) => c[0].data)
     for (const data of writes) {
       expect(data).not.toHaveProperty("aiScore")
@@ -187,7 +187,11 @@ describe("AiService.scoreApplication", () => {
 
   it("never throws, even when the database fails", async () => {
     prisma.application.findUnique.mockRejectedValue(new Error("db down"))
-    await expect(service.scoreApplication("app-1")).resolves.toEqual({ score: null, summary: null })
+    await expect(service.scoreApplication("app-1")).resolves.toEqual({
+      score: null,
+      summary: null,
+      status: "FAILED",
+    })
   })
 })
 
@@ -216,8 +220,8 @@ describe("userSafeAiError", () => {
   })
 
   it("still reports a real rate limit as one", () => {
-    expect(userSafeAiError(Object.assign(new Error("Rate limit reached"), { status: 429 }))).toMatch(
-      /rate limiting/
-    )
+    expect(
+      userSafeAiError(Object.assign(new Error("Rate limit reached"), { status: 429 }))
+    ).toMatch(/rate limiting/)
   })
 })

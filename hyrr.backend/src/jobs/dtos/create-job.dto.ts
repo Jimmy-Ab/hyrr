@@ -49,7 +49,8 @@ export class CreateJobDto {
   @IsNotEmpty()
   categoryId: string
 
-  @ApiPropertyOptional({ example: false })
+  /** Deprecated and ignored: featuring is bought via POST /jobs/:id/feature (Momentum). */
+  @ApiPropertyOptional({ deprecated: true, description: "Ignored; use POST /jobs/:id/feature" })
   @IsOptional()
   @IsBoolean()
   featured?: boolean

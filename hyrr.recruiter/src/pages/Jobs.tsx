@@ -1,4 +1,14 @@
-import { Button, Card, RichTextRenderer, useToast, VerifiedBadge, type Job } from "hyrr.shared"
+import {
+  Badge,
+  Button,
+  Card,
+  insufficientCreditsDetails,
+  RichTextRenderer,
+  ConfirmDialog as SharedConfirmDialog,
+  useToast,
+  VerifiedBadge,
+  type Job,
+} from "hyrr.shared"
 import {
   ArrowUpRight,
   Briefcase,
@@ -8,9 +18,16 @@ import {
   Pencil,
   Power,
   Search,
+  Star,
   Trash2,
 } from "lucide-react"
 import * as React from "react"
+import {
+  InsufficientCreditsNotice,
+  PublishCostNote,
+  usePublishCost,
+} from "../components/billing/momentum-cost"
+import { FeatureJobDialog } from "../components/jobs/feature-job-dialog"
 import { JobPublishErrorNotice } from "../components/jobs/job-publish-error"
 import { JobStatusBadge } from "../components/jobs/job-status-badge"
 import { ConfirmDialog } from "../components/layout/confirm-dialog"
@@ -18,6 +35,8 @@ import { EditJobDialog } from "../components/layout/edit-job-dialog"
 import {
   errorMessage,
   FLAGGED_JOB_TOOLTIP,
+  formatDate,
+  isFeaturedNow,
   isFlaggedJob,
   jobPublishError,
   useCompanyVerified,
@@ -26,6 +45,16 @@ import {
 import { useJobStore } from "../store/useJobStore"
 
 type StatusFilter = "All" | "Active" | "Closed"
+
+function FeaturedBadge({ job }: { job: Job }) {
+  if (!isFeaturedNow(job)) return null
+  return (
+    <Badge variant="warning" className="gap-1">
+      <Star className="w-3 h-3" aria-hidden="true" />
+      Featured until {formatDate(job.featuredUntil)}
+    </Badge>
+  )
+}
 
 export function Jobs() {
   const {
@@ -48,6 +77,23 @@ export function Jobs() {
   const [editingJob, setEditingJob] = React.useState<Job | null>(null)
   const [deletingJob, setDeletingJob] = React.useState<Job | null>(null)
   const [statusBusy, setStatusBusy] = React.useState(false)
+  const [featuringJob, setFeaturingJob] = React.useState<Job | null>(null)
+  const [publishingJob, setPublishingJob] = React.useState<Job | null>(null)
+  // 402 when publishing a draft from this page, shown in the job's panel.
+  const [creditError, setCreditError] = React.useState<{
+    jobId: string
+    required: number
+    balance: number
+  } | null>(null)
+  const publishCost = usePublishCost(
+    {
+      remote: publishingJob?.remote,
+      salary: publishingJob?.salary || undefined,
+      categoryId: publishingJob?.categoryId,
+    },
+    !!publishingJob && !publishingJob.publishedAt,
+    0
+  )
   // Publishing failure for one job (content policy / unverified e-mail), shown in its panel.
   const [statusError, setStatusError] = React.useState<{
     jobId: string
@@ -81,6 +127,7 @@ export function Jobs() {
     const publishing = job.status === "Draft"
     setStatusBusy(true)
     setStatusError(null)
+    setCreditError(null)
     try {
       await updateJob(job.id, { status: next })
       toast(
@@ -91,8 +138,10 @@ export function Jobs() {
         "success"
       )
     } catch (err) {
+      const credits = insufficientCreditsDetails(err)
       const inline = jobPublishError(err)
-      if (inline) setStatusError({ jobId: job.id, error: inline })
+      if (credits) setCreditError({ jobId: job.id, ...credits })
+      else if (inline) setStatusError({ jobId: job.id, error: inline })
       else toast("Could not update job", errorMessage(err), "error")
     } finally {
       setStatusBusy(false)
@@ -218,6 +267,7 @@ export function Jobs() {
 
                   <div className="flex flex-col items-end gap-2 shrink-0">
                     <JobStatusBadge job={job} interactive={false} />
+                    <FeaturedBadge job={job} />
                     <span className="text-[12px] text-txt-caption font-semibold">
                       {count} applicant{count !== 1 && "s"}
                     </span>
@@ -253,6 +303,9 @@ export function Jobs() {
                     <span>•</span>
                     <span>{selectedJob.type}</span>
                   </div>
+                  <div className="mt-2 empty:hidden">
+                    <FeaturedBadge job={selectedJob} />
+                  </div>
                 </div>
                 <JobStatusBadge job={selectedJob} />
               </div>
@@ -281,7 +334,12 @@ export function Jobs() {
                   variant="secondary"
                   disabled={statusBusy || isFlaggedJob(selectedJob)}
                   title={isFlaggedJob(selectedJob) ? FLAGGED_JOB_TOOLTIP : undefined}
-                  onClick={() => handleToggleStatus(selectedJob)}
+                  onClick={() =>
+                    // Publishing a draft spends credits: confirm the cost first.
+                    selectedJob.status === "Draft"
+                      ? setPublishingJob(selectedJob)
+                      : handleToggleStatus(selectedJob)
+                  }
                   className="gap-1.5"
                 >
                   {statusBusy ? (
@@ -295,6 +353,17 @@ export function Jobs() {
                       ? "Publish job"
                       : "Reopen job"}
                 </Button>
+                {selectedJob.status === "Active" && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setFeaturingJob(selectedJob)}
+                    className="gap-1.5"
+                  >
+                    <Star className="w-3.5 h-3.5" aria-hidden="true" />
+                    {isFeaturedNow(selectedJob) ? "Extend feature" : "Feature this job"}
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="ghost"
@@ -305,6 +374,14 @@ export function Jobs() {
                   Delete
                 </Button>
               </div>
+
+              {creditError?.jobId === selectedJob.id && (
+                <InsufficientCreditsNotice
+                  className="-mt-4"
+                  required={creditError.required}
+                  balance={creditError.balance}
+                />
+              )}
 
               {statusError?.jobId === selectedJob.id && (
                 <div className="-mt-4">
@@ -369,6 +446,37 @@ export function Jobs() {
       </div>
 
       <EditJobDialog job={editingJob} onOpenChange={(o) => !o && setEditingJob(null)} />
+      <FeatureJobDialog job={featuringJob} onOpenChange={(o) => !o && setFeaturingJob(null)} />
+      <SharedConfirmDialog
+        open={!!publishingJob}
+        onOpenChange={(o) => !o && setPublishingJob(null)}
+        title="Publish job?"
+        description={`"${publishingJob?.title ?? ""}" will be visible to candidates and start accepting applications.`}
+        confirmLabel={
+          publishingJob && !publishingJob.publishedAt && publishCost.quote
+            ? `Publish · ${publishCost.quote.cost} credits`
+            : "Publish"
+        }
+        destructive={false}
+        onConfirm={async () => {
+          if (publishingJob) await handleToggleStatus(publishingJob)
+        }}
+      >
+        <div className="mt-3">
+          {publishingJob?.publishedAt ? (
+            <p className="text-[12.5px] text-txt-caption">
+              This job was published before, so publishing it again is free.
+            </p>
+          ) : (
+            <PublishCostNote
+              quote={publishCost.quote}
+              loading={publishCost.loading}
+              error={publishCost.error}
+              onRetry={publishCost.retry}
+            />
+          )}
+        </div>
+      </SharedConfirmDialog>
       <ConfirmDialog
         open={!!deletingJob}
         onOpenChange={(o) => !o && setDeletingJob(null)}

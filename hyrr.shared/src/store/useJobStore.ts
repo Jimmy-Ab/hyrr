@@ -2,6 +2,7 @@ import { create } from "zustand"
 import { createAiSlice } from "./slices/ai"
 import { createApplicationsSlice } from "./slices/applications"
 import { createAuthSlice } from "./slices/auth"
+import { createBillingSlice } from "./slices/billing"
 import { createBootstrapSlice } from "./slices/bootstrap"
 import { createCalendarSlice } from "./slices/calendar"
 import { createCandidatesSlice } from "./slices/candidates"
@@ -21,6 +22,7 @@ import type { JobState } from "./types"
 // (timers, sequence tokens, the initial-load promise) lives in ./session.ts.
 
 export { formatDateTime, notificationConversationId, toIsoFromLocal } from "./mappers"
+export { insufficientCreditsDetails, isInsufficientCredits } from "./slices/billing"
 export * from "./types"
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -42,4 +44,5 @@ export const useJobStore = create<JobState>()((...a) => ({
   ...createAiSlice(...a),
   ...createSeekerToolsSlice(...a),
   ...createPipelineSlice(...a),
+  ...createBillingSlice(...a),
 }))

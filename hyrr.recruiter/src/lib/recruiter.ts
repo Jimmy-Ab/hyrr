@@ -1,4 +1,4 @@
-import { isApiError, type Candidate, type Job } from "hyrr.shared"
+import { isApiError, type Candidate, type Job, type TeamMember } from "hyrr.shared"
 import { useJobStore } from "../store/useJobStore"
 
 // ─── Views <-> URL paths ──────────────────────────────────────────────────────
@@ -11,6 +11,7 @@ export const RECRUITER_VIEWS = [
   "Calendar",
   "Messages",
   "Analytics",
+  "Momentum",
   "Settings",
 ] as const
 
@@ -175,4 +176,36 @@ export function formatDateTime(iso: string | null | undefined): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return ""
   return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+}
+
+// ─── Momentum (credits) ───────────────────────────────────────────────────────
+
+/** "$49.00", "ETB 2,500.00" from minor units. */
+export function formatMoney(minor: number, currency = "USD"): string {
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(minor / 100)
+  } catch {
+    return `${currency} ${(minor / 100).toFixed(2)}`
+  }
+}
+
+export function formatCredits(n: number): string {
+  return `${n.toLocaleString()} credit${Math.abs(n) === 1 ? "" : "s"}`
+}
+
+export function formatDate(iso: string | null | undefined): string {
+  if (!iso) return ""
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ""
+  return d.toLocaleDateString(undefined, { dateStyle: "medium" })
+}
+
+/** true while the job's paid feature window is open. */
+export function isFeaturedNow(job: Pick<Job, "featuredUntil">): boolean {
+  return !!job.featuredUntil && new Date(job.featuredUntil).getTime() > Date.now()
+}
+
+/** The signed-in user's company role (from the team list; undefined until it loads). */
+export function useCompanyRole(): TeamMember["role"] | undefined {
+  return useJobStore((s) => s.team.find((m) => m.userId === s.user?.id)?.role)
 }

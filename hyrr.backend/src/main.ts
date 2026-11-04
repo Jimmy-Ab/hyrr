@@ -7,10 +7,10 @@ import { ValidationPipe } from "@nestjs/common"
 import { NestFactory } from "@nestjs/core"
 import { NestExpressApplication } from "@nestjs/platform-express"
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger"
+import helmet from "helmet"
 import { AppModule } from "./app.module"
 import { jwtSecret } from "./auth/jwt.config"
 import cookieParser = require("cookie-parser")
-import helmet from "helmet"
 
 import { getAllowedOrigins } from "./core/config/origins"
 import { AllExceptionsFilter } from "./core/filters/all-exceptions.filter"
@@ -19,12 +19,15 @@ import { isHealthPath, requestIdMiddleware } from "./core/http/request-id"
 import { LoggingInterceptor } from "./core/interceptors/logging.interceptor"
 
 const STRICT_WINDOW_MS = 60_000
+const BILLING_WEBHOOK_PATH = /^\/api\/billing\/webhooks\//
 
 async function bootstrap() {
   // Fail fast on an unsafe JWT secret in production (throws), warn in development.
   jwtSecret()
 
-  const app = await NestFactory.create<NestExpressApplication>(AppModule)
+  // rawBody: payment webhooks (Stripe/Chapa) verify signatures over the exact request bytes;
+  // Nest keeps them on `req.rawBody` next to the parsed JSON body.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true })
   app.enableShutdownHooks()
 
   // Only trust X-Forwarded-For when explicitly running behind a reverse proxy.
@@ -48,7 +51,8 @@ async function bootstrap() {
   const strictLimit = Number(process.env.RATE_LIMIT_STRICT_PER_MINUTE || 10)
   app.use(
     createRateLimiter({
-      skip: (req) => isHealthPath(req.path),
+      // Health probes and provider webhooks (signature-verified; providers retry on 429).
+      skip: (req) => isHealthPath(req.path) || BILLING_WEBHOOK_PATH.test(req.path),
       windowMs: 60_000,
       defaultLimit: Number(process.env.RATE_LIMIT_PER_MINUTE || 120),
       rules: [
@@ -56,8 +60,7 @@ async function bootstrap() {
           name: "auth",
           limit: strictLimit,
           windowMs: STRICT_WINDOW_MS,
-          matches: (req) =>
-            req.method === "POST" && STRICT_AUTH_PATH.test(req.path),
+          matches: (req) => req.method === "POST" && STRICT_AUTH_PATH.test(req.path),
         },
         {
           name: "apply",

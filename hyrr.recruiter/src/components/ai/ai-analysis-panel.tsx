@@ -1,4 +1,12 @@
-import { AI_RECOMMENDATION_LABEL, Badge, Button, useToast, type Candidate } from "hyrr.shared"
+import {
+  AI_RECOMMENDATION_LABEL,
+  Badge,
+  Button,
+  ConfirmDialog,
+  insufficientCreditsDetails,
+  useToast,
+  type Candidate,
+} from "hyrr.shared"
 import {
   AlertCircle,
   AlertTriangle,
@@ -9,10 +17,14 @@ import {
   RotateCw,
   Sparkles,
 } from "lucide-react"
-import { useState } from "react"
-import { errorMessage } from "../../lib/recruiter"
+import { useEffect, useState } from "react"
+import { errorMessage, formatCredits } from "../../lib/recruiter"
 import { useJobStore } from "../../store/useJobStore"
+import { InsufficientCreditsNotice } from "../billing/momentum-cost"
 import { RECOMMENDATION_VARIANT, relativeTime } from "./ai-score"
+
+// Pricing is loaded lazily (once per session) the first time an AI panel opens.
+let pricingRequested = false
 
 function ScoreRing({ score }: { score: number }) {
   const radius = 30
@@ -74,20 +86,43 @@ function BulletList({ items, icon }: { items: string[]; icon: "check" | "warn" }
 /** AI tab of the candidate dialog: structured report, status states and (re-)run action. */
 export function AiAnalysisPanel({ candidate }: { candidate: Candidate }) {
   const analyzeCandidate = useJobStore((s) => s.analyzeCandidate)
+  const pricing = useJobStore((s) => s.pricing)
+  const wallet = useJobStore((s) => s.wallet)
+  const fetchBillingCatalog = useJobStore((s) => s.fetchBillingCatalog)
+  const setSelectedCandidateId = useJobStore((s) => s.setSelectedCandidateId)
   const { toast } = useToast()
   const [starting, setStarting] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [creditError, setCreditError] = useState<{ required: number; balance: number } | null>(null)
+
+  useEffect(() => {
+    if (pricing || pricingRequested) return
+    pricingRequested = true
+    fetchBillingCatalog().catch(() => {
+      pricingRequested = false
+    })
+  }, [pricing, fetchBillingCatalog])
+
+  useEffect(() => setCreditError(null), [candidate.id])
+
+  const cost = pricing?.aiRerunCost ?? null
+  const withCost = (label: string) => (cost ? `${label} (${formatCredits(cost)})` : label)
 
   const pending = candidate.aiStatus === "PENDING"
   const analysis = candidate.aiAnalysis
   const hasResult = candidate.aiScore != null
 
+  // Runs after the cost was confirmed. Never throws, so the confirm dialog always closes.
   const run = async () => {
     setStarting(true)
+    setCreditError(null)
     try {
       await analyzeCandidate(candidate.id)
       toast("Analysis started", "The report updates automatically when it's ready.", "success")
     } catch (err) {
-      toast("Could not start analysis", errorMessage(err), "error")
+      const credits = insufficientCreditsDetails(err)
+      if (credits) setCreditError(credits)
+      else toast("Could not start analysis", errorMessage(err), "error")
     } finally {
       setStarting(false)
     }
@@ -98,7 +133,7 @@ export function AiAnalysisPanel({ candidate }: { candidate: Candidate }) {
       type="button"
       size="sm"
       variant={hasResult ? "secondary" : "primary"}
-      onClick={run}
+      onClick={() => setConfirmOpen(true)}
       disabled={pending || starting}
       className="gap-1.5 cursor-pointer"
     >
@@ -109,8 +144,36 @@ export function AiAnalysisPanel({ candidate }: { candidate: Candidate }) {
       ) : (
         <Sparkles className="w-3.5 h-3.5" />
       )}
-      {label}
+      {pending ? label : withCost(label)}
     </Button>
+  )
+
+  const extras = (
+    <>
+      {creditError && (
+        <InsufficientCreditsNotice
+          className="mt-0"
+          required={creditError.required}
+          balance={creditError.balance}
+          onBuy={() => setSelectedCandidateId(null)}
+        />
+      )}
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title={hasResult ? "Re-run AI analysis?" : "Run AI analysis?"}
+        description={
+          cost
+            ? `This uses ${formatCredits(cost)} from your Momentum balance${
+                wallet ? ` (${wallet.balance.toLocaleString()} available)` : ""
+              }. Credits are refunded if the analysis fails.`
+            : "This uses Momentum credits from your balance. Credits are refunded if the analysis fails."
+        }
+        confirmLabel={cost ? `Run · ${formatCredits(cost)}` : "Run analysis"}
+        destructive={false}
+        onConfirm={run}
+      />
+    </>
   )
 
   const statusBanner = pending ? (
@@ -150,6 +213,7 @@ export function AiAnalysisPanel({ candidate }: { candidate: Candidate }) {
   if (!hasResult) {
     return (
       <div className="space-y-4">
+        {extras}
         {candidate.aiStatus === "FAILED" && statusBanner}
         <div className="flex flex-col items-center justify-center py-10 text-center gap-4">
           <div className="w-14 h-14 rounded-2xl bg-primary-light flex items-center justify-center">
@@ -180,6 +244,7 @@ export function AiAnalysisPanel({ candidate }: { candidate: Candidate }) {
 
   return (
     <div className="space-y-5">
+      {extras}
       {statusBanner}
 
       {/* Score + recommendation */}
