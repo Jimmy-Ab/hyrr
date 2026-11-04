@@ -27,10 +27,16 @@ import {
   errorMessage,
   isWithdrawn,
   PIPELINE_STATUSES,
+  sourceLabel,
   statusBadgeVariant,
 } from "../../lib/recruiter"
 import { useJobStore, type Candidate } from "../../store/useJobStore"
 import { AiAnalysisPanel } from "../ai/ai-analysis-panel"
+import { CandidateLabelsEditor } from "../candidate/candidate-labels-editor"
+import { CandidateNotes } from "../candidate/candidate-notes"
+import { CandidateTimeline } from "../candidate/candidate-timeline"
+
+type CandidateTab = "details" | "notes" | "timeline" | "ai" | "schedule"
 
 export function CandidateDetailDialog() {
   const {
@@ -45,7 +51,7 @@ export function CandidateDetailDialog() {
   } = useJobStore()
   const { toast } = useToast()
 
-  const [activeTab, setActiveTab] = useState<"details" | "ai" | "schedule">("details")
+  const [activeTab, setActiveTab] = useState<CandidateTab>("details")
 
   // Schedule state
   const [meetingTitle, setMeetingTitle] = useState("")
@@ -154,12 +160,19 @@ export function CandidateDetailDialog() {
             <DialogDescription className="text-[13.5px] font-semibold text-txt-body mt-0.5">
               {candidate.title || "No title provided"}
             </DialogDescription>
-            {candidate.location && (
-              <div className="flex items-center gap-1 text-[11.5px] text-txt-caption mt-2 font-medium">
-                <MapPin className="w-3.5 h-3.5" />
-                <span>{candidate.location}</span>
-              </div>
-            )}
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              {candidate.location && (
+                <span className="flex items-center gap-1 text-[11.5px] text-txt-caption font-medium">
+                  <MapPin className="w-3.5 h-3.5" />
+                  <span>{candidate.location}</span>
+                </span>
+              )}
+              {sourceLabel(candidate.source) && (
+                <Badge variant="secondary" className="text-[11px] px-2 py-0.5 rounded-md">
+                  {sourceLabel(candidate.source)}
+                </Badge>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-col gap-2 sm:items-end justify-end">
@@ -219,6 +232,11 @@ export function CandidateDetailDialog() {
         >
           {[
             { id: "details", label: "Profile Details" },
+            {
+              id: "notes",
+              label: candidate.notesCount ? `Notes (${candidate.notesCount})` : "Notes",
+            },
+            { id: "timeline", label: "Timeline" },
             { id: "ai", label: "AI Screening Match" },
             { id: "schedule", label: "Interview Scheduler" },
           ].map((tab) => (
@@ -227,7 +245,7 @@ export function CandidateDetailDialog() {
               type="button"
               role="tab"
               aria-selected={activeTab === tab.id}
-              onClick={() => setActiveTab(tab.id as "details" | "ai" | "schedule")}
+              onClick={() => setActiveTab(tab.id as CandidateTab)}
               className={`py-3.5 px-3 sm:px-4 whitespace-nowrap text-[12.5px] font-bold transition-all relative border-b-2 cursor-pointer ${
                 activeTab === tab.id
                   ? "border-primary text-primary"
@@ -246,6 +264,14 @@ export function CandidateDetailDialog() {
         <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-bg-primary/10">
           {activeTab === "details" && (
             <div className="space-y-6">
+              {/* Labels */}
+              <div>
+                <h4 className="text-[12.5px] font-bold text-txt-heading uppercase tracking-wider mb-2.5">
+                  Labels
+                </h4>
+                <CandidateLabelsEditor candidate={candidate} />
+              </div>
+
               {/* Contact info */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Card className="p-4 flex items-center gap-3 min-w-0">
@@ -284,6 +310,30 @@ export function CandidateDetailDialog() {
                 </div>
               )}
 
+              {/* Screening answers */}
+              {(candidate.screeningAnswers?.length ?? 0) > 0 && (
+                <div>
+                  <h4 className="text-[12.5px] font-bold text-txt-heading uppercase tracking-wider mb-2.5">
+                    Screening Answers
+                  </h4>
+                  <dl className="space-y-3">
+                    {candidate.screeningAnswers.map((qa) => (
+                      <div
+                        key={qa.questionId}
+                        className="p-3.5 rounded-[14px] border border-bg-border/60 bg-bg-secondary"
+                      >
+                        <dt className="text-[12.5px] font-semibold text-txt-heading">
+                          {qa.question}
+                        </dt>
+                        <dd className="text-[13px] text-txt-body mt-1 whitespace-pre-wrap break-words">
+                          {qa.answer || <span className="text-txt-caption">No answer</span>}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              )}
+
               {/* Resume download section */}
               <div>
                 <h4 className="text-[12.5px] font-bold text-txt-heading uppercase tracking-wider mb-2.5">
@@ -319,6 +369,10 @@ export function CandidateDetailDialog() {
               </div>
             </div>
           )}
+
+          {activeTab === "notes" && <CandidateNotes applicationId={candidate.id} />}
+
+          {activeTab === "timeline" && <CandidateTimeline applicationId={candidate.id} />}
 
           {activeTab === "ai" && <AiAnalysisPanel candidate={candidate} />}
 

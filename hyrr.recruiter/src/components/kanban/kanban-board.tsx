@@ -13,12 +13,14 @@ import { useToast } from "hyrr.shared"
 import { useState } from "react"
 import { columnForStatus, errorMessage, isWithdrawn, PIPELINE_STATUSES } from "../../lib/recruiter"
 import { useJobStore, type Candidate } from "../../store/useJobStore"
+import { matchesLabel } from "../labels/labels"
 import { ApplicationCard } from "./application-card"
 import { KanbanColumn } from "./kanban-column"
 
 /** Pipeline board for one job, or for every job when `jobId` is omitted. */
 export function KanbanBoard({ jobId }: { jobId?: string }) {
-  const { candidates, jobs, moveCandidate, searchQuery, setAddCandidateOpen } = useJobStore()
+  const { candidates, jobs, moveCandidate, searchQuery, setAddCandidateOpen, labelFilter } =
+    useJobStore()
   const jobTitles = jobId ? undefined : Object.fromEntries(jobs.map((j) => [j.id, j.title]))
   const { toast } = useToast()
 
@@ -34,6 +36,7 @@ export function KanbanBoard({ jobId }: { jobId?: string }) {
   const query = searchQuery.trim().toLowerCase()
   const filteredCandidates = candidates.filter((c) => {
     if (jobId && c.jobId !== jobId) return false
+    if (!matchesLabel(c, labelFilter)) return false
     if (!query) return true
     return (
       c.name.toLowerCase().includes(query) ||

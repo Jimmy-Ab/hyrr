@@ -1,32 +1,29 @@
 import { HttpStatus, Injectable, Logger, Optional } from "@nestjs/common"
-import {
-  ApplicationStatus,
-  EmploymentType,
-  JobStatus,
-  NotificationAction,
-  NotificationType,
-  Prisma,
-} from "@prisma/client"
+import { ApplicationStatus, EmploymentType, JobStatus, Prisma } from "@prisma/client"
 import { assertEmailVerified, requireVerifiedEmail } from "../auth/email-verification"
 import { CacheService } from "../cache/cache.service"
 import { AccessService, Actor } from "../core/access/access.service"
 import { EmailService } from "../core/delivery/email.service"
-import { appUrl, jobAlertDigest } from "../core/delivery/templates"
 import { AppException, NotFoundAppException } from "../core/exceptions/app-exception"
 import { MessagesGateway } from "../messages/messages.gateway"
 import { NotificationsService } from "../notifications/notifications.service"
 import { PrismaService } from "../prisma/prisma.service"
+import { AlertsService } from "../seeker-tools/alerts.service"
 import { CreateJobDto } from "./dtos/create-job.dto"
 import { UpdateJobDto } from "./dtos/update-job.dto"
+import { computeFunnelAnalytics } from "./funnel-analytics"
 import { evaluateJobContent, JobContent } from "./job-content-policy"
 import { PUBLIC_COMPANY_SELECT } from "./public-company"
 
 const JOB_COLORS = ["purple", "blue", "green", "orange"] as const
 const PUBLIC_JOBS_CACHE_KEY = "jobs:public"
-/** Max INSTANT alerts evaluated per new job. */
-const ALERT_SCAN_LIMIT = 1000
 /** Statuses a recruiter may set; FLAGGED is reserved for admins (moderation). */
 const RECRUITER_JOB_STATUSES: JobStatus[] = [JobStatus.ACTIVE, JobStatus.CLOSED, JobStatus.DRAFT]
+
+/** Bounds for GET /jobs/analytics (most recent applications win when exceeded). */
+const ANALYTICS_MAX_APPLICATIONS = 20_000
+const ANALYTICS_MAX_EVENTS = 100_000
+const ANALYTICS_MAX_JOBS = 500
 
 /** Applications counted on recruiter job cards: SAVED bookmarks are not applicants. */
 const APPLICANT_COUNT = {
@@ -43,7 +40,8 @@ export class JobsService {
     private access: AccessService,
     private notifications: NotificationsService,
     @Optional() private email?: EmailService,
-    @Optional() private messagesGateway?: MessagesGateway
+    @Optional() private messagesGateway?: MessagesGateway,
+    @Optional() private alerts?: AlertsService
   ) {}
 
   /** Jobs always expose `requirements` as a string array. */
@@ -140,109 +138,10 @@ export class JobsService {
     await this.cache.delByPattern("jobs:public*")
     // Alerts never block job creation (drafts are not announced)
     if (job.status === JobStatus.ACTIVE)
-      this.notifyMatchingAlerts(job).catch((err) =>
-        this.logger.warn(`Job alert fan-out failed for ${job.id}: ${err?.message}`)
-      )
+      this.alerts
+        ?.onJobPublished(job.id)
+        .catch((err) => this.logger.warn(`Job alert fan-out failed for ${job.id}: ${err?.message}`))
     return this.withRequirements(job)
-  }
-
-  /**
-   * INSTANT alerts only (DAILY/WEEKLY are handled by the digest). Structural filters run in the
-   * database; free-text keyword/location matching runs on the capped result. One notification per
-   * user, created in bulk, with batched user/setting lookups and fire-and-forget e-mails.
-   */
-  async notifyMatchingAlerts(job: {
-    id: string
-    title: string
-    location: string
-    type: EmploymentType
-    remote: boolean
-    skills?: string[]
-    description?: string
-    recruiterId?: string
-    company?: { name?: string } | null
-    status?: JobStatus
-  }) {
-    // Only live postings are announced (never drafts, closed or flagged jobs).
-    if (job.status && job.status !== JobStatus.ACTIVE) return 0
-    const typeLabel = this.employmentTypeLabel(job.type)
-    const alerts = await this.prisma.jobAlert.findMany({
-      where: {
-        active: true,
-        frequency: "INSTANT",
-        ...(job.recruiterId ? { userId: { not: job.recruiterId } } : {}),
-        ...(job.remote ? {} : { remoteOnly: false }),
-        OR: [{ jobTypes: { isEmpty: true } }, { jobTypes: { has: typeLabel } }],
-        user: { role: "SEEKER", status: "ACTIVE" },
-      },
-      select: { userId: true, keywords: true, locations: true },
-      take: ALERT_SCAN_LIMIT,
-      orderBy: { createdAt: "asc" },
-    })
-    if (!alerts.length) return 0
-
-    const searchable =
-      `${job.title} ${job.location} ${job.type} ${typeLabel} ${(job.skills || []).join(" ")}`.toLowerCase()
-    const jobLocation = (job.location || "").toLowerCase()
-    const userIds = new Set<string>()
-    for (const alert of alerts) {
-      const keywordMatch =
-        !alert.keywords.length ||
-        alert.keywords.some((k) => k.trim() && searchable.includes(k.trim().toLowerCase()))
-      const locationMatch =
-        !alert.locations.length ||
-        alert.locations.some(
-          (l) =>
-            (l.trim() && jobLocation.includes(l.trim().toLowerCase())) ||
-            (job.remote && l.trim().toLowerCase() === "remote")
-        )
-      if (keywordMatch && locationMatch) userIds.add(alert.userId)
-    }
-    if (!userIds.size) return 0
-
-    const title = `New job alert match: ${job.title} at ${job.company?.name || "a company"}`
-    const ids = [...userIds]
-    const created = await this.prisma.notification.createManyAndReturn({
-      data: ids.map((userId) => ({
-        userId,
-        title,
-        type: NotificationType.JOB_ALERT,
-        actionView: NotificationAction.DISCOVER,
-      })),
-    })
-    for (const notification of created) {
-      this.messagesGateway?.emitNotification(notification.userId, notification)
-    }
-
-    if (this.email) {
-      const users = await this.prisma.user.findMany({
-        where: { id: { in: ids } },
-        select: { email: true, name: true, setting: { select: { emailNotifications: true } } },
-      })
-      const jobs = [
-        {
-          title: job.title,
-          company: job.company?.name || "A company",
-          location: job.remote ? `${job.location} (remote)` : job.location,
-          url: appUrl("SEEKER", "/discover"),
-        },
-      ]
-      for (const user of users) {
-        if (!user.email || user.setting?.emailNotifications === false) continue
-        const content = jobAlertDigest({ name: user.name, jobs })
-        this.email.send({ to: user.email, ...content }).catch(() => undefined)
-      }
-    }
-    return ids.length
-  }
-
-  private employmentTypeLabel(type: EmploymentType) {
-    return {
-      FULL_TIME: "Full Time",
-      PART_TIME: "Part Time",
-      CONTRACT: "Contract",
-      REMOTE: "Remote",
-    }[type]
   }
 
   // ─── Recruiter: update / close a job ─────────────────────────────
@@ -302,6 +201,12 @@ export class JobsService {
       include: { company: true, category: true, ...APPLICANT_COUNT },
     })
     await this.cache.delByPattern("jobs:public*")
+    // A draft going live is its first publication: announce it like a newly created job.
+    // (Reopening a CLOSED job is not re-announced.)
+    if (current.status === JobStatus.DRAFT && job.status === JobStatus.ACTIVE)
+      this.alerts
+        ?.onJobPublished(job.id)
+        .catch((err) => this.logger.warn(`Job alert fan-out failed for ${job.id}: ${err?.message}`))
     return this.withRequirements(job)
   }
 
@@ -380,15 +285,46 @@ export class JobsService {
   }
 
   // ─── Recruiter: hiring funnel analytics ──────────────────────────
-  async getAnalytics(actor: Actor | string) {
-    const jobScope =
+  async getAnalytics(actor: Actor | string, jobId?: string) {
+    const companyScope =
       typeof actor === "string" ? { recruiterId: actor } : await this.access.jobScopeWhere(actor)
+    if (jobId && typeof actor !== "string") await this.access.jobForView(actor, jobId)
+    const jobScope: Prisma.JobWhereInput = jobId
+      ? { AND: [companyScope, { id: jobId }] }
+      : companyScope
     const totalJobs = await this.prisma.job.count({ where: jobScope })
 
     const applications = await this.prisma.application.findMany({
       where: { job: jobScope, status: { not: ApplicationStatus.SAVED } },
-      select: { status: true, appliedAt: true, aiScore: true },
+      select: {
+        id: true,
+        jobId: true,
+        source: true,
+        status: true,
+        appliedAt: true,
+        aiScore: true,
+      },
+      orderBy: { appliedAt: "desc" },
+      take: ANALYTICS_MAX_APPLICATIONS,
     })
+    // Stage history of exactly these applications (bounded; minimal columns).
+    const [events, jobs] = await Promise.all([
+      applications.length
+        ? this.prisma.applicationStageEvent.findMany({
+            where: { applicationId: { in: applications.map((a) => a.id) } },
+            select: { applicationId: true, toStatus: true, createdAt: true },
+            orderBy: { createdAt: "asc" },
+            take: ANALYTICS_MAX_EVENTS,
+          })
+        : [],
+      this.prisma.job.findMany({
+        where: jobScope,
+        select: { id: true, title: true },
+        orderBy: { createdAt: "desc" },
+        take: ANALYTICS_MAX_JOBS,
+      }),
+    ])
+    const funnelAnalytics = computeFunnelAnalytics(applications, events, jobs)
 
     const total = applications.length
     const pipeline = {
@@ -431,6 +367,7 @@ export class JobsService {
         month,
         applications: count,
       })),
+      ...funnelAnalytics,
     }
   }
 }

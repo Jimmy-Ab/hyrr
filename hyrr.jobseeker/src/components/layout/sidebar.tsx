@@ -1,6 +1,7 @@
 import { APPLICATION_STATUS, useJobStore } from "hyrr.shared"
 import {
   Bell,
+  BellRing,
   Calendar,
   Compass,
   FileText,
@@ -61,6 +62,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   const navItems: { id: CandidateView; label: string; icon: ElementType; badge?: number }[] = [
     { id: "Dashboard", label: "Dashboard", icon: Home },
     { id: "Discover", label: "Discover Jobs", icon: Compass },
+    { id: "Alerts", label: "Job Alerts", icon: BellRing },
     {
       id: "Applications",
       label: "Applications",

@@ -4,6 +4,7 @@ import type { UserTheme } from "../../lib/contracts"
 import { applyThemeClass, mapSeekerProfile, toError } from "../mappers"
 import type { StoreSet } from "../session"
 import type { JobState, SeekerProfileData } from "../types"
+import { applyProfileStrength } from "./seekerTools"
 
 export type SettingsSlice = Pick<
   JobState,
@@ -74,6 +75,19 @@ export const createSettingsSlice: StateCreator<JobState, [], [], SettingsSlice> 
                 : state.seekerProfile
             : state.seekerProfile,
       }))
+      if (get().user?.role === "SEEKER") {
+        if (typeof updated?.profileStrength === "number") applyProfileStrength(set, updated)
+        else
+          get()
+            .refreshProfileStrength()
+            .catch((e) => console.warn("Failed to refresh profile strength.", e))
+        // Matches depend on the profile; the server cache is invalidated on update.
+        if (get().matchedJobs.length > 0 || get().thinProfile) {
+          get()
+            .fetchMatchedJobs(get().matchTab)
+            .catch((e) => console.warn("Failed to refresh matches.", e))
+        }
+      }
     } finally {
       set({ profileUpdating: false })
     }

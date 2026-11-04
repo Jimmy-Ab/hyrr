@@ -9,6 +9,7 @@ import {
   isApplicationStatus,
   isSeekerView,
   JOB_TYPE_OPTIONS,
+  type JobType,
   type MessageSenderType,
   type NotificationAction,
   notificationActionView,
@@ -16,17 +17,29 @@ import {
   type UserTheme,
 } from "../lib/contracts"
 import type {
+  AlertFrequency,
+  ApplicationSource,
   CalendarEvent,
   Candidate,
+  CandidateLabel,
+  CandidateNote,
   ChatMessage,
+  CompanyProfile,
   ConversationThread,
+  CvSuggestions,
   Document,
   Job,
+  JobAlertItem,
   JobApplication,
+  JobMatch,
   NotificationItem,
   PublicJob,
+  SavedSearchFilters,
+  SavedSearchItem,
+  ScreeningQuestion,
   SeekerProfileData,
   TeamMember,
+  TimelineEntry,
 } from "./types"
 
 export function decodeJwt(token: string) {
@@ -157,6 +170,31 @@ export function mapCandidate(c: any): Candidate {
     aiScoredAt: c.aiScoredAt ?? null,
     aiError: c.aiError ?? null,
     tag: c.tag ?? undefined,
+    source: mapApplicationSource(c.source),
+    labels: Array.isArray(c.labels) ? c.labels.map(mapLabel) : [],
+    notesCount: typeof c.notesCount === "number" ? c.notesCount : 0,
+    screeningAnswers: Array.isArray(c.screeningAnswers)
+      ? c.screeningAnswers.map((a: any) => ({
+          questionId: String(a.questionId ?? ""),
+          question: typeof a.question === "string" ? a.question : "",
+          answer: typeof a.answer === "string" ? a.answer : "",
+        }))
+      : [],
+  }
+}
+
+export function mapApplicationSource(value: unknown): ApplicationSource {
+  return value === "GUEST" || value === "RECRUITER_ADDED" ? value : "DIRECT"
+}
+
+export function mapLabel(l: any): CandidateLabel {
+  // Accepts both { id, name, color } and join rows shaped { label: { ... } }.
+  const src = l?.label && typeof l.label === "object" ? l.label : l
+  return {
+    id: src?.id,
+    name: src?.name || "",
+    color: src?.color || "gray",
+    ...(typeof src?.count === "number" ? { count: src.count } : {}),
   }
 }
 
@@ -202,6 +240,132 @@ export function mapPublicJob(pj: any): PublicJob {
     benefits: pj.benefits || [],
     featured: pj.featured,
     remote: pj.remote,
+    ...(pj.match && typeof pj.match === "object" ? { match: mapJobMatch(pj.match) } : {}),
+  }
+}
+
+export function mapJobMatch(m: any): JobMatch {
+  const score = typeof m?.score === "number" ? Math.max(0, Math.min(100, Math.round(m.score))) : 0
+  return { score, reasons: stringList(m?.reasons).slice(0, 4) }
+}
+
+const ALERT_FREQUENCIES: AlertFrequency[] = ["INSTANT", "DAILY", "WEEKLY"]
+
+export function mapAlert(a: any): JobAlertItem {
+  return {
+    id: a.id,
+    name: a.name || "Job alert",
+    keywords: stringList(a.keywords),
+    locations: stringList(a.locations),
+    jobTypes: stringList(a.jobTypes) as JobAlertItem["jobTypes"],
+    minSalary: typeof a.minSalary === "number" ? a.minSalary : null,
+    remoteOnly: !!a.remoteOnly,
+    frequency: ALERT_FREQUENCIES.includes(a.frequency) ? a.frequency : "DAILY",
+    active: a.active !== false,
+    lastSentAt: a.lastSentAt ?? null,
+    createdAt: a.createdAt || new Date().toISOString(),
+  }
+}
+
+export function mapSavedSearch(s: any): SavedSearchItem {
+  const f = s?.filters && typeof s.filters === "object" ? s.filters : {}
+  const filters: SavedSearchFilters = {}
+  if (typeof f.location === "string" && f.location) filters.location = f.location
+  // API stores the EmploymentType code; the UI filter works with labels.
+  if (typeof f.type === "string" && f.type) filters.type = employmentTypeLabel(f.type as JobType)
+  if (typeof f.remote === "boolean") filters.remote = f.remote
+  if (typeof f.categoryId === "string" && f.categoryId) filters.categoryId = f.categoryId
+  if (f.tab === "for-you" || f.tab === "all") filters.tab = f.tab
+  return {
+    id: s.id,
+    name: s.name || "Saved search",
+    query: typeof s.query === "string" ? s.query : "",
+    filters,
+    createdAt: s.createdAt || new Date().toISOString(),
+  }
+}
+
+export function mapCvSuggestions(raw: any): CvSuggestions {
+  const s = raw && typeof raw === "object" ? raw : {}
+  const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined)
+  return {
+    title: str(s.title),
+    bio: str(s.bio),
+    yearsOfExperience:
+      typeof s.yearsOfExperience === "number"
+        ? String(s.yearsOfExperience)
+        : str(s.yearsOfExperience),
+    skills: stringList(s.skills),
+    languages: stringList(s.languages),
+    experiences: Array.isArray(s.experiences)
+      ? s.experiences
+          .filter((e: any) => e && (e.role || e.company))
+          .map((e: any) => ({
+            role: String(e.role || ""),
+            company: String(e.company || ""),
+            duration: String(e.duration || ""),
+            ...(str(e.desc) ? { desc: str(e.desc) } : {}),
+          }))
+      : [],
+    educations: Array.isArray(s.educations)
+      ? s.educations
+          .filter((e: any) => e && (e.school || e.degree))
+          .map((e: any) => ({
+            school: String(e.school || ""),
+            degree: String(e.degree || ""),
+            duration: String(e.duration || ""),
+          }))
+      : [],
+  }
+}
+
+export function mapScreeningQuestion(q: any): ScreeningQuestion {
+  return {
+    ...(q?.id ? { id: String(q.id) } : {}),
+    question: typeof q?.question === "string" ? q.question : "",
+    required: !!q?.required,
+  }
+}
+
+export function mapNote(n: any): CandidateNote {
+  return {
+    id: n.id,
+    body: typeof n.body === "string" ? n.body : "",
+    createdAt: n.createdAt || new Date().toISOString(),
+    updatedAt: n.updatedAt || n.createdAt || new Date().toISOString(),
+    author: {
+      id: n.author?.id || n.authorId || "",
+      name: n.author?.name || "Team member",
+      avatar: n.author?.avatar || undefined,
+    },
+    mine: !!n.mine,
+  }
+}
+
+export function mapTimelineEntry(t: any): TimelineEntry {
+  const status = isApplicationStatus(t?.status) ? t.status : APPLICATION_STATUS.APPLIED
+  return {
+    status,
+    label: typeof t?.label === "string" && t.label ? t.label : applicationStatusLabel(status),
+    at: t?.at || new Date().toISOString(),
+    ...(t?.actor?.name ? { actorName: String(t.actor.name) } : {}),
+  }
+}
+
+export function mapCompanyProfile(c: any): CompanyProfile {
+  const s = (v: unknown) => (typeof v === "string" ? v : "")
+  return {
+    id: c?.id || "",
+    name: s(c?.name),
+    logo: s(c?.logo),
+    color: s(c?.color),
+    website: s(c?.website),
+    description: s(c?.description),
+    industry: s(c?.industry),
+    country: s(c?.country),
+    city: s(c?.city),
+    verified: c?.verified === true,
+    verifiedDomain: typeof c?.verifiedDomain === "string" ? c.verifiedDomain : null,
   }
 }
 

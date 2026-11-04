@@ -1,3 +1,5 @@
+import type { CvSuggestions } from "../cv-profile"
+
 export interface AIMatchResult {
   score: number // 0-100
   summary: string // Bullet point analysis
@@ -39,6 +41,12 @@ export interface LLMAdapter {
     temperature: number,
     prompt: string
   ): Promise<CandidateAnalysisResult>
+
+  /**
+   * Profile suggestions extracted from CV text (structured output, tolerant JSON fallback).
+   * Throws on failure.
+   */
+  extractProfile(model: string, cvText: string): Promise<CvSuggestions>
 
   /** Free-form assistant reply. Throws on failure. */
   chat(

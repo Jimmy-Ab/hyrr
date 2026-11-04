@@ -1,6 +1,14 @@
-import { BadRequestException, Injectable, Logger, OnModuleInit, Optional } from "@nestjs/common"
+import {
+  BadRequestException,
+  HttpStatus,
+  Injectable,
+  Logger,
+  OnModuleInit,
+  Optional,
+} from "@nestjs/common"
 import { DocType, JobStatus } from "@prisma/client"
 import { CacheService } from "../cache/cache.service"
+import { AppException } from "../core/exceptions/app-exception"
 import { PUBLIC_COMPANY_SELECT } from "../jobs/public-company"
 import { MessagesGateway } from "../messages/messages.gateway"
 import { PrismaService } from "../prisma/prisma.service"
@@ -14,6 +22,7 @@ import {
   ResolvedModel,
 } from "./ai.models"
 import { buildCandidatePrompt } from "./candidate-analysis"
+import { CvSuggestions } from "./cv-profile"
 import { MAX_CHAT_HISTORY } from "./dtos/ai.dto"
 import { CandidateAnalysisResult, ChatTurn } from "./interfaces/llm-adapter.interface"
 
@@ -231,6 +240,26 @@ export class AiService implements OnModuleInit {
     }
     if (!source) return { text: null, note: "No CV attached" }
     return this.cvText.extract(source)
+  }
+
+  /**
+   * Profile suggestions from CV text with the active model (same provider resolution as scoring).
+   * 503 AI_DISABLED without a provider key; 502 AI_FAILED (user-safe message) when the model fails.
+   */
+  async extractProfileFromCv(text: string): Promise<CvSuggestions> {
+    const resolved = await this.resolveModel()
+    if (!resolved)
+      throw new AppException(
+        "AI is not configured, so CVs can't be imported right now",
+        HttpStatus.SERVICE_UNAVAILABLE,
+        "AI_DISABLED"
+      )
+    try {
+      return await this.factory.getAdapter(resolved.model).extractProfile(resolved.model, text)
+    } catch (err) {
+      this.logger.warn(`CV import failed (${resolved.model}): ${(err as Error)?.message || err}`)
+      throw new AppException(userSafeAiError(err), HttpStatus.BAD_GATEWAY, "AI_FAILED")
+    }
   }
 
   /** Conversational assistant using the configured active model. Falls back to canned tips. */

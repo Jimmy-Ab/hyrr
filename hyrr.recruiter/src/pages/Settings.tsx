@@ -8,6 +8,8 @@ import {
 } from "hyrr.shared"
 import { Monitor, Moon, Sun } from "lucide-react"
 import * as React from "react"
+import { CompanyProfileSettings } from "../components/settings/company-profile-settings"
+import { LabelsManager } from "../components/settings/labels-manager"
 import { avatarFallback, errorMessage, useCompanyVerified } from "../lib/recruiter"
 import { useJobStore } from "../store/useJobStore"
 
@@ -65,7 +67,7 @@ export function Settings() {
       <div>
         <h1 className="text-[28px] font-bold tracking-tight text-txt-title">Settings</h1>
         <p className="text-[14px] text-txt-body mt-1">
-          Manage your account, security and appearance.
+          Manage your account, company, labels, security and appearance.
         </p>
       </div>
 
@@ -107,6 +109,10 @@ export function Settings() {
           </dl>
         </section>
       </Card>
+
+      <CompanyProfileSettings />
+
+      <LabelsManager />
 
       <Card className="p-6 rounded-2xl border border-bg-border/60 bg-bg-card">
         <section aria-labelledby="settings-appearance">

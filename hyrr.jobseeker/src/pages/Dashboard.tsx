@@ -8,6 +8,7 @@ import {
   useJobStore,
 } from "hyrr.shared"
 import { ArrowUpRight, Briefcase, Calendar, CheckCircle2, Star, TrendingUp } from "lucide-react"
+import { ProfileStrengthCard } from "../components/profile/profile-strength"
 
 const colorDot: Record<string, string> = {
   purple: "bg-primary",
@@ -17,8 +18,7 @@ const colorDot: Record<string, string> = {
 }
 
 export function CandidateDashboard() {
-  const { jobApplications, recommendedJobs, setCandidateActiveView, user, seekerProfile, events } =
-    useJobStore()
+  const { jobApplications, recommendedJobs, setCandidateActiveView, user, events } = useJobStore()
 
   const applied = jobApplications.filter((a) => a.status === APPLICATION_STATUS.APPLIED).length
   const inProcess = jobApplications.filter(
@@ -29,31 +29,6 @@ export function CandidateDashboard() {
     (a) => a.status === APPLICATION_STATUS.INTERVIEWING
   ).length
   const offers = jobApplications.filter((a) => a.status === APPLICATION_STATUS.OFFER).length
-
-  // Compute profile completion dynamically
-  const completionItems = [
-    { done: !!seekerProfile?.title },
-    { done: !!seekerProfile?.bio },
-    { done: (seekerProfile?.experiences?.length ?? 0) > 0 },
-    { done: (seekerProfile?.educations?.length ?? 0) > 0 },
-    { done: (seekerProfile?.skills?.length ?? 0) >= 5 },
-    { done: !!(seekerProfile?.github || seekerProfile?.website) },
-    { done: !!seekerProfile?.expectedSalary },
-    { done: (seekerProfile?.languages?.length ?? 0) > 0 },
-  ]
-  const profileStrength = Math.round(
-    (completionItems.filter((i) => i.done).length / completionItems.length) * 100
-  )
-
-  const profileTips = [
-    !seekerProfile?.bio && "Add a professional bio",
-    (seekerProfile?.skills?.length ?? 0) < 5 && "Add more skills (5+ recommended)",
-    !seekerProfile?.github && !seekerProfile?.website && "Add a portfolio or GitHub link",
-    (seekerProfile?.languages?.length ?? 0) === 0 && "Add language proficiencies",
-    !seekerProfile?.expectedSalary && "Set expected salary range",
-  ]
-    .filter(Boolean)
-    .slice(0, 2) as string[]
 
   const greeting = (() => {
     const h = new Date().getHours()
@@ -337,45 +312,8 @@ export function CandidateDashboard() {
             </Card>
           )}
 
-          {/* Profile strength */}
-          <Card className="p-5 glass-panel hover-lift border-bg-border/60">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-[13px] font-bold text-txt-heading uppercase tracking-wider">
-                Profile Strength
-              </h3>
-              <span className="text-[13px] font-extrabold text-primary">{profileStrength}%</span>
-            </div>
-            <div className="w-full h-2.5 bg-bg-primary dark:bg-bg-primary/20 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-700 ${
-                  profileStrength >= 80
-                    ? "bg-sec-green"
-                    : profileStrength >= 50
-                      ? "bg-primary"
-                      : "bg-sec-orange"
-                }`}
-                style={{ width: `${profileStrength}%` }}
-              />
-            </div>
-            {profileTips.length > 0 && (
-              <div className="mt-3 space-y-1.5">
-                {profileTips.map((tip) => (
-                  <div
-                    key={tip}
-                    className="flex items-center gap-2 text-[12.5px] text-txt-caption font-medium"
-                  >
-                    <div className="w-1.5 h-1.5 rounded-full bg-sec-orange shrink-0 animate-ping" />
-                    {tip}
-                  </div>
-                ))}
-              </div>
-            )}
-            {profileTips.length === 0 && (
-              <p className="text-[12.5px] text-sec-green font-bold mt-2">
-                ✓ Profile is fully complete!
-              </p>
-            )}
-          </Card>
+          {/* Profile strength (server-computed) */}
+          <ProfileStrengthCard limit={3} className="glass-panel hover-lift border-bg-border/60" />
         </div>
       </div>
 

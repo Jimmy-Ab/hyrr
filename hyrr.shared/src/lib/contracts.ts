@@ -128,6 +128,7 @@ export const NOTIFICATION_TYPE_LABEL: Record<NotificationType, string> = {
 export const SEEKER_VIEW = {
   DASHBOARD: "Dashboard",
   DISCOVER: "Discover",
+  ALERTS: "Alerts",
   APPLICATIONS: "Applications",
   MESSAGES: "Messages",
   NOTIFICATIONS: "Notifications",

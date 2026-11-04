@@ -2,6 +2,7 @@ import { Button } from "hyrr.shared"
 import { BarChart3, Kanban, List, Plus } from "lucide-react"
 import { JobStatusBadge } from "../components/jobs/job-status-badge"
 import { KanbanBoard } from "../components/kanban/kanban-board"
+import { LabelFilterSelect } from "../components/labels/labels"
 import { useJobStore } from "../store/useJobStore"
 
 export function Applications() {
@@ -73,6 +74,7 @@ export function Applications() {
               </option>
             ))}
           </select>
+          <LabelFilterSelect id="board-label-filter" />
           <div
             role="group"
             aria-label="Pipeline view"

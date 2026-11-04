@@ -1,7 +1,21 @@
-import { BadRequestException, HttpStatus, Injectable, Logger, Optional } from "@nestjs/common"
-import { ApplicationStatus, NotificationAction, NotificationType, Prisma } from "@prisma/client"
+import {
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+  Optional,
+} from "@nestjs/common"
+import {
+  ApplicationSource,
+  ApplicationStatus,
+  NotificationAction,
+  NotificationType,
+  Prisma,
+} from "@prisma/client"
 import { AiService } from "../ai/ai.service"
 import { assertEmailVerified } from "../auth/email-verification"
+import { CacheService } from "../cache/cache.service"
 import { AccessService, Actor } from "../core/access/access.service"
 import { EmailService } from "../core/delivery/email.service"
 import { applicationStatus } from "../core/delivery/templates"
@@ -13,9 +27,13 @@ import {
 import { CaptchaService } from "../core/security/captcha.service"
 import { PUBLIC_COMPANY_SELECT } from "../jobs/public-company"
 import { MessagesGateway } from "../messages/messages.gateway"
+import { MessagesService } from "../messages/messages.service"
 import { NotificationsService } from "../notifications/notifications.service"
+import { LABEL_SELECT, LabelsService } from "../pipeline/labels.service"
+import { AnswerInput, ScreeningService } from "../pipeline/screening.service"
 import { PrismaService } from "../prisma/prisma.service"
 import { UploadsService } from "../uploads/uploads.service"
+import { BulkApplicationsDto } from "./dtos/bulk-applications.dto"
 import { CreateApplicationDto } from "./dtos/create-application.dto"
 import { CreateCandidateDto, RECRUITER_STATUSES } from "./dtos/create-candidate.dto"
 import { UpdateApplicationDto } from "./dtos/update-application.dto"
@@ -58,12 +76,20 @@ const SEEKER_JOB_INCLUDE = {
 
 /**
  * Shape of one element of GET /applications/candidates (recruiter view). `include` keeps every
- * scalar column, so all ai* fields (aiScore … aiError) are part of recruiter payloads.
+ * scalar column, so all ai* fields (aiScore … aiError) and `source` are part of recruiter
+ * payloads. Labels, the notes count and screening answers are loaded in the same query (no N+1)
+ * and flattened by `toCandidate`.
  */
 const RECRUITER_CANDIDATE_INCLUDE = {
   job: { include: { company: true } },
   user: { select: { id: true, name: true, avatar: true } },
   calendarEvents: { orderBy: { startTime: "asc" }, take: 1 },
+  labels: { select: { label: { select: LABEL_SELECT } } },
+  answers: {
+    select: { questionId: true, answer: true, question: { select: { question: true } } },
+    orderBy: { question: { position: "asc" } },
+  },
+  _count: { select: { recruiterNotes: true } },
 } satisfies Prisma.ApplicationInclude
 
 const STATUS_TAGS: Partial<Record<ApplicationStatus, string>> = {
@@ -73,7 +99,7 @@ const STATUS_TAGS: Partial<Record<ApplicationStatus, string>> = {
   [ApplicationStatus.ARCHIVED]: "Not a fit",
 }
 
-const STATUS_LABELS: Record<ApplicationStatus, string> = {
+export const STATUS_LABELS: Record<ApplicationStatus, string> = {
   SAVED: "Saved",
   APPLIED: "Applied",
   IN_PROCESS: "In Process",
@@ -125,8 +151,18 @@ export class ApplicationsService {
     @Optional() private messagesGateway?: MessagesGateway,
     @Optional() private uploads?: UploadsService,
     @Optional() private email?: EmailService,
-    @Optional() private captcha?: CaptchaService
+    @Optional() private captcha?: CaptchaService,
+    @Optional() private screening?: ScreeningService,
+    @Optional() private labels?: LabelsService,
+    @Optional() private messages?: MessagesService,
+    @Optional() private cache?: CacheService
   ) {}
+
+  /** The seeker's "For you" list hides jobs they applied to or saved: drop their cached matches. */
+  private async forgetMatches(userId: string | null | undefined) {
+    if (!userId || !this.cache) return
+    await this.cache.delByPattern(`matching:${userId}:*`).catch(() => undefined)
+  }
 
   /**
    * Resumes are persisted as permanent token-less upload URLs. `ownerId` (when given) must be
@@ -142,6 +178,26 @@ export class ApplicationsService {
       throw new BadRequestException("resumeUrl must be a file you uploaded through /api/uploads")
     }
     return this.uploads.canonicalFileUrl(parsed.filename)
+  }
+
+  /**
+   * Recruiter candidate payload (R6): flattens labels / notes count / screening answers loaded via
+   * RECRUITER_CANDIDATE_INCLUDE and signs the resume URL.
+   */
+  private toCandidate<T>(app: T): T {
+    if (!app || typeof app !== "object") return app
+    const { labels, answers, _count, ...rest } = app as any
+    const candidate = {
+      ...rest,
+      labels: (labels || []).map((l: any) => l.label ?? l),
+      notesCount: _count?.recruiterNotes ?? 0,
+      screeningAnswers: (answers || []).map((a: any) => ({
+        questionId: a.questionId,
+        question: a.question?.question ?? "",
+        answer: a.answer,
+      })),
+    }
+    return this.signResume(candidate) as T
   }
 
   /** Adds a fresh download token to resumeUrl so the client can actually open the file. */
@@ -169,8 +225,14 @@ export class ApplicationsService {
     // Guests prove they are human (when captcha is configured); accounts prove their e-mail.
     if (actor) await assertEmailVerified(this.prisma, actor.userId)
     else await this.captcha?.verify(dto.captchaToken, ip)
-    const { captchaToken: _captcha, ...fields } = dto
+    const { captchaToken: _captcha, answers: rawAnswers, ...fields } = dto
     dto = { ...fields, resumeUrl: this.normalizeResumeUrl(dto.resumeUrl, actor?.userId ?? null) }
+    // Required screening questions must be answered (400 SCREENING_ANSWERS_REQUIRED).
+    const answers: AnswerInput[] = this.screening
+      ? await this.screening.validateAnswers(jobId, rawAnswers)
+      : []
+    const saveAnswers = (tx: Prisma.TransactionClient, applicationId: string) =>
+      this.screening?.saveAnswers(tx, applicationId, answers)
 
     // Guest: never link to an existing account and never reveal an existing record.
     if (!actor) {
@@ -180,14 +242,19 @@ export class ApplicationsService {
       })
       if (duplicate) throw alreadyApplied()
 
-      const app = await this.prisma.application.create({
-        data: {
-          ...this.applicantData(dto),
-          jobId,
-          userId: null,
-          status: ApplicationStatus.APPLIED,
-        },
-        select: { id: true, status: true },
+      const app = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.application.create({
+          data: {
+            ...this.applicantData(dto),
+            jobId,
+            userId: null,
+            status: ApplicationStatus.APPLIED,
+            source: ApplicationSource.GUEST,
+          },
+          select: { id: true, status: true },
+        })
+        await saveAnswers(tx, created.id)
+        return created
       })
       await this.afterSubmitted(app.id, job, dto.name, null)
       // Guests get status updates by e-mail; nothing else is returned to an anonymous caller.
@@ -211,37 +278,43 @@ export class ApplicationsService {
     let applicationId: string
     if (existing) {
       // SAVED → APPLIED upgrade
-      await this.prisma.$transaction([
-        this.prisma.application.update({
+      await this.prisma.$transaction(async (tx) => {
+        await tx.application.update({
           where: { id: existing.id },
           data: {
             ...this.applicantData(dto),
             userId: actor.userId,
             status: ApplicationStatus.APPLIED,
+            source: ApplicationSource.DIRECT,
             appliedAt: new Date(),
           },
-        }),
-        this.prisma.applicationStageEvent.create({
+        })
+        await tx.applicationStageEvent.create({
           data: {
             applicationId: existing.id,
             fromStatus: ApplicationStatus.SAVED,
             toStatus: ApplicationStatus.APPLIED,
             actorId: actor.userId,
           },
-        }),
-      ])
+        })
+        await saveAnswers(tx, existing.id)
+      })
       applicationId = existing.id
     } else {
-      const created = await this.prisma.application.create({
-        data: {
-          ...this.applicantData(dto),
-          jobId,
-          userId: actor.userId,
-          status: ApplicationStatus.APPLIED,
-        },
-        select: { id: true },
+      applicationId = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.application.create({
+          data: {
+            ...this.applicantData(dto),
+            jobId,
+            userId: actor.userId,
+            status: ApplicationStatus.APPLIED,
+            source: ApplicationSource.DIRECT,
+          },
+          select: { id: true },
+        })
+        await saveAnswers(tx, created.id)
+        return created.id
       })
-      applicationId = created.id
     }
 
     // The SAVED→APPLIED upgrade already wrote its stage event inside the transaction.
@@ -250,6 +323,7 @@ export class ApplicationsService {
       where: { id: applicationId },
       select: { ...SEEKER_APPLICATION_FIELDS, job: SEEKER_JOB_INCLUDE },
     })
+    await this.forgetMatches(actor.userId)
     return this.signResume(application)
   }
 
@@ -360,6 +434,7 @@ export class ApplicationsService {
           location: dto.location ?? "",
           resumeUrl,
           status,
+          source: ApplicationSource.RECRUITER_ADDED,
           tag: STATUS_TAGS[status] ?? null,
         },
         include: RECRUITER_CANDIDATE_INCLUDE,
@@ -375,7 +450,7 @@ export class ApplicationsService {
       return created
     })
     this.scoreInBackground(app.id)
-    return this.signResume(app)
+    return this.toCandidate(app)
   }
 
   // ─── Seeker: save a job without applying ─────────────────────────
@@ -391,6 +466,7 @@ export class ApplicationsService {
     const existing = await this.prisma.application.findFirst({ where: { jobId, userId }, select })
     if (existing) return existing
 
+    await this.forgetMatches(userId)
     return this.prisma.application.create({
       data: {
         jobId,
@@ -452,23 +528,28 @@ export class ApplicationsService {
   }
 
   // ─── Recruiter: candidates for one job (Kanban board) ────────────
-  async getCandidatesForJob(jobId: string, actor: Actor, page?: Page) {
+  async getCandidatesForJob(jobId: string, actor: Actor, page?: Page, labelId?: string) {
     await this.access.jobForView(actor, jobId)
     const apps = await this.prisma.application.findMany({
-      where: { jobId, status: { not: ApplicationStatus.SAVED } },
+      where: {
+        jobId,
+        status: { not: ApplicationStatus.SAVED },
+        ...(labelId ? { labels: { some: { labelId } } } : {}),
+      },
       include: RECRUITER_CANDIDATE_INCLUDE,
       orderBy: { appliedAt: "desc" },
       ...normalizePage(page),
     })
-    return apps.map((a) => this.signResume(a))
+    return apps.map((a) => this.toCandidate(a))
   }
 
   // ─── Recruiter: candidates across the company's jobs ─────────────
-  async getAllCompanyCandidates(actor: Actor, search?: string, page?: Page) {
+  async getAllCompanyCandidates(actor: Actor, search?: string, page?: Page, labelId?: string) {
     const and: Prisma.ApplicationWhereInput[] = [
       { status: { not: ApplicationStatus.SAVED } },
       { job: await this.access.jobScopeWhere(actor) },
     ]
+    if (labelId) and.push({ labels: { some: { labelId } } })
     if (search?.trim()) {
       const q = search.trim()
       and.push({
@@ -485,7 +566,7 @@ export class ApplicationsService {
       orderBy: { appliedAt: "desc" },
       ...normalizePage(page),
     })
-    return apps.map((a) => this.signResume(a))
+    return apps.map((a) => this.toCandidate(a))
   }
 
   // ─── Shared: update application (C5) ─────────────────────────────
@@ -573,7 +654,7 @@ export class ApplicationsService {
       })
       this.email.send({ to: app.email, ...content }).catch(() => undefined)
     }
-    return this.signResume(app)
+    return this.toCandidate(app)
   }
 
   // ─── Delete / unsave / withdraw (C3) ─────────────────────────────
@@ -587,6 +668,7 @@ export class ApplicationsService {
     const app = await this.access.applicationFor(actor, id, "view")
     if (app.status === ApplicationStatus.SAVED) {
       await this.prisma.application.delete({ where: { id } })
+      await this.forgetMatches(actor.userId)
       return { id, deleted: true }
     }
     if (app.status === ApplicationStatus.WITHDRAWN) {
@@ -619,6 +701,7 @@ export class ApplicationsService {
         NotificationAction.APPLICATIONS
       )
       .catch((err) => this.logger.warn(`Withdraw notification failed: ${err?.message}`))
+    await this.forgetMatches(actor.userId)
     return { id, status: ApplicationStatus.WITHDRAWN }
   }
 
@@ -656,6 +739,112 @@ export class ApplicationsService {
       },
     })
     if (!app) throw new NotFoundAppException("Application not found")
-    return this.signResume(app)
+    return this.toCandidate(app)
   }
+
+  // ─── Timeline (R5) ───────────────────────────────────────────────
+  /**
+   * Stage history, oldest first. The owning seeker sees `{ status, label, at }` only; the hiring
+   * team also sees who made each change (`actor: { name }`, absent for system/unknown actors).
+   */
+  async getTimeline(id: string, actor: Actor) {
+    await this.access.applicationFor(actor, id, "view")
+    const events = await this.prisma.applicationStageEvent.findMany({
+      where: { applicationId: id },
+      select: { toStatus: true, actorId: true, createdAt: true },
+      orderBy: { createdAt: "asc" },
+      take: 200,
+    })
+    const base = (e: (typeof events)[number]) => ({
+      status: e.toStatus,
+      label: STATUS_LABELS[e.toStatus],
+      at: e.createdAt,
+    })
+    if (!isRecruiterRole(actor.role)) return events.map(base)
+
+    const actorIds = [...new Set(events.map((e) => e.actorId).filter(Boolean))] as string[]
+    const users = actorIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: actorIds } },
+          select: { id: true, name: true },
+        })
+      : []
+    const names = new Map(users.map((u) => [u.id, u.name]))
+    return events.map((e) => {
+      const name = e.actorId ? names.get(e.actorId) : undefined
+      return name ? { ...base(e), actor: { name } } : base(e)
+    })
+  }
+
+  // ─── Bulk actions (R4) ───────────────────────────────────────────
+  /**
+   * Applies one action to up to 100 applications. Each item succeeds or fails on its own
+   * (`{ applicationId, ok, error? }`, error = stable error code). MOVE/ARCHIVE reuse
+   * updateApplication (withdrawn immutability, stage events, notifications).
+   */
+  async bulkUpdate(dto: BulkApplicationsDto, actor: Actor) {
+    const { action } = dto
+    const missing =
+      (action === "MOVE" && !dto.status && "status") ||
+      ((action === "ADD_LABEL" || action === "REMOVE_LABEL") && !dto.labelId && "labelId") ||
+      (action === "MESSAGE" && !dto.message && "message")
+    if (missing)
+      throw new AppException(
+        `${missing} is required for ${action}`,
+        HttpStatus.BAD_REQUEST,
+        "VALIDATION_FAILED"
+      )
+    if (action === "MESSAGE" && !this.messages)
+      throw new AppException("Messaging is unavailable", HttpStatus.SERVICE_UNAVAILABLE)
+
+    const ids = [...new Set(dto.applicationIds)]
+    const results: { applicationId: string; ok: boolean; error?: string }[] = []
+    for (const applicationId of ids) {
+      try {
+        await this.bulkOne(applicationId, dto, actor)
+        results.push({ applicationId, ok: true })
+      } catch (err) {
+        results.push({ applicationId, ok: false, error: bulkErrorCode(err) })
+      }
+    }
+    return { results }
+  }
+
+  private async bulkOne(applicationId: string, dto: BulkApplicationsDto, actor: Actor) {
+    switch (dto.action) {
+      case "MOVE":
+        await this.updateApplication(applicationId, { status: dto.status }, actor)
+        return
+      case "ARCHIVE":
+        await this.updateApplication(applicationId, { status: ApplicationStatus.ARCHIVED }, actor)
+        return
+      case "ADD_LABEL":
+      case "REMOVE_LABEL": {
+        const app = await this.access.applicationFor(actor, applicationId, "manage")
+        if (!this.labels) throw new AppException("Labels are unavailable")
+        await this.labels.labelForCompany(dto.labelId!, app.job.companyId)
+        if (dto.action === "ADD_LABEL")
+          await this.labels.addToApplication(applicationId, dto.labelId!)
+        else await this.labels.removeFromApplication(applicationId, dto.labelId!)
+        return
+      }
+      case "MESSAGE":
+        await this.access.applicationFor(actor, applicationId, "manage")
+        await this.messages!.createMessage(applicationId, actor, dto.message!, { clientId: null })
+        return
+    }
+  }
+}
+
+/** Stable per-item error code for bulk results. */
+function bulkErrorCode(err: any): string {
+  if (err?.errorCode) return err.errorCode
+  if (err instanceof HttpException) {
+    const status = err.getStatus()
+    if (status === HttpStatus.NOT_FOUND) return "NOT_FOUND"
+    if (status === HttpStatus.FORBIDDEN) return "FORBIDDEN"
+    if (status === HttpStatus.CONFLICT) return "CONFLICT"
+    if (status === HttpStatus.BAD_REQUEST) return "BAD_REQUEST"
+  }
+  return "FAILED"
 }

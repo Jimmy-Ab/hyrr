@@ -19,6 +19,12 @@ import { useEffect, useState, type FormEvent } from "react"
 import { errorMessage, jobPublishError, type JobPublishError } from "../../lib/recruiter"
 import { useJobStore } from "../../store/useJobStore"
 import { JobPublishErrorNotice } from "../jobs/job-publish-error"
+import {
+  ScreeningQuestionsEditor,
+  toDraftQuestions,
+  toScreeningQuestions,
+  type DraftQuestion,
+} from "../jobs/screening-questions-editor"
 
 const labelCls = "text-[12px] font-semibold text-txt-heading uppercase tracking-wider block mb-1.5"
 const selectCls =
@@ -30,7 +36,7 @@ interface EditJobDialogProps {
 }
 
 export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
-  const { updateJob } = useJobStore()
+  const { updateJob, fetchJobQuestions, saveJobQuestions } = useJobStore()
   const { toast } = useToast()
 
   const [title, setTitle] = useState("")
@@ -42,6 +48,30 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
   const [saving, setSaving] = useState(false)
   const [savingDraft, setSavingDraft] = useState(false)
   const [publishError, setPublishError] = useState<JobPublishError | null>(null)
+  const [questions, setQuestions] = useState<DraftQuestion[]>([])
+  const [questionsLoading, setQuestionsLoading] = useState(false)
+  const [questionsError, setQuestionsError] = useState<string | null>(null)
+  const [questionsDirty, setQuestionsDirty] = useState(false)
+
+  const loadQuestions = async (jobId: string) => {
+    setQuestionsLoading(true)
+    setQuestionsError(null)
+    try {
+      setQuestions(toDraftQuestions(await fetchJobQuestions(jobId)))
+    } catch (err) {
+      setQuestionsError(errorMessage(err, "Could not load screening questions."))
+    } finally {
+      setQuestionsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (job) {
+      setQuestions([])
+      setQuestionsDirty(false)
+      loadQuestions(job.id)
+    }
+  }, [job?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (job) {
@@ -75,6 +105,19 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
     requirements,
   })
 
+  /** Saves the questions only when they were loaded and changed (never wipes on a load error). */
+  const persistQuestions = async (jobId: string) => {
+    if (!questionsDirty || questionsError) return true
+    try {
+      setQuestions(toDraftQuestions(await saveJobQuestions(jobId, toScreeningQuestions(questions))))
+      setQuestionsDirty(false)
+      return true
+    } catch (err) {
+      toast("Job saved, but questions weren't", errorMessage(err), "error")
+      return false
+    }
+  }
+
   /** Content-policy / unverified-email errors stay inline in the dialog; others toast. */
   const handleError = (err: unknown) => {
     const inline = jobPublishError(err)
@@ -93,6 +136,7 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
     setPublishError(null)
     try {
       await updateJob(job.id, patch())
+      if (!(await persistQuestions(job.id))) return
       toast("Job updated", `"${title.trim()}" was saved.`, "success")
       onOpenChange(false)
     } catch (err) {
@@ -108,6 +152,7 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
     setSavingDraft(true)
     try {
       await updateJob(job.id, { ...patch(), status: "DRAFT" })
+      if (!(await persistQuestions(job.id))) return
       toast("Draft saved", `"${title.trim()}" was saved as a draft.`, "success")
       onOpenChange(false)
     } catch (err) {
@@ -219,6 +264,21 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
                 <Plus className="w-4 h-4" />
               </Button>
             </div>
+          </div>
+
+          <div>
+            <span className={labelCls}>Screening questions</span>
+            <ScreeningQuestionsEditor
+              idPrefix="edit-job"
+              questions={questions}
+              onChange={(q) => {
+                setQuestions(q)
+                setQuestionsDirty(true)
+              }}
+              loading={questionsLoading}
+              error={questionsError}
+              onRetry={job ? () => loadQuestions(job.id) : undefined}
+            />
           </div>
 
           {publishError && (

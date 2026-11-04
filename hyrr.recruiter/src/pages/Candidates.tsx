@@ -1,5 +1,6 @@
 import {
   Badge,
+  Button,
   Card,
   Table,
   TableBody,
@@ -8,11 +9,25 @@ import {
   TableHeader,
   TableRow,
   useToast,
+  type BulkAction,
   type Candidate,
 } from "hyrr.shared"
-import { Bookmark, MapPin, MessageSquare, Search, Trash2 } from "lucide-react"
-import { useState } from "react"
+import {
+  Archive,
+  ArrowRightLeft,
+  Bookmark,
+  MapPin,
+  MessageSquare,
+  Search,
+  StickyNote,
+  Tag,
+  Trash2,
+  X,
+} from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { AiScoreChips } from "../components/ai/ai-score"
+import { BulkActionDialog } from "../components/candidates/bulk-action-dialog"
+import { LabelChips, LabelFilterSelect, matchesLabel } from "../components/labels/labels"
 import { ConfirmDialog } from "../components/layout/confirm-dialog"
 import {
   avatarFallback,
@@ -36,10 +51,14 @@ export function Candidates() {
     setSelectedCandidateId,
     openConversation,
     setActiveView,
+    labelFilter,
   } = useJobStore()
   const { toast } = useToast()
   const [statusFilter, setStatusFilter] = useState<string>("All")
   const [pendingDelete, setPendingDelete] = useState<Candidate | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkAction, setBulkAction] = useState<BulkAction | null>(null)
+  const [bulkTargets, setBulkTargets] = useState<Candidate[]>([])
 
   const query = searchQuery.trim().toLowerCase()
   const filteredCandidates = candidates.filter((c) => {
@@ -49,8 +68,41 @@ export function Candidates() {
       (c.title || "").toLowerCase().includes(query) ||
       (c.location || "").toLowerCase().includes(query)
     const matchesStatus = statusFilter === "All" || c.status === statusFilter
-    return matchesSearch && matchesStatus
+    return matchesSearch && matchesStatus && matchesLabel(c, labelFilter)
   })
+
+  // Selection only ever covers visible rows: drop ids hidden by filters or deleted.
+  const visibleKey = filteredCandidates.map((c) => c.id).join(",")
+  const visibleIds = useMemo(() => new Set(visibleKey ? visibleKey.split(",") : []), [visibleKey])
+  useEffect(() => {
+    setSelected((prev) => {
+      const next = new Set([...prev].filter((id) => visibleIds.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [visibleIds])
+
+  const selectedCount = selected.size
+  const allSelected = filteredCandidates.length > 0 && selectedCount === filteredCandidates.length
+  const someSelected = selectedCount > 0 && !allSelected
+  const selectAllRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someSelected
+  }, [someSelected])
+
+  const toggleAll = () =>
+    setSelected(allSelected ? new Set() : new Set(filteredCandidates.map((c) => c.id)))
+  const toggleOne = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const startBulk = (action: BulkAction) => {
+    setBulkTargets(filteredCandidates.filter((c) => selected.has(c.id)))
+    setBulkAction(action)
+  }
 
   const jobTitle = (jobId: string) => jobs.find((j) => j.id === jobId)?.title
 
@@ -101,6 +153,7 @@ export function Candidates() {
             className="w-full h-11 pl-10 pr-4 rounded-input border border-bg-border bg-bg-secondary text-body text-txt-heading placeholder:text-txt-caption focus:outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/10 transition-all duration-200"
           />
         </div>
+        <LabelFilterSelect id="candidates-label-filter" />
         <div
           role="group"
           aria-label="Filter by status"
@@ -129,7 +182,18 @@ export function Candidates() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="pl-6">Candidate</TableHead>
+              <TableHead className="pl-6 w-10">
+                <input
+                  ref={selectAllRef}
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  disabled={filteredCandidates.length === 0}
+                  aria-label="Select all visible candidates"
+                  className="w-4 h-4 accent-primary rounded cursor-pointer align-middle"
+                />
+              </TableHead>
+              <TableHead>Candidate</TableHead>
               <TableHead>Applied Role</TableHead>
               <TableHead>Location</TableHead>
               <TableHead>Pipeline Status</TableHead>
@@ -140,8 +204,21 @@ export function Candidates() {
           </TableHeader>
           <TableBody>
             {filteredCandidates.map((c) => (
-              <TableRow key={c.id} className="group">
-                <TableCell className="pl-6 py-4">
+              <TableRow
+                key={c.id}
+                className="group"
+                data-state={selected.has(c.id) ? "selected" : undefined}
+              >
+                <TableCell className="pl-6 py-4 w-10">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(c.id)}
+                    onChange={() => toggleOne(c.id)}
+                    aria-label={`Select ${c.name}`}
+                    className="w-4 h-4 accent-primary rounded cursor-pointer align-middle"
+                  />
+                </TableCell>
+                <TableCell className="py-4">
                   <button
                     type="button"
                     onClick={() => setSelectedCandidateId(c.id)}
@@ -152,8 +229,23 @@ export function Candidates() {
                       alt=""
                       className="w-10 h-10 rounded-full object-cover border border-bg-border/40 shrink-0"
                     />
-                    <span className="font-semibold text-txt-heading text-[15px] hover:text-primary hover:underline whitespace-nowrap">
-                      {c.name}
+                    <span className="flex flex-col gap-1 min-w-0">
+                      <span className="flex items-center gap-1.5">
+                        <span className="font-semibold text-txt-heading text-[15px] hover:text-primary hover:underline whitespace-nowrap">
+                          {c.name}
+                        </span>
+                        {c.notesCount > 0 && (
+                          <span
+                            className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-txt-caption"
+                            title={`${c.notesCount} note${c.notesCount === 1 ? "" : "s"}`}
+                          >
+                            <StickyNote className="w-3.5 h-3.5" aria-hidden="true" />
+                            {c.notesCount}
+                            <span className="sr-only"> notes</span>
+                          </span>
+                        )}
+                      </span>
+                      <LabelChips labels={c.labels} />
                     </span>
                   </button>
                 </TableCell>
@@ -223,7 +315,7 @@ export function Candidates() {
             ))}
             {filteredCandidates.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-12 text-txt-caption font-semibold">
+                <TableCell colSpan={8} className="text-center py-12 text-txt-caption font-semibold">
                   No candidates match your filters.
                 </TableCell>
               </TableRow>
@@ -231,6 +323,50 @@ export function Candidates() {
           </TableBody>
         </Table>
       </Card>
+
+      {selectedCount > 0 && (
+        <div
+          role="toolbar"
+          aria-label="Bulk actions"
+          className="sticky bottom-4 z-20 flex flex-wrap items-center gap-2 rounded-2xl border border-bg-border bg-bg-card p-3 shadow-floating"
+        >
+          <span className="text-[13px] font-semibold text-txt-heading px-1" aria-live="polite">
+            {selectedCount} selected
+          </span>
+          <button
+            type="button"
+            onClick={() => setSelected(new Set())}
+            aria-label="Clear selection"
+            className="p-1.5 rounded-lg text-txt-caption hover:text-txt-heading hover:bg-bg-hover cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+          <div className="flex flex-wrap gap-2 sm:ml-auto">
+            <Button size="sm" variant="secondary" onClick={() => startBulk("MOVE")}>
+              <ArrowRightLeft className="w-3.5 h-3.5" /> Move to stage
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => startBulk("ADD_LABEL")}>
+              <Tag className="w-3.5 h-3.5" /> Add label
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => startBulk("REMOVE_LABEL")}>
+              <Tag className="w-3.5 h-3.5" /> Remove label
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => startBulk("MESSAGE")}>
+              <MessageSquare className="w-3.5 h-3.5" /> Message
+            </Button>
+            <Button size="sm" variant="danger" onClick={() => startBulk("ARCHIVE")}>
+              <Archive className="w-3.5 h-3.5" /> Archive
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <BulkActionDialog
+        action={bulkAction}
+        candidates={bulkTargets}
+        onOpenChange={(o) => !o && setBulkAction(null)}
+        onDone={(ok) => setSelected((prev) => new Set([...prev].filter((id) => !ok.includes(id))))}
+      />
 
       <ConfirmDialog
         open={!!pendingDelete}

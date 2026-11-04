@@ -18,6 +18,11 @@ import { useEffect, useState, type FormEvent } from "react"
 import { errorMessage, jobPublishError, type JobPublishError } from "../../lib/recruiter"
 import { useJobStore } from "../../store/useJobStore"
 import { JobPublishErrorNotice } from "../jobs/job-publish-error"
+import {
+  ScreeningQuestionsEditor,
+  toScreeningQuestions,
+  type DraftQuestion,
+} from "../jobs/screening-questions-editor"
 
 interface Category {
   id: string
@@ -175,7 +180,7 @@ const STEPS = [
 ]
 
 export function AddJobDialog() {
-  const { isAddJobOpen, setAddJobOpen, addJob } = useJobStore()
+  const { isAddJobOpen, setAddJobOpen, addJob, saveJobQuestions } = useJobStore()
   const { toast } = useToast()
 
   const [step, setStep] = useState(0)
@@ -202,6 +207,7 @@ export function AddJobDialog() {
   const [skills, setSkills] = useState<string[]>([])
   const [requirements, setRequirements] = useState<string[]>([])
   const [benefits, setBenefits] = useState<string[]>([])
+  const [questions, setQuestions] = useState<DraftQuestion[]>([])
 
   const loadCategories = async () => {
     setCategoriesLoading(true)
@@ -235,6 +241,7 @@ export function AddJobDialog() {
     setSkills([])
     setRequirements([])
     setBenefits([])
+    setQuestions([])
     setPublishError(null)
   }
 
@@ -286,6 +293,24 @@ export function AddJobDialog() {
     remote,
   })
 
+  /** Creates the job, then saves its screening questions. false = questions failed (job exists). */
+  const createJob = async (input: Parameters<typeof addJob>[0]) => {
+    const created = await addJob(input)
+    const payload = toScreeningQuestions(questions)
+    if (payload.length === 0 || !created?.id) return true
+    try {
+      await saveJobQuestions(created.id, payload)
+      return true
+    } catch (err) {
+      toast(
+        "Job created, but questions weren't saved",
+        `${errorMessage(err)} Add them from Edit job.`,
+        "error"
+      )
+      return false
+    }
+  }
+
   /** Shows content-policy / unverified-email errors inline; anything else is a toast. */
   const handleError = (err: unknown, failTitle: string) => {
     const inline = jobPublishError(err)
@@ -299,8 +324,9 @@ export function AddJobDialog() {
     setLoading(true)
     setPublishError(null)
     try {
-      await addJob(jobInput())
-      toast("Job created", `"${title}" is now live in your job board.`, "success")
+      if (await createJob(jobInput())) {
+        toast("Job created", `"${title}" is now live in your job board.`, "success")
+      }
       handleClose()
     } catch (err) {
       handleError(err, "Could not create job")
@@ -314,12 +340,13 @@ export function AddJobDialog() {
     setSavingDraft(true)
     try {
       const draft = { ...jobInput(), status: "DRAFT" as const }
-      await addJob(draft)
-      toast(
-        "Draft saved",
-        `"${title}" was saved as a draft. Publish it once you're verified.`,
-        "success"
-      )
+      if (await createJob(draft)) {
+        toast(
+          "Draft saved",
+          `"${title}" was saved as a draft. Publish it once you're verified.`,
+          "success"
+        )
+      }
       handleClose()
     } catch (err) {
       handleError(err, "Could not save draft")
@@ -564,6 +591,17 @@ export function AddJobDialog() {
                   onRemove={(v) => setBenefits(benefits.filter((b) => b !== v))}
                   placeholder="e.g. Unlimited PTO, Equity…"
                   colorClass="bg-sec-green/10 text-sec-green border border-sec-green/20"
+                />
+              </div>
+              <div>
+                <span className={labelCls}>Screening questions</span>
+                <p className="text-[11.5px] text-txt-caption mb-2">
+                  Optional — up to 10 questions candidates answer when applying.
+                </p>
+                <ScreeningQuestionsEditor
+                  idPrefix="add-job"
+                  questions={questions}
+                  onChange={setQuestions}
                 />
               </div>
             </div>

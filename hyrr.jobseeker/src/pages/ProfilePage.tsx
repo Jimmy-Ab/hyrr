@@ -7,6 +7,7 @@ import {
   PROFILE_VISIBILITY,
   useJobStore,
   useToast,
+  type CvSuggestions,
 } from "hyrr.shared"
 import {
   Briefcase,
@@ -29,10 +30,13 @@ import {
   Plus,
   Save,
   Settings,
+  Sparkles,
   Trash2,
   X,
 } from "lucide-react"
 import React, { useEffect, useRef, useState } from "react"
+import { CvImportDialog, type CvSection } from "../components/profile/cv-import-dialog"
+import { ProfileStrengthCard } from "../components/profile/profile-strength"
 
 /* ══════════════════════════════════════════════════════════════
    Small reusable helpers
@@ -75,7 +79,8 @@ function SectionTitle({
 ══════════════════════════════════════════════════════════════ */
 export function ProfilePage() {
   const { toast } = useToast()
-  const { documents, setCandidateActiveView, updateProfile } = useJobStore()
+  const { documents, setCandidateActiveView, updateProfile, profileStrength } = useJobStore()
+  const [cvImportOpen, setCvImportOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   /* ── Loading / saving flags ─────────────────────────────── */
@@ -158,6 +163,12 @@ export function ProfilePage() {
         preferredLocations: (data.preferredLocations || []) as string[],
         visibility: (data.visibility || PROFILE_VISIBILITY.PUBLIC) as string,
       }
+      if (typeof data.profileStrength === "number") {
+        useJobStore.setState({
+          profileStrength: Math.round(data.profileStrength),
+          profileMissing: Array.isArray(data.missing) ? data.missing : [],
+        })
+      }
       const loadedSkills: string[] = data.skills || []
       const loadedLanguages: string[] = data.languages || []
       setProfile(loadedProfile)
@@ -223,7 +234,46 @@ export function ProfilePage() {
      One save for everything editable on this page
   ═══════════════════════════════════════════════════════════ */
   const editableSnapshot = JSON.stringify({ profile, prefs, skills, languages })
-  const isDirty = savedSnapshot !== null && editableSnapshot !== savedSnapshot
+  // Entries imported from a CV have no id until the profile is saved.
+  const hasPendingEntries = experience.some((e) => !e.id) || education.some((e) => !e.id)
+  const isDirty =
+    savedSnapshot !== null && (editableSnapshot !== savedSnapshot || hasPendingEntries)
+
+  /* ═══════════════════════════════════════════════════════════
+     CV import → fills the form (the seeker still presses Save)
+  ═══════════════════════════════════════════════════════════ */
+  const applyCvSuggestions = (sug: CvSuggestions, sections: Set<CvSection>) => {
+    const mergeList = (current: string[], extra: string[]) => {
+      const seen = new Set(current.map((v) => v.toLowerCase()))
+      return [...current, ...extra.filter((v) => !seen.has(v.toLowerCase()))]
+    }
+    if (sections.has("title") && sug.title) setProfile((p) => ({ ...p, title: sug.title! }))
+    if (sections.has("bio") && sug.bio) setProfile((p) => ({ ...p, bio: sug.bio! }))
+    if (sections.has("yearsOfExperience") && sug.yearsOfExperience) {
+      setPrefs((p) => ({ ...p, yearsOfExperience: sug.yearsOfExperience! }))
+    }
+    if (sections.has("skills")) setSkills((cur) => mergeList(cur, sug.skills))
+    if (sections.has("languages")) setLanguages((cur) => mergeList(cur, sug.languages))
+    if (sections.has("experiences")) {
+      setExperience((cur) => {
+        const key = (e: any) => `${e.role}|${e.company}`.toLowerCase()
+        const seen = new Set(cur.map(key))
+        return [...cur, ...sug.experiences.filter((e) => !seen.has(key(e)))]
+      })
+    }
+    if (sections.has("educations")) {
+      setEducation((cur) => {
+        const key = (e: any) => `${e.school}|${e.degree}`.toLowerCase()
+        const seen = new Set(cur.map(key))
+        return [...cur, ...sug.educations.filter((e) => !seen.has(key(e)))]
+      })
+    }
+    toast(
+      "Suggestions added",
+      "Review the highlighted changes, then press Save Profile.",
+      "success"
+    )
+  }
 
   // Warn before leaving the page (reload/close) with unsaved edits.
   useEffect(() => {
@@ -260,7 +310,33 @@ export function ProfilePage() {
         visibility: prefs.visibility,
         skills,
         languages,
+        // Imported entries are only persisted by sending the full lists (server replaces them).
+        ...(hasPendingEntries
+          ? {
+              experiences: experience.map((e) => ({
+                role: e.role,
+                company: e.company,
+                duration: e.duration || "",
+                ...(e.desc ? { desc: e.desc } : {}),
+              })),
+              educations: education.map((e) => ({
+                school: e.school,
+                degree: e.degree,
+                duration: e.duration || "",
+              })),
+            }
+          : {}),
       })
+      if (hasPendingEntries) {
+        // Pick up the ids the server assigned.
+        try {
+          const fresh = await apiFetch("/profile")
+          setExperience(fresh?.experiences || [])
+          setEducation(fresh?.educations || [])
+        } catch (e) {
+          console.warn("Failed to reload profile entries.", e)
+        }
+      }
       setSavedSnapshot(editableSnapshot)
       toast("Profile saved", "Your profile has been updated.", "success")
     } catch (err) {
@@ -360,20 +436,6 @@ export function ProfilePage() {
   ═══════════════════════════════════════════════════════════ */
   const activeResume = documents.find((d) => d.type === "resume" && d.active)
 
-  const completionItems = [
-    { label: "Profile photo", done: !!profile.avatar && !profile.avatar.includes("ui-avatars") },
-    { label: "Headline & Title", done: !!profile.title },
-    { label: "Location", done: !!profile.location },
-    { label: "Bio / Summary", done: !!profile.bio },
-    { label: "Work experience", done: experience.length > 0 },
-    { label: "Education", done: education.length > 0 },
-    { label: "Skills (5+)", done: skills.length >= 5 },
-    { label: "Resume upload", done: !!activeResume },
-  ]
-  const completionPct = Math.round(
-    (completionItems.filter((i) => i.done).length / completionItems.length) * 100
-  )
-
   const joinedLabel = profile.joinedAt
     ? `Joined ${new Date(profile.joinedAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })}`
     : ""
@@ -417,6 +479,14 @@ export function ProfilePage() {
             </span>
           )}
           <Button
+            variant="secondary"
+            onClick={() => setCvImportOpen(true)}
+            className="gap-2 cursor-pointer"
+          >
+            <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+            Import from CV
+          </Button>
+          <Button
             onClick={handleSaveAll}
             disabled={saving || !isDirty}
             className="gap-2 cursor-pointer font-bold"
@@ -440,21 +510,23 @@ export function ProfilePage() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider">
-              Profile Completeness
+              Profile Strength
             </p>
             <p className="text-[19px] font-black text-txt-title leading-none mt-0.5">
-              {completionPct}%
+              {profileStrength}%
             </p>
             <div className="w-full h-1.5 bg-bg-border rounded-full overflow-hidden mt-1.5">
               <div
                 className="h-full rounded-full transition-all duration-700"
                 style={{
-                  width: `${completionPct}%`,
+                  width: `${profileStrength}%`,
                   background: "linear-gradient(90deg,#7c5cfc,#3b7ff5)",
                 }}
               />
             </div>
-            <p className="text-[11.5px] text-txt-caption mt-1">Keep going! Add more details.</p>
+            <p className="text-[11.5px] text-txt-caption mt-1">
+              {profileStrength >= 100 ? "Looking great!" : "Keep going! Add more details."}
+            </p>
           </div>
         </Card>
 
@@ -610,52 +682,19 @@ export function ProfilePage() {
             </div>
           </Card>
 
-          {/* Profile Checklist */}
-          <Card className="p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-[13.5px] font-bold text-txt-title">Profile Checklist</h3>
-              <span className="text-[12px] font-bold text-primary">{completionPct}% Complete</span>
-            </div>
-            <div className="space-y-2">
-              {completionItems.map((item) => (
-                <div key={item.label} className="flex items-center gap-2.5">
-                  <div
-                    className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 transition-colors ${
-                      item.done ? "bg-sec-green text-white" : "border-2 border-bg-border"
-                    }`}
-                  >
-                    {item.done && <CheckCircle2 className="w-3 h-3" />}
-                  </div>
-                  <span
-                    className={`text-[13px] font-medium transition-colors ${
-                      item.done
-                        ? "text-txt-body line-through decoration-sec-green/50"
-                        : "text-txt-caption"
-                    }`}
-                  >
-                    {item.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 w-full h-1.5 bg-bg-border rounded-full overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all duration-700"
-                style={{
-                  width: `${completionPct}%`,
-                  background: "linear-gradient(90deg,#7c5cfc,#3b7ff5)",
-                }}
-              />
-            </div>
-            <button
-              type="button"
-              onClick={handleSaveAll}
-              disabled={saving || !isDirty}
-              className="mt-3 w-full py-2 rounded-[12px] border border-primary/30 text-primary text-[13px] font-bold hover:bg-primary/5 transition-colors cursor-pointer disabled:opacity-50"
-            >
-              {saving ? "Saving…" : isDirty ? "Save changes" : "All changes saved"}
-            </button>
-          </Card>
+          {/* Profile strength (server-computed) with next steps */}
+          <ProfileStrengthCard
+            footer={
+              <button
+                type="button"
+                onClick={handleSaveAll}
+                disabled={saving || !isDirty}
+                className="mt-4 w-full py-2 rounded-[12px] border border-primary/30 text-primary text-[13px] font-bold hover:bg-primary/5 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {saving ? "Saving…" : isDirty ? "Save changes" : "All changes saved"}
+              </button>
+            }
+          />
         </div>
 
         {/* ══════════════ CENTER: Experience, Education, Skills, Languages, Resume ══════════════ */}
@@ -682,7 +721,14 @@ export function ProfilePage() {
                     <div className="flex-1 pb-2">
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <p className="text-[13px] font-bold text-txt-heading">{exp.role}</p>
+                          <p className="text-[13px] font-bold text-txt-heading">
+                            {exp.role}
+                            {!exp.id && (
+                              <span className="ml-2 rounded-full bg-primary-light px-2 py-0.5 text-[11px] font-semibold text-primary">
+                                Imported · unsaved
+                              </span>
+                            )}
+                          </p>
                           <p className="text-[13px] text-txt-caption font-medium">
                             {exp.company}
                             {exp.duration ? ` · ${exp.duration}` : ""}
@@ -694,9 +740,14 @@ export function ProfilePage() {
                           )}
                         </div>
                         <button
-                          onClick={() => exp.id && handleDeleteExperience(exp.id)}
-                          disabled={deletingExpId === exp.id}
-                          className="p-1.5 rounded-lg hover:bg-bg-hover text-txt-caption hover:text-sec-red opacity-0 group-hover:opacity-100 transition-all cursor-pointer shrink-0"
+                          onClick={() =>
+                            exp.id
+                              ? handleDeleteExperience(exp.id)
+                              : setExperience((prev) => prev.filter((x) => x !== exp))
+                          }
+                          disabled={!!exp.id && deletingExpId === exp.id}
+                          aria-label={`Remove ${exp.role}`}
+                          className="p-1.5 rounded-lg hover:bg-bg-hover text-txt-caption hover:text-sec-red opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all cursor-pointer shrink-0"
                           title="Remove"
                         >
                           {deletingExpId === exp.id ? (
@@ -839,9 +890,14 @@ export function ProfilePage() {
                           </p>
                         </div>
                         <button
-                          onClick={() => edu.id && handleDeleteEducation(edu.id)}
-                          disabled={deletingEduId === edu.id}
-                          className="p-1.5 rounded-lg hover:bg-bg-hover text-txt-caption hover:text-sec-red opacity-0 group-hover:opacity-100 transition-all cursor-pointer shrink-0"
+                          onClick={() =>
+                            edu.id
+                              ? handleDeleteEducation(edu.id)
+                              : setEducation((prev) => prev.filter((x) => x !== edu))
+                          }
+                          disabled={!!edu.id && deletingEduId === edu.id}
+                          aria-label={`Remove ${edu.degree}`}
+                          className="p-1.5 rounded-lg hover:bg-bg-hover text-txt-caption hover:text-sec-red opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all cursor-pointer shrink-0"
                           title="Remove"
                         >
                           {deletingEduId === edu.id ? (
@@ -1410,6 +1466,11 @@ export function ProfilePage() {
           </Card>
         </div>
       </div>
+      <CvImportDialog
+        open={cvImportOpen}
+        onOpenChange={setCvImportOpen}
+        onApply={applyCvSuggestions}
+      />
     </div>
   )
 }

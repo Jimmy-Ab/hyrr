@@ -1,6 +1,14 @@
-import { Injectable, NotFoundException } from "@nestjs/common"
-import { Prisma } from "@prisma/client"
+import { HttpStatus, Injectable, NotFoundException } from "@nestjs/common"
+import { DocType, Prisma } from "@prisma/client"
+import { AiService } from "../ai/ai.service"
+import { CvSuggestions } from "../ai/cv-profile"
+import { AppException, NotFoundAppException } from "../core/exceptions/app-exception"
+import { MatchingService } from "../matching/matching.service"
+import { computeProfileStrength } from "../matching/scoring"
 import { PrismaService } from "../prisma/prisma.service"
+import { CvTextService } from "../uploads/cv-text.service"
+import { UploadsService } from "../uploads/uploads.service"
+import { ImportCvDto } from "./dtos/import-cv.dto"
 import { UpdateProfileDto } from "./dtos/profile.dto"
 
 /** Public user fields embedded in profile responses — never passwordHash or OAuth ids. */
@@ -38,7 +46,18 @@ const LIST_FIELDS = ["skills", "languages", "preferredLocations"] as const // nu
 
 @Injectable()
 export class ProfileService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private matching: MatchingService,
+    private ai: AiService,
+    private uploads: UploadsService,
+    private cvText: CvTextService
+  ) {}
+
+  /** GET /profile payload: the profile plus completeness (`profileStrength` 0-100, `missing`). */
+  async getProfileView(userId: string) {
+    return withStrength(await this.getProfile(userId))
+  }
 
   // ─── Any role: get basic user info + company ──────────────────────
   async getMe(userId: string) {
@@ -112,7 +131,7 @@ export class ProfileService {
     }
 
     // Transaction to update profile and sync experiences/educations
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       // Update user name or avatar if provided
       if ((name !== undefined && name !== null) || data.avatar !== undefined) {
         const userData: Prisma.UserUpdateInput = {}
@@ -162,6 +181,8 @@ export class ProfileService {
         include: PROFILE_INCLUDE,
       })
     })
+    await this.matching.invalidate(userId)
+    return withStrength(updated)
   }
 
   async addExperience(
@@ -169,7 +190,7 @@ export class ProfileService {
     exp: { role: string; company: string; duration: string; desc?: string }
   ) {
     const profile = await this.getProfile(userId)
-    return this.prisma.workExperience.create({
+    const created = await this.prisma.workExperience.create({
       data: {
         profileId: profile.id,
         role: exp.role,
@@ -178,18 +199,22 @@ export class ProfileService {
         desc: exp.desc,
       },
     })
+    await this.matching.invalidate(userId)
+    return created
   }
 
   async deleteExperience(id: string, userId: string) {
     const profile = await this.getProfile(userId)
     const exp = await this.prisma.workExperience.findUnique({ where: { id } })
     if (!exp || exp.profileId !== profile.id) throw new NotFoundException("Experience not found")
-    return this.prisma.workExperience.delete({ where: { id } })
+    const deleted = await this.prisma.workExperience.delete({ where: { id } })
+    await this.matching.invalidate(userId)
+    return deleted
   }
 
   async addEducation(userId: string, edu: { school: string; degree: string; duration: string }) {
     const profile = await this.getProfile(userId)
-    return this.prisma.education.create({
+    const created = await this.prisma.education.create({
       data: {
         profileId: profile.id,
         school: edu.school,
@@ -197,12 +222,67 @@ export class ProfileService {
         duration: edu.duration,
       },
     })
+    await this.matching.invalidate(userId)
+    return created
   }
 
   async deleteEducation(id: string, userId: string) {
     const profile = await this.getProfile(userId)
     const edu = await this.prisma.education.findUnique({ where: { id } })
     if (!edu || edu.profileId !== profile.id) throw new NotFoundException("Education not found")
-    return this.prisma.education.delete({ where: { id } })
+    const deleted = await this.prisma.education.delete({ where: { id } })
+    await this.matching.invalidate(userId)
+    return deleted
   }
+
+  /**
+   * CV → profile suggestions (never written; the seeker reviews and saves via PUT /profile).
+   * Source: `documentId` (own document), `url` (own upload), else the latest active RESUME.
+   * 503 AI_DISABLED without an AI provider, 422 CV_UNREADABLE when no text can be read.
+   */
+  async importFromCv(
+    userId: string,
+    dto: ImportCvDto
+  ): Promise<{ suggestions: CvSuggestions; source: "ai" }> {
+    if (!(await this.ai.resolveModel()))
+      throw new AppException(
+        "AI is not configured, so CVs can't be imported right now",
+        HttpStatus.SERVICE_UNAVAILABLE,
+        "AI_DISABLED"
+      )
+
+    let source: string | null = null
+    if (dto.documentId) {
+      const doc = await this.prisma.document.findFirst({
+        where: { id: dto.documentId, userId },
+        select: { url: true },
+      })
+      if (!doc) throw new NotFoundAppException("Document not found", "DOCUMENT_NOT_FOUND")
+      source = doc.url
+    } else if (dto.url) {
+      this.uploads.assertOwnedUpload(dto.url, userId)
+      source = dto.url
+    } else {
+      const doc = await this.prisma.document.findFirst({
+        where: { userId, type: DocType.RESUME, active: true },
+        orderBy: { createdAt: "desc" },
+        select: { url: true },
+      })
+      source = doc?.url ?? null
+    }
+    if (!source) throw cvUnreadable("Upload a CV first")
+
+    const { text, note } = await this.cvText.extract(source)
+    if (!text) throw cvUnreadable(note || "The CV could not be read")
+
+    const suggestions = await this.ai.extractProfileFromCv(text)
+    return { suggestions, source: "ai" }
+  }
+}
+
+const cvUnreadable = (message: string) =>
+  new AppException(message, HttpStatus.UNPROCESSABLE_ENTITY, "CV_UNREADABLE")
+
+function withStrength<T extends Parameters<typeof computeProfileStrength>[0] & object>(profile: T) {
+  return { ...profile, ...computeProfileStrength(profile) }
 }

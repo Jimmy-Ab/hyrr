@@ -1,10 +1,34 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger"
-import { IsEmail, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from "class-validator"
+import { Type } from "class-transformer"
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+  ValidateNested,
+} from "class-validator"
 
 /** Only files uploaded through our own POST /api/uploads endpoint are accepted as resumes. */
 export const UPLOAD_URL_PATTERN =
   /^https?:\/\/[^\s/]+(?:\/[^\s]*)?\/api\/uploads\/[A-Za-z0-9._%-]+(?:\?[^\s]*)?$/
 export const UPLOAD_URL_MESSAGE = "resumeUrl must be a file uploaded through /api/uploads"
+
+export class ScreeningAnswerDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(64)
+  questionId: string
+
+  @ApiProperty({ maxLength: 2000 })
+  @IsString()
+  @MaxLength(2000)
+  answer: string
+}
 
 export class CreateApplicationDto {
   @ApiProperty({ example: "Emily Carter", description: "Applicant full name" })
@@ -50,4 +74,15 @@ export class CreateApplicationDto {
   @IsString()
   @MaxLength(4096)
   captchaToken?: string
+
+  @ApiPropertyOptional({
+    type: [ScreeningAnswerDto],
+    description: "Answers to the job's screening questions (required ones are mandatory)",
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => ScreeningAnswerDto)
+  answers?: ScreeningAnswerDto[]
 }

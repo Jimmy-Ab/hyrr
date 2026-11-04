@@ -8,9 +8,12 @@ import { CalendarModule } from "./calendar/calendar.module"
 import { DashboardModule } from "./dashboard/dashboard.module"
 import { DocumentsModule } from "./documents/documents.module"
 import { JobsModule } from "./jobs/jobs.module"
+import { MatchingModule } from "./matching/matching.module"
 import { MessagesModule } from "./messages/messages.module"
+import { PipelineModule } from "./pipeline/pipeline.module"
 import { PrismaModule } from "./prisma/prisma.module"
 import { ProfileModule } from "./profile/profile.module"
+import { SeekerToolsModule } from "./seeker-tools/seeker-tools.module"
 import { SettingsModule } from "./settings/settings.module"
 import { TalentModule } from "./talent/talent.module"
 
@@ -38,12 +41,15 @@ import { UploadsModule } from "./uploads/uploads.module"
     AuthModule,
     JobsModule,
     ApplicationsModule,
+    PipelineModule,
     MessagesModule,
     DocumentsModule,
     CalendarModule,
     DashboardModule,
     AiModule,
     ProfileModule,
+    MatchingModule,
+    SeekerToolsModule,
     SettingsModule,
     TalentModule,
   ],

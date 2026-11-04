@@ -1,7 +1,11 @@
 import { Test, TestingModule } from "@nestjs/testing"
 import { PrismaClient } from "@prisma/client"
-import { DeepMockProxy, mockDeep } from "jest-mock-extended"
+import { mockDeep } from "jest-mock-extended"
+import { AiService } from "../ai/ai.service"
+import { MatchingService } from "../matching/matching.service"
 import { PrismaService } from "../prisma/prisma.service"
+import { CvTextService } from "../uploads/cv-text.service"
+import { UploadsService } from "../uploads/uploads.service"
 import { ProfileService } from "./profile.service"
 
 describe("ProfileService", () => {
@@ -12,7 +16,14 @@ describe("ProfileService", () => {
     prismaMock = mockDeep<PrismaClient>()
     prismaMock.$transaction.mockImplementation((fn: any) => fn(prismaMock))
     const module: TestingModule = await Test.createTestingModule({
-      providers: [ProfileService, { provide: PrismaService, useValue: prismaMock }],
+      providers: [
+        ProfileService,
+        { provide: PrismaService, useValue: prismaMock },
+        { provide: MatchingService, useValue: { invalidate: jest.fn() } },
+        { provide: AiService, useValue: {} },
+        { provide: UploadsService, useValue: {} },
+        { provide: CvTextService, useValue: {} },
+      ],
     }).compile()
 
     service = module.get<ProfileService>(ProfileService)
@@ -49,7 +60,9 @@ describe("ProfileService", () => {
 
     const args = prismaMock.seekerProfile.update.mock.calls[0][0]
     expect(args.data).toEqual({ website: null, github: null, phone: null, bio: "Hi" })
-    expect(args.include.user).toEqual({ select: expect.not.objectContaining({ passwordHash: true }) })
+    expect(args.include.user).toEqual({
+      select: expect.not.objectContaining({ passwordHash: true }),
+    })
     expect(args.include.user.select.passwordHash).toBeUndefined()
   })
 

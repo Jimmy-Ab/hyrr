@@ -10,6 +10,8 @@ import { createDocumentsSlice } from "./slices/documents"
 import { createJobsSlice } from "./slices/jobs"
 import { createMessagesSlice } from "./slices/messages"
 import { createNotificationsSlice } from "./slices/notifications"
+import { createPipelineSlice } from "./slices/pipeline"
+import { createSeekerToolsSlice } from "./slices/seekerTools"
 import { createSettingsSlice } from "./slices/settings"
 import { createTeamSlice } from "./slices/team"
 import { createUiSlice } from "./slices/ui"
@@ -38,4 +40,6 @@ export const useJobStore = create<JobState>()((...a) => ({
   ...createDocumentsSlice(...a),
   ...createMessagesSlice(...a),
   ...createAiSlice(...a),
+  ...createSeekerToolsSlice(...a),
+  ...createPipelineSlice(...a),
 }))

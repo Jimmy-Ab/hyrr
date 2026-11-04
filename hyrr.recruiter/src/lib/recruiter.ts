@@ -117,3 +117,62 @@ export function errorMessage(err: unknown, fallback = "Something went wrong. Ple
 export function avatarFallback(name: string) {
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || "?")}&background=6C63FF&color=fff`
 }
+
+// ─── Labels, sources, relative time ───────────────────────────────────────────
+
+/** Fixed label palette (saved as the label's colour; reads well on light and dark surfaces). */
+export const LABEL_COLORS = [
+  { value: "#7c5cfc", name: "Violet" },
+  { value: "#3b82f6", name: "Blue" },
+  { value: "#06b6d4", name: "Cyan" },
+  { value: "#10b981", name: "Green" },
+  { value: "#84cc16", name: "Lime" },
+  { value: "#f59e0b", name: "Amber" },
+  { value: "#f97316", name: "Orange" },
+  { value: "#ef4444", name: "Red" },
+  { value: "#ec4899", name: "Pink" },
+  { value: "#6b7485", name: "Gray" },
+] as const
+
+export const DEFAULT_LABEL_COLOR = LABEL_COLORS[0].value
+
+export const APPLICATION_SOURCE_LABEL: Record<string, string> = {
+  DIRECT: "Applied directly",
+  GUEST: "Guest",
+  RECRUITER_ADDED: "Added by team",
+}
+
+export function sourceLabel(source: string | null | undefined): string | null {
+  if (!source) return null
+  return APPLICATION_SOURCE_LABEL[source] ?? null
+}
+
+const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ["year", 365 * 24 * 3600],
+  ["month", 30 * 24 * 3600],
+  ["week", 7 * 24 * 3600],
+  ["day", 24 * 3600],
+  ["hour", 3600],
+  ["minute", 60],
+]
+
+/** "3 hours ago", "just now". */
+export function relativeTime(iso: string | Date | null | undefined): string {
+  if (!iso) return ""
+  const date = typeof iso === "string" ? new Date(iso) : iso
+  const diff = (date.getTime() - Date.now()) / 1000
+  if (Number.isNaN(diff)) return ""
+  if (Math.abs(diff) < 45) return "just now"
+  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" })
+  for (const [unit, seconds] of RELATIVE_UNITS) {
+    if (Math.abs(diff) >= seconds) return rtf.format(Math.round(diff / seconds), unit)
+  }
+  return rtf.format(Math.round(diff / 60), "minute")
+}
+
+export function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return ""
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ""
+  return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+}

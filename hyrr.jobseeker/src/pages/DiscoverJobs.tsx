@@ -3,12 +3,20 @@ import {
   Badge,
   Button,
   Card,
+  ConfirmDialog,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+  EmptyState,
+  Input,
   JOB_REPORT_REASONS,
   JOB_TYPES,
   RichTextRenderer,
@@ -17,29 +25,79 @@ import {
   isApiError,
   useJobStore,
   useToast,
+  type JobMatch,
   type JobReportReason,
+  type MatchTab,
   type PublicJob,
+  type SavedSearchItem,
+  type ScreeningQuestion,
 } from "hyrr.shared"
 import {
+  AlertTriangle,
   Bookmark,
+  BookmarkPlus,
   Briefcase,
   CheckCircle2,
+  ChevronDown,
   Clock,
   DollarSign,
   Flag,
   Globe,
+  History,
   MailWarning,
   MapPin,
   Search,
+  Sparkles,
   Star,
+  Trash2,
+  UserPen,
 } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 const colorBg: Record<string, string> = {
   purple: "bg-primary text-white",
   blue: "bg-sec-blue text-white",
   green: "bg-sec-green text-white",
   orange: "bg-sec-orange text-white",
+}
+
+const MATCH_TABS: { id: MatchTab; label: string }[] = [
+  { id: "for-you", label: "For you" },
+  { id: "all", label: "All jobs" },
+]
+
+function matchTone(score: number) {
+  if (score >= 75) return "text-sec-green bg-sec-green/10 border-sec-green/25"
+  if (score >= 50) return "text-primary bg-primary-light border-primary-border/40"
+  return "text-txt-caption bg-bg-primary border-bg-border"
+}
+
+function MatchBadge({ match }: { match: JobMatch }) {
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold ${matchTone(match.score)}`}
+      title={`${match.score}% match with your profile`}
+    >
+      <Sparkles className="h-3 w-3" aria-hidden="true" />
+      {match.score}% match
+    </span>
+  )
+}
+
+function ReasonChips({ reasons, max }: { reasons: string[]; max: number }) {
+  if (reasons.length === 0) return null
+  return (
+    <div className="flex flex-wrap gap-1">
+      {reasons.slice(0, max).map((r) => (
+        <span
+          key={r}
+          className="rounded-full border border-bg-border bg-bg-primary px-2 py-0.5 text-[11px] font-medium text-txt-body"
+        >
+          {r}
+        </span>
+      ))}
+    </div>
+  )
 }
 
 function JobSkeleton() {
@@ -77,8 +135,141 @@ export function DiscoverJobs() {
     fetchApplications,
     reportJob,
     resendVerification,
+    matchedJobs,
+    matchTab,
+    matchedJobsLoading,
+    thinProfile,
+    fetchMatchedJobs,
+    savedSearches,
+    fetchSavedSearches,
+    createSavedSearch,
+    deleteSavedSearch,
+    fetchScreeningQuestions,
   } = useJobStore()
   const { toast } = useToast()
+
+  // ── Matches ─────────────────────────────────────────────────────────────
+  const [matchError, setMatchError] = useState<string | null>(null)
+  // Tab whose results are in matchedJobs (cached from an earlier visit counts).
+  const [loadedTab, setLoadedTab] = useState<MatchTab | null>(() => {
+    const st = useJobStore.getState()
+    return st.matchedJobs.length > 0 || st.thinProfile ? st.matchTab : null
+  })
+  const [locationFilter, setLocationFilter] = useState("")
+  const [remoteOnly, setRemoteOnly] = useState(false)
+
+  const loadMatches = useCallback(
+    async (tab: MatchTab) => {
+      setMatchError(null)
+      try {
+        await fetchMatchedJobs(tab)
+        setLoadedTab(tab)
+      } catch (err) {
+        if (useJobStore.getState().matchTab === tab) {
+          setMatchError(errorMessage(err, "Could not load jobs."))
+        }
+      }
+    },
+    [fetchMatchedJobs]
+  )
+
+  useEffect(() => {
+    void loadMatches(useJobStore.getState().matchTab)
+    fetchSavedSearches().catch((e) => console.warn("Failed to load saved searches.", e))
+  }, [loadMatches, fetchSavedSearches])
+
+  const switchTab = (tab: MatchTab) => {
+    if (tab === matchTab && !matchError) return
+    void loadMatches(tab)
+  }
+
+  // ── Saved searches ──────────────────────────────────────────────────────
+  const [saveSearchOpen, setSaveSearchOpen] = useState(false)
+  const [searchName, setSearchName] = useState("")
+  const [saveSearchError, setSaveSearchError] = useState<string | null>(null)
+  const [savingSearch, setSavingSearch] = useState(false)
+  const [deleteSearch, setDeleteSearch] = useState<SavedSearchItem | null>(null)
+
+  const openSaveSearch = () => {
+    const parts = [
+      discoverSearch.trim(),
+      discoverTypeFilter !== "All" ? discoverTypeFilter : "",
+      locationFilter.trim(),
+      remoteOnly ? "Remote" : "",
+    ].filter(Boolean)
+    setSearchName(parts.join(" · ").slice(0, 80) || (matchTab === "for-you" ? "For you" : ""))
+    setSaveSearchError(null)
+    setSaveSearchOpen(true)
+  }
+
+  const submitSaveSearch = async () => {
+    const name = searchName.trim()
+    if (!name) {
+      setSaveSearchError("Give this search a name.")
+      return
+    }
+    setSavingSearch(true)
+    setSaveSearchError(null)
+    try {
+      await createSavedSearch({
+        name,
+        query: discoverSearch.trim() || undefined,
+        filters: {
+          ...(discoverTypeFilter !== "All" ? { type: discoverTypeFilter } : {}),
+          ...(locationFilter.trim() ? { location: locationFilter.trim() } : {}),
+          ...(remoteOnly ? { remote: true } : {}),
+          tab: matchTab,
+        },
+      })
+      toast("Search saved", `"${name}" is in your saved searches.`, "success")
+      setSaveSearchOpen(false)
+    } catch (err) {
+      setSaveSearchError(
+        isApiError(err) && err.errorCode === "SAVED_SEARCH_LIMIT"
+          ? "You've reached the limit of 20 saved searches. Delete one to save another."
+          : errorMessage(err, "Please try again.")
+      )
+    } finally {
+      setSavingSearch(false)
+    }
+  }
+
+  const applySavedSearch = (s: SavedSearchItem) => {
+    setDiscoverSearch(s.query)
+    setDiscoverTypeFilter(s.filters.type || "All")
+    setLocationFilter(s.filters.location || "")
+    setRemoteOnly(!!s.filters.remote)
+    const tab = s.filters.tab ?? "all"
+    if (tab !== matchTab || matchError) void loadMatches(tab)
+  }
+
+  const confirmDeleteSearch = async () => {
+    if (!deleteSearch) return
+    try {
+      await deleteSavedSearch(deleteSearch.id)
+      toast("Saved search deleted", deleteSearch.name, "success")
+    } catch (err) {
+      toast("Couldn't delete saved search", errorMessage(err), "error")
+      throw err
+    }
+  }
+
+  // ── Screening questions (apply dialog) ──────────────────────────────────
+  const [questions, setQuestions] = useState<ScreeningQuestion[] | null>(null)
+  const [questionsError, setQuestionsError] = useState<string | null>(null)
+  const [answers, setAnswers] = useState<Record<string, string>>({})
+  const [answerErrors, setAnswerErrors] = useState<Set<string>>(() => new Set())
+
+  const loadQuestions = async (jobId: string) => {
+    setQuestions(null)
+    setQuestionsError(null)
+    try {
+      const list = await fetchScreeningQuestions(jobId)
+      setQuestions(list.filter((q) => q.id))
+    } catch (err) {
+      setQuestionsError(errorMessage(err, "Could not load the application questions."))
+    }
+  }
 
   const [selectedJob, setSelectedJob] = useState<PublicJob | null>(null)
   const [applyJob, setApplyJob] = useState<PublicJob | null>(null)
@@ -97,13 +288,15 @@ export function DiscoverJobs() {
 
   const resumes = documents.filter((d) => d.type === "resume")
 
-  useEffect(() => {
-    if (publicJobs.length > 0 && !selectedJob) {
-      setSelectedJob(publicJobs[0])
-    }
-  }, [publicJobs, selectedJob])
+  // "All jobs" falls back to the plain public list when matching is unavailable.
+  const useFallback = !!matchError && matchTab === "all"
+  const sourceJobs = useFallback ? publicJobs : matchedJobs
+  // Skeleton only when there is nothing current to show (no flash on background refetch).
+  const listLoading = useFallback
+    ? publicJobsLoading
+    : !matchError && (loadedTab !== matchTab || (matchedJobsLoading && matchedJobs.length === 0))
 
-  const filtered = publicJobs.filter((j) => {
+  const filtered = sourceJobs.filter((j) => {
     const matchType = discoverTypeFilter === "All" || j.type === discoverTypeFilter
     const q = discoverSearch.toLowerCase()
     const matchSearch =
@@ -111,8 +304,33 @@ export function DiscoverJobs() {
       j.title.toLowerCase().includes(q) ||
       j.company.toLowerCase().includes(q) ||
       j.skills.some((s) => s.toLowerCase().includes(q))
-    return matchType && matchSearch
+    const loc = locationFilter.trim().toLowerCase()
+    const matchLocation = !loc || j.location.toLowerCase().includes(loc)
+    const matchRemote = !remoteOnly || !!j.remote || j.type === "Remote"
+    return matchType && matchSearch && matchLocation && matchRemote
   })
+
+  // Keep the selection inside the visible list (tab switches and filters change it).
+  useEffect(() => {
+    if (listLoading) return
+    if (!selectedJob || !filtered.some((j) => j.id === selectedJob.id)) {
+      setSelectedJob(filtered[0] ?? null)
+    } else {
+      const fresh = filtered.find((j) => j.id === selectedJob.id)
+      if (fresh && fresh !== selectedJob) setSelectedJob(fresh)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered.map((j) => j.id).join(","), listLoading])
+
+  const hasFilters =
+    !!discoverSearch.trim() || discoverTypeFilter !== "All" || !!locationFilter.trim() || remoteOnly
+
+  const clearFilters = () => {
+    setDiscoverSearch("")
+    setDiscoverTypeFilter("All")
+    setLocationFilter("")
+    setRemoteOnly(false)
+  }
 
   const applicationFor = (id: string) => jobApplications.find((a) => a.publicJobId === id)
   const isApplied = (id: string) => {
@@ -136,17 +354,32 @@ export function DiscoverJobs() {
     setResumeId(active?.id ?? "")
     setCoverLetter("")
     setApplyBlocked(false)
+    setAnswers({})
+    setAnswerErrors(new Set())
     setApplyJob(job)
+    void loadQuestions(job.id)
   }
 
   const submitApplication = async () => {
     if (!applyJob) return
     const resume = resumes.find((d) => d.id === resumeId)
+    const missing = (questions ?? [])
+      .filter((q) => q.required && q.id && !answers[q.id]?.trim())
+      .map((q) => q.id as string)
+    if (missing.length > 0) {
+      setAnswerErrors(new Set(missing))
+      document.getElementById(`apply-q-${missing[0]}`)?.focus()
+      return
+    }
+    setAnswerErrors(new Set())
     setSubmitting(true)
     try {
       await applyFromDiscover(applyJob.id, {
         resumeUrl: resume?.url || undefined,
         coverLetter: coverLetter.trim() || undefined,
+        answers: (questions ?? [])
+          .filter((q) => q.id && answers[q.id]?.trim())
+          .map((q) => ({ questionId: q.id as string, answer: answers[q.id as string].trim() })),
       })
       toast("Applied!", `Your application to ${applyJob.company} has been submitted.`, "success")
       setApplyJob(null)
@@ -155,6 +388,16 @@ export function DiscoverJobs() {
       if (isApiError(err) && err.errorCode === "EMAIL_NOT_VERIFIED") {
         setApplyBlocked(true)
         useJobStore.setState((s) => (s.user ? { user: { ...s.user, emailVerified: false } } : {}))
+      } else if (isApiError(err) && err.errorCode === "SCREENING_ANSWERS_REQUIRED") {
+        const ids = Array.isArray(err.details)
+          ? err.details.filter((d): d is string => typeof d === "string")
+          : []
+        // The question set may have changed since the dialog opened.
+        if (ids.some((id) => !questions?.some((q) => q.id === id))) {
+          await loadQuestions(applyJob.id)
+        }
+        setAnswerErrors(new Set(ids))
+        toast("Answer the required questions", "Some required questions are unanswered.", "error")
       } else if (isApiError(err) && err.errorCode === "ALREADY_APPLIED") {
         toast("Already applied", "You have already applied to this job.", "info")
         setApplyJob(null)
@@ -232,6 +475,90 @@ export function DiscoverJobs() {
         </p>
       </div>
 
+      {/* For you / All jobs + saved searches */}
+      <div className="relative z-10 flex flex-wrap items-center justify-between gap-3">
+        <div
+          role="tablist"
+          aria-label="Job list"
+          className="flex gap-1 rounded-[13px] border border-bg-border bg-bg-primary p-1"
+        >
+          {MATCH_TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={matchTab === t.id}
+              onClick={() => switchTab(t.id)}
+              className={`flex items-center gap-1.5 rounded-[10px] px-3.5 py-1.5 text-[13px] font-bold transition-all cursor-pointer ${
+                matchTab === t.id
+                  ? "bg-primary text-white"
+                  : "text-txt-body hover:bg-bg-hover hover:text-txt-heading"
+              }`}
+            >
+              {t.id === "for-you" && <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />}
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="secondary" size="sm">
+                <History className="h-4 w-4" aria-hidden="true" />
+                Saved searches{savedSearches.length > 0 ? ` (${savedSearches.length})` : ""}
+                <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-72 max-h-80 overflow-y-auto">
+              <DropdownMenuLabel>Saved searches</DropdownMenuLabel>
+              {savedSearches.length === 0 ? (
+                <p className="px-3 py-2 text-[12.5px] text-txt-caption">
+                  Nothing saved yet. Set up filters, then “Save this search”.
+                </p>
+              ) : (
+                savedSearches.map((ss) => (
+                  <div key={ss.id} className="flex items-center gap-1">
+                    <DropdownMenuItem
+                      className="min-w-0 flex-1"
+                      onSelect={() => applySavedSearch(ss)}
+                    >
+                      <span className="truncate">{ss.name}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      aria-label={`Delete saved search ${ss.name}`}
+                      className="shrink-0 px-2 text-txt-caption hover:text-sec-red focus:text-sec-red"
+                      onSelect={() => setDeleteSearch(ss)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                    </DropdownMenuItem>
+                  </div>
+                ))
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button variant="secondary" size="sm" onClick={openSaveSearch}>
+            <BookmarkPlus className="h-4 w-4" aria-hidden="true" />
+            Save this search
+          </Button>
+        </div>
+      </div>
+
+      {/* Thin profile: matches need skills/title */}
+      {thinProfile && matchTab === "for-you" && (
+        <div
+          role="status"
+          className="relative z-10 flex flex-wrap items-center gap-3 rounded-2xl border border-primary-border/40 bg-primary-light p-4"
+        >
+          <UserPen className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+          <p className="min-w-0 flex-1 text-[13.5px] font-medium text-txt-heading">
+            Add your skills and title to get matches.
+          </p>
+          <Button size="sm" onClick={() => setCandidateActiveView("Profile")}>
+            Complete profile
+          </Button>
+        </div>
+      )}
+
       {/* Search + Filter Bar */}
       <Card className="p-4 glass-panel border-bg-border/60 relative z-10">
         <div className="flex flex-col sm:flex-row gap-3">
@@ -246,6 +573,30 @@ export function DiscoverJobs() {
               className="w-full h-10 pl-10 pr-4 rounded-input border border-bg-border bg-bg-primary text-[13px] text-txt-heading placeholder:text-txt-caption focus:outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/15 transition-all"
             />
           </div>
+          <div className="relative sm:w-44">
+            <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-txt-caption pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Location"
+              aria-label="Filter by location"
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value)}
+              className="w-full h-10 pl-10 pr-3 rounded-input border border-bg-border bg-bg-primary text-[13px] text-txt-heading placeholder:text-txt-caption focus:outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/15 transition-all"
+            />
+          </div>
+          <button
+            type="button"
+            aria-pressed={remoteOnly}
+            onClick={() => setRemoteOnly((v) => !v)}
+            className={`h-10 shrink-0 rounded-input border px-3 text-[13px] font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
+              remoteOnly
+                ? "border-primary bg-primary-light text-primary"
+                : "border-bg-border bg-bg-primary text-txt-body hover:bg-bg-hover"
+            }`}
+          >
+            <Globe className="h-4 w-4" aria-hidden="true" />
+            Remote
+          </button>
           <div className="flex gap-1 bg-bg-primary p-1 border border-bg-border rounded-[13px] shrink-0 overflow-x-auto custom-scrollbar-none">
             {JOB_TYPES.map((t) => (
               <button
@@ -270,14 +621,65 @@ export function DiscoverJobs() {
       <div className="flex flex-col lg:flex-row gap-5 flex-1 min-w-0">
         {/* Job List */}
         <div className="w-full lg:w-[360px] shrink-0 flex flex-col gap-3">
-          {publicJobsLoading ? (
+          {listLoading ? (
             Array.from({ length: 5 }).map((_, i) => <JobSkeleton key={i} />)
-          ) : filtered.length === 0 ? (
+          ) : matchError && !useFallback ? (
+            <Card role="alert" className="p-8 flex flex-col items-center gap-3 text-center">
+              <AlertTriangle className="w-8 h-8 text-sec-orange" aria-hidden="true" />
+              <p className="text-[14px] font-semibold text-txt-heading">{matchError}</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button variant="secondary" size="sm" onClick={() => void loadMatches(matchTab)}>
+                  Retry
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => void loadMatches("all")}>
+                  Browse all jobs
+                </Button>
+              </div>
+            </Card>
+          ) : filtered.length === 0 && hasFilters ? (
             <Card className="p-10 flex flex-col items-center gap-3 text-center">
               <Briefcase className="w-10 h-10 text-txt-disabled" />
               <p className="text-[14px] font-semibold text-txt-heading">No roles found</p>
               <p className="text-caption text-txt-caption">Try adjusting your search or filters.</p>
+              <Button variant="secondary" size="sm" onClick={clearFilters}>
+                Clear filters
+              </Button>
             </Card>
+          ) : filtered.length === 0 && matchTab === "for-you" ? (
+            <EmptyState
+              icon={Sparkles}
+              title={thinProfile ? "Tell us what you do" : "No matches right now"}
+              description={
+                thinProfile
+                  ? "Add your skills and job title to your profile and we'll pick jobs for you."
+                  : "We'll keep looking as new jobs are posted. Meanwhile, browse everything that's open."
+              }
+              action={
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button size="sm" onClick={() => void loadMatches("all")}>
+                    Browse all jobs
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setCandidateActiveView("Profile")}
+                  >
+                    Improve profile
+                  </Button>
+                </div>
+              }
+            />
+          ) : filtered.length === 0 ? (
+            <EmptyState
+              icon={Briefcase}
+              title="No open roles yet"
+              description="Create a job alert and we'll tell you when something is posted."
+              action={
+                <Button size="sm" onClick={() => setCandidateActiveView("Alerts")}>
+                  Set up an alert
+                </Button>
+              }
+            />
           ) : (
             filtered.map((job) => {
               const active = selectedJob?.id === job.id
@@ -321,6 +723,12 @@ export function DiscoverJobs() {
                         </span>
                         <span className="text-[12px] font-semibold text-primary">{job.salary}</span>
                       </div>
+                      {job.match && (
+                        <div className="mt-2 flex flex-col gap-1.5">
+                          <MatchBadge match={job.match} />
+                          <ReasonChips reasons={job.match.reasons} max={3} />
+                        </div>
+                      )}
                       <div className="flex items-center gap-2 mt-2">
                         <Badge
                           variant={
@@ -373,12 +781,15 @@ export function DiscoverJobs() {
                         {selectedJob.companyVerified && <VerifiedBadge size="md" />}
                       </p>
                     </div>
-                    {selectedJob.featured && (
-                      <Badge variant="warning">
-                        <Star className="w-3 h-3 mr-1 fill-current" />
-                        Featured
-                      </Badge>
-                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {selectedJob.match && <MatchBadge match={selectedJob.match} />}
+                      {selectedJob.featured && (
+                        <Badge variant="warning">
+                          <Star className="w-3 h-3 mr-1 fill-current" />
+                          Featured
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3 text-[13.5px] text-txt-caption font-medium">
                     <span className="flex items-center gap-1">
@@ -406,6 +817,24 @@ export function DiscoverJobs() {
                   </div>
                 </div>
               </div>
+
+              {/* Why it matches */}
+              {selectedJob.match && selectedJob.match.reasons.length > 0 && (
+                <div className="py-4 border-b border-bg-border/40">
+                  <h3 className="mb-2 flex items-center gap-1.5 text-[14px] font-bold text-txt-heading">
+                    <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
+                    Why this matches you
+                  </h3>
+                  <ul className="space-y-1.5">
+                    {selectedJob.match.reasons.map((r) => (
+                      <li key={r} className="flex items-start gap-2 text-[13px] text-txt-body">
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-sec-green" />
+                        <span>{r}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {/* Skills */}
               <div className="py-5 border-b border-bg-border/40 flex flex-wrap gap-2">
@@ -579,6 +1008,81 @@ export function DiscoverJobs() {
                 </p>
               )}
             </div>
+            {questionsError ? (
+              <div
+                role="alert"
+                className="flex items-center justify-between gap-2 rounded-xl border border-sec-orange/30 bg-sec-orange/10 p-3"
+              >
+                <p className="text-[13px] text-txt-heading">{questionsError}</p>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => applyJob && void loadQuestions(applyJob.id)}
+                >
+                  Retry
+                </Button>
+              </div>
+            ) : questions === null ? (
+              <div className="space-y-2" aria-busy="true" aria-label="Loading questions">
+                <div className="h-4 w-1/2 animate-pulse rounded bg-bg-border/60" />
+                <div className="h-16 w-full animate-pulse rounded-xl bg-bg-border/40" />
+              </div>
+            ) : questions.length > 0 ? (
+              <fieldset className="flex flex-col gap-4">
+                <legend className="mb-2 text-[13.5px] font-semibold text-txt-heading">
+                  Questions from the employer
+                </legend>
+                {questions.map((q) => {
+                  const id = q.id as string
+                  const invalid = answerErrors.has(id)
+                  return (
+                    <div key={id} className="flex flex-col gap-1.5">
+                      <label htmlFor={`apply-q-${id}`} className="text-[13px] text-txt-heading">
+                        {q.question}
+                        {q.required ? (
+                          <span className="ml-1 text-sec-red" aria-hidden="true">
+                            *
+                          </span>
+                        ) : (
+                          <span className="ml-1 font-normal text-txt-caption">(optional)</span>
+                        )}
+                      </label>
+                      <textarea
+                        id={`apply-q-${id}`}
+                        value={answers[id] ?? ""}
+                        onChange={(e) => {
+                          const value = e.target.value
+                          setAnswers((a) => ({ ...a, [id]: value }))
+                          if (invalid && value.trim()) {
+                            setAnswerErrors((prev) => {
+                              const next = new Set(prev)
+                              next.delete(id)
+                              return next
+                            })
+                          }
+                        }}
+                        rows={3}
+                        maxLength={2000}
+                        required={q.required}
+                        aria-required={q.required}
+                        aria-invalid={invalid}
+                        aria-describedby={invalid ? `apply-q-${id}-error` : undefined}
+                        className={`w-full rounded-input border bg-bg-primary p-3 text-[13px] text-txt-heading placeholder:text-txt-caption focus:outline-none ${
+                          invalid
+                            ? "border-sec-red focus:border-sec-red"
+                            : "border-bg-border focus:border-primary/40"
+                        }`}
+                      />
+                      {invalid && (
+                        <p id={`apply-q-${id}-error`} className="text-[12px] text-sec-red">
+                          This question is required.
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
+              </fieldset>
+            ) : null}
             <div className="flex flex-col gap-1.5">
               <label htmlFor="apply-cover" className="text-[13.5px] font-semibold text-txt-heading">
                 Cover letter <span className="font-normal text-txt-caption">(optional)</span>
@@ -603,12 +1107,81 @@ export function DiscoverJobs() {
             >
               Cancel
             </Button>
-            <Button size="sm" onClick={submitApplication} disabled={submitting}>
+            <Button
+              size="sm"
+              onClick={submitApplication}
+              disabled={submitting || (questions === null && !questionsError)}
+            >
               {submitting ? "Submitting…" : "Submit application"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Save search dialog */}
+      <Dialog
+        open={saveSearchOpen}
+        onOpenChange={(open) => !open && !savingSearch && setSaveSearchOpen(false)}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Save this search</DialogTitle>
+            <DialogDescription>
+              Keeps your search text, filters and tab so you can re-apply them in one click.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="mt-4 flex flex-col gap-2"
+            onSubmit={(e) => {
+              e.preventDefault()
+              void submitSaveSearch()
+            }}
+          >
+            <label
+              htmlFor="saved-search-name"
+              className="text-[13px] font-semibold text-txt-heading"
+            >
+              Name
+            </label>
+            <Input
+              id="saved-search-name"
+              value={searchName}
+              maxLength={80}
+              autoFocus
+              onChange={(e) => setSearchName(e.target.value)}
+              placeholder="e.g. Remote frontend roles"
+            />
+            {saveSearchError && (
+              <p role="alert" className="text-[13px] font-medium text-sec-red">
+                {saveSearchError}
+              </p>
+            )}
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setSaveSearchOpen(false)}
+                disabled={savingSearch}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" size="sm" disabled={savingSearch}>
+                {savingSearch ? "Saving…" : "Save search"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        open={!!deleteSearch}
+        onOpenChange={(open) => !open && setDeleteSearch(null)}
+        title="Delete saved search?"
+        description={`"${deleteSearch?.name}" will be removed from your saved searches.`}
+        confirmLabel="Delete"
+        onConfirm={confirmDeleteSearch}
+      />
 
       {/* Report dialog */}
       <Dialog

@@ -72,7 +72,7 @@ async function bootstrap() {
           windowMs: STRICT_WINDOW_MS,
           // AI chat/settings plus on-demand candidate analysis (each call costs LLM tokens)
           matches: (req) =>
-            /^\/api\/ai\//.test(req.path) ||
+            /^\/api\/(ai\/|profile\/import-cv\/?$)/.test(req.path) ||
             (req.method === "POST" && /^\/api\/applications\/[^/]+\/analyze\/?$/.test(req.path)),
         },
       ],

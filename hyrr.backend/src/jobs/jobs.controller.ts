@@ -13,7 +13,10 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from "@nestjs/swagger"
 import { Roles } from "../auth/decorators/roles.decorator"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
+import { OptionalJwtAuthGuard } from "../auth/guards/optional-jwt-auth.guard"
 import { RolesGuard } from "../auth/guards/roles.guard"
+import { ReplaceQuestionsDto } from "../pipeline/dtos/questions.dto"
+import { ScreeningService } from "../pipeline/screening.service"
 import { CreateJobDto } from "./dtos/create-job.dto"
 import { SearchPublicJobsDto } from "./dtos/search-public-jobs.dto"
 import { UpdateJobDto } from "./dtos/update-job.dto"
@@ -22,7 +25,10 @@ import { JobsService } from "./jobs.service"
 @ApiTags("Jobs")
 @Controller("jobs")
 export class JobsController {
-  constructor(private readonly jobsService: JobsService) {}
+  constructor(
+    private readonly jobsService: JobsService,
+    private readonly screening: ScreeningService
+  ) {}
 
   // ─── Public Endpoints ──────────────────────────────────────────────
   @Get("public")
@@ -66,9 +72,35 @@ export class JobsController {
   @Roles("RECRUITER", "ADMIN")
   @ApiBearerAuth()
   @ApiOperation({ summary: "Get real-time hiring funnel analytics for the recruiter" })
+  @ApiQuery({ name: "jobId", required: false, description: "Limit the analytics to one job" })
   @ApiResponse({ status: 200, description: "Returns pipeline statistics" })
-  getAnalytics(@Req() req: any) {
-    return this.jobsService.getAnalytics(req.user)
+  getAnalytics(@Req() req: any, @Query("jobId") jobId?: string) {
+    return this.jobsService.getAnalytics(
+      req.user,
+      typeof jobId === "string" && jobId ? jobId : undefined
+    )
+  }
+
+  // ─── Screening questions (R1) ─────────────────────────────────────
+  @Get(":jobId/questions")
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: "Screening questions (public for ACTIVE jobs)" })
+  @ApiResponse({ status: 200, description: "[{ id, question, required, position }]" })
+  getQuestions(@Param("jobId") jobId: string, @Req() req: any) {
+    return this.screening.list(jobId, req.user || null)
+  }
+
+  @Put(":jobId/questions")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("RECRUITER", "ADMIN")
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Replace the job's screening questions (max 10, manage access)" })
+  replaceQuestions(
+    @Param("jobId") jobId: string,
+    @Body() dto: ReplaceQuestionsDto,
+    @Req() req: any
+  ) {
+    return this.screening.replace(jobId, req.user, dto.questions)
   }
 
   @Get()

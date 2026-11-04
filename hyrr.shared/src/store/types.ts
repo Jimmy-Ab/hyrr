@@ -7,6 +7,7 @@ import type {
   CalendarEventType,
   ConversationClosedReason,
   DocumentType,
+  EmploymentTypeCode,
   JobType,
   MessageDeliveryStatus,
   MessageSenderType,
@@ -94,6 +95,19 @@ export interface Candidate {
   aiModel: string | null
   aiScoredAt: string | null
   aiError: string | null
+  /** How the application was created */
+  source: ApplicationSource
+  labels: CandidateLabel[]
+  notesCount: number
+  screeningAnswers: { questionId: string; question: string; answer: string }[]
+}
+
+export type ApplicationSource = "DIRECT" | "GUEST" | "RECRUITER_ADDED"
+
+export const APPLICATION_SOURCE_LABEL: Record<ApplicationSource, string> = {
+  DIRECT: "Applied directly",
+  GUEST: "Guest application",
+  RECRUITER_ADDED: "Added by recruiter",
 }
 
 export interface NewCandidateInput {
@@ -125,10 +139,17 @@ export interface JobUpdatePatch {
   requirements: string[]
 }
 
+export interface ScreeningAnswerInput {
+  questionId: string
+  answer: string
+}
+
 export interface ApplyInput {
   coverLetter?: string
   resumeUrl?: string
   phone?: string
+  /** Answers to the job's screening questions (required ones are enforced by the server) */
+  answers?: ScreeningAnswerInput[]
 }
 
 export interface NotificationItem {
@@ -163,6 +184,185 @@ export interface PublicJob {
   benefits: string[]
   featured?: boolean
   remote?: boolean
+  /** Profile match (only on /matching/jobs results) */
+  match?: JobMatch
+}
+
+// ─── Phase 3: matching, alerts, saved searches, CV import ─────────────────────
+
+export interface JobMatch {
+  /** 0-100 */
+  score: number
+  /** Human-readable reasons (max 4) */
+  reasons: string[]
+}
+
+export type MatchTab = "for-you" | "all"
+
+export type AlertFrequency = "INSTANT" | "DAILY" | "WEEKLY"
+
+export const ALERT_FREQUENCY_LABEL: Record<AlertFrequency, string> = {
+  INSTANT: "Instantly",
+  DAILY: "Daily digest",
+  WEEKLY: "Weekly digest",
+}
+
+export interface JobAlertItem {
+  id: string
+  name: string
+  keywords: string[]
+  locations: string[]
+  jobTypes: EmploymentTypeCode[]
+  minSalary: number | null
+  remoteOnly: boolean
+  frequency: AlertFrequency
+  active: boolean
+  lastSentAt: string | null
+  createdAt: string
+}
+
+export interface JobAlertInput {
+  name: string
+  keywords?: string[]
+  locations?: string[]
+  jobTypes?: EmploymentTypeCode[]
+  remoteOnly?: boolean
+  frequency: AlertFrequency
+}
+
+export interface SavedSearchFilters {
+  location?: string
+  /** Job type label as used by the Discover filter ("All" = none) */
+  type?: string
+  remote?: boolean
+  categoryId?: string
+  tab?: MatchTab
+}
+
+export interface SavedSearchItem {
+  id: string
+  name: string
+  query: string
+  filters: SavedSearchFilters
+  createdAt: string
+}
+
+export interface SavedSearchInput {
+  name: string
+  query?: string
+  filters: SavedSearchFilters
+}
+
+export interface CvSuggestions {
+  title?: string
+  bio?: string
+  skills: string[]
+  languages: string[]
+  yearsOfExperience?: string
+  experiences: { role: string; company: string; duration: string; desc?: string }[]
+  educations: { school: string; degree: string; duration: string }[]
+}
+
+// ─── Phase 3: recruiter pipeline ───────────────────────────────────────────────
+
+export interface CompanyProfile {
+  id: string
+  name: string
+  /** "" when unset */
+  logo: string
+  color: string
+  website: string
+  description: string
+  industry: string
+  country: string
+  city: string
+  verified: boolean
+  verifiedDomain: string | null
+}
+
+export type CompanyProfilePatch = Partial<
+  Pick<
+    CompanyProfile,
+    "name" | "logo" | "color" | "website" | "description" | "industry" | "country" | "city"
+  >
+>
+
+export interface ScreeningQuestion {
+  /** Missing for questions not saved yet */
+  id?: string
+  question: string
+  required: boolean
+}
+
+export interface CandidateNote {
+  id: string
+  body: string
+  createdAt: string
+  updatedAt: string
+  author: { id: string; name: string; avatar?: string }
+  mine: boolean
+}
+
+export interface CandidateLabel {
+  id: string
+  name: string
+  color: string
+  /** Applications carrying the label (only on GET /labels) */
+  count?: number
+}
+
+export interface TimelineEntry {
+  status: ApplicationStatusCode
+  label: string
+  at: string
+  /** Recruiter side only */
+  actorName?: string
+}
+
+export type BulkAction = "MOVE" | "ADD_LABEL" | "REMOVE_LABEL" | "ARCHIVE" | "MESSAGE"
+
+export interface BulkUpdateInput {
+  applicationIds: string[]
+  action: BulkAction
+  status?: ApplicationStatusCode
+  labelId?: string
+  message?: string
+}
+
+export interface BulkResult {
+  applicationId: string
+  ok: boolean
+  error?: string
+}
+
+export type FunnelStage = "APPLIED" | "IN_PROCESS" | "INTERVIEWING" | "OFFER"
+
+export interface FunnelAnalytics {
+  totalJobs: number
+  totalApplications: number
+  pipeline: {
+    Applied: number
+    InProcess: number
+    Interviewing: number
+    Offer: number
+    Archived: number
+    Withdrawn?: number
+  }
+  offerConversionRate: string
+  avgAiMatchScore: number
+  monthlyApplications: { month: string; applications: number }[]
+  funnel: { stage: FunnelStage; reached: number; conversionFromPrevious: number }[]
+  timeToHireDays: { median: number | null; average: number | null }
+  timeInStageDays: Partial<Record<ApplicationStatusCode, number | null>>
+  bySource: Record<ApplicationSource, number>
+  perJob: {
+    jobId: string
+    title: string
+    applicants: number
+    inProcess: number
+    interviewing: number
+    offers: number
+  }[]
 }
 
 export interface SeekerProfileData {
@@ -420,7 +620,7 @@ export interface JobState {
     remote?: boolean
     /** Defaults to ACTIVE on the server; DRAFT saves without publishing. */
     status?: "ACTIVE" | "DRAFT"
-  }) => Promise<void>
+  }) => Promise<Job>
   updateJob: (jobId: string, patch: Partial<JobUpdatePatch>) => Promise<void>
   deleteJob: (jobId: string) => Promise<void>
   toggleBookmark: (candidateId: string) => Promise<void>
@@ -523,4 +723,57 @@ export interface JobState {
   // ── Profile ──────────────────────────────────────────────────────────────
   profileUpdating: boolean
   updateProfile: (data: ProfileUpdateInput) => Promise<void>
+
+  // ── Seeker tools (matching, alerts, saved searches, CV import) ───────────
+  matchedJobs: PublicJob[]
+  matchTab: MatchTab
+  matchedJobsLoading: boolean
+  /** 0-100, from /matching/jobs and GET /profile */
+  profileStrength: number
+  /** Human-readable missing profile items, from GET /profile */
+  profileMissing: string[]
+  /** No skills and no title: matches are meaningless */
+  thinProfile: boolean
+  fetchMatchedJobs: (tab: MatchTab) => Promise<void>
+  /** Reloads profileStrength / profileMissing from GET /profile. */
+  refreshProfileStrength: () => Promise<void>
+  alerts: JobAlertItem[]
+  alertsLoading: boolean
+  fetchAlerts: () => Promise<void>
+  createAlert: (input: JobAlertInput) => Promise<JobAlertItem>
+  updateAlert: (id: string, patch: Partial<JobAlertInput> & { active?: boolean }) => Promise<void>
+  deleteAlert: (id: string) => Promise<void>
+  savedSearches: SavedSearchItem[]
+  fetchSavedSearches: () => Promise<void>
+  createSavedSearch: (input: SavedSearchInput) => Promise<SavedSearchItem>
+  updateSavedSearch: (id: string, patch: Partial<SavedSearchInput>) => Promise<void>
+  deleteSavedSearch: (id: string) => Promise<void>
+  /** Never writes the profile: returns suggestions for the seeker to review. */
+  importProfileFromCv: (input: { documentId?: string; url?: string }) => Promise<CvSuggestions>
+  fetchScreeningQuestions: (jobId: string) => Promise<ScreeningQuestion[]>
+  /** Stage history of an application (seeker: no actor names). */
+  fetchTimeline: (applicationId: string) => Promise<TimelineEntry[]>
+
+  // ── Recruiter pipeline ───────────────────────────────────────────────────
+  fetchJobQuestions: (jobId: string) => Promise<ScreeningQuestion[]>
+  saveJobQuestions: (jobId: string, questions: ScreeningQuestion[]) => Promise<ScreeningQuestion[]>
+  fetchNotes: (applicationId: string) => Promise<CandidateNote[]>
+  addNote: (applicationId: string, body: string) => Promise<CandidateNote>
+  updateNote: (noteId: string, body: string) => Promise<CandidateNote>
+  deleteNote: (noteId: string) => Promise<void>
+  labels: CandidateLabel[]
+  fetchLabels: () => Promise<void>
+  createLabel: (name: string, color: string) => Promise<CandidateLabel>
+  updateLabel: (id: string, patch: { name?: string; color?: string }) => Promise<void>
+  deleteLabel: (id: string) => Promise<void>
+  setCandidateLabels: (applicationId: string, labelIds: string[]) => Promise<void>
+  labelFilter: string | null
+  setLabelFilter: (labelId: string | null) => void
+  /** Per-item results; successful changes are applied to local state. */
+  bulkUpdateCandidates: (input: BulkUpdateInput) => Promise<BulkResult[]>
+  funnelAnalytics: FunnelAnalytics | null
+  fetchFunnelAnalytics: (jobId?: string) => Promise<void>
+  companyProfile: CompanyProfile | null
+  fetchCompanyProfile: () => Promise<void>
+  updateCompanyProfile: (patch: CompanyProfilePatch) => Promise<void>
 }

@@ -107,33 +107,6 @@ describe("JobsService", () => {
     expect(prismaMock.job.update).not.toHaveBeenCalled()
   })
 
-  it("only notifies INSTANT alerts, in bulk", async () => {
-    prismaMock.jobAlert.findMany.mockResolvedValue([
-      { userId: "u1", keywords: ["react"], locations: [] },
-      { userId: "u1", keywords: [], locations: [] },
-      { userId: "u2", keywords: ["cobol"], locations: [] },
-    ])
-    prismaMock.notification.createManyAndReturn.mockResolvedValue([{ id: "n1", userId: "u1" }])
-    prismaMock.user.findMany.mockResolvedValue([])
-
-    const count = await service.notifyMatchingAlerts({
-      id: "job-1",
-      title: "React Developer",
-      location: "Berlin",
-      type: "FULL_TIME",
-      remote: false,
-      skills: ["React"],
-      recruiterId: "rec-1",
-    })
-
-    const where = prismaMock.jobAlert.findMany.mock.calls[0][0].where
-    expect(where.frequency).toBe("INSTANT")
-    expect(prismaMock.jobAlert.findMany.mock.calls[0][0].take).toBeGreaterThan(0)
-    expect(count).toBe(1)
-    expect(prismaMock.notification.createManyAndReturn).toHaveBeenCalledTimes(1)
-    expect(prismaMock.notification.createManyAndReturn.mock.calls[0][0].data).toHaveLength(1)
-  })
-
   describe("publishing safety", () => {
     const dto: any = {
       title: "Frontend Engineer",
@@ -262,19 +235,6 @@ describe("JobsService", () => {
         service.updateJob("job-1", { requirements: ["Contact us on WhatsApp only"] }, recruiter)
       ).rejects.toMatchObject({ errorCode: "JOB_CONTENT_REJECTED" })
       expect(prismaMock.job.update).not.toHaveBeenCalled()
-    })
-
-    it("alerts are never sent for non-ACTIVE jobs", async () => {
-      const count = await service.notifyMatchingAlerts({
-        id: "job-1",
-        title: "React",
-        location: "Berlin",
-        type: "FULL_TIME",
-        remote: false,
-        status: "FLAGGED",
-      })
-      expect(count).toBe(0)
-      expect(prismaMock.jobAlert.findMany).not.toHaveBeenCalled()
     })
   })
 })

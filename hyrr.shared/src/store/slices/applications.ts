@@ -30,6 +30,13 @@ const applicantBody = (get: StoreGet, input: ApplyInput = {}) => {
     ...(input.phone || profile?.phone ? { phone: input.phone || profile?.phone } : {}),
     ...(input.coverLetter ? { coverLetter: input.coverLetter } : {}),
     ...(input.resumeUrl ? { resumeUrl: input.resumeUrl } : {}),
+    ...(input.answers?.length
+      ? {
+          answers: input.answers
+            .map((a) => ({ questionId: a.questionId, answer: a.answer.trim() }))
+            .filter((a) => a.answer),
+        }
+      : {}),
   }
 }
 

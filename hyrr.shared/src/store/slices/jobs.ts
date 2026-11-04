@@ -40,6 +40,7 @@ export const createJobsSlice: StateCreator<JobState, [], [], JobsSlice> = (set, 
     })
     // Keep the board's current filter: jumping to the new (empty) job hid every candidate.
     set((state) => ({ jobs: [...state.jobs, newJob] }))
+    return newJob
   },
 
   updateJob: async (jobId, patch) => {

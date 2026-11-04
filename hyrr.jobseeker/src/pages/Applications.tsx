@@ -11,14 +11,18 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
   errorMessage,
+  formatDateTime,
+  Skeleton,
   useJobStore,
   useToast,
   VerifiedBadge,
   type ApplicationStatusCode,
   type JobApplication,
+  type TimelineEntry,
 } from "hyrr.shared"
 import {
   Calendar,
+  ChevronDown,
   DollarSign,
   LayoutList,
   MapPin,
@@ -26,7 +30,92 @@ import {
   MoreHorizontal,
   User,
 } from "lucide-react"
-import { useState } from "react"
+import { useId, useState } from "react"
+
+// ─── Stage timeline ───────────────────────────────────────────────────────────
+function ApplicationTimeline({ applicationId }: { applicationId: string }) {
+  const fetchTimeline = useJobStore((s) => s.fetchTimeline)
+  const [open, setOpen] = useState(false)
+  const [entries, setEntries] = useState<TimelineEntry[] | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const panelId = useId()
+
+  const load = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      setEntries(await fetchTimeline(applicationId))
+    } catch (err) {
+      setError(errorMessage(err, "Could not load the timeline."))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const toggle = () => {
+    const next = !open
+    setOpen(next)
+    // Reload on every open so status changes since the last look show up.
+    if (next && !loading) void load()
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-bg-border/30">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        aria-controls={panelId}
+        className="flex w-full items-center justify-between rounded-lg px-1 py-0.5 text-[12px] font-semibold text-txt-caption hover:text-txt-heading cursor-pointer"
+      >
+        Timeline
+        <ChevronDown
+          className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`}
+          aria-hidden="true"
+        />
+      </button>
+      {open && (
+        <div id={panelId} className="mt-2">
+          {loading && !entries ? (
+            <div className="space-y-2" aria-busy="true">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-4 w-1/2" />
+            </div>
+          ) : error ? (
+            <div role="alert" className="flex items-center justify-between gap-2">
+              <p className="text-[12px] text-sec-red">{error}</p>
+              <button
+                type="button"
+                onClick={() => void load()}
+                className="text-[12px] font-semibold text-primary hover:underline cursor-pointer"
+              >
+                Retry
+              </button>
+            </div>
+          ) : !entries || entries.length === 0 ? (
+            <p className="text-[12px] text-txt-caption">No status changes yet.</p>
+          ) : (
+            <ol className="relative ml-1.5 border-l border-bg-border pl-4 space-y-2.5">
+              {entries.map((e, i) => (
+                <li key={`${e.status}-${e.at}-${i}`} className="relative">
+                  <span
+                    className={`absolute -left-[21px] top-1 h-2 w-2 rounded-full ${
+                      i === entries.length - 1 ? "bg-primary" : "bg-bg-border"
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <p className="text-[12.5px] font-semibold text-txt-heading">{e.label}</p>
+                  <p className="text-[11.5px] text-txt-caption">{formatDateTime(e.at)}</p>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ─── Kanban Column ─────────────────────────────────────────────────────────────
 const columnColors: Record<ApplicationStatusCode, string> = {
@@ -233,6 +322,8 @@ function JobCard({
             )}
           </div>
         </div>
+
+        {!isSaved && <ApplicationTimeline applicationId={application.id} />}
       </Card>
     </div>
   )

@@ -9,6 +9,15 @@ import {
   parseAnalysisResponse,
 } from "../candidate-analysis"
 import {
+  buildCvPrompt,
+  CV_JSON_INSTRUCTION,
+  CV_SYSTEM_PROMPT,
+  cvProfileSchema,
+  CvSuggestions,
+  normalizeCvSuggestions,
+  parseCvSuggestionsResponse,
+} from "../cv-profile"
+import {
   AIMatchResult,
   CandidateAnalysisResult,
   ChatTurn,
@@ -20,7 +29,11 @@ const JSON_INSTRUCTION =
 
 /** Shared prompt building, timeout handling and strict response parsing for all providers. */
 export abstract class BaseLLMAdapter implements LLMAdapter {
-  protected abstract createModel(model: string, temperature: number, timeoutMs: number): BaseChatModel
+  protected abstract createModel(
+    model: string,
+    temperature: number,
+    timeoutMs: number
+  ): BaseChatModel
 
   async generateMatch(
     model: string,
@@ -65,6 +78,28 @@ export abstract class BaseLLMAdapter implements LLMAdapter {
       { signal }
     )
     return parseAnalysisResponse(messageText(response.content))
+  }
+
+  async extractProfile(model: string, cvText: string): Promise<CvSuggestions> {
+    const signal = AbortSignal.timeout(ANALYSIS_TIMEOUT_MS)
+    const llm = this.createModel(model, 0, ANALYSIS_TIMEOUT_MS)
+    const human = new HumanMessage(buildCvPrompt(cvText))
+    if (typeof (llm as any).withStructuredOutput === "function") {
+      try {
+        const structured = llm.withStructuredOutput(cvProfileSchema, { name: "cv_profile" })
+        const result = await structured.invoke([new SystemMessage(CV_SYSTEM_PROMPT), human], {
+          signal,
+        })
+        return normalizeCvSuggestions(result)
+      } catch (err) {
+        if (!isRecoverable(err, signal)) throw err
+      }
+    }
+    const response = await llm.invoke(
+      [new SystemMessage(CV_SYSTEM_PROMPT + CV_JSON_INSTRUCTION), human],
+      { signal }
+    )
+    return parseCvSuggestionsResponse(messageText(response.content))
   }
 
   async chat(

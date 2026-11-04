@@ -10,11 +10,12 @@ import {
   DropdownMenuTrigger,
   useToast,
 } from "hyrr.shared"
-import { Bookmark, MessageSquare, MoreHorizontal, Trash2 } from "lucide-react"
+import { Bookmark, MessageSquare, MoreHorizontal, StickyNote, Trash2 } from "lucide-react"
 import { useState } from "react"
 import { avatarFallback, errorMessage, isWithdrawn } from "../../lib/recruiter"
 import { useJobStore, type Candidate } from "../../store/useJobStore"
 import { AiScoreChips } from "../ai/ai-score"
+import { LabelChips } from "../labels/labels"
 import { ConfirmDialog } from "../layout/confirm-dialog"
 
 interface ApplicationCardProps {
@@ -189,6 +190,12 @@ export function ApplicationCard({ candidate, isOverlay = false, jobTitle }: Appl
             </div>
           </div>
 
+          {(candidate.labels?.length ?? 0) > 0 && (
+            <div className="mt-2.5">
+              <LabelChips labels={candidate.labels} />
+            </div>
+          )}
+
           {/* Card Footer: Tag & Bookmark */}
           <div className="flex items-center justify-between mt-3.5 pt-2">
             <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
@@ -211,6 +218,16 @@ export function ApplicationCard({ candidate, isOverlay = false, jobTitle }: Appl
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
+              {candidate.notesCount > 0 && (
+                <span
+                  className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-txt-caption"
+                  title={`${candidate.notesCount} note${candidate.notesCount === 1 ? "" : "s"}`}
+                >
+                  <StickyNote className="w-3.5 h-3.5" aria-hidden="true" />
+                  {candidate.notesCount}
+                  <span className="sr-only"> notes</span>
+                </span>
+              )}
               <button
                 type="button"
                 onClick={(e) => {

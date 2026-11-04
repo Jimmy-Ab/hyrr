@@ -20,6 +20,7 @@ import { Header } from "./components/layout/header"
 import { Sidebar } from "./components/layout/sidebar"
 
 // Pages
+import { AlertsPage } from "./pages/Alerts"
 import { ApplicationsBoard } from "./pages/Applications"
 import { CandidateCalendar } from "./pages/CalendarPage"
 import { CandidateDashboard } from "./pages/Dashboard"
@@ -33,6 +34,7 @@ import { SettingsPage } from "./pages/Settings"
 const VIEW_PATHS: Record<SeekerView, string> = {
   Dashboard: "/dashboard",
   Discover: "/discover",
+  Alerts: "/alerts",
   Applications: "/applications",
   Messages: "/messages",
   Notifications: "/notifications",
@@ -207,6 +209,8 @@ function AppContent() {
         return <CandidateDashboard />
       case "Discover":
         return <DiscoverJobs />
+      case "Alerts":
+        return <AlertsPage />
       case "Applications":
         return <ApplicationsBoard />
       case "Messages":

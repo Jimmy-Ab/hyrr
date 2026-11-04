@@ -10,6 +10,7 @@ import {
 } from "../mappers"
 import { session, type StoreGet, type StoreSet } from "../session"
 import type { Candidate, Job, JobState, PublicJob } from "../types"
+import { applyProfileStrength } from "./seekerTools"
 import { loadSettings } from "./settings"
 
 export type BootstrapSlice = Pick<
@@ -84,7 +85,10 @@ const loadSeeker = async (set: StoreSet, get: StoreGet) => {
       })
 
     const profile = Promise.all([loadMe(set), apiFetch("/profile")]).then(([, profileData]) => {
-      if (profileData) set({ seekerProfile: mapSeekerProfile(profileData) })
+      if (profileData) {
+        set({ seekerProfile: mapSeekerProfile(profileData) })
+        applyProfileStrength(set, profileData)
+      }
     })
 
     await Promise.allSettled([
