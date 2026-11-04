@@ -107,6 +107,13 @@ model User {
   joinedAt     DateTime    @default(now())
   lastLogin    DateTime    @default(now())
 
+  // Account security
+  emailVerifiedAt        DateTime?
+  tokenVersion           Int       @default(0) // bump to revoke every session (password reset/change)
+  twoFactorEnabled       Boolean   @default(false)
+  twoFactorSecret        String?   // TOTP secret, AES-256-GCM encrypted at rest
+  twoFactorRecoveryCodes String[]  // sha256 hashes of one-time recovery codes
+
   // OAuth Credentials (Google, LinkedIn, GitHub)
   googleId     String?     @unique
   githubId     String?     @unique
@@ -128,6 +135,7 @@ model User {
   calendarEvents CalendarEvent[]
   companyMemberships CompanyMember[]
   conversationStates ConversationState[]
+  authTokens         AuthToken[]
   jobAlerts     JobAlert[]
   savedSearches  SavedSearch[]
 }
@@ -139,6 +147,9 @@ model Company {
   color       String        @default("purple")
   status      CompanyStatus @default(PENDING)
   plan        String        @default("Starter") // Starter, Pro, Enterprise
+  verified       Boolean   @default(false) // a verified recruiter e-mail matches the company website domain
+  verifiedDomain String?
+  verifiedAt     DateTime?
   country     String
   city        String?
   website     String?
@@ -554,4 +565,21 @@ model Subscription {
   updatedAt DateTime @updatedAt
 }
 
+// One-time tokens for e-mail verification and password reset (only the hash is stored).
+model AuthToken {
+  id        String        @id @default(uuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      AuthTokenType
+  tokenHash String        @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime      @default(now())
 
+  @@index([userId, type])
+}
+
+enum AuthTokenType {
+  VERIFY_EMAIL
+  RESET_PASSWORD
+}
