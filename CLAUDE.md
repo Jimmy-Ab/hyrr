@@ -20,7 +20,7 @@ Roles: `SEEKER`, `RECRUITER`, `ADMIN`; company roles `OWNER | RECRUITER | HIRING
 - Lint/format: `npx oxlint`, `npx prettier --write <files>` (no semicolons, double quotes, width 100).
 
 ## Conventions
-- **Store actions** (`hyrr.shared/src/store/useJobStore.ts`): optimistic update → API → on failure roll back and **re-throw** (`ApiError`). UI awaits, toasts success after resolve, catches to toast `err.message`.
+- **Store actions** (`hyrr.shared/src/store/slices/*.ts`, composed in `useJobStore.ts`; types in `store/types.ts`, mappers in `store/mappers.ts`, socket listeners in `store/socket.ts`): optimistic update → API → on failure roll back and **re-throw** (`ApiError`). UI awaits, toasts success after resolve, catches to toast `err.message`.
 - **Backend access**: always go through `AccessService` (`src/core/access/access.service.ts`): `applicationFor(actor, id, "view"|"manage")`, `jobScopeWhere`, `companyScope`. Recruiters see their **company's** data.
 - **Errors**: throw `AppException`/helpers from `src/core/exceptions/app-exception.ts` with a stable `errorCode`; Prisma P2002/P2025/P2003 are mapped by the global filter.
 - **DTOs**: class-validator on every body; the global pipe is `whitelist + forbidNonWhitelisted`, so unknown fields are 400.
