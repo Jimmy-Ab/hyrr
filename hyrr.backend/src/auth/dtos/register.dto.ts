@@ -1,5 +1,13 @@
-import { ApiProperty } from "@nestjs/swagger"
-import { IsEmail, IsIn, IsNotEmpty, IsString, MaxLength, MinLength } from "class-validator"
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger"
+import {
+  IsEmail,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+} from "class-validator"
 
 export const SIGNUP_ROLES = ["SEEKER", "RECRUITER"] as const
 
@@ -24,4 +32,10 @@ export class RegisterDto {
   @ApiProperty({ example: "SEEKER", enum: SIGNUP_ROLES, description: "Account role" })
   @IsIn(SIGNUP_ROLES as unknown as string[])
   role: "SEEKER" | "RECRUITER"
+
+  @ApiPropertyOptional({ description: "Cloudflare Turnstile token (required when captcha is on)" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2048)
+  captchaToken?: string
 }

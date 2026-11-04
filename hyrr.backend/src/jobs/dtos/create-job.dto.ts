@@ -1,6 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger"
-import { EmploymentType } from "@prisma/client"
-import { IsArray, IsBoolean, IsEnum, IsNotEmpty, IsOptional, IsString } from "class-validator"
+import { EmploymentType, JobStatus } from "@prisma/client"
+import { IsArray, IsBoolean, IsEnum, IsIn, IsNotEmpty, IsOptional, IsString } from "class-validator"
+
+/** Statuses a job may be created with; DRAFT skips the publish gate (e-mail verification). */
+export const CREATE_JOB_STATUSES = [JobStatus.ACTIVE, JobStatus.DRAFT] as const
 
 export class CreateJobDto {
   @ApiProperty({ example: "Senior Frontend Developer", description: "Job title" })
@@ -55,4 +58,9 @@ export class CreateJobDto {
   @IsOptional()
   @IsBoolean()
   remote?: boolean
+
+  @ApiPropertyOptional({ enum: CREATE_JOB_STATUSES, default: JobStatus.ACTIVE })
+  @IsOptional()
+  @IsIn(CREATE_JOB_STATUSES as unknown as string[])
+  status?: "ACTIVE" | "DRAFT"
 }

@@ -16,7 +16,8 @@ import {
   UserRole,
 } from "@prisma/client"
 import { AccessService, Actor } from "../core/access/access.service"
-import { EmailDeliveryService } from "../core/delivery/email-delivery.service"
+import { EmailService } from "../core/delivery/email.service"
+import { newMessage } from "../core/delivery/templates"
 import { AppException } from "../core/exceptions/app-exception"
 import { NotificationsService } from "../notifications/notifications.service"
 import { PrismaService } from "../prisma/prisma.service"
@@ -92,7 +93,7 @@ export class MessagesService {
     @Optional()
     @Inject(forwardRef(() => NotificationsService))
     private notifications?: NotificationsService,
-    @Optional() private emailDelivery?: EmailDeliveryService
+    @Optional() private email?: EmailService
   ) {}
 
   // ─── Scope & per-user state helpers ───────────────────────────────
@@ -513,14 +514,16 @@ export class MessagesService {
       }
 
       // Guest applicant without an account: the message is also delivered by e-mail.
-      if (side === "RECRUITER" && !receiverId && app.email && this.emailDelivery) {
+      if (side === "RECRUITER" && !receiverId && app.email && this.email) {
         const companyName = app.job?.company?.name || "The hiring team"
-        await this.emailDelivery
-          .send(
-            app.email,
-            `New message from ${companyName} about ${jobTitle}`,
-            `${companyName} sent you a message about your application for ${jobTitle}:\n\n${payload.text}`
-          )
+        const content = newMessage({
+          name: app.name,
+          fromName: companyName,
+          jobTitle,
+          excerpt: payload.text || "",
+        })
+        await this.email
+          .send({ to: app.email, ...content })
           .catch((err) => this.logger.warn(`Guest message e-mail failed: ${err?.message || err}`))
       }
     } catch (err: any) {

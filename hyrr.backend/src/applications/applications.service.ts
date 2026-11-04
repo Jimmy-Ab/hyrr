@@ -1,12 +1,17 @@
 import { BadRequestException, HttpStatus, Injectable, Logger, Optional } from "@nestjs/common"
 import { ApplicationStatus, NotificationAction, NotificationType, Prisma } from "@prisma/client"
 import { AiService } from "../ai/ai.service"
+import { assertEmailVerified } from "../auth/email-verification"
 import { AccessService, Actor } from "../core/access/access.service"
+import { EmailService } from "../core/delivery/email.service"
+import { applicationStatus } from "../core/delivery/templates"
 import {
   AppException,
   ForbiddenAppException,
   NotFoundAppException,
 } from "../core/exceptions/app-exception"
+import { CaptchaService } from "../core/security/captcha.service"
+import { PUBLIC_COMPANY_SELECT } from "../jobs/public-company"
 import { MessagesGateway } from "../messages/messages.gateway"
 import { NotificationsService } from "../notifications/notifications.service"
 import { PrismaService } from "../prisma/prisma.service"
@@ -45,7 +50,7 @@ export const SEEKER_APPLICATION_FIELDS = {
 
 const SEEKER_JOB_INCLUDE = {
   include: {
-    company: true,
+    company: { select: PUBLIC_COMPANY_SELECT },
     category: true,
     postedBy: { select: { name: true, avatar: true } },
   },
@@ -118,7 +123,9 @@ export class ApplicationsService {
     private access: AccessService,
     @Optional() private aiService?: AiService,
     @Optional() private messagesGateway?: MessagesGateway,
-    @Optional() private uploads?: UploadsService
+    @Optional() private uploads?: UploadsService,
+    @Optional() private email?: EmailService,
+    @Optional() private captcha?: CaptchaService
   ) {}
 
   /**
@@ -145,7 +152,7 @@ export class ApplicationsService {
   }
 
   // ─── Seeker / guest: apply to a job (C1) ──────────────────────────
-  async applyToJob(jobId: string, dto: CreateApplicationDto, actor?: Actor | null) {
+  async applyToJob(jobId: string, dto: CreateApplicationDto, actor?: Actor | null, ip?: string) {
     if (actor && isRecruiterRole(actor.role)) {
       throw new ForbiddenAppException(
         "Recruiters add candidates via POST /applications/jobs/:jobId/candidates",
@@ -159,7 +166,11 @@ export class ApplicationsService {
     })
     if (!job || job.status !== "ACTIVE")
       throw new NotFoundAppException("Job not found", "JOB_NOT_FOUND")
-    dto = { ...dto, resumeUrl: this.normalizeResumeUrl(dto.resumeUrl, actor?.userId ?? null) }
+    // Guests prove they are human (when captcha is configured); accounts prove their e-mail.
+    if (actor) await assertEmailVerified(this.prisma, actor.userId)
+    else await this.captcha?.verify(dto.captchaToken, ip)
+    const { captchaToken: _captcha, ...fields } = dto
+    dto = { ...fields, resumeUrl: this.normalizeResumeUrl(dto.resumeUrl, actor?.userId ?? null) }
 
     // Guest: never link to an existing account and never reveal an existing record.
     if (!actor) {
@@ -326,7 +337,6 @@ export class ApplicationsService {
     return { applicationId: id, aiStatus: "PENDING" as const }
   }
 
-
   // ─── Recruiter: add a candidate manually (C2) ─────────────────────
   async createCandidate(jobId: string, dto: CreateCandidateDto, actor: Actor) {
     await this.access.jobForManagement(actor, jobId)
@@ -370,8 +380,13 @@ export class ApplicationsService {
 
   // ─── Seeker: save a job without applying ─────────────────────────
   async saveJob(jobId: string, dto: CreateApplicationDto, userId: string) {
-    const job = await this.prisma.job.findUnique({ where: { id: jobId }, select: { id: true } })
-    if (!job) throw new NotFoundAppException("Job not found", "JOB_NOT_FOUND")
+    const job = await this.prisma.job.findUnique({
+      where: { id: jobId },
+      select: { id: true, status: true },
+    })
+    // Drafts and moderated (FLAGGED) jobs are not public; closed jobs stay bookmarkable.
+    if (!job || job.status === "DRAFT" || job.status === "FLAGGED")
+      throw new NotFoundAppException("Job not found", "JOB_NOT_FOUND")
     const select = { ...SEEKER_APPLICATION_FIELDS, job: SEEKER_JOB_INCLUDE }
     const existing = await this.prisma.application.findFirst({ where: { jobId, userId }, select })
     if (existing) return existing
@@ -548,6 +563,15 @@ export class ApplicationsService {
         status,
         tag: app.tag,
       })
+    } else if (statusChanged && app.email && this.email) {
+      // Guest applicant (no account): the status change is delivered by e-mail only.
+      const content = applicationStatus({
+        name: app.name,
+        jobTitle: app.job.title,
+        companyName: app.job.company?.name || "the hiring team",
+        statusLabel: STATUS_LABELS[status],
+      })
+      this.email.send({ to: app.email, ...content }).catch(() => undefined)
     }
     return this.signResume(app)
   }

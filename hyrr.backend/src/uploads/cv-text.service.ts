@@ -1,5 +1,4 @@
 import { Injectable, Logger } from "@nestjs/common"
-import * as fs from "fs"
 import * as path from "path"
 import { UploadsService } from "./uploads.service"
 
@@ -31,7 +30,7 @@ export class CvTextService {
     if (!urlOrFilename) return { text: null, note: "No CV attached" }
     const parsed = this.uploads.parseUploadUrl(urlOrFilename)
     if (!parsed) return { text: null, note: "CV file not found" }
-    const filePath = path.join(this.uploads.getUploadPath(), path.basename(parsed.filename))
+    const filename = path.basename(parsed.filename)
     let timer: NodeJS.Timeout | undefined
     try {
       const timeout = new Promise<CvTextResult>((resolve) => {
@@ -40,7 +39,7 @@ export class CvTextService {
           CV_EXTRACT_TIMEOUT_MS
         )
       })
-      return await Promise.race([this.read(filePath), timeout])
+      return await Promise.race([this.read(filename), timeout])
     } catch (err) {
       this.logger.warn(`CV text extraction failed for ${parsed.filename}: ${(err as Error)?.message}`)
       return { text: null, note: "The CV file could not be read" }
@@ -49,9 +48,9 @@ export class CvTextService {
     }
   }
 
-  private async read(filePath: string): Promise<CvTextResult> {
-    const buffer = await fs.promises.readFile(filePath)
-    return this.extractFromBuffer(buffer, path.extname(filePath))
+  private async read(filename: string): Promise<CvTextResult> {
+    const buffer = await this.uploads.readFile(filename)
+    return this.extractFromBuffer(buffer, path.extname(filename))
   }
 
   async extractFromBuffer(buffer: Buffer, extension: string): Promise<CvTextResult> {

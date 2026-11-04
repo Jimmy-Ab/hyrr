@@ -1,32 +1,14 @@
-import { Injectable, Logger } from "@nestjs/common"
+import { Injectable } from "@nestjs/common"
+import { EmailService } from "./email.service"
+import { notification } from "./templates"
 
-/** Provider-neutral email gateway. Configure EMAIL_WEBHOOK_URL to connect Resend, SendGrid, SES, or an internal mail service. */
+/** @deprecated Use `EmailService.send({ to, subject, html, text })` with a template from `./templates`. */
 @Injectable()
 export class EmailDeliveryService {
-  private readonly logger = new Logger(EmailDeliveryService.name)
+  constructor(private readonly email: EmailService) {}
 
   async send(to: string, subject: string, text: string) {
-    const url = process.env.EMAIL_WEBHOOK_URL
-    if (!url) {
-      this.logger.debug(`Email delivery not configured; queued notification for ${to}`)
-      return { delivered: false, reason: "not-configured" }
-    }
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        ...(process.env.EMAIL_WEBHOOK_TOKEN
-          ? { authorization: `Bearer ${process.env.EMAIL_WEBHOOK_TOKEN}` }
-          : {}),
-      },
-      body: JSON.stringify({
-        to,
-        subject,
-        text,
-        from: process.env.EMAIL_FROM || "Hyrr <no-reply@hyrr.local>",
-      }),
-    })
-    if (!response.ok) throw new Error(`Email provider responded ${response.status}`)
-    return { delivered: true }
+    const content = notification({ title: text })
+    return this.email.send({ to, subject, html: content.html, text: content.text })
   }
 }

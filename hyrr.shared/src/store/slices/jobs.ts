@@ -30,6 +30,7 @@ export const createJobsSlice: StateCreator<JobState, [], [], JobsSlice> = (set, 
         categoryId: jobData.categoryId,
         featured: jobData.featured ?? false,
         remote: jobData.remote ?? false,
+        ...(jobData.status ? { status: jobData.status } : {}),
       }),
     })
     const newJob = mapJob({

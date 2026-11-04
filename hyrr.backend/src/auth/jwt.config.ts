@@ -1,5 +1,6 @@
 import { Logger, UnauthorizedException } from "@nestjs/common"
 import { JwtService } from "@nestjs/jwt"
+import { UserStatus } from "@prisma/client"
 
 /** Placeholder value committed in .env.example — never acceptable outside local development. */
 export const JWT_SECRET_PLACEHOLDER = "your_super_secret_jwt_key_here_min_32_chars"
@@ -43,12 +44,23 @@ export type AccessTokenPayload = {
   role: string
   email: string
   companyId?: string | null
+  /** Token version: must equal User.tokenVersion (bumped on password reset/change). */
+  tv?: number
   type?: string
 }
 
-/** Throws unless the payload is an access token (refresh tokens carry `type: "refresh"`). */
+/** Tokens issued before tokenVersion existed carry no `tv`; they count as version 0. */
+export function tokenVersionMatches(payload: { tv?: unknown }, current: number): boolean {
+  const tv = payload?.tv === undefined ? 0 : payload.tv
+  return typeof tv === "number" && tv === current
+}
+
+/**
+ * Throws unless the payload is an access token. Every other token kind carries a `type`
+ * (`refresh`, `mfa`), so anything typed is refused here.
+ */
 export function assertAccessPayload<T extends { sub?: string; type?: string }>(payload: T): T {
-  if (!payload || !payload.sub || payload.type === "refresh") {
+  if (!payload || !payload.sub || payload.type !== undefined) {
     throw new UnauthorizedException("Invalid access token")
   }
   return payload
@@ -66,4 +78,37 @@ export function verifyAccessToken(jwt: JwtService, token: string): AccessTokenPa
     throw new UnauthorizedException("Invalid access token")
   }
   return assertAccessPayload(payload)
+}
+
+type SessionLookup = {
+  user: {
+    findUnique(args: {
+      where: { id: string }
+      select: { status: true; tokenVersion: true }
+    }): Promise<{ status: UserStatus; tokenVersion: number } | null>
+  }
+}
+
+/**
+ * Like verifyAccessToken, but also checks the account is still active and the token was not
+ * revoked (its `tv` must match the user's current tokenVersion). Use for sockets.
+ */
+export async function verifyAccessTokenForSession(
+  jwt: JwtService,
+  prisma: SessionLookup,
+  token: string
+): Promise<AccessTokenPayload> {
+  const payload = verifyAccessToken(jwt, token)
+  const user = await prisma.user.findUnique({
+    where: { id: payload.sub },
+    select: { status: true, tokenVersion: true },
+  })
+  if (
+    !user ||
+    user.status !== UserStatus.ACTIVE ||
+    !tokenVersionMatches(payload, user.tokenVersion)
+  ) {
+    throw new UnauthorizedException("Session is no longer valid")
+  }
+  return payload
 }

@@ -2,12 +2,16 @@ import {
   AiChatWidget,
   AuthPage,
   Button,
+  CookieNotice,
+  EmailVerificationBanner,
   OAuthCallback,
   RoleMismatch,
   type SeekerView,
   Skeleton,
   ToastProvider,
   apiFetch,
+  isPublicRoute,
+  resolvePublicRoute,
   useJobStore,
 } from "hyrr.shared"
 import { AlertTriangle } from "lucide-react"
@@ -74,6 +78,8 @@ function useViewRouting() {
   // View change -> URL
   React.useEffect(() => {
     if (window.location.pathname === OAUTH_CALLBACK_PATH) return
+    // Public pages (/terms, /verify-email, …) keep their URL.
+    if (isPublicRoute(window.location.pathname)) return
     const target = VIEW_PATHS[candidateActiveView]
     if (!target || window.location.pathname === target) return
     if (viewFromPath(window.location.pathname)) {
@@ -162,6 +168,10 @@ function AppContent() {
     return <OAuthCallback redirectTo={VIEW_PATHS.Dashboard} />
   }
 
+  // Legal pages and e-mail links render without (and regardless of) a session.
+  const publicPage = resolvePublicRoute(pathname)
+  if (publicPage) return publicPage
+
   if (restoring) {
     return (
       <div className="min-h-screen w-full flex flex-col items-center justify-center bg-bg-primary gap-4">
@@ -220,6 +230,7 @@ function AppContent() {
     <div className="flex h-dvh w-full overflow-hidden bg-bg-primary text-txt-body">
       <Sidebar open={navOpen} onClose={() => setNavOpen(false)} />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <EmailVerificationBanner />
         <Header onMenuClick={() => setNavOpen(true)} />
         <main className="flex-1 overflow-y-auto overflow-x-hidden bg-bg-primary p-4 lg:p-5">
           <div className="mx-auto w-full min-w-0 max-w-[1480px]">{renderView()}</div>
@@ -236,6 +247,7 @@ function App() {
   return (
     <ToastProvider>
       <AppContent />
+      <CookieNotice />
     </ToastProvider>
   )
 }

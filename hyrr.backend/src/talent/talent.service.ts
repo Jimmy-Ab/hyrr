@@ -2,19 +2,43 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpStatus,
   Injectable,
+  Logger,
   NotFoundException,
+  Optional,
 } from "@nestjs/common"
-import { AlertFrequency, CompanyMemberRole, UserRole } from "@prisma/client"
+import {
+  AlertFrequency,
+  CompanyMemberRole,
+  JobStatus,
+  NotificationType,
+  Prisma,
+  UserRole,
+} from "@prisma/client"
+import { CacheService } from "../cache/cache.service"
 import { AccessService, Actor } from "../core/access/access.service"
 import { requireCompanyWriter, resolveCompanyMembership } from "../core/access/company-membership"
+import { AppException, NotFoundAppException } from "../core/exceptions/app-exception"
+import { NotificationsService } from "../notifications/notifications.service"
 import { PrismaService } from "../prisma/prisma.service"
+import { JobReportReason } from "./dtos/talent.dto"
+
+/** Unique reporters needed before a live job is hidden pending review (JOB_REPORT_FLAG_THRESHOLD). */
+export function jobReportFlagThreshold() {
+  const value = Number.parseInt(process.env.JOB_REPORT_FLAG_THRESHOLD ?? "", 10)
+  return Number.isFinite(value) && value >= 1 ? value : 5
+}
 
 @Injectable()
 export class TalentService {
+  private readonly logger = new Logger(TalentService.name)
+
   constructor(
     private readonly prisma: PrismaService,
-    private readonly access: AccessService
+    private readonly access: AccessService,
+    @Optional() private readonly notifications?: NotificationsService,
+    @Optional() private readonly cache?: CacheService
   ) {}
 
   private db() {
@@ -269,14 +293,90 @@ export class TalentService {
     })
   }
 
-  async reportJob(actor: Actor, jobId: string, data: { reason: string; details?: string }) {
-    const job = await this.prisma.job.findUnique({ where: { id: jobId } })
-    if (!job) throw new NotFoundException("Job not found")
-    return this.db().jobReport.upsert({
-      where: { jobId_reporterId: { jobId, reporterId: actor.userId } },
-      update: { reason: data.reason, details: data.details, status: "PENDING" },
-      create: { jobId, reporterId: actor.userId, reason: data.reason, details: data.details },
+  /**
+   * Seekers and recruiters of other companies can report a public job once (idempotent). When
+   * the number of unique reporters reaches the threshold, a live job becomes FLAGGED: hidden from
+   * search, detail, recommendations and alerts, and its poster is told it is under review.
+   */
+  async reportJob(
+    actor: Actor,
+    jobId: string,
+    data: { reason: JobReportReason | string; details?: string }
+  ) {
+    if (actor.role !== UserRole.SEEKER && actor.role !== UserRole.RECRUITER)
+      throw new ForbiddenException("Only job seekers and recruiters can report jobs")
+    const job = await this.prisma.job.findUnique({
+      where: { id: jobId },
+      select: { id: true, title: true, status: true, companyId: true, recruiterId: true },
     })
+    if (!job || job.status === JobStatus.DRAFT)
+      throw new NotFoundAppException("Job not found", "JOB_NOT_FOUND")
+    if (actor.role === UserRole.RECRUITER) {
+      const scope = await this.access.companyScope(actor.userId)
+      if (job.recruiterId === actor.userId || scope.companyIds.includes(job.companyId))
+        throw new AppException(
+          "You cannot report a job posted by your own company",
+          HttpStatus.FORBIDDEN,
+          "CANNOT_REPORT_OWN_JOB"
+        )
+    }
+
+    const existing = await this.prisma.jobReport.findUnique({
+      where: { jobId_reporterId: { jobId, reporterId: actor.userId } },
+      select: { id: true },
+    })
+    if (existing) return { reported: true as const }
+
+    const threshold = jobReportFlagThreshold()
+    let flagged = false
+    try {
+      flagged = await this.prisma.$transaction(async (tx) => {
+        await tx.jobReport.create({
+          data: {
+            jobId,
+            reporterId: actor.userId,
+            reason: data.reason,
+            details: data.details?.trim() || null,
+          },
+        })
+        if (job.status !== JobStatus.ACTIVE) return false
+        const reports = await tx.jobReport.count({
+          where: { jobId, status: { not: "DISMISSED" } },
+        })
+        if (reports < threshold) return false
+        // Conditional update: concurrent reports flag (and notify) only once.
+        const updated = await tx.job.updateMany({
+          where: { id: jobId, status: JobStatus.ACTIVE },
+          data: { status: JobStatus.FLAGGED },
+        })
+        return updated.count === 1
+      })
+    } catch (error) {
+      // A concurrent duplicate report by the same user is still a successful report.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")
+        return { reported: true as const }
+      throw error
+    }
+
+    if (flagged) await this.afterFlagged(job)
+    return { reported: true as const }
   }
 
+  private async afterFlagged(job: { id: string; title: string; recruiterId: string }) {
+    try {
+      await this.cache?.delByPattern("jobs:public*")
+      await this.cache?.delByPattern("ai:featured-jobs:*")
+      await this.notifications?.createNotification(
+        job.recruiterId,
+        `Your job "${job.title}" is under review after several reports and is hidden from job seekers`,
+        NotificationType.SYSTEM,
+        undefined,
+        job.id
+      )
+    } catch (error) {
+      this.logger.warn(
+        `Post-flag side effects failed for job ${job.id}: ${(error as Error)?.message}`
+      )
+    }
+  }
 }

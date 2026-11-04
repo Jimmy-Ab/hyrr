@@ -1,6 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger"
 import { ApplicationStatus } from "@prisma/client"
-import { IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from "class-validator"
+import {
+  IsEmail,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+} from "class-validator"
 import { UPLOAD_URL_MESSAGE, UPLOAD_URL_PATTERN } from "./create-application.dto"
 
 /** Pipeline statuses a recruiter may assign (never SAVED or WITHDRAWN). */

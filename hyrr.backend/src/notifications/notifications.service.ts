@@ -1,6 +1,7 @@
 import { Injectable, Optional } from "@nestjs/common"
 import { NotificationAction, NotificationType, UserSetting } from "@prisma/client"
-import { EmailDeliveryService } from "../core/delivery/email-delivery.service"
+import { EmailService } from "../core/delivery/email.service"
+import { appUrl, notification as notificationEmail } from "../core/delivery/templates"
 import { MessagesGateway } from "../messages/messages.gateway"
 import { PrismaService } from "../prisma/prisma.service"
 
@@ -27,7 +28,7 @@ export const NOTIFICATION_PREFERENCE: Record<NotificationType, PreferenceField |
 export class NotificationsService {
   constructor(
     private prisma: PrismaService,
-    private emailDelivery: EmailDeliveryService,
+    private email: EmailService,
     @Optional() private messagesGateway?: MessagesGateway
   ) {}
 
@@ -56,7 +57,7 @@ export class NotificationsService {
     options: { inApp?: boolean } = {}
   ) {
     const [user, setting] = await Promise.all([
-      this.prisma.user.findUnique({ where: { id: userId }, select: { email: true } }),
+      this.prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true, role: true } }),
       this.prisma.userSetting.findUnique({ where: { userId } }),
     ])
     if (!user) return null
@@ -67,7 +68,7 @@ export class NotificationsService {
 
     if (options.inApp === false) {
       if (user.email && setting?.emailNotifications !== false) {
-        this.emailDelivery.send(user.email, "Hyrr notification", title).catch(() => undefined)
+        this.sendEmailCopy(user, title)
       }
       return null
     }
@@ -91,10 +92,15 @@ export class NotificationsService {
     }
 
     if (user.email && setting?.emailNotifications !== false) {
-      this.emailDelivery.send(user.email, "Hyrr notification", title).catch(() => undefined)
+      this.sendEmailCopy(user, title)
     }
 
     return notification
+  }
+
+  private sendEmailCopy(user: { email: string; name?: string | null; role?: string | null }, title: string) {
+    const content = notificationEmail({ name: user.name, title, url: appUrl(user.role, "/notifications") })
+    this.email.send({ to: user.email, ...content }).catch(() => undefined)
   }
 
   async markRead(id: string, userId: string) {

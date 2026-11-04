@@ -15,8 +15,9 @@ import {
 } from "hyrr.shared"
 import { Briefcase, ChevronLeft, ChevronRight, FileText, Plus, Sparkles, X } from "lucide-react"
 import { useEffect, useState, type FormEvent } from "react"
-import { errorMessage } from "../../lib/recruiter"
+import { errorMessage, jobPublishError, type JobPublishError } from "../../lib/recruiter"
 import { useJobStore } from "../../store/useJobStore"
+import { JobPublishErrorNotice } from "../jobs/job-publish-error"
 
 interface Category {
   id: string
@@ -179,6 +180,8 @@ export function AddJobDialog() {
 
   const [step, setStep] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [savingDraft, setSavingDraft] = useState(false)
+  const [publishError, setPublishError] = useState<JobPublishError | null>(null)
   const [categories, setCategories] = useState<Category[]>([])
   const [categoriesLoading, setCategoriesLoading] = useState(false)
   const [categoriesError, setCategoriesError] = useState<string | null>(null)
@@ -232,6 +235,7 @@ export function AddJobDialog() {
     setSkills([])
     setRequirements([])
     setBenefits([])
+    setPublishError(null)
   }
 
   const handleClose = () => {
@@ -268,35 +272,66 @@ export function AddJobDialog() {
     setStep((s) => s + 1)
   }
 
+  const jobInput = (): Parameters<typeof addJob>[0] => ({
+    title,
+    location: location || "Remote",
+    type,
+    salary: salary || undefined,
+    description,
+    requirements,
+    skills,
+    benefits,
+    categoryId,
+    featured,
+    remote,
+  })
+
+  /** Shows content-policy / unverified-email errors inline; anything else is a toast. */
+  const handleError = (err: unknown, failTitle: string) => {
+    const inline = jobPublishError(err)
+    if (inline) setPublishError(inline)
+    else toast(failTitle, errorMessage(err), "error")
+  }
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!validateStep()) return
     setLoading(true)
+    setPublishError(null)
     try {
-      await addJob({
-        title,
-        location: location || "Remote",
-        type,
-        salary: salary || undefined,
-        description,
-        requirements,
-        skills,
-        benefits,
-        categoryId,
-        featured,
-        remote,
-      })
+      await addJob(jobInput())
       toast("Job created", `"${title}" is now live in your job board.`, "success")
       handleClose()
     } catch (err) {
-      toast("Could not create job", errorMessage(err), "error")
+      handleError(err, "Could not create job")
     } finally {
       setLoading(false)
     }
   }
 
+  // Drafts aren't visible to candidates, so they don't need a verified e-mail.
+  const handleSaveDraft = async () => {
+    setSavingDraft(true)
+    try {
+      const draft = { ...jobInput(), status: "DRAFT" as const }
+      await addJob(draft)
+      toast(
+        "Draft saved",
+        `"${title}" was saved as a draft. Publish it once you're verified.`,
+        "success"
+      )
+      handleClose()
+    } catch (err) {
+      handleError(err, "Could not save draft")
+    } finally {
+      setSavingDraft(false)
+    }
+  }
+
+  const busy = loading || savingDraft
+
   return (
-    <Dialog open={isAddJobOpen} onOpenChange={(open) => !open && !loading && handleClose()}>
+    <Dialog open={isAddJobOpen} onOpenChange={(open) => !open && !busy && handleClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create Job Listing</DialogTitle>
@@ -534,6 +569,14 @@ export function AddJobDialog() {
             </div>
           )}
 
+          {publishError && (
+            <JobPublishErrorNotice
+              error={publishError}
+              onSaveDraft={publishError.kind === "unverified" ? handleSaveDraft : undefined}
+              savingDraft={savingDraft}
+            />
+          )}
+
           <DialogFooter className="mt-6 flex justify-between">
             <div className="flex gap-2">
               {step > 0 && (
@@ -550,6 +593,7 @@ export function AddJobDialog() {
                 type="button"
                 variant="ghost"
                 onClick={handleClose}
+                disabled={busy}
                 className="cursor-pointer"
               >
                 Cancel
@@ -562,7 +606,7 @@ export function AddJobDialog() {
             ) : (
               <Button
                 type="submit"
-                disabled={loading}
+                disabled={busy}
                 className="cursor-pointer gap-1.5 min-w-[140px]"
               >
                 {loading ? (

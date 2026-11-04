@@ -1,0 +1,33 @@
+# Staging / production-like override:
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --build
+# - production mode, Postgres/Redis not reachable from the host, everything restarts on failure.
+# - Put real secrets (JWT_SECRET, SMTP_*, S3_*, SENTRY_DSN, TURNSTILE_SECRET_KEY,
+#   TWO_FACTOR_ENCRYPTION_KEY ...) in hyrr.backend/.env; set PUBLIC_API_URL, CORS_ORIGINS,
+#   FRONTEND_URL, RECRUITER_APP_URL and the VITE_* build args in the shell or the root .env.
+services:
+  postgres:
+    ports: !reset []
+    restart: unless-stopped
+
+  redis:
+    ports: !reset []
+    restart: unless-stopped
+
+  backend:
+    environment:
+      NODE_ENV: production
+      TRUST_PROXY: ${TRUST_PROXY:-true}
+      SEED_DEMO_DATA: "false"
+    restart: unless-stopped
+
+  recruiter:
+    restart: unless-stopped
+
+  jobseeker:
+    restart: unless-stopped
+
+  backup:
+    restart: unless-stopped
+
+  clamav:
+    restart: unless-stopped

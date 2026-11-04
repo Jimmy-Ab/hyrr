@@ -106,14 +106,20 @@ export class CreateSavedSearchDto {
   filters: Record<string, unknown>
 }
 
+export const JOB_REPORT_REASONS = [
+  "SCAM",
+  "MISLEADING",
+  "DISCRIMINATORY",
+  "DUPLICATE",
+  "OTHER",
+] as const
+export type JobReportReason = (typeof JOB_REPORT_REASONS)[number]
+
 export class ReportJobDto {
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  reason: string
+  @IsIn(JOB_REPORT_REASONS as unknown as string[])
+  reason: JobReportReason
   @IsOptional()
   @IsString()
   @MaxLength(2000)
   details?: string
 }
-

@@ -3,6 +3,7 @@ import { PrismaClient } from "@prisma/client"
 import { mockDeep } from "jest-mock-extended"
 import { AiService } from "../ai/ai.service"
 import { AccessService } from "../core/access/access.service"
+import { CaptchaService } from "../core/security/captcha.service"
 import { MessagesGateway } from "../messages/messages.gateway"
 import { NotificationsService } from "../notifications/notifications.service"
 import { PrismaService } from "../prisma/prisma.service"
@@ -17,6 +18,7 @@ describe("ApplicationsService", () => {
   let notifications: any
   let ai: any
   let gateway: any
+  let captcha: any
 
   const activeJob = { id: "job-1", status: "ACTIVE", title: "Engineer", recruiterId: "rec-1" }
   const applyDto = {
@@ -44,6 +46,12 @@ describe("ApplicationsService", () => {
       resolveModel: jest.fn().mockResolvedValue({ model: "gpt-4o-mini", provider: "openai" }),
     }
     gateway = { emitAiScoreUpdate: jest.fn(), emitApplicationUpdate: jest.fn() }
+    captcha = {
+      isEnabled: jest.fn().mockReturnValue(false),
+      verify: jest.fn().mockResolvedValue(undefined),
+    }
+    // Seekers in these tests have a verified e-mail unless a test says otherwise.
+    prismaMock.user.findUnique.mockResolvedValue({ emailVerifiedAt: new Date() })
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -53,6 +61,7 @@ describe("ApplicationsService", () => {
         { provide: NotificationsService, useValue: notifications },
         { provide: AiService, useValue: ai },
         { provide: MessagesGateway, useValue: gateway },
+        { provide: CaptchaService, useValue: captcha },
       ],
     }).compile()
 
@@ -154,7 +163,38 @@ describe("ApplicationsService", () => {
       expect(prismaMock.application.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ userId: null }) })
       )
-      expect(Object.keys(result).sort()).toEqual(["id", "status"])
+      expect(Object.keys(result ?? {}).sort()).toEqual(["id", "status"])
+    })
+
+    it("seekers with an unverified e-mail get 403 EMAIL_NOT_VERIFIED", async () => {
+      prismaMock.job.findUnique.mockResolvedValue(activeJob)
+      prismaMock.user.findUnique.mockResolvedValue({ emailVerifiedAt: null })
+      await expect(
+        service.applyToJob("job-1", applyDto, { userId: "seeker-1", role: "SEEKER" })
+      ).rejects.toMatchObject({ status: 403, errorCode: "EMAIL_NOT_VERIFIED" })
+      expect(prismaMock.application.create).not.toHaveBeenCalled()
+      expect(prismaMock.application.update).not.toHaveBeenCalled()
+    })
+
+    it("guests pass the captcha token and IP to CaptchaService and it is not persisted", async () => {
+      prismaMock.job.findUnique.mockResolvedValue(activeJob)
+      prismaMock.application.findFirst.mockResolvedValue(null)
+      prismaMock.application.create.mockResolvedValue({ id: "app-guest", status: "APPLIED" })
+
+      await service.applyToJob("job-1", { ...applyDto, captchaToken: "tok" }, null, "1.2.3.4")
+
+      expect(captcha.verify).toHaveBeenCalledWith("tok", "1.2.3.4")
+      expect(JSON.stringify(prismaMock.application.create.mock.calls[0][0])).not.toContain("tok")
+    })
+
+    it("a failed guest captcha blocks the application", async () => {
+      prismaMock.job.findUnique.mockResolvedValue(activeJob)
+      const { AppException } = await import("../core/exceptions/app-exception")
+      captcha.verify.mockRejectedValue(new AppException("captcha", 400, "CAPTCHA_REQUIRED"))
+      await expect(service.applyToJob("job-1", applyDto, null)).rejects.toMatchObject({
+        errorCode: "CAPTCHA_REQUIRED",
+      })
+      expect(prismaMock.application.create).not.toHaveBeenCalled()
     })
 
     it("recruiters cannot apply (403)", async () => {
@@ -319,7 +359,10 @@ describe("ApplicationsService", () => {
 
     it("recruiter hard-deletes with manage access", async () => {
       access.applicationFor.mockResolvedValue({ id: "app-1", status: "APPLIED", job: activeJob })
-      const result = await service.deleteApplication("app-1", { userId: "rec-1", role: "RECRUITER" })
+      const result = await service.deleteApplication("app-1", {
+        userId: "rec-1",
+        role: "RECRUITER",
+      })
       expect(access.applicationFor).toHaveBeenCalledWith(expect.anything(), "app-1", "manage")
       expect(result).toEqual({ id: "app-1", deleted: true })
     })
@@ -400,7 +443,9 @@ describe("ApplicationsService", () => {
     const recruiter = { userId: "rec-1", role: "RECRUITER" }
 
     it("requires manage access", async () => {
-      access.applicationFor.mockRejectedValue(Object.assign(new Error("Forbidden"), { status: 403 }))
+      access.applicationFor.mockRejectedValue(
+        Object.assign(new Error("Forbidden"), { status: 403 })
+      )
       await expect(service.analyzeApplication("app-1", recruiter)).rejects.toMatchObject({
         status: 403,
       })

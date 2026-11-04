@@ -1,4 +1,5 @@
 import {
+  AccountSecuritySettings,
   apiFetch,
   Button,
   Card,
@@ -8,20 +9,8 @@ import {
   useToast,
   type UserTheme,
 } from "hyrr.shared"
-import {
-  Bell,
-  Eye,
-  EyeOff,
-  Globe,
-  Loader2,
-  Lock,
-  Palette,
-  Shield,
-  Trash2,
-  User,
-} from "lucide-react"
+import { Bell, Globe, Loader2, Lock, Palette, Shield, User } from "lucide-react"
 import { useEffect, useState } from "react"
-import { ConfirmDialog } from "../components/ui/confirm-dialog"
 
 type Tab = "General" | "Account" | "Security" | "Notifications" | "Appearance" | "Privacy"
 
@@ -81,24 +70,15 @@ function Switch({
 }
 
 export function SettingsPage() {
-  const { theme, setTheme, user, seekerProfile, profileUpdating, updateProfile, deleteAccount } =
-    useJobStore()
+  const { theme, setTheme, user, seekerProfile, profileUpdating, updateProfile } = useJobStore()
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState<Tab>("General")
-  const [showPassword, setShowPassword] = useState(false)
-  const [showNewPassword, setShowNewPassword] = useState(false)
-  const [pwForm, setPwForm] = useState({ current: "", newPw: "", confirm: "" })
-  const [pwLoading, setPwLoading] = useState(false)
 
   // General tab form state (prefilled from the profile)
   const [generalName, setGeneralName] = useState(user?.name || "")
   const [generalTitle, setGeneralTitle] = useState(seekerProfile?.title || "")
   const [generalLocation, setGeneralLocation] = useState(seekerProfile?.location || "")
   const [phone, setPhone] = useState(seekerProfile?.phone || "")
-
-  // Delete account
-  const [deleteOpen, setDeleteOpen] = useState(false)
-  const [deletePassword, setDeletePassword] = useState("")
 
   // Notification & privacy prefs (persisted via /settings)
   const [notifPrefs, setNotifPrefs] = useState({
@@ -197,38 +177,6 @@ export function SettingsPage() {
       await setTheme(value)
     } catch (err) {
       toast("Theme not saved", errorMessage(err), "error")
-    }
-  }
-
-  const handleChangePassword = async () => {
-    if (!pwForm.current || !pwForm.newPw)
-      return toast("Missing fields", "Please fill in all password fields.", "error")
-    if (pwForm.newPw.length < 8)
-      return toast("Password too short", "New password must be at least 8 characters.", "error")
-    if (pwForm.newPw !== pwForm.confirm)
-      return toast("Passwords don't match", "Please re-enter the new password.", "error")
-    setPwLoading(true)
-    try {
-      await apiFetch("/auth/change-password", {
-        method: "POST",
-        body: JSON.stringify({ currentPassword: pwForm.current, newPassword: pwForm.newPw }),
-      })
-      toast("Updated", "Password changed successfully.", "success")
-      setPwForm({ current: "", newPw: "", confirm: "" })
-    } catch (err) {
-      toast("Couldn't change password", errorMessage(err), "error")
-    } finally {
-      setPwLoading(false)
-    }
-  }
-
-  const handleDeleteAccount = async () => {
-    try {
-      await deleteAccount(deletePassword || undefined)
-      toast("Account deleted", "Your account and data have been removed.", "success")
-    } catch (err) {
-      toast("Couldn't delete account", errorMessage(err), "error")
-      throw err
     }
   }
 
@@ -339,104 +287,12 @@ export function SettingsPage() {
               {profileUpdating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               Update Account
             </Button>
-
-            <div className="pt-4 border-t border-bg-border/40">
-              <h3 className="text-[13px] font-bold text-sec-red mb-2">Danger Zone</h3>
-              <p className="text-[13px] text-txt-caption mb-3">
-                Permanently delete your account and all associated data. This cannot be undone.
-              </p>
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setDeletePassword("")
-                  setDeleteOpen(true)
-                }}
-                className="gap-2 cursor-pointer border-sec-red/30 text-sec-red hover:bg-sec-red/5"
-              >
-                <Trash2 className="w-4 h-4" /> Delete Account
-              </Button>
-            </div>
           </div>
         )
 
       case "Security":
         return (
-          <div className="space-y-6">
-            <div className="space-y-3">
-              <label
-                htmlFor="pw-current"
-                className="text-[13.5px] font-bold text-txt-heading block"
-              >
-                Current Password
-              </label>
-              <div className="relative max-w-sm">
-                <Input
-                  id="pw-current"
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="current-password"
-                  placeholder="••••••••"
-                  value={pwForm.current}
-                  onChange={(e) => setPwForm((p) => ({ ...p, current: e.target.value }))}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-txt-caption hover:text-txt-heading cursor-pointer"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-            <div className="space-y-3">
-              <label htmlFor="pw-new" className="text-[13.5px] font-bold text-txt-heading block">
-                New Password
-              </label>
-              <div className="relative max-w-sm">
-                <Input
-                  id="pw-new"
-                  type={showNewPassword ? "text" : "password"}
-                  autoComplete="new-password"
-                  placeholder="Minimum 8 characters"
-                  value={pwForm.newPw}
-                  onChange={(e) => setPwForm((p) => ({ ...p, newPw: e.target.value }))}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowNewPassword(!showNewPassword)}
-                  aria-label={showNewPassword ? "Hide new password" : "Show new password"}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-txt-caption hover:text-txt-heading cursor-pointer"
-                >
-                  {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-            <div className="space-y-3">
-              <label
-                htmlFor="pw-confirm"
-                className="text-[13.5px] font-bold text-txt-heading block"
-              >
-                Confirm New Password
-              </label>
-              <Input
-                id="pw-confirm"
-                type="password"
-                autoComplete="new-password"
-                placeholder="Re-enter new password"
-                className="max-w-sm"
-                value={pwForm.confirm}
-                onChange={(e) => setPwForm((p) => ({ ...p, confirm: e.target.value }))}
-              />
-            </div>
-            <Button
-              onClick={handleChangePassword}
-              disabled={pwLoading}
-              className="cursor-pointer shadow-button gap-2"
-            >
-              {pwLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              Update Password
-            </Button>
-          </div>
+          <AccountSecuritySettings deleteDescription="This permanently deletes your profile, applications, documents and messages. This cannot be undone." />
         )
 
       case "Notifications":
@@ -613,35 +469,6 @@ export function SettingsPage() {
           {renderTab()}
         </Card>
       </div>
-
-      <ConfirmDialog
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        title="Delete your account?"
-        description="This permanently deletes your profile, applications, documents and messages. This cannot be undone."
-        confirmLabel="Delete account"
-        onConfirm={handleDeleteAccount}
-      >
-        <div className="mt-4 space-y-2">
-          <label
-            htmlFor="delete-password"
-            className="text-[13.5px] font-bold text-txt-heading block"
-          >
-            Confirm with your password
-          </label>
-          <Input
-            id="delete-password"
-            type="password"
-            autoComplete="current-password"
-            value={deletePassword}
-            onChange={(e) => setDeletePassword(e.target.value)}
-            placeholder="Your password"
-          />
-          <p className="text-[12px] text-txt-caption">
-            Signed up with Google, GitHub or LinkedIn and never set a password? Leave this empty.
-          </p>
-        </div>
-      </ConfirmDialog>
     </div>
   )
 }

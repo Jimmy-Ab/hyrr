@@ -1,8 +1,23 @@
-import { BadRequestException, Injectable, Logger } from "@nestjs/common"
-import { createHmac, randomUUID, timingSafeEqual } from "crypto"
-import * as fs from "fs"
+import {
+  BadRequestException,
+  HttpStatus,
+  Inject,
+  Injectable,
+  Logger,
+  Optional,
+  ServiceUnavailableException,
+} from "@nestjs/common"
+import { randomUUID } from "crypto"
 import * as path from "path"
-import { jwtSecret } from "../auth/jwt.config"
+import { AppException } from "../core/exceptions/app-exception"
+import { clamAvConfigFromEnv, scanBuffer } from "./clamav"
+import { matchesDeclaredType } from "./file-validation"
+import { LocalStorageDriver } from "./storage/local-storage.driver"
+import { createStorageDriver } from "./storage/storage.factory"
+import { STORAGE_DRIVER, StorageDriver } from "./storage/storage.driver"
+import { createUploadToken, uploadApiUrl, verifyUploadToken } from "./storage/upload-signing"
+
+export { resolveUploadDir } from "./storage/local-storage.driver"
 
 /** MIME type → allowed extensions. */
 export const ALLOWED_UPLOAD_TYPES: Record<string, string[]> = {
@@ -20,23 +35,20 @@ const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 /** `<ownerUserId>_<randomUUID>.<ext>` */
 const OWNED_FILENAME = new RegExp(`^([A-Za-z0-9-]{1,64})_(${UUID})(\\.[a-z0-9]{1,5})$`, "i")
 
-export function resolveUploadDir(): string {
-  return path.resolve(process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads"))
-}
+export type IncomingUpload = { buffer: Buffer; mimetype: string; originalname: string; size: number }
 
 @Injectable()
 export class UploadsService {
   private readonly logger = new Logger(UploadsService.name)
-  private readonly uploadDir = resolveUploadDir()
+  readonly storage: StorageDriver
 
-  constructor() {
-    if (!fs.existsSync(this.uploadDir)) {
-      fs.mkdirSync(this.uploadDir, { recursive: true })
-    }
+  constructor(@Optional() @Inject(STORAGE_DRIVER) storage?: StorageDriver) {
+    this.storage = storage ?? createStorageDriver()
   }
 
+  /** Local upload directory (local driver only). */
   getUploadPath(): string {
-    return this.uploadDir
+    return this.storage instanceof LocalStorageDriver ? this.storage.dir : ""
   }
 
   /** Name for a freshly uploaded file; embeds the uploader so ownership can be verified later. */
@@ -51,24 +63,17 @@ export class UploadsService {
     return match ? match[1] : null
   }
 
-  private baseUrl() {
-    return (process.env.PUBLIC_API_URL || `http://localhost:${process.env.PORT || 3000}`).replace(
-      /\/+$/,
-      ""
-    )
-  }
-
   /** `${PUBLIC_API_URL}/api/uploads/<file>` (+ short-lived token for non-image documents). */
   formatFileUrl(filename: string): string {
     const safe = path.basename(filename)
-    const url = `${this.baseUrl()}/api/uploads/${encodeURIComponent(safe)}`
+    const url = uploadApiUrl(safe)
     if (PUBLIC_IMAGE_EXTENSIONS.includes(path.extname(safe).toLowerCase())) return url
     return `${url}?token=${this.createAccessToken(safe)}`
   }
 
   /** Permanent, token-less URL for a stored upload. This is what gets persisted in the DB. */
   canonicalFileUrl(filename: string): string {
-    return `${this.baseUrl()}/api/uploads/${encodeURIComponent(path.basename(filename))}`
+    return uploadApiUrl(path.basename(filename))
   }
 
   /**
@@ -81,30 +86,11 @@ export class UploadsService {
     return parsed ? this.formatFileUrl(parsed.filename) : value
   }
 
-  private signature(value: string) {
-    return createHmac("sha256", process.env.UPLOAD_URL_SECRET || jwtSecret())
-      .update(value)
-      .digest("base64url")
-  }
   createAccessToken(filename: string, expiresInMs = 15 * 60 * 1000) {
-    const payload = `${filename}:${Date.now() + expiresInMs}`
-    return `${Buffer.from(payload).toString("base64url")}.${this.signature(payload)}`
+    return createUploadToken(filename, expiresInMs)
   }
   verifyAccessToken(filename: string, token?: string) {
-    if (!token) return false
-    const [encoded, signature] = token.split(".")
-    if (!encoded || !signature) return false
-    const payload = Buffer.from(encoded, "base64url").toString()
-    const separator = payload.lastIndexOf(":")
-    const tokenFilename = payload.slice(0, separator)
-    const expiry = payload.slice(separator + 1)
-    const expected = this.signature(payload)
-    if (
-      signature.length !== expected.length ||
-      !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
-    )
-      return false
-    return tokenFilename === filename && Number(expiry) > Date.now()
+    return verifyUploadToken(filename, token)
   }
 
   getFilename(value: string) {
@@ -118,6 +104,9 @@ export class UploadsService {
   /**
    * Parses a URL (or bare filename) produced by POST /api/uploads.
    * Returns null when it does not reference one of our stored uploads.
+   * Local driver: checks the file exists on disk. Object storage: no network call, the
+   * filename must have the server-generated `<owner>_<uuid>.<ext>` shape
+   * (use `fileExists` where existence matters).
    */
   parseUploadUrl(value: string): { filename: string; ownerId: string | null } | null {
     if (!value || typeof value !== "string") return null
@@ -127,12 +116,17 @@ export class UploadsService {
       if (!/\/uploads\/[^/]+$/.test(url.pathname)) return null
       filename = path.basename(decodeURIComponent(url.pathname))
     } catch {
-      if (value.includes("/")) return null
+      if (value.includes("/") || value.includes("\\")) return null
       filename = value
     }
     if (!filename || filename.startsWith(".")) return null
-    if (!fs.existsSync(path.join(this.uploadDir, filename))) return null
-    return { filename, ownerId: this.ownerOf(filename) }
+    const ownerId = this.ownerOf(filename)
+    if (this.storage instanceof LocalStorageDriver) {
+      if (!this.storage.existsSync(filename)) return null
+    } else if (!ownerId) {
+      return null
+    }
+    return { filename, ownerId }
   }
 
   /** Returns the stored filename when `value` is an upload owned by `userId`; otherwise 400. */
@@ -144,44 +138,70 @@ export class UploadsService {
     return parsed.filename
   }
 
+  async fileExists(filename: string): Promise<boolean> {
+    try {
+      return await this.storage.exists(path.basename(filename))
+    } catch (err: any) {
+      this.logger.warn(`Could not check upload ${filename}: ${err?.message}`)
+      return false
+    }
+  }
+
+  /** Reads a stored upload. */
+  async readFile(filename: string): Promise<Buffer> {
+    return this.storage.getBuffer(path.basename(filename))
+  }
+
   /** Removes a stored upload; a missing file is not an error. */
   async deleteFile(filename: string): Promise<void> {
     const safe = path.basename(filename)
     if (!safe || safe.startsWith(".")) return
     try {
-      await fs.promises.unlink(path.join(this.uploadDir, safe))
+      await this.storage.delete(safe)
     } catch (err: any) {
-      if (err?.code !== "ENOENT")
-        this.logger.warn(`Could not delete upload ${safe}: ${err?.message}`)
+      this.logger.warn(`Could not delete upload ${safe}: ${err?.message}`)
     }
   }
 
-  validateStoredFile(file: { path: string; mimetype: string; originalname: string }) {
-    const data = fs.readFileSync(file.path)
-    const extension = path.extname(file.originalname).toLowerCase()
-    const isPng =
-      data.length >= 8 &&
-      data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
-    const isJpeg = data.length >= 3 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff
-    const isWebp =
-      data.length >= 12 &&
-      data.subarray(0, 4).toString("ascii") === "RIFF" &&
-      data.subarray(8, 12).toString("ascii") === "WEBP"
-    const isPdf = data.subarray(0, 5).toString() === "%PDF-"
-    const isZip = data.length >= 4 && data.subarray(0, 2).toString() === "PK"
-    const isLegacyDoc =
-      data.length >= 8 &&
-      data.subarray(0, 8).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]))
-    const valid =
-      (extension === ".png" && isPng) ||
-      ((extension === ".jpg" || extension === ".jpeg") && isJpeg) ||
-      (extension === ".webp" && isWebp) ||
-      (extension === ".pdf" && isPdf) ||
-      (extension === ".docx" && isZip) ||
-      (extension === ".doc" && isLegacyDoc)
-    if (!valid) {
-      fs.unlinkSync(file.path)
-      throw new BadRequestException("File content does not match its declared type")
+  /** Throws 400 when the buffer's magic bytes don't match the declared extension. */
+  validateBuffer(buffer: Buffer, originalName: string) {
+    if (!matchesDeclaredType(buffer, path.extname(originalName))) {
+      throw new AppException(
+        "File content does not match its declared type",
+        HttpStatus.BAD_REQUEST,
+        "FILE_TYPE_MISMATCH"
+      )
     }
+  }
+
+  /** ClamAV INSTREAM scan when CLAMAV_HOST is set. Infected → 400 FILE_INFECTED. */
+  async scan(buffer: Buffer): Promise<void> {
+    const config = clamAvConfigFromEnv()
+    if (!config) return
+    let result
+    try {
+      result = await scanBuffer(buffer, config)
+    } catch (err: any) {
+      this.logger.error(`Virus scan unavailable: ${err?.message}`)
+      if (process.env.CLAMAV_FAIL_OPEN === "true") return
+      throw new ServiceUnavailableException("File scanning is temporarily unavailable")
+    }
+    if (result.infected) {
+      this.logger.warn(`Rejected infected upload (${result.signature})`)
+      throw new AppException(
+        "The file was rejected by the virus scanner",
+        HttpStatus.BAD_REQUEST,
+        "FILE_INFECTED"
+      )
+    }
+  }
+
+  /** Validates, scans and stores an uploaded file. Returns the generated filename (storage key). */
+  async store(userId: string, file: IncomingUpload): Promise<string> {
+    this.validateBuffer(file.buffer, file.originalname)
+    await this.scan(file.buffer)
+    const filename = this.buildFilename(userId, file.originalname)
+    await this.storage.put(filename, file.buffer, file.mimetype)
+    return filename
   }
 }

@@ -112,10 +112,24 @@ export function mapJob(j: any): Job {
     location: j.location || "",
     type: j.type ? employmentTypeLabel(j.type) : "",
     posted: "Posted " + new Date(j.createdAt || Date.now()).toLocaleDateString(),
-    status: j.status === "ACTIVE" ? "Active" : j.status === "DRAFT" ? "Draft" : "Closed",
+    status: mapJobStatus(j.status),
     color: j.color || j.company?.color || "purple",
     description: j.description || "",
     requirements: Array.isArray(j.requirements) ? j.requirements : [],
+    companyVerified: j.company?.verified === true,
+  }
+}
+
+export function mapJobStatus(status: unknown): Job["status"] {
+  switch (status) {
+    case "ACTIVE":
+      return "Active"
+    case "DRAFT":
+      return "Draft"
+    case "FLAGGED":
+      return "Flagged"
+    default:
+      return "Closed"
   }
 }
 
@@ -177,6 +191,7 @@ export function mapPublicJob(pj: any): PublicJob {
     title: pj.title,
     company: pj.company?.name || "Company",
     companyColor: pj.company?.color || "purple",
+    companyVerified: pj.company?.verified === true,
     location: pj.location || "",
     type: employmentTypeLabel(pj.type),
     salary: pj.salary || "Competitive",
@@ -198,6 +213,7 @@ export function mapJobApplication(a: any): JobApplication {
     company: job.company?.name || "Company",
     title: job.title || a.title || "Position",
     companyColor: job.company?.color || "purple",
+    companyVerified: job.company?.verified === true,
     location: job.location || "",
     type: job.type ? employmentTypeLabel(job.type) : "",
     salary: job.salary || "Competitive",

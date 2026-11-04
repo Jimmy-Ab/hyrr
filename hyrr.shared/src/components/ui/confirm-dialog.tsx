@@ -1,15 +1,15 @@
+import * as React from "react"
+import { Button } from "./button"
 import {
-  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "hyrr.shared"
-import * as React from "react"
+} from "./dialog"
 
-interface ConfirmDialogProps {
+export interface ConfirmDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   title: string

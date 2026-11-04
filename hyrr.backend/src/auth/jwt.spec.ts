@@ -5,6 +5,7 @@ import {
   jwtSecret,
   jwtSecretProblem,
   verifyAccessToken,
+  verifyAccessTokenForSession,
 } from "./jwt.config"
 import { JwtStrategy } from "./strategies/jwt.strategy"
 
@@ -19,6 +20,36 @@ describe("access token verification", () => {
 
   it("rejects refresh tokens used as access tokens", () => {
     expect(() => verifyAccessToken(jwt, refresh)).toThrow(UnauthorizedException)
+  })
+
+  it("rejects MFA challenge tokens used as access tokens", () => {
+    const mfa = jwt.sign({ sub: "u1", type: "mfa", tv: 0 }, { expiresIn: "5m" })
+    expect(() => verifyAccessToken(jwt, mfa)).toThrow(UnauthorizedException)
+  })
+
+  describe("verifyAccessTokenForSession (sockets)", () => {
+    const prisma: any = { user: { findUnique: jest.fn() } }
+    beforeEach(() => prisma.user.findUnique.mockReset())
+
+    it("accepts a token whose tv matches; legacy tokens without tv count as 0", async () => {
+      prisma.user.findUnique.mockResolvedValue({ status: "ACTIVE", tokenVersion: 0 })
+      await expect(verifyAccessTokenForSession(jwt, prisma, access)).resolves.toMatchObject({
+        sub: "u1",
+      })
+    })
+
+    it("rejects revoked tokens and inactive users", async () => {
+      prisma.user.findUnique.mockResolvedValue({ status: "ACTIVE", tokenVersion: 1 })
+      await expect(verifyAccessTokenForSession(jwt, prisma, access)).rejects.toThrow(
+        UnauthorizedException
+      )
+      const v1 = jwt.sign({ sub: "u1", role: "SEEKER", email: "a@b.c", tv: 1 })
+      await expect(verifyAccessTokenForSession(jwt, prisma, v1)).resolves.toBeDefined()
+      prisma.user.findUnique.mockResolvedValue({ status: "SUSPENDED", tokenVersion: 1 })
+      await expect(verifyAccessTokenForSession(jwt, prisma, v1)).rejects.toThrow(
+        UnauthorizedException
+      )
+    })
   })
 
   it("rejects tampered tokens", () => {
@@ -45,6 +76,29 @@ describe("access token verification", () => {
       ).rejects.toThrow(UnauthorizedException)
     })
 
+    it("rejects tokens issued before a password reset/change (tokenVersion)", async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: "u1",
+        status: "ACTIVE",
+        role: "SEEKER",
+        email: "a@b.c",
+        tokenVersion: 2,
+      })
+      await expect(
+        strategy.validate({ sub: "u1", role: "SEEKER", email: "a@b.c", tv: 1 })
+      ).rejects.toThrow(UnauthorizedException)
+      await expect(
+        strategy.validate({ sub: "u1", role: "SEEKER", email: "a@b.c", tv: 2 })
+      ).resolves.toMatchObject({ userId: "u1" })
+    })
+
+    it("rejects mfa tokens before touching the database", async () => {
+      await expect(strategy.validate({ sub: "u1", type: "mfa" } as any)).rejects.toThrow(
+        UnauthorizedException
+      )
+      expect(prisma.user.findUnique).not.toHaveBeenCalled()
+    })
+
     it("returns the current role/company from the database", async () => {
       prisma.user.findUnique.mockResolvedValue({
         id: "u1",
@@ -52,6 +106,7 @@ describe("access token verification", () => {
         role: "RECRUITER",
         email: "a@b.c",
         companyId: "co-1",
+        tokenVersion: 0,
       })
       await expect(
         strategy.validate({ sub: "u1", role: "SEEKER", email: "a@b.c" })

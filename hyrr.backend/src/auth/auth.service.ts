@@ -2,6 +2,7 @@ import {
   ConflictException,
   HttpStatus,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common"
@@ -9,10 +10,19 @@ import { JwtService } from "@nestjs/jwt"
 import { CompanyMemberRole, Prisma, User, UserRole, UserStatus } from "@prisma/client"
 import * as bcrypt from "bcrypt"
 import { AppException } from "../core/exceptions/app-exception"
+import { CaptchaService } from "../core/security/captcha.service"
 import { PrismaService } from "../prisma/prisma.service"
+import { AccountEmailService } from "./account-email.service"
 import { LoginDto } from "./dtos/login.dto"
 import { RegisterDto } from "./dtos/register.dto"
-import { jwtSecret } from "./jwt.config"
+import { jwtSecret, tokenVersionMatches } from "./jwt.config"
+import { LoginAttemptsService } from "./login-attempts.service"
+import { TwoFactorService } from "./two-factor.service"
+
+/** Failed logins (per e-mail or IP, 15-min window) after which a captcha is required. */
+export const CAPTCHA_AFTER_FAILURES = 3
+/** Wrong 2FA codes per user (15-min window) before further attempts are refused. */
+export const MFA_MAX_FAILURES = 10
 
 export type SignupRole = "SEEKER" | "RECRUITER"
 
@@ -31,23 +41,48 @@ export type AuthTokens = {
   refreshToken: string
   userId: string
   role: string
+  emailVerified: boolean
+  twoFactorEnabled: boolean
 }
+
+export type MfaChallenge = { mfaRequired: true; mfaToken: string }
 
 export type OAuthResult = AuthTokens | { error: "email_unverified" | "account_inactive" }
 
+/** Fields generateTokens needs (a full Prisma User satisfies it). */
+type TokenUser = {
+  id: string
+  role: string
+  email: string
+  companyId?: string | null
+  tokenVersion?: number
+  emailVerifiedAt?: Date | null
+  twoFactorEnabled?: boolean
+}
+
 type Tx = Prisma.TransactionClient
+
+let cachedDummyHash: string | undefined
+const dummyHash = () => (cachedDummyHash ??= bcrypt.hashSync("hyrr-no-such-account", 12))
 
 const avatarFor = (name: string) =>
   `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6C63FF&color=fff`
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name)
+
   constructor(
     private prisma: PrismaService,
-    private jwtService: JwtService
+    private jwtService: JwtService,
+    private captcha: CaptchaService,
+    private attempts: LoginAttemptsService,
+    private twoFactor: TwoFactorService,
+    private accountEmail: AccountEmailService
   ) {}
 
-  async register(dto: RegisterDto) {
+  async register(dto: RegisterDto, ip?: string) {
+    await this.captcha.verify(dto.captchaToken, ip)
     const email = dto.email.trim()
     const existing = await this.prisma.user.findUnique({ where: { email } })
     if (existing) throw new ConflictException("Email already registered")
@@ -62,6 +97,9 @@ export class AuthService {
         role: dto.role,
       })
     )
+    void this.accountEmail
+      .sendVerification(user)
+      .catch((error) => this.logger.warn(`Verification e-mail failed: ${error?.message}`))
     return this.generateTokens(user)
   }
 
@@ -76,6 +114,7 @@ export class AuthService {
       passwordHash?: string
       providerField?: "googleId" | "githubId" | "linkedinId"
       providerId?: string
+      emailVerifiedAt?: Date
     }
   ): Promise<User> {
     const role = data.role === "RECRUITER" ? UserRole.RECRUITER : UserRole.SEEKER
@@ -86,6 +125,7 @@ export class AuthService {
         avatar: data.avatar,
         role,
         ...(data.passwordHash ? { passwordHash: data.passwordHash } : {}),
+        ...(data.emailVerifiedAt ? { emailVerifiedAt: data.emailVerifiedAt } : {}),
         ...(data.providerField && data.providerId ? { [data.providerField]: data.providerId } : {}),
       },
     })
@@ -108,15 +148,35 @@ export class AuthService {
     return user
   }
 
-  async login(dto: LoginDto) {
-    const user = await this.prisma.user.findUnique({
-      where: { email: dto.email.trim() },
-    })
-    if (!user || !user.passwordHash) throw new UnauthorizedException("Invalid credentials")
+  /**
+   * Password login. After CAPTCHA_AFTER_FAILURES failures for the e-mail or IP a captcha is required
+   * (only when captcha is enabled). Users with 2FA get an MFA challenge instead of tokens.
+   */
+  async login(dto: LoginDto, ip?: string): Promise<AuthTokens | MfaChallenge> {
+    const email = dto.email.trim()
+    const captchaOn = this.captcha.isEnabled()
+    const keys = this.attempts.loginKeys(email, ip)
+    if (captchaOn && (await this.attempts.count(keys)) >= CAPTCHA_AFTER_FAILURES) {
+      await this.captcha.verify(dto.captchaToken, ip)
+    }
 
-    const valid = await bcrypt.compare(dto.password, user.passwordHash)
-    if (!valid) throw new UnauthorizedException("Invalid credentials")
+    const user = await this.prisma.user.findUnique({ where: { email } })
+    // Always run bcrypt so response time doesn't reveal whether the account exists.
+    const valid = await bcrypt.compare(dto.password, user?.passwordHash || dummyHash())
+    if (!user || !user.passwordHash || !valid) {
+      if (captchaOn) await this.attempts.fail(keys)
+      throw new UnauthorizedException("Invalid credentials")
+    }
     this.assertActive(user)
+    if (captchaOn) await this.attempts.reset(keys)
+
+    if (user.twoFactorEnabled) {
+      const mfaToken = this.jwtService.sign(
+        { sub: user.id, type: "mfa", tv: user.tokenVersion ?? 0 },
+        { expiresIn: "5m" }
+      )
+      return { mfaRequired: true, mfaToken }
+    }
 
     await this.prisma.user.update({
       where: { id: user.id },
@@ -124,6 +184,51 @@ export class AuthService {
     })
 
     return this.generateTokens(user)
+  }
+
+  /** Second login step: exchanges an MFA token + TOTP/recovery code for normal tokens. */
+  async verifyMfaLogin(mfaToken: string, code: string): Promise<AuthTokens> {
+    let payload: { sub?: string; type?: string; tv?: number }
+    try {
+      payload = await this.jwtService.verifyAsync(mfaToken, { secret: jwtSecret() })
+    } catch {
+      payload = {}
+    }
+    if (payload.type !== "mfa" || !payload.sub) throw this.mfaTokenInvalid()
+
+    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } })
+    if (!user || !user.twoFactorEnabled || !tokenVersionMatches(payload, user.tokenVersion ?? 0)) {
+      throw this.mfaTokenInvalid()
+    }
+    this.assertActive(user)
+
+    const keys = [`auth:fail:mfa:${user.id}`]
+    if ((await this.attempts.count(keys)) >= MFA_MAX_FAILURES) {
+      throw new AppException(
+        "Too many invalid codes. Please try again later.",
+        HttpStatus.TOO_MANY_REQUESTS,
+        "TOO_MANY_REQUESTS"
+      )
+    }
+    if (!(await this.twoFactor.verifyCode(user, code))) {
+      await this.attempts.fail(keys)
+      throw new AppException(
+        "The verification code is not valid",
+        HttpStatus.UNAUTHORIZED,
+        "TWO_FACTOR_INVALID_CODE"
+      )
+    }
+    await this.attempts.reset(keys)
+    await this.prisma.user.update({ where: { id: user.id }, data: { lastLogin: new Date() } })
+    return this.generateTokens(user)
+  }
+
+  private mfaTokenInvalid() {
+    return new AppException(
+      "Your sign-in session expired. Please sign in again.",
+      HttpStatus.UNAUTHORIZED,
+      "MFA_SESSION_EXPIRED"
+    )
   }
 
   private assertActive(user: { status: UserStatus }) {
@@ -136,15 +241,23 @@ export class AuthService {
     }
   }
 
-  async refreshTokens(userId: string) {
+  /** `tokenVersion` is the refresh token's `tv`; a mismatch means the session was revoked. */
+  async refreshTokens(userId: string, tokenVersion?: number) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } })
     if (!user || user.status !== UserStatus.ACTIVE) throw new UnauthorizedException("Access denied")
+    if (!tokenVersionMatches({ tv: tokenVersion }, user.tokenVersion ?? 0)) {
+      throw new UnauthorizedException("Session has been revoked")
+    }
     return this.generateTokens(user)
   }
 
   async verifyRefreshToken(token: string) {
     try {
-      const payload = await this.jwtService.verifyAsync<{ sub: string; type?: string }>(token, {
+      const payload = await this.jwtService.verifyAsync<{
+        sub: string
+        type?: string
+        tv?: number
+      }>(token, {
         secret: jwtSecret(),
       })
       if (payload.type !== "refresh" || !payload.sub)
@@ -167,6 +280,7 @@ export class AuthService {
     const providerId = String(profile.id)
 
     let user = await this.prisma.user.findFirst({ where: { [providerField]: providerId } })
+    const verifiedEmail = profile.emailVerified ? profile.email?.trim().toLowerCase() : undefined
 
     if (!user) {
       const email = profile.email?.trim()
@@ -175,10 +289,14 @@ export class AuthService {
       user = await this.prisma.user.findUnique({ where: { email } })
       if (user) {
         if (user.status !== UserStatus.ACTIVE) return { error: "account_inactive" }
-        if (!user[providerField]) {
+        if (!user[providerField] || !user.emailVerifiedAt) {
           user = await this.prisma.user.update({
             where: { id: user.id },
-            data: { [providerField]: providerId },
+            data: {
+              [providerField]: providerId,
+              // The provider just vouched for this address.
+              ...(user.emailVerifiedAt ? {} : { emailVerifiedAt: new Date() }),
+            },
           })
         }
       } else {
@@ -191,18 +309,25 @@ export class AuthService {
             role: role === "RECRUITER" ? "RECRUITER" : "SEEKER",
             providerField,
             providerId,
+            emailVerifiedAt: new Date(),
           })
         )
       }
     }
 
     if (user.status !== UserStatus.ACTIVE) return { error: "account_inactive" }
-    await this.prisma.user.update({ where: { id: user.id }, data: { lastLogin: new Date() } })
+    const markVerified =
+      !user.emailVerifiedAt && !!verifiedEmail && verifiedEmail === user.email.toLowerCase()
+    user = await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastLogin: new Date(), ...(markVerified ? { emailVerifiedAt: new Date() } : {}) },
+    })
+    await this.accountEmail.refreshCompanyVerification(user.id)
     return this.generateTokens(user)
   }
 
   async getMe(userId: string) {
-    return this.prisma.user.findUnique({
+    const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
@@ -213,8 +338,19 @@ export class AuthService {
         status: true,
         joinedAt: true,
         companyId: true,
+        emailVerifiedAt: true,
+        twoFactorEnabled: true,
+        passwordHash: true,
       },
     })
+    if (!user) return null
+    const { emailVerifiedAt, passwordHash, ...rest } = user
+    return {
+      ...rest,
+      emailVerified: !!emailVerifiedAt,
+      // Lets the UI know whether password confirmation applies (OAuth-only accounts have none).
+      hasPassword: !!passwordHash,
+    }
   }
 
   async changePassword(userId: string, currentPassword: string, newPassword: string) {
@@ -226,8 +362,13 @@ export class AuthService {
     if (!valid) throw new UnauthorizedException("Current password is incorrect")
 
     const passwordHash = await bcrypt.hash(newPassword, 12)
-    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash } })
-    return { message: "Password changed successfully" }
+    // Bumping tokenVersion signs out every other session; this one continues with fresh tokens.
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash, tokenVersion: { increment: 1 } },
+    })
+    await this.accountEmail.notifyPasswordChanged(updated)
+    return this.generateTokens(updated)
   }
 
   /**
@@ -296,23 +437,27 @@ export class AuthService {
     return { deleted: true }
   }
 
-  private generateTokens(user: {
-    id: string
-    role: string
-    email: string
-    companyId?: string | null
-  }): AuthTokens {
+  private generateTokens(user: TokenUser): AuthTokens {
+    const tv = user.tokenVersion ?? 0
     const payload = {
       sub: user.id,
       role: user.role,
       email: user.email,
       companyId: user.companyId || null,
+      tv,
     }
     const accessToken = this.jwtService.sign(payload, { expiresIn: "15m" })
     const refreshToken = this.jwtService.sign(
-      { sub: user.id, type: "refresh" },
+      { sub: user.id, type: "refresh", tv },
       { expiresIn: "7d" }
     )
-    return { accessToken, refreshToken, userId: user.id, role: user.role }
+    return {
+      accessToken,
+      refreshToken,
+      userId: user.id,
+      role: user.role,
+      emailVerified: !!user.emailVerifiedAt,
+      twoFactorEnabled: !!user.twoFactorEnabled,
+    }
   }
 }

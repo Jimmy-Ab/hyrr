@@ -1,4 +1,4 @@
-import { Badge, Button, Card, RichTextRenderer, useToast, type Job } from "hyrr.shared"
+import { Button, Card, RichTextRenderer, useToast, VerifiedBadge, type Job } from "hyrr.shared"
 import {
   ArrowUpRight,
   Briefcase,
@@ -11,9 +11,18 @@ import {
   Trash2,
 } from "lucide-react"
 import * as React from "react"
+import { JobPublishErrorNotice } from "../components/jobs/job-publish-error"
+import { JobStatusBadge } from "../components/jobs/job-status-badge"
 import { ConfirmDialog } from "../components/layout/confirm-dialog"
 import { EditJobDialog } from "../components/layout/edit-job-dialog"
-import { errorMessage } from "../lib/recruiter"
+import {
+  errorMessage,
+  FLAGGED_JOB_TOOLTIP,
+  isFlaggedJob,
+  jobPublishError,
+  useCompanyVerified,
+  type JobPublishError,
+} from "../lib/recruiter"
 import { useJobStore } from "../store/useJobStore"
 
 type StatusFilter = "All" | "Active" | "Closed"
@@ -29,7 +38,9 @@ export function Jobs() {
     setSearchQuery,
     updateJob,
     deleteJob,
+    workspaceName,
   } = useJobStore()
+  const companyVerified = useCompanyVerified()
   const { toast } = useToast()
 
   const [selectedJobId, setSelectedJobId] = React.useState<string | null>(null)
@@ -37,6 +48,11 @@ export function Jobs() {
   const [editingJob, setEditingJob] = React.useState<Job | null>(null)
   const [deletingJob, setDeletingJob] = React.useState<Job | null>(null)
   const [statusBusy, setStatusBusy] = React.useState(false)
+  // Publishing failure for one job (content policy / unverified e-mail), shown in its panel.
+  const [statusError, setStatusError] = React.useState<{
+    jobId: string
+    error: JobPublishError
+  } | null>(null)
 
   const query = searchQuery.trim().toLowerCase()
   const filteredJobs = jobs.filter((job) => {
@@ -59,19 +75,25 @@ export function Jobs() {
   }
 
   const handleToggleStatus = async (job: Job) => {
+    // Flagged jobs stay hidden until moderation resolves the reports.
+    if (isFlaggedJob(job)) return
     const next = job.status === "Active" ? "CLOSED" : "ACTIVE"
+    const publishing = job.status === "Draft"
     setStatusBusy(true)
+    setStatusError(null)
     try {
       await updateJob(job.id, { status: next })
       toast(
-        next === "ACTIVE" ? "Job reopened" : "Job closed",
+        next === "CLOSED" ? "Job closed" : publishing ? "Job published" : "Job reopened",
         next === "ACTIVE"
-          ? `"${job.title}" is accepting applications again.`
+          ? `"${job.title}" is accepting applications${publishing ? "" : " again"}.`
           : `"${job.title}" no longer accepts applications.`,
         "success"
       )
     } catch (err) {
-      toast("Could not update job", errorMessage(err), "error")
+      const inline = jobPublishError(err)
+      if (inline) setStatusError({ jobId: job.id, error: inline })
+      else toast("Could not update job", errorMessage(err), "error")
     } finally {
       setStatusBusy(false)
     }
@@ -97,6 +119,12 @@ export function Jobs() {
           <h1 className="text-[28px] md:text-[36px] font-extrabold tracking-tight text-txt-title">
             Open Roles
           </h1>
+          {workspaceName && (
+            <p className="mt-1 flex items-center gap-1.5 text-[14px] font-semibold text-txt-heading">
+              {workspaceName}
+              {companyVerified && <VerifiedBadge size="md" />}
+            </p>
+          )}
           <p className="text-body text-txt-body mt-1 font-semibold opacity-90">
             Manage your hiring vacancies, view pipelines, and review applications.
           </p>
@@ -189,9 +217,7 @@ export function Jobs() {
                   </div>
 
                   <div className="flex flex-col items-end gap-2 shrink-0">
-                    <Badge variant={job.status === "Active" ? "success" : "secondary"}>
-                      {job.status}
-                    </Badge>
+                    <JobStatusBadge job={job} interactive={false} />
                     <span className="text-[12px] text-txt-caption font-semibold">
                       {count} applicant{count !== 1 && "s"}
                     </span>
@@ -228,10 +254,17 @@ export function Jobs() {
                     <span>{selectedJob.type}</span>
                   </div>
                 </div>
-                <Badge variant={selectedJob.status === "Active" ? "success" : "secondary"}>
-                  {selectedJob.status}
-                </Badge>
+                <JobStatusBadge job={selectedJob} />
               </div>
+
+              {isFlaggedJob(selectedJob) && (
+                <p
+                  role="status"
+                  className="-mt-2 rounded-xl border border-sec-orange/30 bg-sec-orange/5 p-3 text-[13px] text-txt-body"
+                >
+                  {FLAGGED_JOB_TOOLTIP} You can still edit it and manage existing applicants.
+                </p>
+              )}
 
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -246,7 +279,8 @@ export function Jobs() {
                 <Button
                   size="sm"
                   variant="secondary"
-                  disabled={statusBusy}
+                  disabled={statusBusy || isFlaggedJob(selectedJob)}
+                  title={isFlaggedJob(selectedJob) ? FLAGGED_JOB_TOOLTIP : undefined}
                   onClick={() => handleToggleStatus(selectedJob)}
                   className="gap-1.5"
                 >
@@ -255,7 +289,11 @@ export function Jobs() {
                   ) : (
                     <Power className="w-3.5 h-3.5" />
                   )}
-                  {selectedJob.status === "Active" ? "Close job" : "Reopen job"}
+                  {selectedJob.status === "Active"
+                    ? "Close job"
+                    : selectedJob.status === "Draft"
+                      ? "Publish job"
+                      : "Reopen job"}
                 </Button>
                 <Button
                   size="sm"
@@ -267,6 +305,12 @@ export function Jobs() {
                   Delete
                 </Button>
               </div>
+
+              {statusError?.jobId === selectedJob.id && (
+                <div className="-mt-4">
+                  <JobPublishErrorNotice error={statusError.error} />
+                </div>
+              )}
 
               {/* Job Info Details */}
               <div className="flex flex-col gap-4 text-body text-txt-body leading-relaxed">

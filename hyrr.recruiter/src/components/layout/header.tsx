@@ -14,6 +14,7 @@ import {
   Input,
   notificationConversationId,
   useToast,
+  VerifiedBadge,
   type TeamMember,
 } from "hyrr.shared"
 import {
@@ -26,13 +27,19 @@ import {
   Moon,
   Plus,
   Search,
+  Settings,
   Sun,
   Trash2,
   User,
   Users,
 } from "lucide-react"
 import { useEffect, useState, type FormEvent } from "react"
-import { avatarFallback, errorMessage, isRecruiterView } from "../../lib/recruiter"
+import {
+  avatarFallback,
+  errorMessage,
+  isRecruiterView,
+  useCompanyVerified,
+} from "../../lib/recruiter"
 import { useJobStore } from "../../store/useJobStore"
 import { ConfirmDialog } from "./confirm-dialog"
 
@@ -79,7 +86,8 @@ function usePrefersDark() {
 }
 
 function TeamDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
-  const { team, fetchTeam, addTeamMember, removeTeamMember, user } = useJobStore()
+  const { team, fetchTeam, addTeamMember, removeTeamMember, user, workspaceName } = useJobStore()
+  const companyVerified = useCompanyVerified()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -146,7 +154,18 @@ function TeamDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: b
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Team</DialogTitle>
-            <DialogDescription>People with access to your company workspace.</DialogDescription>
+            <DialogDescription>
+              People with access to{" "}
+              {workspaceName ? (
+                <span className="inline-flex items-center gap-1 font-semibold text-txt-heading">
+                  {workspaceName}
+                  {companyVerified && <VerifiedBadge />}
+                </span>
+              ) : (
+                "your company workspace"
+              )}
+              .
+            </DialogDescription>
           </DialogHeader>
 
           <div className="mt-4 max-h-72 overflow-y-auto flex flex-col gap-1">
@@ -281,7 +300,9 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
     setAddJobOpen,
     user,
     logout,
+    workspaceName,
   } = useJobStore()
+  const companyVerified = useCompanyVerified()
   const { toast } = useToast()
   const [teamOpen, setTeamOpen] = useState(false)
   const prefersDark = usePrefersDark()
@@ -508,8 +529,18 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
                 {user?.name || "Recruiter Account"}
               </p>
               <p className="text-txt-caption text-[11px] font-normal truncate">{user?.email}</p>
+              {workspaceName && (
+                <p className="mt-1 flex items-center gap-1 text-txt-body text-[11px] font-medium min-w-0">
+                  <span className="truncate">{workspaceName}</span>
+                  {companyVerified && <VerifiedBadge />}
+                </p>
+              )}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => setActiveView("Settings")}>
+              <Settings className="w-3.5 h-3.5 mr-2 text-txt-body" />
+              Settings
+            </DropdownMenuItem>
             {/* Defer so the menu finishes closing before the dialog takes focus */}
             <DropdownMenuItem onSelect={() => setTimeout(() => setTeamOpen(true), 0)}>
               <Users className="w-3.5 h-3.5 mr-2 text-txt-body" />

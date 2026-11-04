@@ -117,6 +117,10 @@ export const createBootstrapSlice: StateCreator<JobState, [], [], BootstrapSlice
 
     const run = async () => {
       set({ isInitialLoading: true, initialLoadError: null })
+      // emailVerified / twoFactorEnabled live on /auth/me; never blocks the workspace.
+      get()
+        .refreshAuthUser()
+        .catch((e) => console.warn("Failed to load account status.", e))
       try {
         if (user.role === "RECRUITER") await loadRecruiter(set, get)
         else if (user.role === "SEEKER") await loadSeeker(set, get)

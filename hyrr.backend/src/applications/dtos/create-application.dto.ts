@@ -42,4 +42,12 @@ export class CreateApplicationDto {
   @MaxLength(1000)
   @Matches(UPLOAD_URL_PATTERN, { message: UPLOAD_URL_MESSAGE })
   resumeUrl?: string
+
+  @ApiPropertyOptional({
+    description: "Turnstile token (guest applications, when captcha is enabled)",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(4096)
+  captchaToken?: string
 }

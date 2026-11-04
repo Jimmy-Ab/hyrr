@@ -6,6 +6,11 @@ ARG VITE_API_URL=http://localhost:3000/api
 ARG VITE_SOCKET_URL=http://localhost:3000
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_SOCKET_URL=$VITE_SOCKET_URL
+# Optional: Cloudflare Turnstile site key and Sentry DSN (features stay off when empty)
+ARG VITE_TURNSTILE_SITE_KEY=
+ARG VITE_SENTRY_DSN=
+ENV VITE_TURNSTILE_SITE_KEY=$VITE_TURNSTILE_SITE_KEY
+ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
 
 # Copy every workspace manifest first so `npm ci` can resolve the root lockfile
 # (and this layer stays cached until dependencies change)

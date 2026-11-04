@@ -6,11 +6,13 @@ import {
   Home,
   MessageSquare,
   Plus,
+  Settings,
+  ShieldAlert,
   Users,
   X,
 } from "lucide-react"
 import { useEffect, type ElementType } from "react"
-import { type RecruiterView } from "../../lib/recruiter"
+import { FLAGGED_JOB_TOOLTIP, isFlaggedJob, type RecruiterView } from "../../lib/recruiter"
 import { useJobStore } from "../../store/useJobStore"
 
 interface SidebarProps {
@@ -158,6 +160,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             {jobs.map((job) => {
               const isJobActive = selectedJobId === job.id && activeView === "Applications"
               const dotColor = dotColorClasses[job.color] ?? "bg-primary"
+              const flagged = isFlaggedJob(job)
 
               return (
                 <button
@@ -168,7 +171,9 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                     setActiveView("Applications")
                     onClose()
                   }}
-                  title={job.title}
+                  title={
+                    flagged ? `${job.title} — Under review. ${FLAGGED_JOB_TOOLTIP}` : job.title
+                  }
                   className={`flex items-center gap-2.5 h-[36px] px-3.5 rounded-xl transition-colors duration-150 text-left cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary/30 w-full ${
                     isJobActive
                       ? "bg-primary-light text-primary font-semibold"
@@ -176,7 +181,13 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                   }`}
                 >
                   <span className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
-                  <span className="text-[13px] truncate">{job.title}</span>
+                  <span className="text-[13px] truncate flex-1">{job.title}</span>
+                  {flagged && (
+                    <span className="flex items-center gap-1 shrink-0 text-[11px] font-semibold text-sec-orange">
+                      <ShieldAlert className="w-3.5 h-3.5" aria-hidden="true" />
+                      <span className="sr-only">Under review</span>
+                    </span>
+                  )}
                 </button>
               )
             })}
@@ -184,6 +195,33 @@ export function Sidebar({ open, onClose }: SidebarProps) {
               <p className="px-3.5 text-[12px] text-txt-caption">No jobs yet.</p>
             )}
           </div>
+        </div>
+
+        {/* ─── Bottom: Settings ─── */}
+        <div className="mt-auto pt-3 border-t border-bg-border/60">
+          <button
+            type="button"
+            id="nav-settings"
+            aria-current={activeView === "Settings" ? "page" : undefined}
+            onClick={() => {
+              setActiveView("Settings")
+              onClose()
+            }}
+            className={`flex items-center gap-3 h-[40px] px-3.5 rounded-xl transition-colors duration-150 group text-left cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary/30 w-full ${
+              activeView === "Settings"
+                ? "bg-primary-light text-primary font-semibold"
+                : "text-txt-body hover:bg-bg-hover hover:text-txt-heading font-medium"
+            }`}
+          >
+            <Settings
+              className={`w-[18px] h-[18px] shrink-0 transition-colors ${
+                activeView === "Settings"
+                  ? "text-primary"
+                  : "text-txt-caption group-hover:text-txt-heading"
+              }`}
+            />
+            <span className="text-[13.5px]">Settings</span>
+          </button>
         </div>
       </aside>
     </>

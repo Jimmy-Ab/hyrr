@@ -47,6 +47,14 @@ services:
       UPLOAD_DIR: /app/uploads
       # Demo data is only loaded when explicitly requested: SEED_DEMO_DATA=true docker compose up
       SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
+      # Virus scanning: `CLAMAV_HOST=clamav docker compose --profile security up`
+      # (empty → scanning disabled; this compose-level value wins over hyrr.backend/.env).
+      CLAMAV_HOST: ${CLAMAV_HOST:-}
+      CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+      # SMTP_*, EMAIL_FROM, STORAGE_DRIVER / S3_*, SENTRY_DSN, TURNSTILE_SECRET_KEY,
+      # TWO_FACTOR_ENCRYPTION_KEY, RECRUITER_APP_URL ... are passed through from
+      # ./hyrr.backend/.env (env_file above), see hyrr.backend/.env.example. They are deliberately
+      # NOT repeated here: an `environment:` entry, even an empty one, overrides the env_file value.
     ports:
       - "3000:3000"
     volumes:
@@ -56,6 +64,22 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      clamav:
+        condition: service_started
+        required: false
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      # migrations run before the server starts
+      start_period: 60s
     command: >
       sh -c "npx prisma migrate deploy &&
              if [ \"$$SEED_DEMO_DATA\" = \"true\" ]; then npx prisma db seed; fi &&
@@ -69,6 +93,8 @@ services:
       args:
         VITE_API_URL: ${VITE_API_URL:-http://localhost:3000/api}
         VITE_SOCKET_URL: ${VITE_SOCKET_URL:-http://localhost:3000}
+        VITE_TURNSTILE_SITE_KEY: ${VITE_TURNSTILE_SITE_KEY:-}
+        VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
     container_name: hyrr_recruiter
     ports:
       - "5173:5173"
@@ -83,13 +109,54 @@ services:
       args:
         VITE_API_URL: ${VITE_API_URL:-http://localhost:3000/api}
         VITE_SOCKET_URL: ${VITE_SOCKET_URL:-http://localhost:3000}
+        VITE_TURNSTILE_SITE_KEY: ${VITE_TURNSTILE_SITE_KEY:-}
+        VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
     container_name: hyrr_jobseeker
     ports:
       - "5174:5174"
     depends_on:
       - backend
 
+  # ─── Nightly Postgres backups (7 daily + 4 weekly kept in the backups_data volume) ─
+  # Restore: gunzip -c <file>.sql.gz | docker compose exec -T postgres psql -U hyrr_user -d hyrr_db
+  backup:
+    image: prodrigestivill/postgres-backup-local:16
+    container_name: hyrr_backup
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: hyrr_db
+      POSTGRES_USER: hyrr_user
+      POSTGRES_PASSWORD: hyrr_password
+      POSTGRES_EXTRA_OPTS: "-Z6 --no-owner --no-privileges"
+      SCHEDULE: ${BACKUP_SCHEDULE:-@daily}
+      BACKUP_KEEP_DAYS: 7
+      BACKUP_KEEP_WEEKS: 4
+      BACKUP_KEEP_MONTHS: 0
+      HEALTHCHECK_PORT: 8080
+    volumes:
+      - backups_data:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ─── ClamAV (optional virus scanning for uploads) ────────────────────────────
+  # docker compose --profile security up  (and set CLAMAV_HOST=clamav for the backend)
+  clamav:
+    image: clamav/clamav-debian:stable
+    container_name: hyrr_clamav
+    profiles: ["security"]
+    volumes:
+      - clamav_data:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 300s
+
 volumes:
   postgres_data:
   redis_data:
   uploads_data:
+  backups_data:
+  clamav_data:

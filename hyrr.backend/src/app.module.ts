@@ -15,6 +15,9 @@ import { SettingsModule } from "./settings/settings.module"
 import { TalentModule } from "./talent/talent.module"
 
 import { CoreModule } from "./core/core.module"
+import { SecurityModule } from "./core/security/security.module"
+import { VerificationModule } from "./core/verification/verification.module"
+import { HealthModule } from "./health/health.module"
 import { NotificationsModule } from "./notifications/notifications.module"
 import { UploadsModule } from "./uploads/uploads.module"
 
@@ -25,6 +28,9 @@ import { UploadsModule } from "./uploads/uploads.module"
       envFilePath: [`${__dirname}/../.env`, `${__dirname}/../../.env`],
     }),
     CoreModule,
+    SecurityModule,
+    VerificationModule,
+    HealthModule,
     UploadsModule,
     NotificationsModule,
     CacheModule,

@@ -15,6 +15,8 @@ export type RateLimitOptions = {
   /** Fallback limit for everything else, counted per IP + route group (first path segment). */
   defaultLimit: number
   windowMs: number
+  /** Requests for which the limiter is bypassed entirely (e.g. health probes). */
+  skip?: (req: Request) => boolean
   /** Hard cap on tracked keys so memory stays bounded even under spoofed-IP floods. */
   maxKeys?: number
   now?: () => number
@@ -62,7 +64,7 @@ export function createRateLimiter(options: RateLimitOptions) {
   }
 
   const middleware = (req: Request, res: Response, next: NextFunction) => {
-    if (req.method === "OPTIONS") return next()
+    if (req.method === "OPTIONS" || options.skip?.(req)) return next()
     const at = now()
     if (at - lastSweep > options.windowMs) sweep(at)
 
@@ -93,3 +95,7 @@ export function createRateLimiter(options: RateLimitOptions) {
 
   return Object.assign(middleware, { size: () => buckets.size })
 }
+
+/** POST endpoints sharing the strict per-IP "auth" bucket. */
+export const STRICT_AUTH_PATH =
+  /^\/api\/auth\/(login|register|forgot-password|reset-password|resend-verification|2fa\/verify)\/?$/

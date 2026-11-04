@@ -2,6 +2,7 @@ import { CallHandler, ExecutionContext, Injectable, Logger, NestInterceptor } fr
 import { Request, Response } from "express"
 import { Observable } from "rxjs"
 import { tap } from "rxjs/operators"
+import { ensureRequestId, isHealthPath } from "../http/request-id"
 
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {
@@ -16,11 +17,11 @@ export class LoggingInterceptor implements NestInterceptor {
     const response = httpContext.getResponse<Response>()
 
     const { method, originalUrl, ip } = request
+    if (isHealthPath(request.path || originalUrl)) return next.handle()
     const userAgent = request.get("user-agent") || ""
     const startTime = Date.now()
 
-    const correlationId = (request.headers["x-correlation-id"] as string) || `req-${Date.now()}`
-    request.headers["x-correlation-id"] = correlationId
+    const correlationId = ensureRequestId(request)
     if (!response.headersSent) response.setHeader("x-correlation-id", correlationId)
 
     return next.handle().pipe(

@@ -12,10 +12,11 @@ import {
 import { plainToInstance } from "class-transformer"
 import { validate } from "class-validator"
 import { Server, Socket } from "socket.io"
-import { verifyAccessToken } from "../auth/jwt.config"
+import { verifyAccessTokenForSession } from "../auth/jwt.config"
 import { AccessService, Actor } from "../core/access/access.service"
 import { getAllowedOrigins } from "../core/config/origins"
 import { normalizeException } from "../core/filters/all-exceptions.filter"
+import { PrismaService } from "../prisma/prisma.service"
 import { CreateMessageDto } from "./dtos/create-message.dto"
 import { MessagesService } from "./messages.service"
 
@@ -59,7 +60,8 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
   constructor(
     private jwtService: JwtService,
     @Inject(forwardRef(() => MessagesService)) private messagesService: MessagesService,
-    private access: AccessService
+    private access: AccessService,
+    private prisma: PrismaService
   ) {}
 
   private actorOf(client: Socket): Actor {
@@ -81,8 +83,8 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
         return
       }
 
-      // Rejects expired/invalid tokens and refresh tokens (type === "refresh").
-      const payload = verifyAccessToken(this.jwtService, token)
+      // Rejects expired/invalid/typed (refresh, mfa) tokens and revoked sessions (tokenVersion).
+      const payload = await verifyAccessTokenForSession(this.jwtService, this.prisma, token)
 
       ;(client as any).userId = payload.sub
       ;(client as any).userRole = payload.role

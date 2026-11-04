@@ -4,6 +4,7 @@ import {
   APPLICATION_STATUS_LABEL,
   Badge,
   Card,
+  ConfirmDialog,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -12,6 +13,7 @@ import {
   errorMessage,
   useJobStore,
   useToast,
+  VerifiedBadge,
   type ApplicationStatusCode,
   type JobApplication,
 } from "hyrr.shared"
@@ -25,7 +27,6 @@ import {
   User,
 } from "lucide-react"
 import { useState } from "react"
-import { ConfirmDialog } from "../components/ui/confirm-dialog"
 
 // ─── Kanban Column ─────────────────────────────────────────────────────────────
 const columnColors: Record<ApplicationStatusCode, string> = {
@@ -124,7 +125,10 @@ function JobCard({
               <h4 className="text-body font-semibold text-txt-heading truncate">
                 {application.title}
               </h4>
-              <p className="text-caption text-txt-body mt-0.5 font-medium">{application.company}</p>
+              <p className="text-caption text-txt-body mt-0.5 font-medium flex items-center gap-1">
+                {application.company}
+                {application.companyVerified && <VerifiedBadge focusable={false} />}
+              </p>
             </div>
           </div>
 

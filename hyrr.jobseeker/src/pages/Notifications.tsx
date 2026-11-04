@@ -1,6 +1,7 @@
 import {
   Button,
   Card,
+  ConfirmDialog,
   errorMessage,
   NOTIFICATION_TYPE_LABEL,
   notificationConversationId,
@@ -12,7 +13,6 @@ import {
 } from "hyrr.shared"
 import { Bell, Briefcase, Calendar, Check, MessageSquare, Search, Star, Trash2 } from "lucide-react"
 import { useState } from "react"
-import { ConfirmDialog } from "../components/ui/confirm-dialog"
 
 const notifIcons: Record<NotificationType, typeof Bell> = {
   APPLICATION: Briefcase,

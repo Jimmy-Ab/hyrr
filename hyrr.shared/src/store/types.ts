@@ -24,10 +24,50 @@ export interface Job {
   location: string
   type: string
   posted: string
-  status: "Active" | "Closed" | "Draft"
+  /** "Flagged" = hidden after user reports; shown as "Under review" */
+  status: "Active" | "Closed" | "Draft" | "Flagged"
   color: "purple" | "blue" | "green" | "orange"
   description: string
   requirements: string[]
+  /** The posting company passed domain verification */
+  companyVerified: boolean
+}
+
+/** UI label for a job status ("Flagged" reads as "Under review"). */
+export const JOB_STATUS_LABEL: Record<Job["status"], string> = {
+  Active: "Active",
+  Closed: "Closed",
+  Draft: "Draft",
+  Flagged: "Under review",
+}
+
+export type JobReportReason = "SCAM" | "MISLEADING" | "DISCRIMINATORY" | "DUPLICATE" | "OTHER"
+
+export const JOB_REPORT_REASONS: { value: JobReportReason; label: string }[] = [
+  { value: "SCAM", label: "Scam or fraud" },
+  { value: "MISLEADING", label: "Misleading or inaccurate" },
+  { value: "DISCRIMINATORY", label: "Discriminatory" },
+  { value: "DUPLICATE", label: "Duplicate posting" },
+  { value: "OTHER", label: "Something else" },
+]
+
+export interface TwoFactorSetup {
+  otpauthUrl: string
+  qrDataUrl: string
+  secret: string
+}
+
+export type LoginResult = boolean | "MFA_REQUIRED" | "CAPTCHA_REQUIRED"
+
+export interface AuthUser {
+  id: string
+  email: string
+  name: string
+  avatar: string
+  role: "SEEKER" | "RECRUITER" | "ADMIN"
+  /** false until the user confirms their e-mail address */
+  emailVerified: boolean
+  twoFactorEnabled: boolean
 }
 
 export interface Candidate {
@@ -112,6 +152,7 @@ export interface PublicJob {
   title: string
   company: string
   companyColor: "purple" | "blue" | "green" | "orange"
+  companyVerified: boolean
   location: string
   type: JobType
   salary: string
@@ -150,6 +191,7 @@ export interface JobApplication {
   company: string
   title: string
   companyColor: "purple" | "blue" | "green" | "orange"
+  companyVerified: boolean
   location: string
   type: string
   salary: string
@@ -313,13 +355,7 @@ export interface JobState {
   initialLoadError: string | null
 
   // ── Auth ─────────────────────────────────────────────────────────────────
-  user: {
-    id: string
-    email: string
-    name: string
-    avatar: string
-    role: "SEEKER" | "RECRUITER" | "ADMIN"
-  } | null
+  user: AuthUser | null
   accessToken: string | null
   isAuthenticated: boolean
   authLoading: boolean
@@ -327,13 +363,39 @@ export interface JobState {
   socket: Socket | null
 
   // ── Auth actions ─────────────────────────────────────────────────────────
-  loginUser: (email: string, password: string) => Promise<boolean>
+  /** Set while a password login waits for the second factor. */
+  mfaPending: { mfaToken: string } | null
+  /**
+   * true = signed in; false = failed (authError set); "MFA_REQUIRED" = call verifyTwoFactorLogin;
+   * "CAPTCHA_REQUIRED" = show the captcha and retry with its token.
+   */
+  loginUser: (email: string, password: string, captchaToken?: string) => Promise<LoginResult>
+  /** Completes a pending MFA login with a TOTP or recovery code. Sets authError on failure. */
+  verifyTwoFactorLogin: (code: string) => Promise<boolean>
+  /** Abandons a pending MFA login (back to the password form). */
+  cancelTwoFactorLogin: () => void
   registerUser: (
     name: string,
     email: string,
     password: string,
-    role: "SEEKER" | "RECRUITER"
+    role: "SEEKER" | "RECRUITER",
+    captchaToken?: string
   ) => Promise<boolean>
+  /** Reloads emailVerified / twoFactorEnabled (and name/avatar) from /auth/me. */
+  refreshAuthUser: () => Promise<void>
+  verifyEmail: (token: string) => Promise<void>
+  resendVerification: () => Promise<void>
+  requestPasswordReset: (email: string, captchaToken?: string) => Promise<void>
+  resetPassword: (token: string, password: string) => Promise<void>
+  /** Changes the password and keeps the current session using the fresh token. */
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>
+  startTwoFactorSetup: () => Promise<TwoFactorSetup>
+  /** Returns the 10 one-time recovery codes (shown once). */
+  enableTwoFactor: (code: string) => Promise<string[]>
+  disableTwoFactor: (code: string, password?: string) => Promise<void>
+  regenerateRecoveryCodes: (code: string) => Promise<string[]>
+  /** Downloads a JSON export of the user's data. */
+  exportMyData: () => Promise<void>
   logout: () => Promise<void>
   /** Swaps the access token (login, restore, silent refresh). Never loads workspace data. */
   setAccessToken: (token: string | null) => void
@@ -356,6 +418,8 @@ export interface JobState {
     categoryId: string
     featured?: boolean
     remote?: boolean
+    /** Defaults to ACTIVE on the server; DRAFT saves without publishing. */
+    status?: "ACTIVE" | "DRAFT"
   }) => Promise<void>
   updateJob: (jobId: string, patch: Partial<JobUpdatePatch>) => Promise<void>
   deleteJob: (jobId: string) => Promise<void>
@@ -402,6 +466,7 @@ export interface JobState {
   withdrawApplication: (applicationId: string) => Promise<void>
   setDiscoverSearch: (q: string) => void
   setDiscoverTypeFilter: (t: string) => void
+  reportJob: (jobId: string, reason: JobReportReason, details?: string) => Promise<void>
 
   // ── Calendar ─────────────────────────────────────────────────────────────
   events: CalendarEvent[]

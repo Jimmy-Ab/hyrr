@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger, OnModuleInit, Optional } from "@nestjs/common"
 import { DocType, JobStatus } from "@prisma/client"
 import { CacheService } from "../cache/cache.service"
+import { PUBLIC_COMPANY_SELECT } from "../jobs/public-company"
 import { MessagesGateway } from "../messages/messages.gateway"
 import { PrismaService } from "../prisma/prisma.service"
 import { CvTextService } from "../uploads/cv-text.service"
@@ -92,7 +93,9 @@ export class AiService implements OnModuleInit {
         where: { id: applicationId },
         include: {
           job: { include: { category: true } },
-          user: { include: { seekerProfile: { include: { experiences: true, educations: true } } } },
+          user: {
+            include: { seekerProfile: { include: { experiences: true, educations: true } } },
+          },
           answers: { include: { question: true } },
         },
       })
@@ -297,7 +300,7 @@ export class AiService implements OnModuleInit {
         status: JobStatus.ACTIVE,
         OR: [{ categoryId: { in: interestIds } }, { remote: profile.preferredType === "Remote" }],
       },
-      include: { company: true, category: true },
+      include: { company: { select: PUBLIC_COMPANY_SELECT }, category: true },
       take: FEATURED_CANDIDATE_POOL,
       orderBy: { createdAt: "desc" },
     })
@@ -305,7 +308,7 @@ export class AiService implements OnModuleInit {
     if (preFiltered.length === 0) {
       const featured = await this.prisma.job.findMany({
         where: { status: JobStatus.ACTIVE, featured: true },
-        include: { company: true, category: true },
+        include: { company: { select: PUBLIC_COMPANY_SELECT }, category: true },
         take: FEATURED_RESULT_COUNT,
       })
       await this.cache.set(cacheKey, featured, FEATURED_CACHE_TTL_SECONDS)

@@ -1,5 +1,13 @@
 import type { CalendarEvent } from "hyrr.shared"
-import { Button, Card, errorMessage, toIsoFromLocal, useJobStore, useToast } from "hyrr.shared"
+import {
+  Button,
+  Card,
+  ConfirmDialog,
+  errorMessage,
+  toIsoFromLocal,
+  useJobStore,
+  useToast,
+} from "hyrr.shared"
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -10,7 +18,6 @@ import {
   X,
 } from "lucide-react"
 import { useState } from "react"
-import { ConfirmDialog } from "../components/ui/confirm-dialog"
 
 const typeStyle = (type: string) => {
   if (type === "interview") return "bg-primary-light border-primary-border/30 text-primary"

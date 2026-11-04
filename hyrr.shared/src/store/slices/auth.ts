@@ -1,7 +1,7 @@
 import type { StateCreator } from "zustand"
-import { apiFetch } from "../../lib/api"
+import { apiFetch, isApiError } from "../../lib/api"
 import { decodeJwt, toError } from "../mappers"
-import { clearMessagingTimers, session } from "../session"
+import { clearMessagingTimers, session, type StoreGet, type StoreSet } from "../session"
 import { initializeSocket } from "../socket"
 import type {
   AiChatMessage,
@@ -27,8 +27,22 @@ export type AuthSlice = Pick<
   | "authLoading"
   | "authError"
   | "socket"
+  | "mfaPending"
   | "loginUser"
+  | "verifyTwoFactorLogin"
+  | "cancelTwoFactorLogin"
   | "registerUser"
+  | "refreshAuthUser"
+  | "verifyEmail"
+  | "resendVerification"
+  | "requestPasswordReset"
+  | "resetPassword"
+  | "changePassword"
+  | "startTwoFactorSetup"
+  | "enableTwoFactor"
+  | "disableTwoFactor"
+  | "regenerateRecoveryCodes"
+  | "exportMyData"
   | "logout"
   | "deleteAccount"
   | "setAccessToken"
@@ -60,6 +74,40 @@ const emptyWorkspace = {
   searchQuery: "",
 }
 
+/** Stores a login/register/2FA response and starts loading the workspace. */
+function applySession(
+  set: StoreSet,
+  get: StoreGet,
+  data: any,
+  known: { email?: string; name?: string }
+) {
+  get().setAccessToken(data.accessToken)
+  set((state) => {
+    const base = state.user ?? {
+      id: data.userId,
+      role: data.role,
+      email: "",
+      name: "",
+      avatar: "",
+      emailVerified: true,
+      twoFactorEnabled: false,
+    }
+    return {
+      authLoading: false,
+      user: {
+        ...base,
+        email: base.email || known.email || "",
+        name: known.name ?? base.name,
+        ...(typeof data.emailVerified === "boolean" ? { emailVerified: data.emailVerified } : {}),
+        ...(typeof data.twoFactorEnabled === "boolean"
+          ? { twoFactorEnabled: data.twoFactorEnabled }
+          : {}),
+      },
+    }
+  })
+  void get().fetchInitialData()
+}
+
 export const createAuthSlice: StateCreator<JobState, [], [], AuthSlice> = (set, get) => ({
   // ── Auth initial state ───────────────────────────────────────────────────
   user: null,
@@ -68,51 +116,204 @@ export const createAuthSlice: StateCreator<JobState, [], [], AuthSlice> = (set, 
   authLoading: false,
   authError: null,
   socket: null,
+  mfaPending: null,
 
-  loginUser: async (email, password) => {
-    set({ authLoading: true, authError: null })
+  loginUser: async (email, password, captchaToken) => {
+    set({ authLoading: true, authError: null, mfaPending: null })
     try {
       const data = await apiFetch("/auth/login", {
         method: "POST",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, ...(captchaToken ? { captchaToken } : {}) }),
         skipAuth: true,
       })
-      get().setAccessToken(data.accessToken)
-      set((state) => ({
-        authLoading: false,
-        user: state.user
-          ? { ...state.user, email: state.user.email || email }
-          : { id: data.userId, role: data.role, email, name: "", avatar: "" },
-      }))
-      void get().fetchInitialData()
+      if (data?.mfaRequired && data.mfaToken) {
+        set({ authLoading: false, mfaPending: { mfaToken: data.mfaToken } })
+        return "MFA_REQUIRED"
+      }
+      applySession(set, get, data, { email })
       return true
     } catch (err) {
+      if (isApiError(err) && err.errorCode === "CAPTCHA_REQUIRED") {
+        set({
+          authLoading: false,
+          authError: "Please complete the security check and try again.",
+        })
+        return "CAPTCHA_REQUIRED"
+      }
       set({ authError: toError(err, "Sign in failed").message, authLoading: false })
       return false
     }
   },
 
-  registerUser: async (name, email, password, role) => {
+  verifyTwoFactorLogin: async (code) => {
+    const pending = get().mfaPending
+    if (!pending) {
+      set({ authError: "Your sign-in expired. Please enter your password again." })
+      return false
+    }
+    set({ authLoading: true, authError: null })
+    try {
+      const data = await apiFetch("/auth/2fa/verify", {
+        method: "POST",
+        body: JSON.stringify({ mfaToken: pending.mfaToken, code: code.trim() }),
+        skipAuth: true,
+      })
+      set({ mfaPending: null })
+      applySession(set, get, data, {})
+      return true
+    } catch (err) {
+      // An expired mfaToken can't be retried: send the user back to the password step.
+      const expired = isApiError(err) && /EXPIRED|TOKEN/i.test(err.errorCode || "")
+      set({
+        authLoading: false,
+        authError: expired
+          ? "Your sign-in expired. Please enter your password again."
+          : toError(err, "Invalid code").message,
+        ...(expired ? { mfaPending: null } : {}),
+      })
+      return false
+    }
+  },
+
+  cancelTwoFactorLogin: () => set({ mfaPending: null, authError: null }),
+
+  registerUser: async (name, email, password, role, captchaToken) => {
     set({ authLoading: true, authError: null })
     try {
       const data = await apiFetch("/auth/register", {
         method: "POST",
-        body: JSON.stringify({ name, email, password, role }),
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+          role,
+          ...(captchaToken ? { captchaToken } : {}),
+        }),
         skipAuth: true,
       })
-      get().setAccessToken(data.accessToken)
-      set((state) => ({
-        authLoading: false,
-        user: state.user
-          ? { ...state.user, name, email: state.user.email || email }
-          : { id: data.userId, role: data.role, email, name, avatar: "" },
-      }))
-      void get().fetchInitialData()
+      applySession(set, get, { emailVerified: false, ...data }, { email, name })
       return true
     } catch (err) {
       set({ authError: toError(err, "Registration failed").message, authLoading: false })
       return false
     }
+  },
+
+  refreshAuthUser: async () => {
+    if (!get().accessToken) return
+    const me = await apiFetch("/auth/me")
+    if (!me) return
+    set((state) =>
+      state.user && (!me.id || me.id === state.user.id)
+        ? {
+            user: {
+              ...state.user,
+              name: me.name || state.user.name,
+              email: me.email || state.user.email,
+              avatar: me.avatar || state.user.avatar,
+              emailVerified:
+                typeof me.emailVerified === "boolean" ? me.emailVerified : state.user.emailVerified,
+              twoFactorEnabled:
+                typeof me.twoFactorEnabled === "boolean"
+                  ? me.twoFactorEnabled
+                  : state.user.twoFactorEnabled,
+            },
+          }
+        : {}
+    )
+  },
+
+  verifyEmail: async (token) => {
+    await apiFetch("/auth/verify-email", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+      skipAuth: true,
+    })
+    set((state) => (state.user ? { user: { ...state.user, emailVerified: true } } : {}))
+    if (get().accessToken) {
+      try {
+        await get().refreshAuthUser()
+      } catch (e) {
+        console.warn("Verified, but failed to refresh the account.", e)
+      }
+    }
+  },
+
+  resendVerification: async () => {
+    await apiFetch("/auth/resend-verification", { method: "POST" })
+  },
+
+  requestPasswordReset: async (email, captchaToken) => {
+    await apiFetch("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email, ...(captchaToken ? { captchaToken } : {}) }),
+      skipAuth: true,
+    })
+  },
+
+  resetPassword: async (token, password) => {
+    await apiFetch("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ token, password }),
+      skipAuth: true,
+    })
+  },
+
+  changePassword: async (currentPassword, newPassword) => {
+    const data = await apiFetch("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    })
+    // The server revokes older tokens; continue with the fresh one it returns.
+    if (data?.accessToken) get().setAccessToken(data.accessToken)
+  },
+
+  startTwoFactorSetup: async () => {
+    const data = await apiFetch("/auth/2fa/setup", { method: "POST" })
+    return {
+      otpauthUrl: String(data?.otpauthUrl ?? ""),
+      qrDataUrl: String(data?.qrDataUrl ?? ""),
+      secret: String(data?.secret ?? ""),
+    }
+  },
+
+  enableTwoFactor: async (code) => {
+    const data = await apiFetch("/auth/2fa/enable", {
+      method: "POST",
+      body: JSON.stringify({ code: code.trim() }),
+    })
+    set((state) => (state.user ? { user: { ...state.user, twoFactorEnabled: true } } : {}))
+    return Array.isArray(data?.recoveryCodes) ? data.recoveryCodes.map(String) : []
+  },
+
+  disableTwoFactor: async (code, password) => {
+    await apiFetch("/auth/2fa/disable", {
+      method: "POST",
+      body: JSON.stringify({ code: code.trim(), ...(password ? { password } : {}) }),
+    })
+    set((state) => (state.user ? { user: { ...state.user, twoFactorEnabled: false } } : {}))
+  },
+
+  regenerateRecoveryCodes: async (code) => {
+    const data = await apiFetch("/auth/2fa/recovery-codes", {
+      method: "POST",
+      body: JSON.stringify({ code: code.trim() }),
+    })
+    return Array.isArray(data?.recoveryCodes) ? data.recoveryCodes.map(String) : []
+  },
+
+  exportMyData: async () => {
+    const data = await apiFetch("/auth/account/export")
+    const json = typeof data === "string" ? data : JSON.stringify(data, null, 2)
+    const blob = new Blob([json], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `hyrr-data-${new Date().toISOString().slice(0, 10)}.json`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
   },
 
   logout: async () => {
@@ -129,6 +330,7 @@ export const createAuthSlice: StateCreator<JobState, [], [], AuthSlice> = (set, 
       accessToken: null,
       isAuthenticated: false,
       socket: null,
+      mfaPending: null,
     })
     try {
       await apiFetch("/auth/logout", { method: "POST", skipAuth: true })
@@ -154,7 +356,13 @@ export const createAuthSlice: StateCreator<JobState, [], [], AuthSlice> = (set, 
       }
       session.initialLoad = null
       clearMessagingTimers()
-      set({ accessToken: null, isAuthenticated: false, user: null, socket: null })
+      set({
+        accessToken: null,
+        isAuthenticated: false,
+        user: null,
+        socket: null,
+        mfaPending: null,
+      })
       return
     }
     const decoded = decodeJwt(token)
@@ -170,6 +378,13 @@ export const createAuthSlice: StateCreator<JobState, [], [], AuthSlice> = (set, 
               name: sameUser ? state.user!.name : "",
               avatar: sameUser ? state.user!.avatar : "",
               role: decoded.role as "SEEKER" | "RECRUITER" | "ADMIN",
+              // Unknown until /auth/me answers: assume verified so the banner never flashes.
+              emailVerified: sameUser
+                ? state.user!.emailVerified
+                : typeof decoded.emailVerified === "boolean"
+                  ? decoded.emailVerified
+                  : true,
+              twoFactorEnabled: sameUser ? state.user!.twoFactorEnabled : false,
             }
           : state.user,
       }

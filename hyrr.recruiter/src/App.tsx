@@ -2,11 +2,15 @@ import {
   AiChatWidget,
   AuthPage,
   Button,
+  CookieNotice,
+  EmailVerificationBanner,
   OAuthCallback,
   RoleMismatch,
   Skeleton,
   ToastProvider,
   apiFetch,
+  isPublicRoute,
+  resolvePublicRoute,
 } from "hyrr.shared"
 import { AlertTriangle, RefreshCw } from "lucide-react"
 import * as React from "react"
@@ -23,6 +27,7 @@ import { Candidates } from "./pages/Candidates"
 import { Dashboard } from "./pages/Dashboard"
 import { Jobs } from "./pages/Jobs"
 import { Messages } from "./pages/Messages"
+import { Settings } from "./pages/Settings"
 import { useJobStore } from "./store/useJobStore"
 
 const AUTH_CALLBACK_PATH = "/auth/callback"
@@ -50,6 +55,8 @@ function useViewRouting(enabled: boolean) {
 
   React.useEffect(() => {
     if (!enabled) return
+    // Public pages (/terms, /privacy, token links) own their URL; never rewrite them.
+    if (isPublicRoute(window.location.pathname)) return
     // Read the live value: the effect above may have just updated it synchronously.
     const path = viewToPath(useJobStore.getState().activeView)
     if (window.location.pathname === path) return
@@ -91,11 +98,17 @@ function AppContent() {
   const [loading, setLoading] = React.useState(true)
   const [sidebarOpen, setSidebarOpen] = React.useState(false)
   const isCallback = window.location.pathname === AUTH_CALLBACK_PATH
+  // Legal pages and e-mail token links (verify / reset password) render without a session.
+  const publicRoute = isCallback ? null : resolvePublicRoute(window.location.pathname)
+  const isPublic = publicRoute != null
 
   // Silent refresh on startup (session restore). The store loads the role's data
   // once the access token (and therefore the role) is known.
   React.useEffect(() => {
-    if (isCallback) return
+    if (isCallback || isPublic) {
+      setLoading(false)
+      return
+    }
     async function silentRefresh() {
       try {
         const res = await apiFetch("/auth/refresh", { method: "POST", skipAuth: true })
@@ -114,10 +127,10 @@ function AppContent() {
       }
     }
     silentRefresh()
-  }, [isCallback, setAccessToken, logout, fetchInitialData])
+  }, [isCallback, isPublic, setAccessToken, logout, fetchInitialData])
 
   const isRecruiter = isAuthenticated && user?.role === "RECRUITER"
-  useViewRouting(isRecruiter && !isCallback)
+  useViewRouting(isRecruiter && !isCallback && !isPublic)
 
   // Close the mobile drawer whenever the view changes.
   React.useEffect(() => {
@@ -127,6 +140,8 @@ function AppContent() {
   if (isCallback) {
     return <OAuthCallback />
   }
+
+  if (publicRoute) return <>{publicRoute}</>
 
   if (loading) {
     return (
@@ -185,6 +200,8 @@ function AppContent() {
         return <Messages />
       case "Analytics":
         return <Analytics />
+      case "Settings":
+        return <Settings />
       default:
         return <Dashboard />
     }
@@ -194,6 +211,7 @@ function AppContent() {
     <div className="flex flex-col h-dvh w-full overflow-hidden bg-bg-primary text-txt-body">
       {/* Top Header */}
       <Header onMenuClick={() => setSidebarOpen(true)} />
+      <EmailVerificationBanner />
 
       {/* Main Container */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
@@ -219,6 +237,7 @@ function App() {
   return (
     <ToastProvider>
       <AppContent />
+      <CookieNotice />
     </ToastProvider>
   )
 }

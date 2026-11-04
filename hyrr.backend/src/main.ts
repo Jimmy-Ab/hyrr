@@ -1,11 +1,7 @@
-import * as dotenv from "dotenv"
-import * as path from "path"
-
-// Load .env BEFORE any NestJS/Prisma module initializes.
-// When run via `npm run start:dev --workspace=hyrr.backend` from the
-// monorepo root, CWD is the repo root — not hyrr.backend/ — so we
-// resolve the path relative to this file's directory.
-dotenv.config({ path: path.resolve(__dirname, "../.env") })
+// Must stay the first import: loads .env and initialises Sentry (when SENTRY_DSN is set) before
+// any NestJS/Prisma module is loaded. The .env path is resolved relative to this file because
+// `npm run start:dev --workspace=hyrr.backend` runs with the monorepo root as CWD.
+import "./instrument"
 
 import { ValidationPipe } from "@nestjs/common"
 import { NestFactory } from "@nestjs/core"
@@ -14,10 +10,12 @@ import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger"
 import { AppModule } from "./app.module"
 import { jwtSecret } from "./auth/jwt.config"
 import cookieParser = require("cookie-parser")
+import helmet from "helmet"
 
 import { getAllowedOrigins } from "./core/config/origins"
 import { AllExceptionsFilter } from "./core/filters/all-exceptions.filter"
-import { createRateLimiter } from "./core/http/rate-limit"
+import { createRateLimiter, STRICT_AUTH_PATH } from "./core/http/rate-limit"
+import { isHealthPath, requestIdMiddleware } from "./core/http/request-id"
 import { LoggingInterceptor } from "./core/interceptors/logging.interceptor"
 
 const STRICT_WINDOW_MS = 60_000
@@ -27,15 +25,30 @@ async function bootstrap() {
   jwtSecret()
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule)
+  app.enableShutdownHooks()
 
   // Only trust X-Forwarded-For when explicitly running behind a reverse proxy.
   if (process.env.TRUST_PROXY === "true" || process.env.TRUST_PROXY === "1") {
     app.set("trust proxy", 1)
   }
 
+  app.use(requestIdMiddleware)
+
+  // Security headers. The API serves JSON + uploads consumed cross-origin by the SPAs, so
+  // resources may be embedded cross-origin; Swagger UI (dev) gets a relaxed CSP.
+  const apiHelmet = helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } })
+  const docsHelmet = helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+  app.use((req: any, res: any, next: any) =>
+    (/^\/api\/docs(\/|-json|$)/.test(req.path) ? docsHelmet : apiHelmet)(req, res, next)
+  )
+
   const strictLimit = Number(process.env.RATE_LIMIT_STRICT_PER_MINUTE || 10)
   app.use(
     createRateLimiter({
+      skip: (req) => isHealthPath(req.path),
       windowMs: 60_000,
       defaultLimit: Number(process.env.RATE_LIMIT_PER_MINUTE || 120),
       rules: [
@@ -44,7 +57,7 @@ async function bootstrap() {
           limit: strictLimit,
           windowMs: STRICT_WINDOW_MS,
           matches: (req) =>
-            req.method === "POST" && /^\/api\/auth\/(login|register)\/?$/.test(req.path),
+            req.method === "POST" && STRICT_AUTH_PATH.test(req.path),
         },
         {
           name: "apply",

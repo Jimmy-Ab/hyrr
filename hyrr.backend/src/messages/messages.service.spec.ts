@@ -2,7 +2,7 @@ import { Test, TestingModule } from "@nestjs/testing"
 import { PrismaClient } from "@prisma/client"
 import { mockDeep } from "jest-mock-extended"
 import { AccessService } from "../core/access/access.service"
-import { EmailDeliveryService } from "../core/delivery/email-delivery.service"
+import { EmailService } from "../core/delivery/email.service"
 import { NotificationsService } from "../notifications/notifications.service"
 import { PrismaService } from "../prisma/prisma.service"
 import { MessagesGateway } from "./messages.gateway"
@@ -77,7 +77,7 @@ describe("MessagesService", () => {
         { provide: AccessService, useValue: access },
         { provide: MessagesGateway, useValue: gateway },
         { provide: NotificationsService, useValue: notifications },
-        { provide: EmailDeliveryService, useValue: email },
+        { provide: EmailService, useValue: email },
       ],
     }).compile()
 
@@ -359,9 +359,11 @@ describe("MessagesService", () => {
 
       expect(msg.id).toBe("m-new")
       expect(email.send).toHaveBeenCalledWith(
-        "guest@example.com",
-        expect.stringContaining("Acme"),
-        expect.stringContaining("Interview on Monday?")
+        expect.objectContaining({
+          to: "guest@example.com",
+          subject: expect.stringContaining("Acme"),
+          text: expect.stringContaining("Interview on Monday?"),
+        })
       )
       expect(notifications.createNotification).not.toHaveBeenCalled()
       expect(gateway.emitNewMessage).toHaveBeenCalledWith(

@@ -36,7 +36,7 @@ export class ApplicationsController {
   @ApiResponse({ status: 409, description: "ALREADY_APPLIED" })
   applyToJob(@Param("jobId") jobId: string, @Body() dto: CreateApplicationDto, @Req() req: any) {
     // AI scoring is triggered inside the service (fire-and-forget)
-    return this.applicationsService.applyToJob(jobId, dto, req.user || null)
+    return this.applicationsService.applyToJob(jobId, dto, req.user || null, req.ip)
   }
 
   // ─── Recruiter: add a candidate manually ──────────────────────────
@@ -47,11 +47,7 @@ export class ApplicationsController {
   @ApiOperation({ summary: "Add a candidate to a job pipeline (Recruiter only)" })
   @ApiResponse({ status: 201, description: "Candidate created (same shape as GET /candidates)" })
   @ApiResponse({ status: 409, description: "ALREADY_APPLIED" })
-  createCandidate(
-    @Param("jobId") jobId: string,
-    @Body() dto: CreateCandidateDto,
-    @Req() req: any
-  ) {
+  createCandidate(@Param("jobId") jobId: string, @Body() dto: CreateCandidateDto, @Req() req: any) {
     return this.applicationsService.createCandidate(jobId, dto, req.user)
   }
 
@@ -136,8 +132,7 @@ export class ApplicationsController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
-    summary:
-      "Recruiter: delete candidate. Seeker: unsave (SAVED) or withdraw (any other status)",
+    summary: "Recruiter: delete candidate. Seeker: unsave (SAVED) or withdraw (any other status)",
   })
   @ApiResponse({ status: 200, description: "{ id, deleted: true } or { id, status: WITHDRAWN }" })
   deleteApplication(@Param("id") id: string, @Req() req: any) {

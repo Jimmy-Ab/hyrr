@@ -8,6 +8,7 @@ import {
 } from "@prisma/client"
 import { AccessService, Actor } from "../core/access/access.service"
 import { AppException } from "../core/exceptions/app-exception"
+import { PUBLIC_COMPANY_SELECT } from "../jobs/public-company"
 import { NotificationsService } from "../notifications/notifications.service"
 import { PrismaService } from "../prisma/prisma.service"
 
@@ -18,7 +19,7 @@ const SEEKER_EVENT_APPLICATION = {
   userId: true,
   name: true,
   status: true,
-  job: { include: { company: true } },
+  job: { include: { company: { select: PUBLIC_COMPANY_SELECT } } },
 } satisfies Prisma.ApplicationSelect
 
 const RECRUITER_EVENT_APPLICATION = {
@@ -29,7 +30,11 @@ const RECRUITER_EVENT_APPLICATION = {
 const parseIso = (value: string, field: string) => {
   const date = new Date(value)
   if (Number.isNaN(date.getTime()))
-    throw new AppException(`${field} must be an ISO-8601 datetime`, HttpStatus.BAD_REQUEST, "INVALID_DATE")
+    throw new AppException(
+      `${field} must be an ISO-8601 datetime`,
+      HttpStatus.BAD_REQUEST,
+      "INVALID_DATE"
+    )
   return date
 }
 
@@ -98,7 +103,11 @@ export class CalendarService {
     const startTime = parseIso(data.startTime, "startTime")
     const endTime = data.endTime ? parseIso(data.endTime, "endTime") : null
     if (endTime && endTime < startTime)
-      throw new AppException("endTime must be after startTime", HttpStatus.BAD_REQUEST, "INVALID_DATE")
+      throw new AppException(
+        "endTime must be after startTime",
+        HttpStatus.BAD_REQUEST,
+        "INVALID_DATE"
+      )
     const event = await this.prisma.calendarEvent.create({
       data: {
         // The creator owns the event (used for delete permission)
@@ -116,7 +125,11 @@ export class CalendarService {
       },
       include:
         actor.role === "SEEKER"
-          ? { application: { select: { ...SEEKER_EVENT_APPLICATION, user: { select: { id: true } } } } }
+          ? {
+              application: {
+                select: { ...SEEKER_EVENT_APPLICATION, user: { select: { id: true } } },
+              },
+            }
           : { application: { include: RECRUITER_EVENT_APPLICATION } },
     })
 

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common"
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common"
 import { DocType } from "@prisma/client"
 import { PrismaService } from "../prisma/prisma.service"
 import { UploadsService } from "../uploads/uploads.service"
@@ -27,6 +27,9 @@ export class DocumentsService {
   async createDocument(userId: string, data: CreateDocumentDto) {
     // Only files this user uploaded through /api/uploads can be attached (400 otherwise).
     const filename = this.uploads.assertOwnedUpload(data.url, userId)
+    if (!(await this.uploads.fileExists(filename))) {
+      throw new BadRequestException("The uploaded file was not found")
+    }
     const docType = Object.values(DocType).includes(data.type) ? data.type : DocType.OTHER
 
     const document = await this.prisma.$transaction(async (tx) => {

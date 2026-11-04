@@ -53,7 +53,7 @@ export class ProfileService {
         status: true,
         joinedAt: true,
         company: {
-          select: { id: true, name: true, logo: true, color: true, plan: true },
+          select: { id: true, name: true, logo: true, color: true, plan: true, verified: true },
         },
       },
     })
@@ -120,8 +120,7 @@ export class ProfileService {
         // User.avatar is non-nullable: clearing falls back to a generated initials avatar
         if (data.avatar !== undefined)
           userData.avatar =
-            data.avatar ||
-            `https://ui-avatars.com/api/?name=${encodeURIComponent(name || "User")}`
+            data.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(name || "User")}`
         await tx.user.update({
           where: { id: userId },
           data: userData,

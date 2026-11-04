@@ -9,6 +9,8 @@ import {
 import { Prisma } from "@prisma/client"
 import { Request, Response } from "express"
 import { AppException } from "../exceptions/app-exception"
+import { ensureRequestId } from "../http/request-id"
+import { captureException } from "../observability/sentry"
 
 type NormalizedError = {
   statusCode: number
@@ -36,6 +38,28 @@ const PRISMA_ERROR_MAP: Record<string, { statusCode: number; errorCode: string; 
     },
   }
 
+/** Stable codes for plain Nest HttpExceptions (AppException keeps its own errorCode). */
+const HTTP_STATUS_CODES: Record<number, string> = {
+  400: "BAD_REQUEST",
+  401: "UNAUTHORIZED",
+  403: "FORBIDDEN",
+  404: "NOT_FOUND",
+  405: "METHOD_NOT_ALLOWED",
+  409: "CONFLICT",
+  413: "PAYLOAD_TOO_LARGE",
+  415: "UNSUPPORTED_MEDIA_TYPE",
+  422: "UNPROCESSABLE_ENTITY",
+  429: "TOO_MANY_REQUESTS",
+  503: "SERVICE_UNAVAILABLE",
+}
+
+const toCode = (value: string) =>
+  value
+    .trim()
+    .replace(/[^A-Za-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toUpperCase()
+
 /** Maps any thrown value to the API error shape `{ statusCode, errorCode, message, details? }`. */
 export function normalizeException(exception: unknown): NormalizedError {
   if (exception instanceof AppException) {
@@ -50,13 +74,20 @@ export function normalizeException(exception: unknown): NormalizedError {
     const statusCode = exception.getStatus()
     const res: any = exception.getResponse()
     let message = "An unexpected error occurred. Please try again later."
-    let errorCode = "INTERNAL_SERVER_ERROR"
+    const fallbackCode =
+      HTTP_STATUS_CODES[statusCode] ||
+      (statusCode >= 500 ? "INTERNAL_SERVER_ERROR" : "HTTP_" + statusCode)
+    let errorCode = fallbackCode
     let details: any
     if (typeof res === "string") {
       message = res
     } else if (typeof res === "object" && res !== null) {
       message = Array.isArray(res.message) ? res.message.join(", ") : res.message || message
-      errorCode = res.errorCode || res.error || errorCode
+      // Explicit errorCode wins; otherwise a status-based code (Nest's `error` text is a fallback).
+      errorCode =
+        res.errorCode ||
+        HTTP_STATUS_CODES[statusCode] ||
+        (typeof res.error === "string" && res.error ? toCode(res.error) : fallbackCode)
       details = res.details || (Array.isArray(res.message) ? res.message : undefined)
     }
     return { statusCode, errorCode, message, details }
@@ -85,6 +116,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     if (type !== "http") {
       this.logUnhandled(exception, normalized, `${type} context`)
+      if (normalized.statusCode >= 500) captureException(exception, { context: type })
       if (type === "ws") {
         // Never touch an HTTP response here: emit an error event to the socket instead.
         const client: any = host.switchToWs().getClient()
@@ -103,8 +135,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const ctx = host.switchToHttp()
     const response = ctx.getResponse<Response>()
     const request = ctx.getRequest<Request>()
-    const correlationId = request.headers["x-correlation-id"] || `req-${Date.now()}`
+    const correlationId = ensureRequestId(request)
     this.logUnhandled(exception, normalized, `${request.method} ${request.url}`)
+    if (normalized.statusCode >= 500) {
+      captureException(exception, {
+        correlationId,
+        method: request.method,
+        path: request.path,
+      })
+    }
 
     const { statusCode, errorCode, message, details } = normalized
     const errorResponse = {

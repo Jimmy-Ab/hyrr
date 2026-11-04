@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   Card,
+  VerifiedBadge,
   useJobStore,
 } from "hyrr.shared"
 import { ArrowUpRight, Briefcase, Calendar, CheckCircle2, Star, TrendingUp } from "lucide-react"
@@ -419,7 +420,10 @@ export function CandidateDashboard() {
                 <h4 className="text-[14px] font-bold text-txt-heading group-hover:text-primary transition-colors">
                   {job.title}
                 </h4>
-                <p className="text-[13px] text-txt-body mt-0.5 font-semibold">{job.company}</p>
+                <p className="text-[13px] text-txt-body mt-0.5 font-semibold flex items-center gap-1">
+                  {job.company}
+                  {job.companyVerified && <VerifiedBadge focusable={false} />}
+                </p>
                 <div className="flex items-center justify-between mt-4 pt-3 border-t border-bg-border/30">
                   <span className="text-[12.5px] text-txt-caption font-semibold">
                     {job.location}

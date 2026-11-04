@@ -9,12 +9,15 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  JOB_REPORT_REASONS,
   JOB_TYPES,
   RichTextRenderer,
+  VerifiedBadge,
   errorMessage,
   isApiError,
   useJobStore,
   useToast,
+  type JobReportReason,
   type PublicJob,
 } from "hyrr.shared"
 import {
@@ -23,7 +26,9 @@ import {
   CheckCircle2,
   Clock,
   DollarSign,
+  Flag,
   Globe,
+  MailWarning,
   MapPin,
   Search,
   Star,
@@ -70,6 +75,8 @@ export function DiscoverJobs() {
     seekerProfile,
     documents,
     fetchApplications,
+    reportJob,
+    resendVerification,
   } = useJobStore()
   const { toast } = useToast()
 
@@ -79,6 +86,13 @@ export function DiscoverJobs() {
   const [coverLetter, setCoverLetter] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [applyBlocked, setApplyBlocked] = useState(false)
+  const [resending, setResending] = useState(false)
+  const [reportJobTarget, setReportJobTarget] = useState<PublicJob | null>(null)
+  const [reportReason, setReportReason] = useState<JobReportReason>("SCAM")
+  const [reportDetails, setReportDetails] = useState("")
+  const [reporting, setReporting] = useState(false)
+  const [reportedIds, setReportedIds] = useState<Set<string>>(() => new Set())
   const detailRef = useRef<HTMLDivElement>(null)
 
   const resumes = documents.filter((d) => d.type === "resume")
@@ -121,6 +135,7 @@ export function DiscoverJobs() {
     const active = resumes.find((d) => d.active) ?? resumes[0]
     setResumeId(active?.id ?? "")
     setCoverLetter("")
+    setApplyBlocked(false)
     setApplyJob(job)
   }
 
@@ -137,7 +152,10 @@ export function DiscoverJobs() {
       setApplyJob(null)
       setCandidateActiveView("Applications")
     } catch (err) {
-      if (isApiError(err) && err.errorCode === "ALREADY_APPLIED") {
+      if (isApiError(err) && err.errorCode === "EMAIL_NOT_VERIFIED") {
+        setApplyBlocked(true)
+        useJobStore.setState((s) => (s.user ? { user: { ...s.user, emailVerified: false } } : {}))
+      } else if (isApiError(err) && err.errorCode === "ALREADY_APPLIED") {
         toast("Already applied", "You have already applied to this job.", "info")
         setApplyJob(null)
         fetchApplications().catch(() => {})
@@ -146,6 +164,40 @@ export function DiscoverJobs() {
       }
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleResend = async () => {
+    setResending(true)
+    try {
+      await resendVerification()
+      toast("Verification e-mail sent", "Open the link in it, then apply again.", "success")
+    } catch (err) {
+      toast("Couldn't send e-mail", errorMessage(err), "error")
+    } finally {
+      setResending(false)
+    }
+  }
+
+  const openReport = (job: PublicJob) => {
+    setReportReason("SCAM")
+    setReportDetails("")
+    setReportJobTarget(job)
+  }
+
+  const submitReport = async () => {
+    if (!reportJobTarget) return
+    setReporting(true)
+    try {
+      await reportJob(reportJobTarget.id, reportReason, reportDetails)
+      const id = reportJobTarget.id
+      setReportedIds((prev) => new Set(prev).add(id))
+      toast("Report sent", "Thanks — our team will review this job.", "success")
+      setReportJobTarget(null)
+    } catch (err) {
+      toast("Couldn't send report", errorMessage(err, "Please try again."), "error")
+    } finally {
+      setReporting(false)
     }
   }
 
@@ -258,7 +310,10 @@ export function DiscoverJobs() {
                           <Star className="w-3.5 h-3.5 text-sec-orange shrink-0 fill-current" />
                         )}
                       </div>
-                      <p className="text-[13px] text-txt-body mt-0.5">{job.company}</p>
+                      <p className="text-[13px] text-txt-body mt-0.5 flex items-center gap-1 min-w-0">
+                        <span className="truncate">{job.company}</span>
+                        {job.companyVerified && <VerifiedBadge focusable={false} />}
+                      </p>
                       <div className="flex items-center gap-2 mt-2 flex-wrap">
                         <span className="text-[12px] text-txt-caption flex items-center gap-0.5">
                           <MapPin className="w-3 h-3" />
@@ -313,8 +368,9 @@ export function DiscoverJobs() {
                       <h2 className="text-[20px] sm:text-[22px] font-extrabold text-txt-title break-words">
                         {selectedJob.title}
                       </h2>
-                      <p className="text-[14px] text-txt-body font-medium mt-0.5">
+                      <p className="text-[14px] text-txt-body font-medium mt-0.5 flex items-center gap-1.5">
                         {selectedJob.company}
+                        {selectedJob.companyVerified && <VerifiedBadge size="md" />}
                       </p>
                     </div>
                     {selectedJob.featured && (
@@ -432,6 +488,17 @@ export function DiscoverJobs() {
                   </Button>
                 )}
               </div>
+              <div className="mt-4 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => openReport(selectedJob)}
+                  disabled={reportedIds.has(selectedJob.id)}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[12px] font-semibold text-txt-caption hover:text-sec-red hover:bg-bg-hover disabled:cursor-default disabled:hover:bg-transparent disabled:hover:text-txt-caption cursor-pointer"
+                >
+                  <Flag className="w-3.5 h-3.5" aria-hidden="true" />
+                  {reportedIds.has(selectedJob.id) ? "Reported" : "Report job"}
+                </button>
+              </div>
             </Card>
           </div>
         )}
@@ -447,6 +514,32 @@ export function DiscoverJobs() {
             </DialogDescription>
           </DialogHeader>
           <div className="mt-4 flex flex-col gap-4">
+            {applyBlocked && (
+              <div
+                role="alert"
+                className="flex flex-col gap-2 rounded-xl border border-sec-orange/30 bg-sec-orange/10 p-3"
+              >
+                <p className="flex items-start gap-2 text-[13px] text-txt-heading">
+                  <MailWarning
+                    className="mt-0.5 h-4 w-4 shrink-0 text-sec-orange"
+                    aria-hidden="true"
+                  />
+                  <span>
+                    Please verify your e-mail address before applying. We sent you a link when you
+                    signed up.
+                  </span>
+                </p>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleResend}
+                  disabled={resending}
+                  className="self-start"
+                >
+                  {resending ? "Sending…" : "Resend verification e-mail"}
+                </Button>
+              </div>
+            )}
             <div className="flex flex-col gap-1.5">
               <label
                 htmlFor="apply-resume"
@@ -512,6 +605,74 @@ export function DiscoverJobs() {
             </Button>
             <Button size="sm" onClick={submitApplication} disabled={submitting}>
               {submitting ? "Submitting…" : "Submit application"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Report dialog */}
+      <Dialog
+        open={!!reportJobTarget}
+        onOpenChange={(open) => !open && !reporting && setReportJobTarget(null)}
+      >
+        <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Report this job</DialogTitle>
+            <DialogDescription>
+              {reportJobTarget?.title} · {reportJobTarget?.company}. Reports are anonymous to the
+              employer.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4 flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor="report-reason"
+                className="text-[13.5px] font-semibold text-txt-heading"
+              >
+                Reason
+              </label>
+              <select
+                id="report-reason"
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value as JobReportReason)}
+                className="h-10 w-full rounded-input border border-bg-border bg-bg-primary px-3 text-[13px] text-txt-heading focus:outline-none focus:border-primary/40"
+              >
+                {JOB_REPORT_REASONS.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor="report-details"
+                className="text-[13.5px] font-semibold text-txt-heading"
+              >
+                Details <span className="font-normal text-txt-caption">(optional)</span>
+              </label>
+              <textarea
+                id="report-details"
+                value={reportDetails}
+                onChange={(e) => setReportDetails(e.target.value)}
+                rows={4}
+                maxLength={1000}
+                placeholder="What's wrong with this posting? E.g. it asks for a fee or bank details."
+                className="w-full rounded-input border border-bg-border bg-bg-primary p-3 text-[13px] text-txt-heading placeholder:text-txt-caption focus:outline-none focus:border-primary/40"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setReportJobTarget(null)}
+              disabled={reporting}
+            >
+              Cancel
+            </Button>
+            <Button size="sm" variant="danger" onClick={submitReport} disabled={reporting}>
+              {reporting ? "Sending…" : "Send report"}
             </Button>
           </DialogFooter>
         </DialogContent>

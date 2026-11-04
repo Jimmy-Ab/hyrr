@@ -33,9 +33,7 @@ describe("NotificationsService", () => {
     expect(prisma.notification.create).not.toHaveBeenCalled()
     expect(gateway.emitNotification).not.toHaveBeenCalled()
     expect(emailDelivery.send).toHaveBeenCalledWith(
-      "sam@x.io",
-      "Hyrr notification",
-      "New message from Rita"
+      expect.objectContaining({ to: "sam@x.io", subject: "New message from Rita" })
     )
   })
 

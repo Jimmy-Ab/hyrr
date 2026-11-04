@@ -7,15 +7,19 @@ import {
   NotificationType,
   Prisma,
 } from "@prisma/client"
+import { assertEmailVerified, requireVerifiedEmail } from "../auth/email-verification"
 import { CacheService } from "../cache/cache.service"
 import { AccessService, Actor } from "../core/access/access.service"
-import { EmailDeliveryService } from "../core/delivery/email-delivery.service"
+import { EmailService } from "../core/delivery/email.service"
+import { appUrl, jobAlertDigest } from "../core/delivery/templates"
 import { AppException, NotFoundAppException } from "../core/exceptions/app-exception"
 import { MessagesGateway } from "../messages/messages.gateway"
 import { NotificationsService } from "../notifications/notifications.service"
 import { PrismaService } from "../prisma/prisma.service"
 import { CreateJobDto } from "./dtos/create-job.dto"
 import { UpdateJobDto } from "./dtos/update-job.dto"
+import { evaluateJobContent, JobContent } from "./job-content-policy"
+import { PUBLIC_COMPANY_SELECT } from "./public-company"
 
 const JOB_COLORS = ["purple", "blue", "green", "orange"] as const
 const PUBLIC_JOBS_CACHE_KEY = "jobs:public"
@@ -38,7 +42,7 @@ export class JobsService {
     private cache: CacheService,
     private access: AccessService,
     private notifications: NotificationsService,
-    @Optional() private emailDelivery?: EmailDeliveryService,
+    @Optional() private email?: EmailService,
     @Optional() private messagesGateway?: MessagesGateway
   ) {}
 
@@ -50,9 +54,7 @@ export class JobsService {
   // ─── Recruiter: list the company's jobs ───────────────────────────
   async getRecruiterJobs(actor: Actor | string) {
     const scope =
-      typeof actor === "string"
-        ? { recruiterId: actor }
-        : await this.access.jobScopeWhere(actor)
+      typeof actor === "string" ? { recruiterId: actor } : await this.access.jobScopeWhere(actor)
     const jobs = await this.prisma.job.findMany({
       where: scope,
       include: { company: true, category: true, ...APPLICANT_COUNT },
@@ -61,9 +63,25 @@ export class JobsService {
     return jobs.map((job) => this.withRequirements(job))
   }
 
+  /** 400 JOB_CONTENT_REJECTED with the matched reasons when a posting looks like a scam. */
+  private assertAcceptableContent(content: JobContent) {
+    const reasons = evaluateJobContent(content)
+    if (reasons.length)
+      throw new AppException(
+        "This job posting contains content that is not allowed on Hyrr",
+        HttpStatus.BAD_REQUEST,
+        "JOB_CONTENT_REJECTED",
+        reasons
+      )
+  }
+
   // ─── Recruiter: create a job ──────────────────────────────────────
   async createJob(recruiterId: string, dto: CreateJobDto) {
     const user = await this.prisma.user.findUnique({ where: { id: recruiterId } })
+    const status = dto.status === JobStatus.DRAFT ? JobStatus.DRAFT : JobStatus.ACTIVE
+    // Publishing needs a verified e-mail; drafts can be prepared before verifying.
+    if (status === JobStatus.ACTIVE) requireVerifiedEmail(user ?? { emailVerifiedAt: null })
+    this.assertAcceptableContent(dto)
     const count = await this.prisma.job.count({ where: { recruiterId } })
     const color = JOB_COLORS[count % JOB_COLORS.length]
 
@@ -113,16 +131,18 @@ export class JobsService {
         companyId,
         recruiterId,
         categoryId: dto.categoryId,
+        status,
       },
       include: { company: true, category: true },
     })
 
     // Invalidate cached public listings
     await this.cache.delByPattern("jobs:public*")
-    // Alerts never block job creation
-    this.notifyMatchingAlerts(job).catch((err) =>
-      this.logger.warn(`Job alert fan-out failed for ${job.id}: ${err?.message}`)
-    )
+    // Alerts never block job creation (drafts are not announced)
+    if (job.status === JobStatus.ACTIVE)
+      this.notifyMatchingAlerts(job).catch((err) =>
+        this.logger.warn(`Job alert fan-out failed for ${job.id}: ${err?.message}`)
+      )
     return this.withRequirements(job)
   }
 
@@ -141,7 +161,10 @@ export class JobsService {
     description?: string
     recruiterId?: string
     company?: { name?: string } | null
+    status?: JobStatus
   }) {
+    // Only live postings are announced (never drafts, closed or flagged jobs).
+    if (job.status && job.status !== JobStatus.ACTIVE) return 0
     const typeLabel = this.employmentTypeLabel(job.type)
     const alerts = await this.prisma.jobAlert.findMany({
       where: {
@@ -191,14 +214,23 @@ export class JobsService {
       this.messagesGateway?.emitNotification(notification.userId, notification)
     }
 
-    if (this.emailDelivery) {
+    if (this.email) {
       const users = await this.prisma.user.findMany({
         where: { id: { in: ids } },
-        select: { email: true, setting: { select: { emailNotifications: true } } },
+        select: { email: true, name: true, setting: { select: { emailNotifications: true } } },
       })
+      const jobs = [
+        {
+          title: job.title,
+          company: job.company?.name || "A company",
+          location: job.remote ? `${job.location} (remote)` : job.location,
+          url: appUrl("SEEKER", "/discover"),
+        },
+      ]
       for (const user of users) {
         if (!user.email || user.setting?.emailNotifications === false) continue
-        this.emailDelivery.send(user.email, "Hyrr job alert", title).catch(() => undefined)
+        const content = jobAlertDigest({ name: user.name, jobs })
+        this.email.send({ to: user.email, ...content }).catch(() => undefined)
       }
     }
     return ids.length
@@ -230,6 +262,25 @@ export class JobsService {
           "INVALID_STATUS"
         )
     }
+
+    const effectiveStatus =
+      actor.role !== "ADMIN" && current.status === JobStatus.FLAGGED ? current.status : dto.status
+    if (
+      effectiveStatus === JobStatus.ACTIVE &&
+      current.status !== JobStatus.ACTIVE &&
+      actor.role !== "ADMIN"
+    )
+      await assertEmailVerified(this.prisma, actor.userId)
+    if (
+      actor.role !== "ADMIN" &&
+      [dto.title, dto.description, dto.requirements, dto.benefits].some((v) => v !== undefined)
+    )
+      this.assertAcceptableContent({
+        title: dto.title ?? current.title,
+        description: dto.description ?? current.description,
+        requirements: dto.requirements ?? current.requirements,
+        benefits: dto.benefits ?? current.benefits,
+      })
 
     const { salaryMin, salaryMax, employmentType, ...rest } = dto
     const data: Prisma.JobUncheckedUpdateInput = { ...rest }
@@ -299,7 +350,7 @@ export class JobsService {
 
     const jobs = await this.prisma.job.findMany({
       where,
-      include: { company: true, category: true },
+      include: { company: { select: PUBLIC_COMPANY_SELECT }, category: true },
       orderBy: [{ featured: "desc" }, { createdAt: "desc" }],
       take: 50,
     })
@@ -314,7 +365,7 @@ export class JobsService {
     const job = await this.prisma.job.findFirst({
       where: { id, status: JobStatus.ACTIVE },
       include: {
-        company: true,
+        company: { select: PUBLIC_COMPANY_SELECT },
         category: true,
         postedBy: { select: { name: true, avatar: true } },
       },
@@ -331,9 +382,7 @@ export class JobsService {
   // ─── Recruiter: hiring funnel analytics ──────────────────────────
   async getAnalytics(actor: Actor | string) {
     const jobScope =
-      typeof actor === "string"
-        ? { recruiterId: actor }
-        : await this.access.jobScopeWhere(actor)
+      typeof actor === "string" ? { recruiterId: actor } : await this.access.jobScopeWhere(actor)
     const totalJobs = await this.prisma.job.count({ where: jobScope })
 
     const applications = await this.prisma.application.findMany({

@@ -1,5 +1,6 @@
-import { Badge, Button } from "hyrr.shared"
+import { Button } from "hyrr.shared"
 import { BarChart3, Kanban, List, Plus } from "lucide-react"
+import { JobStatusBadge } from "../components/jobs/job-status-badge"
 import { KanbanBoard } from "../components/kanban/kanban-board"
 import { useJobStore } from "../store/useJobStore"
 
@@ -31,7 +32,6 @@ export function Applications() {
     )
   }
 
-  const isActive = currentJob?.status === "Active"
   const jobIds = new Set(jobs.map((j) => j.id))
   const totalCandidates = candidates.filter((c) => jobIds.has(c.jobId)).length
 
@@ -44,11 +44,7 @@ export function Applications() {
             <h1 className="text-[22px] font-bold text-txt-title tracking-tight leading-tight break-words">
               {currentJob ? currentJob.title : "All applications"}
             </h1>
-            {currentJob && (
-              <Badge variant={isActive ? "success" : "secondary"} className="rounded-md text-xs">
-                {currentJob.status}
-              </Badge>
-            )}
+            {currentJob && <JobStatusBadge job={currentJob} className="rounded-md text-xs" />}
           </div>
           <p className="text-[13px] text-txt-caption mt-1.5 font-normal">
             {currentJob

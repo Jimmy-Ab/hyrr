@@ -2,6 +2,7 @@ import {
   apiFetch,
   Button,
   Card,
+  ConfirmDialog,
   Dialog,
   DialogContent,
   DialogFooter,
@@ -24,7 +25,6 @@ import {
   Upload,
 } from "lucide-react"
 import { useRef, useState } from "react"
-import { ConfirmDialog } from "../components/ui/confirm-dialog"
 
 type DocType = "resume" | "cover" | "cert" | "portfolio" | "other"
 

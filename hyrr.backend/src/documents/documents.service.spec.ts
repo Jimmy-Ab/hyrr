@@ -22,6 +22,7 @@ describe("DocumentsService", () => {
         return url
       }),
       deleteFile: jest.fn().mockResolvedValue(undefined),
+      fileExists: jest.fn().mockResolvedValue(true),
     }
     const module: TestingModule = await Test.createTestingModule({
       providers: [

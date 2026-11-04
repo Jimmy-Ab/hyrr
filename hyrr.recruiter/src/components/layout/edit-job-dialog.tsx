@@ -16,8 +16,9 @@ import {
 } from "hyrr.shared"
 import { Loader2, Plus, X } from "lucide-react"
 import { useEffect, useState, type FormEvent } from "react"
-import { errorMessage } from "../../lib/recruiter"
+import { errorMessage, jobPublishError, type JobPublishError } from "../../lib/recruiter"
 import { useJobStore } from "../../store/useJobStore"
+import { JobPublishErrorNotice } from "../jobs/job-publish-error"
 
 const labelCls = "text-[12px] font-semibold text-txt-heading uppercase tracking-wider block mb-1.5"
 const selectCls =
@@ -39,6 +40,8 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
   const [requirements, setRequirements] = useState<string[]>([])
   const [draftReq, setDraftReq] = useState("")
   const [saving, setSaving] = useState(false)
+  const [savingDraft, setSavingDraft] = useState(false)
+  const [publishError, setPublishError] = useState<JobPublishError | null>(null)
 
   useEffect(() => {
     if (job) {
@@ -52,6 +55,7 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
       setDescription(job.description)
       setRequirements(job.requirements ?? [])
       setDraftReq("")
+      setPublishError(null)
     }
   }, [job])
 
@@ -63,6 +67,21 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
     }
   }
 
+  const patch = () => ({
+    title: title.trim(),
+    location: location.trim() || "Remote",
+    employmentType: employmentTypeCode(type),
+    description,
+    requirements,
+  })
+
+  /** Content-policy / unverified-email errors stay inline in the dialog; others toast. */
+  const handleError = (err: unknown) => {
+    const inline = jobPublishError(err)
+    if (inline) setPublishError(inline)
+    else toast("Could not update job", errorMessage(err), "error")
+  }
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!job) return
@@ -71,25 +90,37 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
       return
     }
     setSaving(true)
+    setPublishError(null)
     try {
-      await updateJob(job.id, {
-        title: title.trim(),
-        location: location.trim() || "Remote",
-        employmentType: employmentTypeCode(type),
-        description,
-        requirements,
-      })
+      await updateJob(job.id, patch())
       toast("Job updated", `"${title.trim()}" was saved.`, "success")
       onOpenChange(false)
     } catch (err) {
-      toast("Could not update job", errorMessage(err), "error")
+      handleError(err)
     } finally {
       setSaving(false)
     }
   }
 
+  // Unpublishing keeps the edits without requiring a verified e-mail.
+  const handleSaveDraft = async () => {
+    if (!job) return
+    setSavingDraft(true)
+    try {
+      await updateJob(job.id, { ...patch(), status: "DRAFT" })
+      toast("Draft saved", `"${title.trim()}" was saved as a draft.`, "success")
+      onOpenChange(false)
+    } catch (err) {
+      handleError(err)
+    } finally {
+      setSavingDraft(false)
+    }
+  }
+
+  const busy = saving || savingDraft
+
   return (
-    <Dialog open={!!job} onOpenChange={(o) => !saving && onOpenChange(o)}>
+    <Dialog open={!!job} onOpenChange={(o) => !busy && onOpenChange(o)}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Job</DialogTitle>
@@ -190,16 +221,24 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
             </div>
           </div>
 
+          {publishError && (
+            <JobPublishErrorNotice
+              error={publishError}
+              onSaveDraft={publishError.kind === "unverified" ? handleSaveDraft : undefined}
+              savingDraft={savingDraft}
+            />
+          )}
+
           <DialogFooter>
             <Button
               type="button"
               variant="ghost"
               onClick={() => onOpenChange(false)}
-              disabled={saving}
+              disabled={busy}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={saving} className="gap-1.5">
+            <Button type="submit" disabled={busy} className="gap-1.5">
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
               Save changes
             </Button>

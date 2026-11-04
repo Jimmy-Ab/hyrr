@@ -6,15 +6,44 @@ import * as bcrypt from "bcrypt"
 import { plainToInstance } from "class-transformer"
 import { validate } from "class-validator"
 import { mockDeep } from "jest-mock-extended"
+import { CaptchaService } from "../core/security/captcha.service"
 import { PrismaService } from "../prisma/prisma.service"
+import { AccountEmailService } from "./account-email.service"
 import { AuthService } from "./auth.service"
 import { RegisterDto } from "./dtos/register.dto"
+import { jwtSecret, verifyAccessToken } from "./jwt.config"
+import { LoginAttemptsService } from "./login-attempts.service"
+import { TwoFactorService } from "./two-factor.service"
+
+/** Minimal stand-in for CacheService (in-memory, no TTL handling needed for these tests). */
+function memoryCache() {
+  const store = new Map<string, unknown>()
+  return {
+    get: jest.fn(async (k: string) => (store.has(k) ? store.get(k) : null)),
+    set: jest.fn(async (k: string, v: unknown) => void store.set(k, v)),
+    del: jest.fn(async (k: string) => void store.delete(k)),
+  }
+}
 
 describe("AuthService", () => {
   let service: AuthService
   let prismaMock: any
+  let captcha: { isEnabled: jest.Mock; verify: jest.Mock }
+  let twoFactor: { verifyCode: jest.Mock }
+  let accountEmail: {
+    sendVerification: jest.Mock
+    notifyPasswordChanged: jest.Mock
+    refreshCompanyVerification: jest.Mock
+  }
 
   beforeEach(async () => {
+    captcha = { isEnabled: jest.fn().mockReturnValue(false), verify: jest.fn() }
+    twoFactor = { verifyCode: jest.fn() }
+    accountEmail = {
+      sendVerification: jest.fn().mockResolvedValue(undefined),
+      notifyPasswordChanged: jest.fn().mockResolvedValue(undefined),
+      refreshCompanyVerification: jest.fn().mockResolvedValue(undefined),
+    }
     prismaMock = mockDeep<PrismaClient>()
     // Interactive transactions run against the same mock client.
     prismaMock.$transaction.mockImplementation((fn: any) => fn(prismaMock))
@@ -28,6 +57,10 @@ describe("AuthService", () => {
             sign: jest.fn().mockReturnValue("mock_token"),
           },
         },
+        { provide: CaptchaService, useValue: captcha },
+        { provide: LoginAttemptsService, useValue: new LoginAttemptsService(memoryCache() as any) },
+        { provide: TwoFactorService, useValue: twoFactor },
+        { provide: AccountEmailService, useValue: accountEmail },
       ],
     }).compile()
 
@@ -113,7 +146,7 @@ describe("AuthService", () => {
       password: "password123",
     })
 
-    expect(result.accessToken).toBe("mock_token")
+    expect((result as any).accessToken).toBe("mock_token")
   })
 
   it("rejects login for a suspended account even with the right password", async () => {
@@ -258,5 +291,234 @@ describe("RegisterDto", () => {
   it.each(["SEEKER", "RECRUITER"])("accepts role %p", async (role) => {
     const errors = await validate(plainToInstance(RegisterDto, { ...base, role }))
     expect(errors).toHaveLength(0)
+  })
+})
+
+describe("AuthService account security", () => {
+  const jwt = new JwtService({ secret: jwtSecret() })
+  let prisma: any
+  let captcha: { isEnabled: jest.Mock; verify: jest.Mock }
+  let twoFactor: { verifyCode: jest.Mock }
+  let accountEmail: any
+  let service: AuthService
+  let passwordHash: string
+
+  const baseUser = (over: Record<string, unknown> = {}) => ({
+    id: "u1",
+    email: "a@b.c",
+    name: "A",
+    role: "SEEKER",
+    status: "ACTIVE",
+    passwordHash,
+    tokenVersion: 0,
+    emailVerifiedAt: new Date(),
+    twoFactorEnabled: false,
+    twoFactorSecret: null,
+    twoFactorRecoveryCodes: [],
+    companyId: null,
+    ...over,
+  })
+
+  beforeAll(async () => {
+    passwordHash = await bcrypt.hash("password123", 4)
+  })
+
+  beforeEach(() => {
+    prisma = mockDeep<PrismaClient>()
+    prisma.$transaction.mockImplementation((fn: any) => fn(prisma))
+    captcha = { isEnabled: jest.fn().mockReturnValue(true), verify: jest.fn() }
+    twoFactor = { verifyCode: jest.fn() }
+    accountEmail = {
+      sendVerification: jest.fn().mockResolvedValue(undefined),
+      notifyPasswordChanged: jest.fn().mockResolvedValue(undefined),
+      refreshCompanyVerification: jest.fn().mockResolvedValue(undefined),
+    }
+    service = new AuthService(
+      prisma,
+      jwt,
+      captcha as any,
+      new LoginAttemptsService(memoryCache() as any),
+      twoFactor as any,
+      accountEmail
+    )
+  })
+
+  describe("login captcha", () => {
+    const fail = () =>
+      service.login({ email: "a@b.c", password: "wrong-password" }, "1.2.3.4").catch((e) => e)
+
+    it("requires a captcha after 3 failures (same e-mail) when captcha is enabled", async () => {
+      prisma.user.findUnique.mockResolvedValue(baseUser())
+      captcha.verify.mockRejectedValue(
+        Object.assign(new Error("x"), { errorCode: "CAPTCHA_REQUIRED" })
+      )
+      for (let i = 0; i < 3; i++) expect(await fail()).toBeInstanceOf(UnauthorizedException)
+      expect(captcha.verify).not.toHaveBeenCalled()
+
+      await expect(
+        service.login({ email: "a@b.c", password: "password123" }, "9.9.9.9")
+      ).rejects.toMatchObject({ errorCode: "CAPTCHA_REQUIRED" })
+      expect(captcha.verify).toHaveBeenCalledWith(undefined, "9.9.9.9")
+    })
+
+    it("counts failures per IP across different e-mails", async () => {
+      prisma.user.findUnique.mockResolvedValue(null)
+      for (const email of ["x@b.c", "y@b.c", "z@b.c"]) {
+        await service.login({ email, password: "nope-nope" }, "5.5.5.5").catch(() => null)
+      }
+      captcha.verify.mockResolvedValue(undefined)
+      await service.login({ email: "q@b.c", password: "nope-nope" }, "5.5.5.5").catch(() => null)
+      expect(captcha.verify).toHaveBeenCalledTimes(1)
+    })
+
+    it("lets a valid captcha through and resets the counter on success", async () => {
+      prisma.user.findUnique.mockResolvedValue(baseUser())
+      for (let i = 0; i < 3; i++) await fail()
+      captcha.verify.mockResolvedValue(undefined)
+      const ok: any = await service.login(
+        { email: "a@b.c", password: "password123", captchaToken: "t" },
+        "1.2.3.4"
+      )
+      expect(ok.accessToken).toBeDefined()
+      captcha.verify.mockClear()
+      await service.login({ email: "a@b.c", password: "password123" }, "1.2.3.4")
+      expect(captcha.verify).not.toHaveBeenCalled()
+    })
+
+    it("never asks for a captcha when captcha is disabled", async () => {
+      captcha.isEnabled.mockReturnValue(false)
+      prisma.user.findUnique.mockResolvedValue(baseUser())
+      for (let i = 0; i < 5; i++) await fail()
+      const ok: any = await service.login({ email: "a@b.c", password: "password123" }, "1.2.3.4")
+      expect(ok.accessToken).toBeDefined()
+      expect(captcha.verify).not.toHaveBeenCalled()
+    })
+  })
+
+  it("register verifies the captcha and sends the verification e-mail", async () => {
+    prisma.user.findUnique.mockResolvedValue(null)
+    prisma.user.create.mockResolvedValue(baseUser({ emailVerifiedAt: null }))
+    const result = await service.register(
+      { name: "A", email: "a@b.c", password: "password123", role: "SEEKER", captchaToken: "t" },
+      "1.1.1.1"
+    )
+    expect(captcha.verify).toHaveBeenCalledWith("t", "1.1.1.1")
+    expect(result.emailVerified).toBe(false)
+    expect(accountEmail.sendVerification).toHaveBeenCalled()
+  })
+
+  it("access and refresh tokens carry the token version and verification flags", async () => {
+    prisma.user.findUnique.mockResolvedValue(baseUser({ tokenVersion: 4, twoFactorEnabled: false }))
+    const result: any = await service.login({ email: "a@b.c", password: "password123" })
+    expect(verifyAccessToken(jwt, result.accessToken).tv).toBe(4)
+    expect((await service.verifyRefreshToken(result.refreshToken)).tv).toBe(4)
+    expect(result).toMatchObject({ emailVerified: true, twoFactorEnabled: false })
+  })
+
+  describe("tokenVersion revocation", () => {
+    it("rejects a refresh token issued before the version was bumped", async () => {
+      prisma.user.findUnique.mockResolvedValue(baseUser({ tokenVersion: 1 }))
+      await expect(service.refreshTokens("u1", 0)).rejects.toThrow(UnauthorizedException)
+      await expect(service.refreshTokens("u1", 1)).resolves.toMatchObject({ userId: "u1" })
+    })
+
+    it("change-password bumps the version and returns fresh tokens for this session", async () => {
+      prisma.user.findUnique.mockResolvedValue(baseUser())
+      prisma.user.update.mockResolvedValue(baseUser({ tokenVersion: 1 }))
+      const tokens = await service.changePassword("u1", "password123", "new-password-1")
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: "u1" },
+        data: expect.objectContaining({ tokenVersion: { increment: 1 } }),
+      })
+      expect(verifyAccessToken(jwt, tokens.accessToken).tv).toBe(1)
+      expect(accountEmail.notifyPasswordChanged).toHaveBeenCalled()
+    })
+  })
+
+  describe("2FA login", () => {
+    beforeEach(() => captcha.isEnabled.mockReturnValue(false))
+
+    it("returns an MFA challenge instead of tokens and the mfa token is not an access token", async () => {
+      prisma.user.findUnique.mockResolvedValue(baseUser({ twoFactorEnabled: true }))
+      const result: any = await service.login({ email: "a@b.c", password: "password123" })
+      expect(result).toEqual({ mfaRequired: true, mfaToken: expect.any(String) })
+      expect(result.accessToken).toBeUndefined()
+      expect(() => verifyAccessToken(jwt, result.mfaToken)).toThrow(UnauthorizedException)
+      await expect(service.verifyRefreshToken(result.mfaToken)).rejects.toThrow(
+        UnauthorizedException
+      )
+    })
+
+    it("exchanges a valid code for tokens", async () => {
+      prisma.user.findUnique.mockResolvedValue(baseUser({ twoFactorEnabled: true }))
+      const { mfaToken }: any = await service.login({ email: "a@b.c", password: "password123" })
+      twoFactor.verifyCode.mockResolvedValue(true)
+      const tokens = await service.verifyMfaLogin(mfaToken, "123456")
+      expect(verifyAccessToken(jwt, tokens.accessToken).sub).toBe("u1")
+      expect(tokens.twoFactorEnabled).toBe(true)
+    })
+
+    it("rejects wrong codes, access tokens used as mfa tokens and stale versions", async () => {
+      prisma.user.findUnique.mockResolvedValue(baseUser({ twoFactorEnabled: true }))
+      const { mfaToken }: any = await service.login({ email: "a@b.c", password: "password123" })
+      twoFactor.verifyCode.mockResolvedValue(false)
+      await expect(service.verifyMfaLogin(mfaToken, "000000")).rejects.toMatchObject({
+        errorCode: "TWO_FACTOR_INVALID_CODE",
+      })
+
+      const access = jwt.sign({ sub: "u1", role: "SEEKER", email: "a@b.c", tv: 0 })
+      await expect(service.verifyMfaLogin(access, "123456")).rejects.toMatchObject({
+        errorCode: "MFA_SESSION_EXPIRED",
+      })
+
+      prisma.user.findUnique.mockResolvedValue(
+        baseUser({ twoFactorEnabled: true, tokenVersion: 2 })
+      )
+      twoFactor.verifyCode.mockResolvedValue(true)
+      await expect(service.verifyMfaLogin(mfaToken, "123456")).rejects.toMatchObject({
+        errorCode: "MFA_SESSION_EXPIRED",
+      })
+    })
+
+    it("locks the second step after too many wrong codes", async () => {
+      prisma.user.findUnique.mockResolvedValue(baseUser({ twoFactorEnabled: true }))
+      const { mfaToken }: any = await service.login({ email: "a@b.c", password: "password123" })
+      twoFactor.verifyCode.mockResolvedValue(false)
+      for (let i = 0; i < 10; i++)
+        await service.verifyMfaLogin(mfaToken, "000000").catch(() => null)
+      twoFactor.verifyCode.mockResolvedValue(true)
+      await expect(service.verifyMfaLogin(mfaToken, "123456")).rejects.toMatchObject({
+        errorCode: "TOO_MANY_REQUESTS",
+      })
+    })
+  })
+
+  it("OAuth sign-up marks the provider-verified e-mail as verified and refreshes company verification", async () => {
+    prisma.user.findFirst.mockResolvedValue(null)
+    prisma.user.findUnique.mockResolvedValue(null)
+    prisma.user.create.mockResolvedValue(baseUser())
+    prisma.user.update.mockResolvedValue(baseUser())
+    await service.upsertOAuthUser(
+      { provider: "google", id: "g", email: "a@b.c", emailVerified: true, name: "A", avatar: "" },
+      "SEEKER"
+    )
+    expect(prisma.user.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ emailVerifiedAt: expect.any(Date) }),
+    })
+    expect(accountEmail.refreshCompanyVerification).toHaveBeenCalledWith("u1")
+  })
+
+  it("getMe exposes emailVerified/twoFactorEnabled but never the password hash", async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: "u1",
+      email: "a@b.c",
+      emailVerifiedAt: null,
+      twoFactorEnabled: true,
+      passwordHash: "secret-hash",
+    })
+    const me: any = await service.getMe("u1")
+    expect(me).toMatchObject({ emailVerified: false, twoFactorEnabled: true, hasPassword: true })
+    expect(me.passwordHash).toBeUndefined()
+    expect(me.emailVerifiedAt).toBeUndefined()
   })
 })
