@@ -13,8 +13,8 @@ Roles: `SEEKER`, `RECRUITER`, `ADMIN`; company roles `OWNER | RECRUITER | HIRING
 ## Commands (run from repo root unless noted)
 - Typecheck: `npx tsc --noEmit -p hyrr.shared`, `npx tsc --noEmit -p hyrr.recruiter/tsconfig.app.json`, `npx tsc --noEmit -p hyrr.jobseeker/tsconfig.app.json`, backend `cd hyrr.backend && npx tsc --noEmit -p .`
 - Tests (backend only): `cd hyrr.backend && npx jest [path]`; target a folder first, run everything before finishing.
-- Builds: `npm run build --workspace=hyrr.recruiter` (also `hyrr.jobseeker`, `hyrr.admin`, which must keep building).
-- Dev: `npm run dev:backend`, `npm run dev:recruiter`, `npm run dev:jobseeker`. The root `dev`/`build` scripts are broken; use `build:all`.
+- Builds: `npm run build` (all workspaces) or `npm run build --workspace=hyrr.recruiter` (also `hyrr.jobseeker`, `hyrr.admin`, which must keep building). `npm run typecheck` = `tsc -b` over every workspace with the root TypeScript 6 (stricter than the backend's own 5.9, e.g. `catch (err)` is `unknown`: write `catch (err: any)`).
+- Dev: `npm run dev:backend`, `npm run dev:recruiter`, `npm run dev:jobseeker`.
 - Prisma: `cd hyrr.backend && npx prisma generate`. Never `migrate dev` against the user's DB; use the `hyrr-migration` skill.
 - Docker: `docker compose up --build` (backend reads `hyrr.backend/.env`; demo data only with `SEED_DEMO_DATA=true`).
 - Lint/format: `npx oxlint`, `npx prettier --write <files>` (no semicolons, double quotes, width 100).

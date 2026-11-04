@@ -44,6 +44,9 @@ jobs:
         working-directory: hyrr.backend
         run: npx tsc --noEmit -p .
 
+      - name: Typecheck all workspaces (root TypeScript, project references)
+        run: npm run typecheck
+
       - name: Backend unit tests
         working-directory: hyrr.backend
         run: npx jest --ci

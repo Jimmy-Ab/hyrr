@@ -359,7 +359,7 @@ export class ApplicationsService {
         NotificationType.APPLICATION,
         NotificationAction.APPLICATIONS
       )
-    } catch (err) {
+    } catch (err: any) {
       // The application itself is committed; side effects must not fail the request.
       this.logger.warn(`Post-apply side effects failed for ${applicationId}: ${err?.message}`)
     }
