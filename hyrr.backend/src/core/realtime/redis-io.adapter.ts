@@ -50,7 +50,7 @@ export function guardPublish(client: Redis, onError: (err: any) => void): Redis 
  * themselves.
  */
 export class RedisIoAdapter extends IoAdapter {
-  private readonly logger = new Logger(RedisIoAdapter.name)
+  private readonly log = new Logger(RedisIoAdapter.name)
   private adapterConstructor?: ReturnType<typeof createAdapter>
   private pubClient?: Redis
   private subClient?: Redis
@@ -73,9 +73,9 @@ export class RedisIoAdapter extends IoAdapter {
     this.subClient.on("error", (err) => this.logError("sub", err))
 
     const ready = await Promise.all([waitForReady(this.pubClient), waitForReady(this.subClient)])
-    if (ready.every(Boolean)) this.logger.log("Socket.io Redis adapter connected")
+    if (ready.every(Boolean)) this.log.log("Socket.io Redis adapter connected")
     else
-      this.logger.warn(
+      this.log.warn(
         "Redis not reachable yet: sockets work on this instance; cross-instance fan-out resumes on reconnect"
       )
 
@@ -104,6 +104,6 @@ export class RedisIoAdapter extends IoAdapter {
     const now = Date.now()
     if (now - this.lastErrorAt < 30_000) return
     this.lastErrorAt = now
-    this.logger.warn(`Socket.io Redis ${kind} client error: ${err?.message || err}`)
+    this.log.warn(`Socket.io Redis ${kind} client error: ${err?.message || err}`)
   }
 }
