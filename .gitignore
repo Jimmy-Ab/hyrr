@@ -31,3 +31,9 @@ dist-ssr
 
 # Local file uploads
 hyrr.backend/uploads
+
+# Playwright
+test-results/
+playwright-report/
+e2e/test-results/
+e2e/playwright-report/
