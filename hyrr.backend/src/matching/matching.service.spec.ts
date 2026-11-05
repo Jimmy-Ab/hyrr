@@ -97,4 +97,37 @@ describe("MatchingService", () => {
     await service.invalidate("u1")
     expect(cache.delByPattern).toHaveBeenCalledWith("matching:u1:*")
   })
+
+  describe("with embeddings", () => {
+    it("blends the similarity into the score and adds the reason", async () => {
+      const embeddings = {
+        similarities: jest.fn().mockResolvedValue(
+          new Map([
+            ["good", 0.9],
+            ["weak", 0.95],
+          ])
+        ),
+      }
+      service = new MatchingService(prisma, cache, embeddings as any)
+      const rule = await new MatchingService(prisma, cache).getMatchedJobs("u1", "all", 50)
+      const ruleGood = rule.jobs.find((j: any) => j.id === "good")!.match.score
+
+      const result = await service.getMatchedJobs("u1", "for-you", 50)
+      expect(embeddings.similarities).toHaveBeenCalledWith("u1", ["good", "weak"])
+      const good = result.jobs.find((j: any) => j.id === "good")!
+      expect(good.match.score).toBe(Math.round(0.7 * ruleGood + 27))
+      expect(good.match.reasons).toContain("Similar to your background")
+      expect(good.match.reasons.length).toBeLessThanOrEqual(4)
+      // A weak rule match lifted only by similarity still has to reach the 40 threshold.
+      expect(result.jobs.map((j: any) => j.id)).toEqual(["good"])
+    })
+
+    it("falls back to rule scores when similarities fail", async () => {
+      const embeddings = { similarities: jest.fn().mockRejectedValue(new Error("db down")) }
+      service = new MatchingService(prisma, cache, embeddings as any)
+      const blended = await service.getMatchedJobs("u1", "for-you", 50)
+      const rule = await new MatchingService(prisma, cache).getMatchedJobs("u1", "for-you", 50)
+      expect(blended.jobs.map((j: any) => j.match)).toEqual(rule.jobs.map((j: any) => j.match))
+    })
+  })
 })

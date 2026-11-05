@@ -257,6 +257,33 @@ export function scoreJobForProfile(job: ScorableJob, profile: ScorableProfile): 
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
+/** Weight of the rule score when an embedding similarity is available (the rest is similarity). */
+export const RULE_WEIGHT = 0.7
+/** Cosine similarity from which the "Similar to your background" reason is shown. */
+export const SIMILARITY_REASON_MIN = 0.5
+export const SIMILARITY_REASON = "Similar to your background"
+
+/**
+ * Blends the rule score (0-100) with an embedding cosine similarity (0..1):
+ * `round(0.7 * rule + 0.3 * sim * 100)`. Without a similarity the rule score is returned unchanged.
+ */
+export function blendScore(rule: number, sim?: number | null): number {
+  if (sim === undefined || sim === null || !Number.isFinite(sim)) return rule
+  const clamped = Math.max(0, Math.min(1, sim))
+  const blended = Math.round(RULE_WEIGHT * rule + (1 - RULE_WEIGHT) * clamped * 100)
+  return Math.max(0, Math.min(100, blended))
+}
+
+/** Applies `blendScore` to a rule match and adds the similarity reason (still max 4 reasons). */
+export function blendMatch(match: JobMatch, sim?: number | null): JobMatch {
+  const score = blendScore(match.score, sim)
+  if (sim === undefined || sim === null || !(sim >= SIMILARITY_REASON_MIN)) {
+    return score === match.score ? match : { ...match, score }
+  }
+  const reasons = [...match.reasons.slice(0, MAX_REASONS - 1), SIMILARITY_REASON]
+  return { score, reasons }
+}
+
 /** True when there is too little to match on (no skills and no title). */
 export function isThinProfile(profile: ScorableProfile | null | undefined): boolean {
   if (!profile) return true

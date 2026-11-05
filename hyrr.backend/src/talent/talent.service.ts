@@ -16,6 +16,7 @@ import { requireCompanyWriter, resolveCompanyMembership } from "../core/access/c
 import { AppException, NotFoundAppException } from "../core/exceptions/app-exception"
 import { NotificationsService } from "../notifications/notifications.service"
 import { PrismaService } from "../prisma/prisma.service"
+import { SearchService } from "../search/search.service"
 import { JobReportReason } from "./dtos/talent.dto"
 
 /** Unique reporters needed before a live job is hidden pending review (JOB_REPORT_FLAG_THRESHOLD). */
@@ -32,7 +33,8 @@ export class TalentService {
     private readonly prisma: PrismaService,
     private readonly access: AccessService,
     @Optional() private readonly notifications?: NotificationsService,
-    @Optional() private readonly cache?: CacheService
+    @Optional() private readonly cache?: CacheService,
+    @Optional() private readonly search?: SearchService
   ) {}
 
   private db() {
@@ -239,6 +241,8 @@ export class TalentService {
 
   private async afterFlagged(job: { id: string; title: string; recruiterId: string }) {
     try {
+      // FLAGGED jobs leave the search index.
+      this.search?.indexJobSoon(job.id)
       await this.cache?.delByPattern("jobs:public*")
       await this.cache?.delByPattern("ai:featured-jobs:*")
       await this.notifications?.createNotification(

@@ -10,6 +10,8 @@ import { AppException, NotFoundAppException } from "../core/exceptions/app-excep
 import { MessagesGateway } from "../messages/messages.gateway"
 import { NotificationsService } from "../notifications/notifications.service"
 import { PrismaService } from "../prisma/prisma.service"
+import { SearchService } from "../search/search.service"
+import { EmbeddingsService } from "../embeddings/embeddings.service"
 import { AlertsService } from "../seeker-tools/alerts.service"
 import { CreateJobDto } from "./dtos/create-job.dto"
 import { UpdateJobDto } from "./dtos/update-job.dto"
@@ -19,7 +21,13 @@ import { PUBLIC_COMPANY_SELECT } from "./public-company"
 
 const JOB_COLORS = ["purple", "blue", "green", "orange"] as const
 const PUBLIC_JOBS_CACHE_KEY = "jobs:public"
-const PUBLIC_SEARCH_LIMIT = 50
+/** Default and maximum page size of GET /jobs/public. */
+export const PUBLIC_SEARCH_LIMIT = 50
+export const PUBLIC_SEARCH_MAX_LIMIT = 100
+/** Job fields whose change makes the stored embedding stale. */
+const EMBEDDED_FIELDS = ["title", "description", "skills", "requirements", "status"] as const
+
+export type PublicJobsPage<T = any> = { items: T[]; total: number }
 /** Statuses a recruiter may set; FLAGGED is reserved for admins (moderation). */
 const RECRUITER_JOB_STATUSES: JobStatus[] = [JobStatus.ACTIVE, JobStatus.CLOSED, JobStatus.DRAFT]
 
@@ -50,8 +58,23 @@ export class JobsService {
     private pricing: PricingService,
     @Optional() private email?: EmailService,
     @Optional() private messagesGateway?: MessagesGateway,
-    @Optional() private alerts?: AlertsService
+    @Optional() private alerts?: AlertsService,
+    @Optional() private search?: SearchService,
+    @Optional() private embeddings?: EmbeddingsService
   ) {}
+
+  /** Search index + embedding refresh; both are queued and never fail the request. */
+  private afterJobChange(jobId: string, opts: { index?: boolean; embed?: boolean }) {
+    try {
+      if (opts.index) this.search?.indexJobSoon(jobId)
+      if (opts.embed && this.embeddings)
+        void Promise.resolve(this.embeddings.embedJobSoon(jobId)).catch((err: any) =>
+          this.logger.warn(`Embedding refresh failed for ${jobId}: ${err?.message}`)
+        )
+    } catch (err: any) {
+      this.logger.warn(`Index/embedding refresh failed for ${jobId}: ${err?.message}`)
+    }
+  }
 
   /** Jobs always expose `requirements` as a string array. */
   private withRequirements<T extends { requirements?: string[] | null }>(job: T): T {
@@ -158,6 +181,7 @@ export class JobsService {
 
     // Invalidate cached public listings
     await this.cache.delByPattern("jobs:public*")
+    this.afterJobChange(job.id, { index: job.status === JobStatus.ACTIVE, embed: true })
     // Alerts never block job creation (drafts are not announced)
     if (job.status === JobStatus.ACTIVE)
       this.alerts
@@ -297,6 +321,11 @@ export class JobsService {
       })
     })
     await this.cache.delByPattern("jobs:public*")
+    this.afterJobChange(job.id, {
+      // Only ACTIVE jobs live in the index: (re)index when it is or was public.
+      index: job.status === JobStatus.ACTIVE || current.status === JobStatus.ACTIVE,
+      embed: EMBEDDED_FIELDS.some((f) => data[f] !== undefined),
+    })
     // The first publication is announced like a newly created job (reopening is not).
     if (published && job.status === JobStatus.ACTIVE)
       this.alerts
@@ -368,6 +397,7 @@ export class JobsService {
       })
     })
     await this.cache.delByPattern("jobs:public*")
+    this.afterJobChange(jobId, { index: true })
     const balance = await this.wallet.getBalance(current.companyId)
     return { featuredUntil: job.featuredUntil, balance }
   }
@@ -393,27 +423,96 @@ export class JobsService {
       )
     await this.prisma.job.delete({ where: { id: jobId } })
     await this.cache.delByPattern("jobs:public*")
+    try {
+      this.search?.removeJobSoon(jobId)
+    } catch (err: any) {
+      this.logger.warn(`Search removal failed for ${jobId}: ${err?.message}`)
+    }
     return { id: jobId, deleted: true }
   }
 
   // ─── Public: full-text search + filter (Redis cached) ────────────
+  /** Array-returning form kept for existing callers; see `searchPublicJobsPage`. */
   async searchPublicJobs(
     query?: string,
     type?: EmploymentType,
     categorySlug?: string,
-    remote?: boolean
+    remote?: boolean,
+    page: { limit?: number; offset?: number } = {}
   ) {
-    const cacheKey = `${PUBLIC_JOBS_CACHE_KEY}:${query || ""}:${type || ""}:${categorySlug || ""}:${remote ?? ""}`
+    return (await this.searchPublicJobsPage(query, type, categorySlug, remote, page)).items
+  }
 
-    const cached = await this.cache.get<any[]>(cacheKey)
-    if (cached) return cached
+  /**
+   * Active jobs, currently featured first. With Meilisearch enabled and a non-empty query the
+   * ids and their order come from Meili (relevance) and are hydrated from Postgres; otherwise
+   * (or when Meili fails) Postgres `contains` matching, newest first. Cached for 2 minutes.
+   */
+  async searchPublicJobsPage(
+    query?: string,
+    type?: EmploymentType,
+    categorySlug?: string,
+    remote?: boolean,
+    page: { limit?: number; offset?: number } = {}
+  ): Promise<PublicJobsPage> {
+    const limit = Math.min(
+      PUBLIC_SEARCH_MAX_LIMIT,
+      Math.max(1, Math.floor(page.limit ?? PUBLIC_SEARCH_LIMIT))
+    )
+    const offset = Math.max(0, Math.floor(page.offset ?? 0))
+    const q = query?.trim() || ""
+    const cacheKey = `${PUBLIC_JOBS_CACHE_KEY}:${q}:${type || ""}:${categorySlug || ""}:${remote ?? ""}:${limit}:${offset}`
 
+    const cached = await this.cache.get<PublicJobsPage>(cacheKey)
+    if (cached && Array.isArray(cached.items)) return cached
+
+    const include = { company: { select: PUBLIC_COMPANY_SELECT }, category: true }
+    let result: PublicJobsPage | null = null
+
+    if (q && this.search?.isEnabled()) {
+      const hits = await this.search.searchJobs({
+        q,
+        type,
+        categorySlug,
+        remote: !!remote,
+        limit,
+        offset,
+      })
+      if (hits) {
+        const rows = hits.ids.length
+          ? await this.prisma.job.findMany({
+              where: { id: { in: hits.ids }, status: JobStatus.ACTIVE },
+              include,
+            })
+          : []
+        const byId = new Map(rows.map((job) => [job.id, job]))
+        const items = hits.ids
+          .map((id) => byId.get(id))
+          .filter((job): job is (typeof rows)[number] => !!job)
+          .map((job) => this.withRequirements(job))
+        result = { items, total: hits.total }
+      }
+    }
+
+    if (!result) result = await this.searchPublicJobsPostgres(q, type, categorySlug, remote, limit, offset)
+
+    await this.cache.set(cacheKey, result, 120) // 2-minute TTL
+    return result
+  }
+
+  private async searchPublicJobsPostgres(
+    q: string,
+    type: EmploymentType | undefined,
+    categorySlug: string | undefined,
+    remote: boolean | undefined,
+    limit: number,
+    offset: number
+  ): Promise<PublicJobsPage> {
     const where: Prisma.JobWhereInput = { status: JobStatus.ACTIVE }
     if (type) where.type = type
     if (remote) where.remote = true
     if (categorySlug) where.category = { slug: categorySlug }
 
-    const q = query?.trim()
     if (q) {
       const contains = { contains: q, mode: "insensitive" as const }
       where.OR = [
@@ -432,27 +531,36 @@ export class JobsService {
       { publishedAt: { sort: "desc", nulls: "last" } },
       { createdAt: "desc" },
     ]
-    const featuredJobs = await this.prisma.job.findMany({
-      where: { AND: [where, { featuredUntil: { gt: now } }] },
-      include,
-      orderBy: newest,
-      take: PUBLIC_SEARCH_LIMIT,
-    })
-    const otherJobs =
-      featuredJobs.length < PUBLIC_SEARCH_LIMIT
+    const featuredWhere: Prisma.JobWhereInput = { AND: [where, { featuredUntil: { gt: now } }] }
+    const otherWhere: Prisma.JobWhereInput = {
+      AND: [where, { OR: [{ featuredUntil: null }, { featuredUntil: { lte: now } }] }],
+    }
+    const [featuredTotal, otherTotal] = await Promise.all([
+      this.prisma.job.count({ where: featuredWhere }),
+      this.prisma.job.count({ where: otherWhere }),
+    ]).then((counts) => counts.map((n) => Number(n) || 0))
+    const featuredJobs =
+      offset < featuredTotal
         ? await this.prisma.job.findMany({
-            where: {
-              AND: [where, { OR: [{ featuredUntil: null }, { featuredUntil: { lte: now } }] }],
-            },
+            where: featuredWhere,
             include,
             orderBy: newest,
-            take: PUBLIC_SEARCH_LIMIT - featuredJobs.length,
+            skip: offset || undefined,
+            take: limit,
           })
         : []
-    const results = [...featuredJobs, ...otherJobs].map((job) => this.withRequirements(job))
-
-    await this.cache.set(cacheKey, results, 120) // 2-minute TTL
-    return results
+    const otherJobs =
+      featuredJobs.length < limit
+        ? await this.prisma.job.findMany({
+            where: otherWhere,
+            include,
+            orderBy: newest,
+            skip: Math.max(0, offset - featuredTotal) || undefined,
+            take: limit - featuredJobs.length,
+          })
+        : []
+    const items = [...featuredJobs, ...otherJobs].map((job) => this.withRequirements(job))
+    return { items, total: featuredTotal + otherTotal }
   }
 
   // ─── Public: get single job detail ───────────────────────────────

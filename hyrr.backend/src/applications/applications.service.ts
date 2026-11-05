@@ -4,6 +4,7 @@ import {
   HttpStatus,
   Injectable,
   Logger,
+  OnModuleInit,
   Optional,
 } from "@nestjs/common"
 import {
@@ -34,6 +35,7 @@ import { NotificationsService } from "../notifications/notifications.service"
 import { LABEL_SELECT, LabelsService } from "../pipeline/labels.service"
 import { AnswerInput, ScreeningService } from "../pipeline/screening.service"
 import { PrismaService } from "../prisma/prisma.service"
+import { QueueService } from "../queue/queue.service"
 import { UploadsService } from "../uploads/uploads.service"
 import { BulkApplicationsDto } from "./dtos/bulk-applications.dto"
 import { CreateApplicationDto } from "./dtos/create-application.dto"
@@ -142,7 +144,7 @@ export function normalizePage(page: Page = {}) {
 const isRecruiterRole = (role?: string) => role === "RECRUITER" || role === "ADMIN"
 
 @Injectable()
-export class ApplicationsService {
+export class ApplicationsService implements OnModuleInit {
   private readonly logger = new Logger(ApplicationsService.name)
 
   constructor(
@@ -159,8 +161,19 @@ export class ApplicationsService {
     @Optional() private messages?: MessagesService,
     @Optional() private cache?: CacheService,
     @Optional() private wallet?: WalletService,
-    @Optional() private pricing?: PricingService
+    @Optional() private pricing?: PricingService,
+    @Optional() private queue?: QueueService
   ) {}
+
+  onModuleInit() {
+    this.queue?.process<{ applicationId: string }>(
+      "ai-scoring",
+      "score-application",
+      async ({ applicationId }) => {
+        await this.aiService?.scoreApplication(applicationId)
+      }
+    )
+  }
 
   /** The seeker's "For you" list hides jobs they applied to or saved: drop their cached matches. */
   private async forgetMatches(userId: string | null | undefined) {
@@ -376,9 +389,20 @@ export class ApplicationsService {
    */
   scoreInBackground(applicationId: string) {
     if (!this.aiService) return
+    if (this.queue) {
+      void this.queue.add(
+        "ai-scoring",
+        "score-application",
+        { applicationId },
+        { attempts: 2, jobId: `score:${applicationId}` }
+      )
+      return
+    }
     this.aiService
       .scoreApplication(applicationId)
-      .catch((err) => this.logger.warn(`AI scoring failed for ${applicationId}: ${err?.message}`))
+      .catch((err: any) =>
+        this.logger.warn(`AI scoring failed for ${applicationId}: ${err?.message}`)
+      )
   }
 
   // ─── Recruiter: (re-)run AI analysis (A1) ────────────────────────

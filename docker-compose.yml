@@ -17,7 +17,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # ─── Redis (cache for public job search / AI recommendations) ────────────────
+  # ─── Redis (cache, queues, shared rate limits, socket.io fan-out) ─────────────
   redis:
     image: redis:7-alpine
     container_name: hyrr_redis
@@ -26,21 +26,49 @@ services:
     volumes:
       - redis_data:/data
 
+  # ─── Meilisearch (public job search; the backend falls back to Postgres without it) ─
+  meilisearch:
+    image: getmeili/meilisearch:v1.11
+    container_name: hyrr_meilisearch
+    environment:
+      # Set MEILI_MASTER_KEY in the shell or the root .env for anything shared; the backend
+      # receives the same value below.
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-hyrr-dev-meili-master-key}
+      MEILI_ENV: ${MEILI_ENV:-development}
+      MEILI_NO_ANALYTICS: "true"
+    ports:
+      - "7701:7700"
+    volumes:
+      - meili_data:/meili_data
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # ─── NestJS Backend API ───────────────────────────────────────────────────────
   backend:
-    build:
+    build: &backend-build
       context: ./hyrr.backend
       dockerfile: Dockerfile
     container_name: hyrr_backend
     env_file:
       - ./hyrr.backend/.env
-    environment:
+    environment: &backend-env
       DATABASE_URL: postgresql://hyrr_user:hyrr_password@postgres:5432/hyrr_db?schema=public
       NODE_ENV: production
       # JWT_SECRET comes from ./hyrr.backend/.env (env_file above). The backend refuses to start
       # in production if it is missing, shorter than 32 chars, or the .env.example placeholder.
       REDIS_HOST: redis
       REDIS_PORT: "6379"
+      # Search: Meilisearch above (unset MEILI_HOST → Postgres search).
+      MEILI_HOST: http://meilisearch:7700
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-hyrr-dev-meili-master-key}
+      # Background jobs (BullMQ on Redis). QUEUE_WORKER=true: this instance also processes jobs.
+      # Scaling: run API replicas with QUEUE_WORKER=false and dedicated workers via the "worker"
+      # profile, e.g. `QUEUE_WORKER=false docker compose --profile worker up --scale worker=2`.
+      # With Redis, rate limits and socket.io events are shared across all instances.
+      QUEUE_WORKER: ${QUEUE_WORKER:-true}
       PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:3000}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:5175}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5174}
@@ -64,6 +92,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      meilisearch:
+        condition: service_started
+        required: false
       clamav:
         condition: service_started
         required: false
@@ -84,6 +115,37 @@ services:
       sh -c "npx prisma migrate deploy &&
              if [ \"$$SEED_DEMO_DATA\" = \"true\" ]; then npx prisma db seed; fi &&
              node dist/main"
+
+  # ─── Queue worker (optional): `docker compose --profile worker up [--scale worker=N]` ─
+  # Same image and settings as the backend, processing BullMQ jobs (e-mail, AI scoring, alerts,
+  # maintenance, search indexing). Migrations stay with the backend service, which it waits for.
+  # Its HTTP port is internal only (used by the health check).
+  worker:
+    build: *backend-build
+    profiles: ["worker"]
+    env_file:
+      - ./hyrr.backend/.env
+    environment:
+      <<: *backend-env
+      QUEUE_WORKER: "true"
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["node", "dist/main"]
 
   # ─── Recruiter SPA ────────────────────────────────────────────────────────────
   recruiter:
@@ -157,6 +219,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  meili_data:
   uploads_data:
   backups_data:
   clamav_data:

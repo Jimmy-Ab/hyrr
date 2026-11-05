@@ -1,5 +1,5 @@
 import * as nodemailer from "nodemailer"
-import { EmailService } from "./email.service"
+import { EMAIL_ATTEMPTS, EMAIL_BACKOFF_MS, EmailService } from "./email.service"
 
 jest.mock("nodemailer", () => ({ createTransport: jest.fn() }))
 
@@ -57,5 +57,48 @@ describe("EmailService", () => {
     const service = new EmailService()
     jest.spyOn((service as any).logger, "warn").mockImplementation(() => undefined)
     await expect(service.send(message)).resolves.toEqual({ delivered: false })
+  })
+
+  it("deliver() throws on SMTP failure so the queue retries", async () => {
+    process.env.SMTP_HOST = "smtp.example.com"
+    ;(nodemailer.createTransport as jest.Mock).mockReturnValue({
+      sendMail: jest.fn().mockRejectedValue(new Error("ECONNREFUSED")),
+    })
+    await expect(new EmailService().deliver(message)).rejects.toThrow("ECONNREFUSED")
+  })
+
+  describe("with a queue", () => {
+    const queue = { add: jest.fn().mockResolvedValue(undefined), process: jest.fn() }
+
+    it("enqueues email:send (5 attempts, 10 s backoff) and resolves queued", async () => {
+      const service = new EmailService(queue as any)
+      await expect(service.send(message)).resolves.toEqual({ delivered: false, queued: true })
+      expect(queue.add).toHaveBeenCalledWith("email", "send", message, {
+        attempts: EMAIL_ATTEMPTS,
+        backoffMs: EMAIL_BACKOFF_MS,
+      })
+      expect(EMAIL_ATTEMPTS).toBe(5)
+      expect(EMAIL_BACKOFF_MS).toBe(10_000)
+      expect(nodemailer.createTransport).not.toHaveBeenCalled()
+    })
+
+    it("does not enqueue without a recipient", async () => {
+      const service = new EmailService(queue as any)
+      await expect(service.send({ ...message, to: " \n" })).resolves.toEqual({ delivered: false })
+      expect(queue.add).not.toHaveBeenCalled()
+    })
+
+    it("registers deliver() as the email:send processor", async () => {
+      delete process.env.SMTP_HOST
+      const service = new EmailService(queue as any)
+      const log = jest.spyOn((service as any).logger, "log").mockImplementation(() => undefined)
+      service.onModuleInit()
+      expect(queue.process).toHaveBeenCalledWith("email", "send", expect.any(Function))
+      const handler = queue.process.mock.calls[0][2]
+      await expect(handler(message)).resolves.toEqual({ delivered: false })
+      expect(log.mock.calls[0][0]).toBe(
+        `[e-mail not configured, SMTP_HOST unset] to=sam@example.com subject="Hello Bcc: evil@example.com"\n${message.text}`
+      )
+    })
   })
 })

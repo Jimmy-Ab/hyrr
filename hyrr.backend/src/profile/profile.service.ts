@@ -1,8 +1,9 @@
-import { HttpStatus, Injectable, NotFoundException } from "@nestjs/common"
+import { HttpStatus, Injectable, NotFoundException, Optional } from "@nestjs/common"
 import { DocType, Prisma } from "@prisma/client"
 import { AiService } from "../ai/ai.service"
 import { CvSuggestions } from "../ai/cv-profile"
 import { AppException, NotFoundAppException } from "../core/exceptions/app-exception"
+import { EmbeddingsService } from "../embeddings/embeddings.service"
 import { MatchingService } from "../matching/matching.service"
 import { computeProfileStrength } from "../matching/scoring"
 import { PrismaService } from "../prisma/prisma.service"
@@ -51,7 +52,8 @@ export class ProfileService {
     private matching: MatchingService,
     private ai: AiService,
     private uploads: UploadsService,
-    private cvText: CvTextService
+    private cvText: CvTextService,
+    @Optional() private embeddings?: EmbeddingsService
   ) {}
 
   /** GET /profile payload: the profile plus completeness (`profileStrength` 0-100, `missing`). */
@@ -182,6 +184,7 @@ export class ProfileService {
       })
     })
     await this.matching.invalidate(userId)
+    await this.embeddings?.embedProfileSoon(userId)
     return withStrength(updated)
   }
 
@@ -200,6 +203,7 @@ export class ProfileService {
       },
     })
     await this.matching.invalidate(userId)
+    await this.embeddings?.embedProfileSoon(userId)
     return created
   }
 
@@ -209,6 +213,7 @@ export class ProfileService {
     if (!exp || exp.profileId !== profile.id) throw new NotFoundException("Experience not found")
     const deleted = await this.prisma.workExperience.delete({ where: { id } })
     await this.matching.invalidate(userId)
+    await this.embeddings?.embedProfileSoon(userId)
     return deleted
   }
 
@@ -223,6 +228,7 @@ export class ProfileService {
       },
     })
     await this.matching.invalidate(userId)
+    await this.embeddings?.embedProfileSoon(userId)
     return created
   }
 
@@ -232,6 +238,7 @@ export class ProfileService {
     if (!edu || edu.profileId !== profile.id) throw new NotFoundException("Education not found")
     const deleted = await this.prisma.education.delete({ where: { id } })
     await this.matching.invalidate(userId)
+    await this.embeddings?.embedProfileSoon(userId)
     return deleted
   }
 

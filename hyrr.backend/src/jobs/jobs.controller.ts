@@ -8,8 +8,10 @@ import {
   Put,
   Query,
   Req,
+  Res,
   UseGuards,
 } from "@nestjs/common"
+import type { Response } from "express"
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from "@nestjs/swagger"
 import { Roles } from "../auth/decorators/roles.decorator"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
@@ -42,14 +44,25 @@ export class JobsController {
   @ApiQuery({ name: "type", required: false, description: "Employment type enum code" })
   @ApiQuery({ name: "category", required: false, description: "Category slug filter" })
   @ApiQuery({ name: "remote", required: false, type: Boolean })
-  @ApiResponse({ status: 200, description: "Returns list of matching job listings" })
-  searchPublicJobs(@Query() query: SearchPublicJobsDto) {
-    return this.jobsService.searchPublicJobs(
+  @ApiQuery({ name: "limit", required: false, type: Number, description: "1–100, default 50" })
+  @ApiQuery({ name: "offset", required: false, type: Number })
+  @ApiResponse({
+    status: 200,
+    description: "Matching job listings (featured first); the full count is in X-Total-Count",
+  })
+  async searchPublicJobs(
+    @Query() query: SearchPublicJobsDto,
+    @Res({ passthrough: true }) res: Response
+  ) {
+    const page = await this.jobsService.searchPublicJobsPage(
       query.q,
       query.type,
       query.category,
-      query.remote === "true"
+      query.remote === "true",
+      { limit: query.limit, offset: query.offset }
     )
+    res.setHeader("X-Total-Count", String(page.total))
+    return page.items
   }
 
   @Get("categories")

@@ -130,7 +130,7 @@ describe("AlertsService", () => {
     })
   })
 
-  describe("onJobPublished (INSTANT)", () => {
+  describe("sendInstant (INSTANT)", () => {
     it("notifies each matching user once, with one notification batch and e-mail", async () => {
       prisma.job.findUnique.mockResolvedValue(job())
       prisma.jobAlert.findMany.mockResolvedValue([
@@ -138,7 +138,7 @@ describe("AlertsService", () => {
         alert({ id: "a2", userId: "u1", keywords: [] }),
         alert({ id: "a3", userId: "u2", keywords: ["cobol"] }),
       ])
-      const count = await service.onJobPublished("job-1")
+      const count = await service.sendInstant("job-1")
       expect(count).toBe(1)
       const where = prisma.jobAlert.findMany.mock.calls[0][0].where
       expect(where.frequency).toBe("INSTANT")
@@ -154,7 +154,7 @@ describe("AlertsService", () => {
 
     it.each(["FLAGGED", "DRAFT", "CLOSED"])("never announces %s jobs", async (status) => {
       prisma.job.findUnique.mockResolvedValue(job({ status }))
-      expect(await service.onJobPublished("job-1")).toBe(0)
+      expect(await service.sendInstant("job-1")).toBe(0)
       expect(prisma.jobAlert.findMany).not.toHaveBeenCalled()
     })
 
@@ -178,11 +178,32 @@ describe("AlertsService", () => {
           setting: { jobRecommendations: true, emailNotifications: false },
         },
       ])
-      expect(await service.onJobPublished("job-1")).toBe(1)
+      expect(await service.sendInstant("job-1")).toBe(1)
       expect(
         prisma.notification.createManyAndReturn.mock.calls[0][0].data.map((d: any) => d.userId)
       ).toEqual(["u2"])
       expect(email.send).not.toHaveBeenCalled()
+    })
+  })
+
+  describe("onJobPublished", () => {
+    it("enqueues alerts:instant deduped per job", async () => {
+      const queue = { add: jest.fn().mockResolvedValue(undefined) }
+      const queued = new AlertsService(prisma, email, gateway, queue as any)
+      await queued.onJobPublished("job-1")
+      expect(queue.add).toHaveBeenCalledWith(
+        "alerts",
+        "instant",
+        { jobId: "job-1" },
+        { jobId: "instant:job-1" }
+      )
+      expect(prisma.job.findUnique).not.toHaveBeenCalled()
+    })
+
+    it("fans out directly without a queue", async () => {
+      prisma.job.findUnique.mockResolvedValue(job({ status: "DRAFT" }))
+      await service.onJobPublished("job-1")
+      expect(prisma.job.findUnique).toHaveBeenCalled()
     })
   })
 
@@ -307,5 +328,43 @@ describe("AlertsScheduler", () => {
     process.env.ALERT_DIGESTS_ENABLED = "false"
     await scheduler.weekly()
     expect(alerts.runDigest).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("AlertsScheduler queue registration", () => {
+  const saved = process.env.ALERT_DIGESTS_ENABLED
+  afterEach(() => {
+    process.env.ALERT_DIGESTS_ENABLED = saved
+  })
+
+  const setup = () => {
+    const alerts = {
+      sendInstant: jest.fn().mockResolvedValue(2),
+      runDigest: jest.fn().mockResolvedValue({ alerts: 0, users: 0 }),
+    } as any
+    const queue = { process: jest.fn(), repeat: jest.fn() }
+    const scheduler = new AlertsScheduler(alerts, queue as any)
+    const handler = (name: string) => queue.process.mock.calls.find((c) => c[1] === name)?.[2]
+    return { alerts, queue, scheduler, handler }
+  }
+
+  it("registers instant + digest processors and the UTC repeatables", async () => {
+    delete process.env.ALERT_DIGESTS_ENABLED
+    const { alerts, queue, scheduler, handler } = setup()
+    scheduler.onModuleInit()
+    expect(queue.repeat).toHaveBeenCalledWith("alerts", "digest-daily", "0 8 * * *")
+    expect(queue.repeat).toHaveBeenCalledWith("alerts", "digest-weekly", "0 8 * * 1")
+    await expect(handler("instant")({ jobId: "j1" })).resolves.toBe(2)
+    expect(alerts.sendInstant).toHaveBeenCalledWith("j1")
+    await handler("digest-weekly")({})
+    expect(alerts.runDigest).toHaveBeenCalledWith("WEEKLY")
+  })
+
+  it("does not schedule digests when ALERT_DIGESTS_ENABLED=false", () => {
+    process.env.ALERT_DIGESTS_ENABLED = "false"
+    const { queue, scheduler, handler } = setup()
+    scheduler.onModuleInit()
+    expect(queue.repeat).not.toHaveBeenCalled()
+    expect(handler("instant")).toBeDefined()
   })
 })

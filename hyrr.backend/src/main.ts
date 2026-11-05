@@ -8,18 +8,45 @@ import { NestFactory } from "@nestjs/core"
 import { NestExpressApplication } from "@nestjs/platform-express"
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger"
 import helmet from "helmet"
+import Redis from "ioredis"
 import { AppModule } from "./app.module"
 import { jwtSecret } from "./auth/jwt.config"
 import cookieParser = require("cookie-parser")
 
 import { getAllowedOrigins } from "./core/config/origins"
 import { AllExceptionsFilter } from "./core/filters/all-exceptions.filter"
-import { createRateLimiter, STRICT_AUTH_PATH } from "./core/http/rate-limit"
+import {
+  createRateLimiter,
+  RateLimitStore,
+  RedisRateLimitStore,
+  STRICT_AUTH_PATH,
+} from "./core/http/rate-limit"
 import { isHealthPath, requestIdMiddleware } from "./core/http/request-id"
 import { LoggingInterceptor } from "./core/interceptors/logging.interceptor"
+import { RedisIoAdapter } from "./core/realtime/redis-io.adapter"
+import { isRedisConfigured, redisOptions } from "./core/redis/redis-options"
 
 const STRICT_WINDOW_MS = 60_000
 const BILLING_WEBHOOK_PATH = /^\/api\/billing\/webhooks\//
+
+/**
+ * Shared rate-limit counters when Redis is configured. The client never queues commands while
+ * disconnected: the store sees `status !== "ready"` and fails open to in-memory limits.
+ */
+function redisRateLimitStore(): RateLimitStore | undefined {
+  if (!isRedisConfigured()) return undefined
+  const client = new Redis(
+    redisOptions({
+      enableOfflineQueue: false,
+      maxRetriesPerRequest: 1,
+      retryStrategy: (times) => Math.min(times * 500, 5_000),
+    })
+  )
+  client.on("error", () => {
+    /* logged (throttled) by the store when a request falls back */
+  })
+  return new RedisRateLimitStore(client)
+}
 
 async function bootstrap() {
   // Fail fast on an unsafe JWT secret in production (throws), warn in development.
@@ -29,6 +56,9 @@ async function bootstrap() {
   // Nest keeps them on `req.rawBody` next to the parsed JSON body.
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true })
   app.enableShutdownHooks()
+  // Safety net: a client stuck reconnecting to an unreachable Redis must never block shutdown.
+  for (const signal of ["SIGTERM", "SIGINT"] as const)
+    process.once(signal, () => setTimeout(() => process.exit(0), 8_000).unref())
 
   // Only trust X-Forwarded-For when explicitly running behind a reverse proxy.
   if (process.env.TRUST_PROXY === "true" || process.env.TRUST_PROXY === "1") {
@@ -52,6 +82,7 @@ async function bootstrap() {
   app.use(
     createRateLimiter({
       // Health probes and provider webhooks (signature-verified; providers retry on 429).
+      store: redisRateLimitStore(),
       skip: (req) => isHealthPath(req.path) || BILLING_WEBHOOK_PATH.test(req.path),
       windowMs: 60_000,
       defaultLimit: Number(process.env.RATE_LIMIT_PER_MINUTE || 120),
@@ -104,6 +135,13 @@ async function bootstrap() {
     methods: "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
     credentials: true,
   })
+
+  // Socket.io: fan out room emits across instances through Redis when configured.
+  if (isRedisConfigured()) {
+    const ioAdapter = new RedisIoAdapter(app)
+    await ioAdapter.connectToRedis()
+    app.useWebSocketAdapter(ioAdapter)
+  }
 
   // Global API route prefix
   app.setGlobalPrefix("api")

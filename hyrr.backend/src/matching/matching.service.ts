@@ -1,10 +1,12 @@
-import { Injectable } from "@nestjs/common"
+import { Injectable, Logger, Optional } from "@nestjs/common"
 import { JobStatus } from "@prisma/client"
 import { CacheService } from "../cache/cache.service"
+import { EmbeddingsService } from "../embeddings/embeddings.service"
 import { PUBLIC_COMPANY_SELECT } from "../jobs/public-company"
 import { PrismaService } from "../prisma/prisma.service"
 import { MatchTab } from "./dtos/matching-query.dto"
-import { computeProfileStrength, isThinProfile, scoreJobForProfile } from "./scoring"
+import { matchingCacheKey, matchingCachePattern } from "./matching-cache"
+import { blendMatch, computeProfileStrength, isThinProfile, scoreJobForProfile } from "./scoring"
 
 export const MATCH_CACHE_TTL_SECONDS = 5 * 60
 /** Minimum score for the "for-you" tab. */
@@ -13,23 +15,23 @@ export const FOR_YOU_MIN_SCORE = 40
 const CANDIDATE_POOL = 500
 const DEFAULT_LIMIT = 50
 
-const cacheKey = (userId: string, tab: MatchTab, limit: number) =>
-  `matching:${userId}:${tab}:${limit}`
-
 @Injectable()
 export class MatchingService {
+  private readonly logger = new Logger(MatchingService.name)
+
   constructor(
     private prisma: PrismaService,
-    private cache: CacheService
+    private cache: CacheService,
+    @Optional() private embeddings?: EmbeddingsService
   ) {}
 
   /** Drops every cached match list of a seeker (call after profile changes). */
   async invalidate(userId: string) {
-    await this.cache.delByPattern(`matching:${userId}:*`)
+    await this.cache.delByPattern(matchingCachePattern(userId))
   }
 
   async getMatchedJobs(userId: string, tab: MatchTab = "for-you", limit = DEFAULT_LIMIT) {
-    const key = cacheKey(userId, tab, limit)
+    const key = matchingCacheKey(userId, tab, limit)
     const cached = await this.cache.get<any>(key)
     if (cached) return cached
 
@@ -61,13 +63,18 @@ export class MatchingService {
       excluded = new Set(own.map((a) => a.jobId))
     }
 
-    let scored = jobs
-      .filter((job) => !excluded.has(job.id))
-      .map((job) => ({
-        ...job,
-        requirements: job.requirements ?? [],
-        match: scoreJobForProfile(job, profile || {}),
-      }))
+    const candidates = jobs.filter((job) => !excluded.has(job.id))
+    // Embedding cosine similarity (0..1) per job; empty when embeddings are off or not ready.
+    const similarity = await this.similarities(
+      userId,
+      candidates.map((job) => job.id)
+    )
+
+    let scored = candidates.map((job) => ({
+      ...job,
+      requirements: job.requirements ?? [],
+      match: blendMatch(scoreJobForProfile(job, profile || {}), similarity.get(job.id)),
+    }))
     if (tab === "for-you") {
       scored = scored
         .filter((job) => job.match.score >= FOR_YOU_MIN_SCORE)
@@ -82,5 +89,16 @@ export class MatchingService {
     const result = { profileStrength, missing, thinProfile, jobs: scored }
     await this.cache.set(key, result, MATCH_CACHE_TTL_SECONDS)
     return result
+  }
+
+  /** Never lets an embeddings problem break matching: falls back to rule-only scores. */
+  private async similarities(userId: string, jobIds: string[]): Promise<Map<string, number>> {
+    if (!this.embeddings || !jobIds.length) return new Map()
+    try {
+      return await this.embeddings.similarities(userId, jobIds)
+    } catch (err: any) {
+      this.logger.warn(`Embedding similarities failed, using rule scores: ${err?.message ?? err}`)
+      return new Map()
+    }
   }
 }

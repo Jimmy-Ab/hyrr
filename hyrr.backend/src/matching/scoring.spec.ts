@@ -1,4 +1,11 @@
-import { computeProfileStrength, isThinProfile, scoreJobForProfile } from "./scoring"
+import {
+  blendMatch,
+  blendScore,
+  computeProfileStrength,
+  isThinProfile,
+  scoreJobForProfile,
+  SIMILARITY_REASON,
+} from "./scoring"
 
 const job = {
   title: "Senior Frontend Developer",
@@ -95,5 +102,35 @@ describe("computeProfileStrength", () => {
     const result = computeProfileStrength({ title: "Dev", skills: ["a", "b"] })
     expect(result.profileStrength).toBe(15)
     expect(result.missing).toContain("At least 3 skills")
+  })
+})
+
+describe("blendScore / blendMatch", () => {
+  it("returns the rule score unchanged without a similarity", () => {
+    expect(blendScore(55)).toBe(55)
+    expect(blendScore(55, null)).toBe(55)
+    expect(blendScore(55, Number.NaN)).toBe(55)
+  })
+
+  it("blends 70% rule + 30% similarity and rounds", () => {
+    expect(blendScore(50, 0.8)).toBe(59) // 35 + 24
+    expect(blendScore(100, 1)).toBe(100)
+    expect(blendScore(0, 0)).toBe(0)
+    expect(blendScore(33, 0.41)).toBe(Math.round(0.7 * 33 + 0.3 * 41))
+  })
+
+  it("clamps the similarity to 0..1", () => {
+    expect(blendScore(40, 1.5)).toBe(blendScore(40, 1))
+    expect(blendScore(40, -0.2)).toBe(28)
+  })
+
+  it("adds the similarity reason from 0.5, keeping at most 4 reasons", () => {
+    const rule = { score: 60, reasons: ["a", "b"] }
+    expect(blendMatch(rule).reasons).toEqual(["a", "b"])
+    expect(blendMatch(rule, 0.49)).toEqual({ score: 57, reasons: ["a", "b"] })
+    expect(blendMatch(rule, 0.5)).toEqual({ score: 57, reasons: ["a", "b", SIMILARITY_REASON] })
+    const full = blendMatch({ score: 80, reasons: ["a", "b", "c", "d"] }, 0.9)
+    expect(full.reasons).toEqual(["a", "b", "c", SIMILARITY_REASON])
+    expect(full.score).toBe(83)
   })
 })

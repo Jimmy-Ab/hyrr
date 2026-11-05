@@ -1,5 +1,6 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from "@nestjs/common"
 import Redis from "ioredis"
+import { redisOptions } from "../core/redis/redis-options"
 
 const MEMORY_MAX_ENTRIES = 1000
 
@@ -16,9 +17,7 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
   onModuleInit() {
     try {
       this.client = new Redis({
-        host: process.env.REDIS_HOST || "localhost",
-        port: parseInt(process.env.REDIS_PORT || "6379"),
-        password: process.env.REDIS_PASSWORD || undefined,
+        ...redisOptions(),
         lazyConnect: true,
         enableOfflineQueue: false,
         retryStrategy: (times) => (times > 3 ? null : Math.min(times * 500, 2000)),

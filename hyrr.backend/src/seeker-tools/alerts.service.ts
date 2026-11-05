@@ -12,6 +12,7 @@ import { appUrl, jobAlertDigest } from "../core/delivery/templates"
 import { AppException, NotFoundAppException } from "../core/exceptions/app-exception"
 import { MessagesGateway } from "../messages/messages.gateway"
 import { PrismaService } from "../prisma/prisma.service"
+import { QueueService } from "../queue/queue.service"
 import { AlertJob, jobMatchesAlert } from "./alert-matching"
 import { CreateAlertDto, UpdateAlertDto } from "./dtos/alert.dto"
 
@@ -62,7 +63,8 @@ export class AlertsService {
   constructor(
     private prisma: PrismaService,
     @Optional() private email?: EmailService,
-    @Optional() private gateway?: MessagesGateway
+    @Optional() private gateway?: MessagesGateway,
+    @Optional() private queue?: QueueService
   ) {}
 
   // ─── CRUD ─────────────────────────────────────────────────────────
@@ -127,10 +129,22 @@ export class AlertsService {
   // ─── Delivery ─────────────────────────────────────────────────────
 
   /**
-   * INSTANT alerts for a freshly published job. Only ACTIVE jobs are announced (never DRAFT /
-   * FLAGGED / CLOSED). Returns the number of users notified. Callers run it fire-and-forget.
+   * A job was published: enqueues `alerts:instant { jobId }` (deduped per job while pending).
+   * Without a queue it fans out directly. Never throws when queued.
    */
-  async onJobPublished(jobId: string): Promise<number> {
+  async onJobPublished(jobId: string): Promise<void> {
+    if (!this.queue) {
+      await this.sendInstant(jobId)
+      return
+    }
+    await this.queue.add("alerts", "instant", { jobId }, { jobId: `instant:${jobId}` })
+  }
+
+  /**
+   * INSTANT alerts for a freshly published job (the `alerts:instant` processor). Only ACTIVE jobs
+   * are announced (never DRAFT / FLAGGED / CLOSED). Returns the number of users notified.
+   */
+  async sendInstant(jobId: string): Promise<number> {
     const job = await this.prisma.job.findUnique({
       where: { id: jobId },
       select: { ...JOB_SELECT, status: true },

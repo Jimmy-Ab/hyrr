@@ -13,11 +13,34 @@ services:
     ports: !reset []
     restart: unless-stopped
 
+  meilisearch:
+    ports: !reset []
+    restart: unless-stopped
+    environment:
+      MEILI_ENV: production
+      # Production mode requires a master key of at least 16 bytes.
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:?set MEILI_MASTER_KEY (16+ chars) for staging}
+
   backend:
     environment:
       NODE_ENV: production
       TRUST_PROXY: ${TRUST_PROXY:-true}
       SEED_DEMO_DATA: "false"
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:?set MEILI_MASTER_KEY (16+ chars) for staging}
+      # BullMQ on Redis (the default whenever REDIS_HOST is set; explicit here).
+      QUEUE_DRIVER: bullmq
+    restart: unless-stopped
+    # Several API replicas: not done here because the base file pins container_name and the
+    # host port 3000. Behind a load balancer, drop both, then `--scale backend=2`; Redis already
+    # shares rate limits, socket.io events (sticky sessions are still needed for the polling
+    # transport) and queues across instances.
+
+  worker:
+    environment:
+      NODE_ENV: production
+      SEED_DEMO_DATA: "false"
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:?set MEILI_MASTER_KEY (16+ chars) for staging}
+      QUEUE_DRIVER: bullmq
     restart: unless-stopped
 
   recruiter:

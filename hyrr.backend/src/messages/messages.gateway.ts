@@ -42,6 +42,15 @@ const errorAck = (err: any) => {
   }
 }
 
+/**
+ * Multi-instance notes (socket.io Redis adapter, see core/realtime/redis-io.adapter.ts):
+ * - Every server-side emit targets rooms (`user_<id>`, `company_<id>`, `chat_<applicationId>`),
+ *   which the adapter fans out to sockets on every instance; `except(socketId)` works the same.
+ * - Per-socket state (userId/role/name on the socket, `client.data`) belongs to the connection
+ *   and is not shared; cross-instance lookups use `client.data` (kept by fetchSockets()).
+ * - There is no in-process presence/online map: "is the user viewing this chat" is answered by
+ *   fetchSockets() across instances. Typing indicators are room emits, so they fan out too.
+ */
 @WebSocketGateway({
   cors: {
     // Evaluated per handshake so CORS_ORIGINS loaded from .env is always honoured.
@@ -207,11 +216,21 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
     this.server?.to(`user_${userId}`).emit("unread_update", data)
   }
 
-  /** True when one of the user's sockets is currently in `room` (e.g. viewing a thread). */
+  /**
+   * True when one of the user's sockets is currently in `room` (e.g. viewing a thread), on any
+   * instance. With the Redis adapter this asks the other instances (bounded by the adapter's
+   * requestsTimeout); if that fails, it falls back to this instance's sockets.
+   */
   async isUserInRoom(userId: string, room: string): Promise<boolean> {
     if (!this.server) return false
-    const sockets = await this.server.in(room).fetchSockets()
-    return sockets.some((s) => ((s as any).userId ?? s.data?.userId) === userId)
+    const matches = (sockets: { data?: any }[]) =>
+      sockets.some((s) => ((s as any).userId ?? s.data?.userId) === userId)
+    try {
+      return matches(await this.server.in(room).fetchSockets())
+    } catch (err: any) {
+      this.logger.warn(`fetchSockets across instances failed: ${err?.message || err}`)
+      return matches(await this.server.local.in(room).fetchSockets())
+    }
   }
 
   emitApplicationUpdate(seekerUserId: string, data: Record<string, any>) {

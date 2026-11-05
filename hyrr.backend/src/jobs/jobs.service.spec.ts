@@ -77,10 +77,11 @@ describe("JobsService", () => {
   })
 
   it("should search public active jobs", async () => {
-    // featured query (none), then the regular one
-    prismaMock.job.findMany
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ id: "job-2", title: "Product Designer", status: "ACTIVE" }] as any)
+    // no featured jobs (the featured page query is skipped), then the regular one
+    prismaMock.job.count.mockResolvedValueOnce(0).mockResolvedValueOnce(1)
+    prismaMock.job.findMany.mockResolvedValueOnce([
+      { id: "job-2", title: "Product Designer", status: "ACTIVE" },
+    ] as any)
 
     const result = await service.searchPublicJobs("Design")
     expect(result).toHaveLength(1)
@@ -88,9 +89,8 @@ describe("JobsService", () => {
   })
 
   it("searches with case-insensitive contains instead of a raw tsquery", async () => {
-    prismaMock.job.findMany
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ id: "job-2", requirements: null }])
+    prismaMock.job.count.mockResolvedValueOnce(0).mockResolvedValueOnce(1)
+    prismaMock.job.findMany.mockResolvedValueOnce([{ id: "job-2", requirements: null }])
     const result: any[] = await service.searchPublicJobs("acme")
     const where = prismaMock.job.findMany.mock.calls[0][0].where.AND[0]
     expect(JSON.stringify(where)).not.toContain("search")
@@ -564,6 +564,7 @@ describe("JobsService", () => {
 
     it("public search lists currently featured jobs first", async () => {
       cache.get.mockResolvedValue(null)
+      prismaMock.job.count.mockResolvedValueOnce(1).mockResolvedValueOnce(5)
       prismaMock.job.findMany
         .mockResolvedValueOnce([{ id: "featured", requirements: [] }])
         .mockResolvedValueOnce([{ id: "regular", requirements: [] }])
@@ -576,6 +577,171 @@ describe("JobsService", () => {
         { featuredUntil: { lte: expect.any(Date) } },
       ])
       expect(second.take).toBe(49)
+    })
+  })
+
+  describe("search index + embeddings hooks", () => {
+    let search: any
+    let embeddings: any
+    let svc: JobsService
+
+    beforeEach(() => {
+      search = {
+        isEnabled: jest.fn().mockReturnValue(true),
+        indexJobSoon: jest.fn(),
+        removeJobSoon: jest.fn(),
+        searchJobs: jest.fn(),
+      }
+      embeddings = { embedJobSoon: jest.fn().mockResolvedValue(undefined) }
+      svc = new JobsService(
+        prismaMock,
+        cache,
+        access,
+        { createNotification: jest.fn() } as any,
+        wallet,
+        pricing,
+        undefined,
+        undefined,
+        undefined,
+        search,
+        embeddings
+      )
+      cache.get.mockResolvedValue(null)
+    })
+
+    it("create indexes ACTIVE jobs and embeds every new job", async () => {
+      prismaMock.user.findUnique.mockResolvedValue({
+        id: "rec-1",
+        companyId: "co-1",
+        emailVerifiedAt: new Date(),
+      })
+      prismaMock.job.count.mockResolvedValue(0)
+      access.companyScope.mockResolvedValue({ manageCompanyIds: ["co-1"], companyIds: ["co-1"] })
+      prismaMock.job.create.mockResolvedValue({ id: "job-9", status: "ACTIVE", requirements: [] })
+      await svc.createJob("rec-1", { title: "Dev", description: "d", skills: [] } as any)
+      expect(search.indexJobSoon).toHaveBeenCalledWith("job-9")
+      expect(embeddings.embedJobSoon).toHaveBeenCalledWith("job-9")
+
+      search.indexJobSoon.mockClear()
+      prismaMock.job.create.mockResolvedValue({ id: "job-10", status: "DRAFT", requirements: [] })
+      await svc.createJob("rec-1", { title: "Dev", status: "DRAFT", skills: [] } as any)
+      expect(search.indexJobSoon).not.toHaveBeenCalled()
+      expect(embeddings.embedJobSoon).toHaveBeenCalledWith("job-10")
+    })
+
+    it("update reindexes public jobs; embeds only when embedded fields change", async () => {
+      const recruiter = { userId: "rec-1", role: "RECRUITER" } as any
+      access.jobForManagement.mockResolvedValue({
+        id: "job-1",
+        status: "ACTIVE",
+        title: "t",
+        description: "d",
+        requirements: [],
+        benefits: [],
+        publishedAt: new Date(),
+      })
+      prismaMock.job.update.mockResolvedValue({ id: "job-1", status: "ACTIVE" })
+      await svc.updateJob("job-1", { location: "Paris" } as any, recruiter)
+      expect(search.indexJobSoon).toHaveBeenCalledWith("job-1")
+      expect(embeddings.embedJobSoon).not.toHaveBeenCalled()
+
+      prismaMock.job.update.mockResolvedValue({ id: "job-1", status: "CLOSED" })
+      await svc.updateJob("job-1", { status: "CLOSED" } as any, recruiter)
+      expect(search.indexJobSoon).toHaveBeenCalledTimes(2)
+      expect(embeddings.embedJobSoon).toHaveBeenCalledWith("job-1")
+    })
+
+    it("draft edits are not indexed", async () => {
+      access.jobForManagement.mockResolvedValue({ id: "job-1", status: "DRAFT", benefits: [] })
+      prismaMock.job.update.mockResolvedValue({ id: "job-1", status: "DRAFT" })
+      await svc.updateJob("job-1", { location: "Rome" } as any, { userId: "r", role: "RECRUITER" } as any)
+      expect(search.indexJobSoon).not.toHaveBeenCalled()
+    })
+
+    it("feature reindexes and delete removes from the index", async () => {
+      access.jobForManagement.mockResolvedValue({
+        id: "job-1",
+        status: "ACTIVE",
+        companyId: "co-1",
+        title: "t",
+      })
+      prismaMock.job.findUnique.mockResolvedValue({ featuredUntil: null })
+      prismaMock.job.update.mockResolvedValue({ featuredUntil: new Date() })
+      await svc.featureJob("job-1", 14, { userId: "r", role: "RECRUITER" } as any)
+      expect(search.indexJobSoon).toHaveBeenCalledWith("job-1")
+
+      prismaMock.job.delete.mockResolvedValue({})
+      await svc.deleteJob("job-1", { userId: "r", role: "RECRUITER" } as any)
+      expect(search.removeJobSoon).toHaveBeenCalledWith("job-1")
+    })
+
+    it("hook failures never fail the request", async () => {
+      embeddings.embedJobSoon.mockRejectedValue(new Error("queue down"))
+      search.removeJobSoon.mockImplementation(() => {
+        throw new Error("boom")
+      })
+      access.jobForManagement.mockResolvedValue({ id: "job-1", status: "ACTIVE" })
+      prismaMock.job.delete.mockResolvedValue({})
+      await expect(
+        svc.deleteJob("job-1", { userId: "r", role: "RECRUITER" } as any)
+      ).resolves.toEqual({ id: "job-1", deleted: true })
+    })
+
+    it("queries use Meili ids, hydrate ACTIVE rows from Postgres and keep Meili order", async () => {
+      search.searchJobs.mockResolvedValue({ ids: ["b", "gone", "a"], total: 3 })
+      prismaMock.job.findMany.mockResolvedValue([
+        { id: "a", requirements: [] },
+        { id: "b", requirements: null },
+      ])
+      const page = await svc.searchPublicJobsPage("react", "FULL_TIME" as any, "eng", true, {
+        limit: 10,
+        offset: 20,
+      })
+      expect(page.items.map((j: any) => j.id)).toEqual(["b", "a"])
+      expect(page.items[0].requirements).toEqual([])
+      expect(page.total).toBe(3)
+      expect(search.searchJobs).toHaveBeenCalledWith({
+        q: "react",
+        type: "FULL_TIME",
+        categorySlug: "eng",
+        remote: true,
+        limit: 10,
+        offset: 20,
+      })
+      expect(prismaMock.job.findMany.mock.calls[0][0].where).toEqual({
+        id: { in: ["b", "gone", "a"] },
+        status: "ACTIVE",
+      })
+      expect(cache.set).toHaveBeenCalledWith(
+        "jobs:public:react:FULL_TIME:eng:true:10:20",
+        page,
+        120
+      )
+    })
+
+    it("falls back to Postgres when Meili is down or the query is empty", async () => {
+      search.searchJobs.mockResolvedValue(null)
+      prismaMock.job.count.mockResolvedValue(0)
+      prismaMock.job.findMany.mockResolvedValue([])
+      await svc.searchPublicJobsPage("react")
+      expect(prismaMock.job.findMany.mock.calls[0][0].where.AND[0].OR).toBeDefined()
+
+      search.searchJobs.mockClear()
+      await svc.searchPublicJobsPage("  ")
+      expect(search.searchJobs).not.toHaveBeenCalled()
+    })
+
+    it("Postgres pagination continues past the featured block and clamps the limit", async () => {
+      prismaMock.job.count.mockResolvedValueOnce(3).mockResolvedValueOnce(40)
+      prismaMock.job.findMany.mockResolvedValueOnce([{ id: "x", requirements: [] }])
+      const page = await svc.searchPublicJobsPage(undefined, undefined, undefined, false, {
+        limit: 500,
+        offset: 10,
+      })
+      expect(page.total).toBe(43)
+      // offset 10 >= 3 featured: only the regular query runs, skipping 7 of them
+      expect(prismaMock.job.findMany).toHaveBeenCalledTimes(1)
+      expect(prismaMock.job.findMany.mock.calls[0][0]).toMatchObject({ skip: 7, take: 100 })
     })
   })
 })
