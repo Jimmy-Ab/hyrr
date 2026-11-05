@@ -156,3 +156,48 @@ export function Reveal({
     </motion.div>
   )
 }
+
+/**
+ * Inertial smooth scrolling (Lenis) for an app's scroll container. Wheel/trackpad only: touch keeps
+ * native momentum, nested scroll areas (kanban columns, chat, dialogs) scroll natively, and it is
+ * off when the OS asks for reduced motion. `resetKey` change (e.g. the active view) jumps to top.
+ * Pass the element via a callback ref (`ref={setMainEl}`), so it starts when the area mounts.
+ */
+export function useSmoothScroll(wrapper: HTMLElement | null, resetKey?: unknown) {
+  const reduce = useReducedMotion()
+  const lenisRef = React.useRef<import("lenis").default | null>(null)
+
+  React.useEffect(() => {
+    const content = wrapper?.firstElementChild as HTMLElement | null
+    if (!wrapper || !content || reduce) return
+    let cancelled = false
+    let instance: import("lenis").default | null = null
+    // Loaded lazily so it never blocks first paint.
+    void import("lenis").then(({ default: Lenis }) => {
+      if (cancelled) return
+      instance = new Lenis({
+        wrapper,
+        content,
+        autoRaf: true,
+        smoothWheel: true,
+        syncTouch: false,
+        allowNestedScroll: true,
+        duration: 1.05,
+        easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)), // expo out
+        wheelMultiplier: 0.95,
+      })
+      lenisRef.current = instance
+    })
+    return () => {
+      cancelled = true
+      instance?.destroy()
+      lenisRef.current = null
+    }
+  }, [wrapper, reduce])
+
+  React.useEffect(() => {
+    if (resetKey === undefined) return
+    if (lenisRef.current) lenisRef.current.scrollTo(0, { immediate: true })
+    else wrapper?.scrollTo({ top: 0 })
+  }, [resetKey]) // eslint-disable-line react-hooks/exhaustive-deps
+}

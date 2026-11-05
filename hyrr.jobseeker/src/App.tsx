@@ -15,6 +15,7 @@ import {
   isPublicRoute,
   resolvePublicRoute,
   useJobStore,
+  useSmoothScroll,
 } from "hyrr.shared"
 import { AlertTriangle } from "lucide-react"
 import * as React from "react"
@@ -141,6 +142,8 @@ function AppContent() {
     () => window.location.pathname !== OAUTH_CALLBACK_PATH
   )
   const [navOpen, setNavOpen] = React.useState(false)
+  const [mainEl, setMainEl] = React.useState<HTMLElement | null>(null)
+  useSmoothScroll(mainEl, candidateActiveView)
 
   // Session restore on startup (skipped on the OAuth callback, which brings its own token).
   React.useEffect(() => {
@@ -241,7 +244,10 @@ function AppContent() {
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <EmailVerificationBanner />
         <Header onMenuClick={() => setNavOpen(true)} />
-        <main className="app-canvas flex-1 overflow-y-auto overflow-x-hidden p-4 lg:p-5">
+        <main
+          ref={setMainEl}
+          className="app-canvas flex-1 overflow-y-auto overflow-x-hidden p-4 lg:p-5"
+        >
           <div className="mx-auto w-full min-w-0 max-w-[1480px]">
             <PageTransition viewKey={candidateActiveView}>{renderView()}</PageTransition>
           </div>

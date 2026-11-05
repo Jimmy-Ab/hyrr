@@ -12,6 +12,7 @@ import {
   apiFetch,
   isPublicRoute,
   resolvePublicRoute,
+  useSmoothScroll,
 } from "hyrr.shared"
 import { AlertTriangle, RefreshCw } from "lucide-react"
 import * as React from "react"
@@ -99,6 +100,8 @@ function AppContent() {
 
   const [loading, setLoading] = React.useState(true)
   const [sidebarOpen, setSidebarOpen] = React.useState(false)
+  const [mainEl, setMainEl] = React.useState<HTMLElement | null>(null)
+  useSmoothScroll(mainEl, activeView)
   const isCallback = window.location.pathname === AUTH_CALLBACK_PATH
   // Legal pages and e-mail token links (verify / reset password) render without a session.
   const publicRoute = isCallback ? null : resolvePublicRoute(window.location.pathname)
@@ -223,7 +226,10 @@ function AppContent() {
         <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
         {/* Right Scrollable Content Area */}
-        <main className="app-canvas flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 md:p-8">
+        <main
+          ref={setMainEl}
+          className="app-canvas flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 md:p-8"
+        >
           <div className="max-w-[1440px] mx-auto w-full h-full">
             <PageTransition viewKey={activeView}>{renderView()}</PageTransition>
           </div>
