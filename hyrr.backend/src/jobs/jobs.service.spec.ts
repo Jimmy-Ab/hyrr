@@ -249,7 +249,7 @@ describe("JobsService", () => {
         benefits: [],
       })
       prismaMock.job.update.mockResolvedValue({ id: "job-1", status: "ACTIVE" })
-      await service.updateJob("job-1", { status: "ACTIVE", salary: "$100k" }, recruiter)
+      await service.updateJob("job-1", { status: "ACTIVE", location: "Berlin" }, recruiter)
       expect(prismaMock.user.findUnique).not.toHaveBeenCalled()
     })
 
@@ -279,7 +279,10 @@ describe("JobsService", () => {
       skills: ["React"],
       categoryId: "cat-1",
       remote: true,
-      salary: "$130k",
+      salaryMin: 110000,
+      salaryMax: 130000,
+      salaryCurrency: "USD",
+      salaryPeriod: "YEAR" as const,
     }
     const recruiter = { userId: "rec-1", role: "RECRUITER" }
     const admin = { userId: "adm-1", role: "ADMIN" }
@@ -317,10 +320,13 @@ describe("JobsService", () => {
       const job: any = await service.createJob("rec-1", dto)
       expect(pricing.publishCost).toHaveBeenCalledWith({
         remote: true,
-        salary: "$130k",
+        salaryMax: 130000,
+        salaryCurrency: "USD",
+        salaryPeriod: "YEAR",
         categoryId: "cat-1",
       })
       const data = prismaMock.job.create.mock.calls[0][0].data
+      expect(data.salary).toBe("USD 110,000 – 130,000 / year")
       expect(data.publishedAt).toBeInstanceOf(Date)
       expect(data.momentumCost).toBe(10)
       expect(wallet.debit).toHaveBeenCalledTimes(1)
@@ -655,7 +661,11 @@ describe("JobsService", () => {
     it("draft edits are not indexed", async () => {
       access.jobForManagement.mockResolvedValue({ id: "job-1", status: "DRAFT", benefits: [] })
       prismaMock.job.update.mockResolvedValue({ id: "job-1", status: "DRAFT" })
-      await svc.updateJob("job-1", { location: "Rome" } as any, { userId: "r", role: "RECRUITER" } as any)
+      await svc.updateJob(
+        "job-1",
+        { location: "Rome" } as any,
+        { userId: "r", role: "RECRUITER" } as any
+      )
       expect(search.indexJobSoon).not.toHaveBeenCalled()
     })
 

@@ -10,11 +10,22 @@ export class PublishCostQueryDto {
   @IsBoolean()
   remote?: boolean
 
-  @ApiPropertyOptional({ example: "$120,000 – $150,000" })
+  @ApiPropertyOptional({ example: 150000 })
+  @IsOptional()
+  @Transform(({ value }) => (value === "" || value == null ? undefined : Number(value)))
+  @IsInt()
+  salaryMax?: number
+
+  @ApiPropertyOptional({ example: "USD" })
   @IsOptional()
   @IsString()
-  @MaxLength(100)
-  salary?: string
+  @MaxLength(3)
+  salaryCurrency?: string
+
+  @ApiPropertyOptional({ enum: ["YEAR", "MONTH", "HOUR"] })
+  @IsOptional()
+  @IsIn(["YEAR", "MONTH", "HOUR"])
+  salaryPeriod?: "YEAR" | "MONTH" | "HOUR"
 
   @ApiPropertyOptional()
   @IsOptional()

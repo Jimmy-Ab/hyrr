@@ -2,12 +2,28 @@ import {
   apiFetch,
   Button,
   Card,
+  educationSchema,
+  emptySalaryRange,
   errorMessage,
+  experienceSchema,
+  FieldError,
+  fieldErrorsOf,
   Input,
+  isSalaryRangeEmpty,
+  MonthRangeInput,
   PROFILE_VISIBILITY,
+  profileBasicsSchema,
+  SalaryRangeInput,
+  salaryRangeSchema,
+  scopeErrors,
   useJobStore,
   useToast,
+  validate,
+  YearRangeInput,
+  type Currency,
   type CvSuggestions,
+  type FieldErrors,
+  type SalaryRangeValue,
 } from "hyrr.shared"
 import {
   Briefcase,
@@ -41,6 +57,70 @@ import { ProfileStrengthCard } from "../components/profile/profile-strength"
 /* ══════════════════════════════════════════════════════════════
    Small reusable helpers
 ══════════════════════════════════════════════════════════════ */
+
+const EMPTY_EXP = {
+  role: "",
+  company: "",
+  startDate: "",
+  endDate: null as string | null,
+  current: false,
+  desc: "",
+}
+const EMPTY_EDU = {
+  school: "",
+  degree: "",
+  startYear: null as number | null,
+  endYear: null as number | null,
+}
+const YEARS_OPTIONS = [...Array.from({ length: 20 }, (_, i) => String(i)), "20+"]
+
+/** API row → editable row ("YYYY-MM" dates). */
+const toExperienceRow = (e: any) => ({
+  ...e,
+  startDate: e?.startDate ? String(e.startDate).slice(0, 7) : "",
+  endDate: e?.current ? null : e?.endDate ? String(e.endDate).slice(0, 7) : null,
+  current: !!e?.current,
+})
+const toEducationRow = (e: any) => ({
+  ...e,
+  startYear: typeof e?.startYear === "number" ? e.startYear : null,
+  endYear: typeof e?.endYear === "number" ? e.endYear : null,
+})
+const toExperienceInput = (e: any) => ({
+  role: String(e.role ?? "").trim(),
+  company: String(e.company ?? "").trim(),
+  startDate: e.startDate || "",
+  endDate: e.current ? null : e.endDate || null,
+  current: !!e.current,
+  ...(e.desc ? { desc: String(e.desc) } : {}),
+})
+const toEducationInput = (e: any) => ({
+  school: String(e.school ?? "").trim(),
+  degree: String(e.degree ?? "").trim(),
+  startYear: e.startYear as number,
+  endYear: e.endYear ?? null,
+})
+/** Best effort from CV text like "Jan 2020 – Present" / "2018-2021". */
+function datesFromText(text?: string) {
+  const years = (text ?? "").match(/(19|20)\d{2}/g) ?? []
+  const current = /present|current|now|today/i.test(text ?? "")
+  return {
+    startDate: years[0] ? `${years[0]}-01` : "",
+    endDate: current ? null : years[1] ? `${years[1]}-01` : null,
+    current,
+  }
+}
+function yearsFromText(text?: string) {
+  const years = (text ?? "").match(/(19|20)\d{2}/g) ?? []
+  return {
+    startYear: years[0] ? Number(years[0]) : null,
+    endYear: years[1] ? Number(years[1]) : null,
+  }
+}
+const withoutPrefix = (errors: FieldErrors, prefix: string) =>
+  Object.fromEntries(Object.entries(errors).filter(([k]) => !k.startsWith(`${prefix}.`)))
+const prefixed = (errors: FieldErrors, prefix: string) =>
+  Object.fromEntries(Object.entries(errors).map(([k, v]) => [`${prefix}.${k}`, v]))
 
 function InfoRow({ icon, text }: { icon: React.ReactNode; text: string }) {
   if (!text) return null
@@ -110,7 +190,7 @@ export function ProfilePage() {
 
   /* ── Career prefs state ─────────────────────────────────── */
   const [prefs, setPrefs] = useState({
-    expectedSalary: "",
+    salary: emptySalaryRange("") as SalaryRangeValue,
     preferredType: "Full Time",
     availability: "",
     yearsOfExperience: "",
@@ -128,8 +208,17 @@ export function ProfilePage() {
   /* ── Add-form states ────────────────────────────────────── */
   const [showExpForm, setShowExpForm] = useState(false)
   const [showEduForm, setShowEduForm] = useState(false)
-  const [expForm, setExpForm] = useState({ role: "", company: "", duration: "", desc: "" })
-  const [eduForm, setEduForm] = useState({ school: "", degree: "", duration: "" })
+  const [expForm, setExpForm] = useState(EMPTY_EXP)
+  const [eduForm, setEduForm] = useState(EMPTY_EDU)
+  /** Inline errors: page fields by name, add-forms as "exp.*" / "edu.*", list items as "experiences.N.*". */
+  const [errors, setErrors] = useState<FieldErrors>({})
+  const clearError = (key: string) =>
+    setErrors((e) => {
+      if (!(key in e)) return e
+      const next = { ...e }
+      delete next[key]
+      return next
+    })
   const [newSkill, setNewSkill] = useState("")
   const [newLang, setNewLang] = useState("")
 
@@ -156,7 +245,15 @@ export function ProfilePage() {
         joinedAt: data.user?.joinedAt || data.user?.createdAt || "",
       }
       const loadedPrefs = {
-        expectedSalary: data.expectedSalary || "",
+        salary:
+          data.expectedSalaryMin != null && data.expectedSalaryMax != null
+            ? {
+                min: data.expectedSalaryMin,
+                max: data.expectedSalaryMax,
+                currency: (data.expectedSalaryCurrency || "") as Currency,
+                period: data.expectedSalaryPeriod || "YEAR",
+              }
+            : emptySalaryRange(""),
         preferredType: data.preferredType || "Full Time",
         availability: data.availability || "",
         yearsOfExperience: data.yearsOfExperience || "",
@@ -173,8 +270,8 @@ export function ProfilePage() {
       const loadedLanguages: string[] = data.languages || []
       setProfile(loadedProfile)
       setPrefs(loadedPrefs)
-      setExperience(data.experiences || [])
-      setEducation(data.educations || [])
+      setExperience((data.experiences || []).map(toExperienceRow))
+      setEducation((data.educations || []).map(toEducationRow))
       setSkills(loadedSkills)
       setLanguages(loadedLanguages)
       setSavedSnapshot(
@@ -250,7 +347,8 @@ export function ProfilePage() {
     if (sections.has("title") && sug.title) setProfile((p) => ({ ...p, title: sug.title! }))
     if (sections.has("bio") && sug.bio) setProfile((p) => ({ ...p, bio: sug.bio! }))
     if (sections.has("yearsOfExperience") && sug.yearsOfExperience) {
-      setPrefs((p) => ({ ...p, yearsOfExperience: sug.yearsOfExperience! }))
+      const years = String(sug.yearsOfExperience).match(/\d+/)?.[0]
+      if (years) setPrefs((p) => ({ ...p, yearsOfExperience: Number(years) >= 20 ? "20+" : years }))
     }
     if (sections.has("skills")) setSkills((cur) => mergeList(cur, sug.skills))
     if (sections.has("languages")) setLanguages((cur) => mergeList(cur, sug.languages))
@@ -258,14 +356,30 @@ export function ProfilePage() {
       setExperience((cur) => {
         const key = (e: any) => `${e.role}|${e.company}`.toLowerCase()
         const seen = new Set(cur.map(key))
-        return [...cur, ...sug.experiences.filter((e) => !seen.has(key(e)))]
+        return [
+          ...cur,
+          ...sug.experiences
+            .filter((e) => !seen.has(key(e)))
+            .map((e) => ({
+              ...e,
+              ...datesFromText(e.duration),
+            })),
+        ]
       })
     }
     if (sections.has("educations")) {
       setEducation((cur) => {
         const key = (e: any) => `${e.school}|${e.degree}`.toLowerCase()
         const seen = new Set(cur.map(key))
-        return [...cur, ...sug.educations.filter((e) => !seen.has(key(e)))]
+        return [
+          ...cur,
+          ...sug.educations
+            .filter((e) => !seen.has(key(e)))
+            .map((e) => ({
+              ...e,
+              ...yearsFromText(e.duration),
+            })),
+        ]
       })
     }
     toast(
@@ -285,11 +399,40 @@ export function ProfilePage() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload)
   }, [isDirty])
 
-  const handleSaveAll = async () => {
-    if (!profile.name.trim()) {
-      toast("Name required", "Please enter your full name.", "error")
-      return
+  /** Shows `found` inline, focuses the first invalid field and returns whether it is valid. */
+  const showErrors = (found: FieldErrors) => {
+    setErrors(found)
+    const first = Object.keys(found)[0]
+    if (first) {
+      document
+        .querySelector<HTMLElement>(`[data-field="${first}"], #pf-${first.replace(/\./g, "-")}`)
+        ?.focus()
+      toast("Check the highlighted fields", found[first], "error")
     }
+    return !first
+  }
+
+  const handleSaveAll = async () => {
+    const pending = hasPendingEntries
+    const found: FieldErrors = {
+      ...validate(profileBasicsSchema, {
+        ...profile,
+        skills,
+        languages,
+        preferredLocations: prefs.preferredLocations,
+      }),
+      ...validate(salaryRangeSchema, prefs.salary, "salary"),
+    }
+    if (pending) {
+      experience.forEach((e, i) =>
+        Object.assign(found, validate(experienceSchema, toExperienceInput(e), `experiences.${i}`))
+      )
+      education.forEach((e, i) =>
+        Object.assign(found, validate(educationSchema, toEducationInput(e), `educations.${i}`))
+      )
+    }
+    if (!showErrors(found)) return
+    const salary = prefs.salary
     try {
       setSaving(true)
       await updateProfile({
@@ -302,7 +445,20 @@ export function ProfilePage() {
         github: profile.github.trim(),
         linkedin: profile.linkedin.trim(),
         bio: profile.bio,
-        expectedSalary: prefs.expectedSalary.trim(),
+        // All four together, or all null to clear the range.
+        ...(isSalaryRangeEmpty(salary)
+          ? {
+              expectedSalaryMin: null,
+              expectedSalaryMax: null,
+              expectedSalaryCurrency: null,
+              expectedSalaryPeriod: null,
+            }
+          : {
+              expectedSalaryMin: salary.min,
+              expectedSalaryMax: salary.max,
+              expectedSalaryCurrency: salary.currency,
+              expectedSalaryPeriod: salary.period,
+            }),
         preferredType: prefs.preferredType,
         availability: prefs.availability.trim(),
         yearsOfExperience: prefs.yearsOfExperience.trim(),
@@ -313,17 +469,11 @@ export function ProfilePage() {
         // Imported entries are only persisted by sending the full lists (server replaces them).
         ...(hasPendingEntries
           ? {
-              experiences: experience.map((e) => ({
-                role: e.role,
-                company: e.company,
-                duration: e.duration || "",
-                ...(e.desc ? { desc: e.desc } : {}),
-              })),
-              educations: education.map((e) => ({
-                school: e.school,
-                degree: e.degree,
-                duration: e.duration || "",
-              })),
+              experiences: experience.map(toExperienceInput),
+              educations: education.map((e) => {
+                const v = toEducationInput(e)
+                return { ...v, startYear: v.startYear as number }
+              }),
             }
           : {}),
       })
@@ -331,16 +481,26 @@ export function ProfilePage() {
         // Pick up the ids the server assigned.
         try {
           const fresh = await apiFetch("/profile")
-          setExperience(fresh?.experiences || [])
-          setEducation(fresh?.educations || [])
+          setExperience((fresh?.experiences || []).map(toExperienceRow))
+          setEducation((fresh?.educations || []).map(toEducationRow))
         } catch (e) {
           console.warn("Failed to reload profile entries.", e)
         }
       }
       setSavedSnapshot(editableSnapshot)
+      setErrors({})
       toast("Profile saved", "Your profile has been updated.", "success")
     } catch (err) {
-      toast("Couldn't save profile", errorMessage(err, "Failed to save profile."), "error")
+      const server = fieldErrorsOf(err)
+      if (Object.keys(server).length) {
+        // expectedSalaryMin → salary.min, so the error lands on the salary picker.
+        const mapped: FieldErrors = {}
+        for (const [k, v] of Object.entries(server)) {
+          const m = /^expectedSalary(Min|Max|Currency|Period)$/.exec(k)
+          mapped[m ? `salary.${m[1].toLowerCase()}` : k] = v
+        }
+        showErrors(mapped)
+      } else toast("Couldn't save profile", errorMessage(err, "Failed to save profile."), "error")
     } finally {
       setSaving(false)
     }
@@ -350,27 +510,24 @@ export function ProfilePage() {
      Experience CRUD
   ═══════════════════════════════════════════════════════════ */
   const handleAddExperience = async () => {
-    if (!expForm.role.trim() || !expForm.company.trim()) {
-      toast("Required", "Please fill in role and company.", "info")
-      return
-    }
+    const input = toExperienceInput(expForm)
+    const found = validate(experienceSchema, input, "exp")
+    setErrors((e) => ({ ...withoutPrefix(e, "exp"), ...found }))
+    if (Object.keys(found).length) return
     setAddingExp(true)
     try {
       const created = await apiFetch("/profile/experience", {
         method: "POST",
-        body: JSON.stringify({
-          role: expForm.role.trim(),
-          company: expForm.company.trim(),
-          duration: expForm.duration.trim() || "Present",
-          desc: expForm.desc.trim(),
-        }),
+        body: JSON.stringify(input),
       })
-      setExperience((prev) => [...prev, created])
-      setExpForm({ role: "", company: "", duration: "", desc: "" })
+      setExperience((prev) => [...prev, toExperienceRow(created)])
+      setExpForm(EMPTY_EXP)
       setShowExpForm(false)
       toast("Experience Added", `${expForm.role} at ${expForm.company} added.`, "success")
     } catch (err: any) {
-      toast("Error", err?.message || "Failed to add experience.", "error")
+      const server = fieldErrorsOf(err)
+      if (Object.keys(server).length) setErrors((e) => ({ ...e, ...prefixed(server, "exp") }))
+      else toast("Error", err?.message || "Failed to add experience.", "error")
     } finally {
       setAddingExp(false)
     }
@@ -393,26 +550,24 @@ export function ProfilePage() {
      Education CRUD
   ═══════════════════════════════════════════════════════════ */
   const handleAddEducation = async () => {
-    if (!eduForm.school.trim() || !eduForm.degree.trim()) {
-      toast("Required", "Please fill in school and degree.", "info")
-      return
-    }
+    const input = toEducationInput(eduForm)
+    const found = validate(educationSchema, input, "edu")
+    setErrors((e) => ({ ...withoutPrefix(e, "edu"), ...found }))
+    if (Object.keys(found).length) return
     setAddingEdu(true)
     try {
       const created = await apiFetch("/profile/education", {
         method: "POST",
-        body: JSON.stringify({
-          school: eduForm.school.trim(),
-          degree: eduForm.degree.trim(),
-          duration: eduForm.duration.trim() || "",
-        }),
+        body: JSON.stringify(input),
       })
-      setEducation((prev) => [...prev, created])
-      setEduForm({ school: "", degree: "", duration: "" })
+      setEducation((prev) => [...prev, toEducationRow(created)])
+      setEduForm(EMPTY_EDU)
       setShowEduForm(false)
       toast("Education Added", `${eduForm.degree} at ${eduForm.school} added.`, "success")
     } catch (err: any) {
-      toast("Error", err?.message || "Failed to add education.", "error")
+      const server = fieldErrorsOf(err)
+      if (Object.keys(server).length) setErrors((e) => ({ ...e, ...prefixed(server, "edu") }))
+      else toast("Error", err?.message || "Failed to add education.", "error")
     } finally {
       setAddingEdu(false)
     }
@@ -626,17 +781,33 @@ export function ProfilePage() {
               {/* Name & Title — editable */}
               <div className="text-center mb-4 space-y-1">
                 <input
+                  id="pf-name"
+                  aria-label="Full name"
+                  aria-invalid={!!errors.name || undefined}
+                  aria-describedby={errors.name ? "pf-name-error" : undefined}
                   value={profile.name}
-                  onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))}
+                  onChange={(e) => {
+                    setProfile((p) => ({ ...p, name: e.target.value }))
+                    clearError("name")
+                  }}
                   placeholder="Your Name"
                   className="w-full text-center text-[15px] font-bold text-txt-title bg-transparent border-b border-transparent hover:border-bg-border focus:border-primary/50 focus:outline-none transition-colors pb-0.5"
                 />
+                <FieldError id="pf-name-error" message={errors.name} />
                 <input
+                  id="pf-title"
+                  aria-label="Professional title"
+                  aria-invalid={!!errors.title || undefined}
+                  aria-describedby={errors.title ? "pf-title-error" : undefined}
                   value={profile.title}
-                  onChange={(e) => setProfile((p) => ({ ...p, title: e.target.value }))}
+                  onChange={(e) => {
+                    setProfile((p) => ({ ...p, title: e.target.value }))
+                    clearError("title")
+                  }}
                   placeholder="Professional title…"
                   className="w-full text-center text-[13px] text-txt-caption bg-transparent border-b border-transparent hover:border-bg-border focus:border-primary/50 focus:outline-none transition-colors pb-0.5"
                 />
+                <FieldError id="pf-title-error" message={errors.title} />
               </div>
 
               {/* Contact info rows — editable */}
@@ -664,15 +835,25 @@ export function ProfilePage() {
                     placeholder: "yourportfolio.com",
                   },
                 ].map(({ icon, key, placeholder, disabled }) => (
-                  <div key={key} className="flex items-center gap-2">
-                    <span className="text-txt-caption shrink-0">{icon}</span>
-                    <input
-                      value={(profile as any)[key]}
-                      onChange={(e) => setProfile((p) => ({ ...p, [key]: e.target.value }))}
-                      placeholder={placeholder}
-                      disabled={disabled}
-                      className="flex-1 text-[13px] font-medium text-txt-body bg-transparent border-b border-transparent hover:border-bg-border focus:border-primary/50 focus:outline-none transition-colors pb-0.5 disabled:opacity-60 disabled:cursor-not-allowed min-w-0"
-                    />
+                  <div key={key}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-txt-caption shrink-0">{icon}</span>
+                      <input
+                        id={`pf-${key}`}
+                        aria-label={placeholder}
+                        aria-invalid={!!errors[key] || undefined}
+                        aria-describedby={errors[key] ? `pf-${key}-error` : undefined}
+                        value={(profile as any)[key]}
+                        onChange={(e) => {
+                          setProfile((p) => ({ ...p, [key]: e.target.value }))
+                          clearError(key)
+                        }}
+                        placeholder={placeholder}
+                        disabled={disabled}
+                        className={`flex-1 text-[13px] font-medium text-txt-body bg-transparent border-b ${errors[key] ? "border-sec-red/70" : "border-transparent"} hover:border-bg-border focus:border-primary/50 focus:outline-none transition-colors pb-0.5 disabled:opacity-60 disabled:cursor-not-allowed min-w-0`}
+                      />
+                    </div>
+                    <FieldError id={`pf-${key}-error`} message={errors[key]} />
                   </div>
                 ))}
                 {joinedLabel && (
@@ -738,6 +919,22 @@ export function ProfilePage() {
                               {exp.desc}
                             </p>
                           )}
+                          {!exp.id && (
+                            <div className="mt-2">
+                              <MonthRangeInput
+                                id={`pf-experiences-${i}`}
+                                startDate={exp.startDate || ""}
+                                endDate={exp.endDate ?? null}
+                                current={!!exp.current}
+                                errors={scopeErrors(errors, `experiences.${i}`)}
+                                onChange={(v) =>
+                                  setExperience((prev) =>
+                                    prev.map((x) => (x === exp ? { ...x, ...v } : x))
+                                  )
+                                }
+                              />
+                            </div>
+                          )}
                         </div>
                         <button
                           onClick={() =>
@@ -788,35 +985,38 @@ export function ProfilePage() {
                       Job Title *
                     </label>
                     <Input
+                      id="pf-exp-role"
                       placeholder="e.g. Senior Developer"
                       value={expForm.role}
                       onChange={(e) => setExpForm((f) => ({ ...f, role: e.target.value }))}
+                      aria-invalid={!!errors["exp.role"] || undefined}
                       className="h-8 text-[13px]"
                     />
+                    <FieldError id="pf-exp-role-error" message={errors["exp.role"]} />
                   </div>
                   <div>
                     <label className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
                       Company *
                     </label>
                     <Input
+                      id="pf-exp-company"
                       placeholder="e.g. Google"
                       value={expForm.company}
                       onChange={(e) => setExpForm((f) => ({ ...f, company: e.target.value }))}
+                      aria-invalid={!!errors["exp.company"] || undefined}
                       className="h-8 text-[13px]"
                     />
+                    <FieldError id="pf-exp-company-error" message={errors["exp.company"]} />
                   </div>
                 </div>
-                <div>
-                  <label className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
-                    Duration
-                  </label>
-                  <Input
-                    placeholder="e.g. Jan 2022 – Present"
-                    value={expForm.duration}
-                    onChange={(e) => setExpForm((f) => ({ ...f, duration: e.target.value }))}
-                    className="h-8 text-[13px]"
-                  />
-                </div>
+                <MonthRangeInput
+                  id="pf-exp"
+                  startDate={expForm.startDate}
+                  endDate={expForm.endDate}
+                  current={expForm.current}
+                  errors={scopeErrors(errors, "exp")}
+                  onChange={(v) => setExpForm((f) => ({ ...f, ...v }))}
+                />
                 <div>
                   <label className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
                     Description
@@ -826,14 +1026,17 @@ export function ProfilePage() {
                     placeholder="Key achievements or responsibilities…"
                     value={expForm.desc}
                     onChange={(e) => setExpForm((f) => ({ ...f, desc: e.target.value }))}
+                    maxLength={2000}
                     className="w-full p-2.5 rounded-[10px] border border-bg-border bg-bg-secondary text-[13px] text-txt-body placeholder:text-txt-caption resize-none focus:outline-none focus:border-primary/40 transition-all"
                   />
+                  <FieldError id="pf-exp-desc-error" message={errors["exp.desc"]} />
                 </div>
                 <div className="flex gap-2 justify-end">
                   <button
                     onClick={() => {
                       setShowExpForm(false)
-                      setExpForm({ role: "", company: "", duration: "", desc: "" })
+                      setExpForm(EMPTY_EXP)
+                      setErrors((e) => withoutPrefix(e, "exp"))
                     }}
                     className="px-3 py-1.5 rounded-[10px] text-[13px] font-semibold text-txt-caption hover:bg-bg-hover transition-colors cursor-pointer"
                   >
@@ -888,6 +1091,21 @@ export function ProfilePage() {
                             {edu.degree}
                             {edu.duration ? ` · ${edu.duration}` : ""}
                           </p>
+                          {!edu.id && (
+                            <div className="mt-2">
+                              <YearRangeInput
+                                id={`pf-educations-${i}`}
+                                startYear={edu.startYear ?? null}
+                                endYear={edu.endYear ?? null}
+                                errors={scopeErrors(errors, `educations.${i}`)}
+                                onChange={(v) =>
+                                  setEducation((prev) =>
+                                    prev.map((x) => (x === edu ? { ...x, ...v } : x))
+                                  )
+                                }
+                              />
+                            </div>
+                          )}
                         </div>
                         <button
                           onClick={() =>
@@ -938,40 +1156,43 @@ export function ProfilePage() {
                       Institution *
                     </label>
                     <Input
+                      id="pf-edu-school"
                       placeholder="e.g. MIT"
                       value={eduForm.school}
                       onChange={(e) => setEduForm((f) => ({ ...f, school: e.target.value }))}
+                      aria-invalid={!!errors["edu.school"] || undefined}
                       className="h-8 text-[13px]"
                     />
+                    <FieldError id="pf-edu-school-error" message={errors["edu.school"]} />
                   </div>
                   <div>
                     <label className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
                       Degree *
                     </label>
                     <Input
+                      id="pf-edu-degree"
                       placeholder="e.g. B.S. Computer Science"
                       value={eduForm.degree}
                       onChange={(e) => setEduForm((f) => ({ ...f, degree: e.target.value }))}
+                      aria-invalid={!!errors["edu.degree"] || undefined}
                       className="h-8 text-[13px]"
                     />
+                    <FieldError id="pf-edu-degree-error" message={errors["edu.degree"]} />
                   </div>
                 </div>
-                <div>
-                  <label className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
-                    Duration
-                  </label>
-                  <Input
-                    placeholder="e.g. 2018 – 2022"
-                    value={eduForm.duration}
-                    onChange={(e) => setEduForm((f) => ({ ...f, duration: e.target.value }))}
-                    className="h-8 text-[13px]"
-                  />
-                </div>
+                <YearRangeInput
+                  id="pf-edu"
+                  startYear={eduForm.startYear}
+                  endYear={eduForm.endYear}
+                  errors={scopeErrors(errors, "edu")}
+                  onChange={(v) => setEduForm((f) => ({ ...f, ...v }))}
+                />
                 <div className="flex gap-2 justify-end">
                   <button
                     onClick={() => {
                       setShowEduForm(false)
-                      setEduForm({ school: "", degree: "", duration: "" })
+                      setEduForm(EMPTY_EDU)
+                      setErrors((e) => withoutPrefix(e, "edu"))
                     }}
                     className="px-3 py-1.5 rounded-[10px] text-[13px] font-semibold text-txt-caption hover:bg-bg-hover transition-colors cursor-pointer"
                   >
@@ -1228,20 +1449,17 @@ export function ProfilePage() {
             </div>
 
             <div className="space-y-3.5">
-              <div>
-                <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider mb-1">
-                  Expected Salary (Annual)
-                </p>
-                <div className="relative">
-                  <DollarSign className="w-3 h-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-txt-caption" />
-                  <input
-                    value={prefs.expectedSalary}
-                    onChange={(e) => setPrefs((p) => ({ ...p, expectedSalary: e.target.value }))}
-                    placeholder="e.g. $140,000 – $160,000"
-                    className="w-full pl-7 pr-3 py-1.5 rounded-[10px] border border-bg-border bg-bg-primary text-[13px] text-txt-body placeholder:text-txt-caption focus:outline-none focus:border-primary/40 transition-all font-medium"
-                  />
-                </div>
-              </div>
+              <SalaryRangeInput
+                id="pf-salary"
+                stacked
+                label="Expected salary"
+                value={prefs.salary}
+                onChange={(salary) => {
+                  setPrefs((p) => ({ ...p, salary }))
+                  setErrors((e) => withoutPrefix(e, "salary"))
+                }}
+                errors={scopeErrors(errors, "salary")}
+              />
 
               <div>
                 <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider mb-1">
@@ -1249,12 +1467,28 @@ export function ProfilePage() {
                 </p>
                 <div className="relative">
                   <Clock className="w-3 h-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-txt-caption" />
-                  <input
+                  <select
+                    id="pf-yearsOfExperience"
+                    aria-label="Years of experience"
                     value={prefs.yearsOfExperience}
                     onChange={(e) => setPrefs((p) => ({ ...p, yearsOfExperience: e.target.value }))}
-                    placeholder="e.g. 5+ years"
-                    className="w-full pl-7 pr-3 py-1.5 rounded-[10px] border border-bg-border bg-bg-primary text-[13px] text-txt-body placeholder:text-txt-caption focus:outline-none focus:border-primary/40 transition-all font-medium"
-                  />
+                    className="w-full pl-7 pr-3 py-1.5 rounded-[10px] border border-bg-border bg-bg-primary text-[13px] text-txt-body focus:outline-none focus:border-primary/40 transition-all font-medium cursor-pointer"
+                  >
+                    <option value="">Select…</option>
+                    {YEARS_OPTIONS.map((y) => (
+                      <option key={y} value={y}>
+                        {y === "0"
+                          ? "Less than 1 year"
+                          : y === "20+"
+                            ? "20+ years"
+                            : `${y} year${y === "1" ? "" : "s"}`}
+                      </option>
+                    ))}
+                    {prefs.yearsOfExperience &&
+                      !YEARS_OPTIONS.includes(prefs.yearsOfExperience) && (
+                        <option value={prefs.yearsOfExperience}>{prefs.yearsOfExperience}</option>
+                      )}
+                  </select>
                 </div>
               </div>
 
@@ -1380,17 +1614,35 @@ export function ProfilePage() {
             <textarea
               rows={5}
               value={profile.bio}
-              onChange={(e) => setProfile((p) => ({ ...p, bio: e.target.value }))}
+              onChange={(e) => {
+                setProfile((p) => ({ ...p, bio: e.target.value }))
+                clearError("bio")
+              }}
+              id="pf-bio"
+              maxLength={4000}
+              aria-invalid={!!errors.bio || undefined}
               placeholder="Briefly describe your background, tech stack, and what you excel at…"
               className="w-full p-3 rounded-[12px] border border-bg-border bg-bg-primary text-[13.5px] text-txt-body placeholder:text-txt-caption resize-none focus:outline-none focus:border-primary/40 transition-all font-medium leading-relaxed"
             />
+            <div className="flex justify-between">
+              <FieldError id="pf-bio-error" message={errors.bio} />
+              <span className="ml-auto text-[11px] text-txt-caption tabular-nums">
+                {profile.bio.length} / 4,000
+              </span>
+            </div>
             {/* Social links */}
             <div className="mt-3 space-y-2">
               <div className="flex items-center gap-2">
                 <Globe className="w-3.5 h-3.5 text-txt-caption shrink-0" />
                 <input
+                  id="pf-github"
+                  aria-invalid={!!errors.github || undefined}
+                  aria-describedby={errors.github ? "pf-github-error" : undefined}
                   value={profile.github}
-                  onChange={(e) => setProfile((p) => ({ ...p, github: e.target.value }))}
+                  onChange={(e) => {
+                    setProfile((p) => ({ ...p, github: e.target.value }))
+                    clearError("github")
+                  }}
                   placeholder="GitHub URL"
                   aria-label="GitHub URL"
                   type="url"
@@ -1400,14 +1652,22 @@ export function ProfilePage() {
               <div className="flex items-center gap-2">
                 <ExternalLink className="w-3.5 h-3.5 text-txt-caption shrink-0" />
                 <input
+                  id="pf-linkedin"
+                  aria-invalid={!!errors.linkedin || undefined}
+                  aria-describedby={errors.linkedin ? "pf-linkedin-error" : undefined}
                   value={profile.linkedin}
-                  onChange={(e) => setProfile((p) => ({ ...p, linkedin: e.target.value }))}
+                  onChange={(e) => {
+                    setProfile((p) => ({ ...p, linkedin: e.target.value }))
+                    clearError("linkedin")
+                  }}
                   placeholder="LinkedIn URL"
                   aria-label="LinkedIn URL"
                   type="url"
                   className="flex-1 text-[13px] text-txt-body bg-transparent border-b border-transparent hover:border-bg-border focus:border-primary/50 focus:outline-none transition-colors pb-0.5 placeholder:text-txt-caption"
                 />
               </div>
+              <FieldError id="pf-github-error" message={errors.github} />
+              <FieldError id="pf-linkedin-error" message={errors.linkedin} />
             </div>
           </Card>
 

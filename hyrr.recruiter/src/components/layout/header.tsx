@@ -11,6 +11,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  FieldError,
   Input,
   notificationConversationId,
   useToast,
@@ -115,13 +116,15 @@ function TeamDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: b
 
   const isOwner = team.some((m) => m.userId === user?.id && m.role === "OWNER")
 
+  const [inviteError, setInviteError] = useState<string | null>(null)
   const handleInvite = async (e: FormEvent) => {
     e.preventDefault()
     const trimmed = email.trim()
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      toast("Invalid email", "Enter a valid email address.", "error")
+      setInviteError("Enter a valid email address, e.g. name@company.com")
       return
     }
+    setInviteError(null)
     setInviting(true)
     try {
       await addTeamMember(trimmed, role)
@@ -239,8 +242,14 @@ function TeamDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: b
                     required
                     placeholder="colleague@company.com"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value)
+                      setInviteError(null)
+                    }}
+                    aria-invalid={!!inviteError || undefined}
+                    aria-describedby={inviteError ? "team-invite-email-error" : undefined}
                   />
+                  <FieldError id="team-invite-email-error" message={inviteError ?? undefined} />
                 </div>
                 <label htmlFor="team-invite-role" className="sr-only">
                   Role

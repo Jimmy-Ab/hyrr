@@ -11,7 +11,7 @@ export function usePublishCost(input: PublishCostInput, enabled: boolean, delay 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [nonce, setNonce] = useState(0)
-  const { remote, salary, categoryId } = input
+  const { remote, salaryMax, salaryCurrency, salaryPeriod, categoryId } = input
 
   useEffect(() => {
     if (!enabled) return
@@ -19,7 +19,13 @@ export function usePublishCost(input: PublishCostInput, enabled: boolean, delay 
     setLoading(true)
     const timer = window.setTimeout(async () => {
       try {
-        const result = await getPublishCost({ remote, salary, categoryId })
+        const result = await getPublishCost({
+          remote,
+          salaryMax,
+          salaryCurrency,
+          salaryPeriod,
+          categoryId,
+        })
         if (!cancelled) {
           setQuote(result)
           setError(null)
@@ -34,7 +40,17 @@ export function usePublishCost(input: PublishCostInput, enabled: boolean, delay 
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [enabled, remote, salary, categoryId, delay, getPublishCost, nonce])
+  }, [
+    enabled,
+    remote,
+    salaryMax,
+    salaryCurrency,
+    salaryPeriod,
+    categoryId,
+    delay,
+    getPublishCost,
+    nonce,
+  ])
 
   return { quote, loading, error, retry: () => setNonce((n) => n + 1) }
 }

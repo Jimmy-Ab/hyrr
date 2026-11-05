@@ -7,13 +7,25 @@ import {
   DialogHeader,
   DialogTitle,
   employmentTypeCode,
+  emptySalaryRange,
+  FieldError,
+  fieldErrorsOf,
   Input,
   insufficientCreditsDetails,
+  isSalaryRangeEmpty,
   JOB_TYPE_OPTIONS,
+  jobBasicsSchema,
   RichTextEditor,
+  SalaryRangeInput,
+  salaryRangeSchema,
+  scopeErrors,
   useToast,
+  validate,
+  type Currency,
+  type FieldErrors,
   type Job,
   type JobType,
+  type SalaryRangeValue,
 } from "hyrr.shared"
 import { Loader2, Plus, X } from "lucide-react"
 import { useEffect, useState, type FormEvent } from "react"
@@ -49,6 +61,9 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
   const [location, setLocation] = useState("")
   const [type, setType] = useState<JobType>(JOB_TYPE_OPTIONS[0])
   const [description, setDescription] = useState("")
+  const [salary, setSalary] = useState<SalaryRangeValue>(emptySalaryRange("USD"))
+  const [salaryTouched, setSalaryTouched] = useState(false)
+  const [errors, setErrors] = useState<FieldErrors>({})
   const [requirements, setRequirements] = useState<string[]>([])
   const [draftReq, setDraftReq] = useState("")
   const [saving, setSaving] = useState(false)
@@ -92,6 +107,18 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
       )
       setDescription(job.description)
       setRequirements(job.requirements ?? [])
+      setSalary(
+        job.salaryMin != null && job.salaryMax != null
+          ? {
+              min: job.salaryMin,
+              max: job.salaryMax,
+              currency: (job.salaryCurrency as Currency) || "USD",
+              period: job.salaryPeriod ?? "YEAR",
+            }
+          : emptySalaryRange("USD")
+      )
+      setSalaryTouched(false)
+      setErrors({})
       setDraftReq("")
       setPublishError(null)
       setCreditError(null)
@@ -112,7 +139,38 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
     employmentType: employmentTypeCode(type),
     description,
     requirements,
+    // Only send the range when it was edited (an untouched legacy free-text salary is kept).
+    ...(salaryTouched
+      ? isSalaryRangeEmpty(salary)
+        ? { salaryMin: null, salaryMax: null, salaryCurrency: null, salaryPeriod: null }
+        : {
+            salaryMin: salary.min,
+            salaryMax: salary.max,
+            salaryCurrency: salary.currency || null,
+            salaryPeriod: salary.period,
+          }
+      : {}),
   })
+
+  /** Same rules as the backend; shows errors inline and returns false when invalid. */
+  const check = () => {
+    const text = description
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .trim()
+    const found: FieldErrors = {
+      ...validate(jobBasicsSchema, {
+        title,
+        location: location || "Remote",
+        categoryId: job?.categoryId || "-",
+      }),
+      ...(salaryTouched ? validate(salaryRangeSchema, salary, "salary") : {}),
+      ...(text.length < 20 ? { description: "Description must be at least 20 characters" } : {}),
+      ...(requirements.length === 0 ? { requirements: "Add at least one requirement" } : {}),
+    }
+    setErrors(found)
+    return Object.keys(found).length === 0
+  }
 
   /** Saves the questions only when they were loaded and changed (never wipes on a load error). */
   const persistQuestions = async (jobId: string) => {
@@ -134,6 +192,16 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
       setCreditError(credits)
       return
     }
+    const server = fieldErrorsOf(err)
+    if (Object.keys(server).length) {
+      const mapped: FieldErrors = {}
+      for (const [key, message] of Object.entries(server)) {
+        const m = /^salary(Min|Max|Currency|Period)$/.exec(key)
+        mapped[m ? `salary.${m[1].toLowerCase()}` : key.split(".")[0]] = message
+      }
+      setErrors(mapped)
+      return
+    }
     const inline = jobPublishError(err)
     if (inline) setPublishError(inline)
     else toast("Could not update job", errorMessage(err), "error")
@@ -146,10 +214,7 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
 
   const saveChanges = async () => {
     if (!job) return
-    if (!title.trim()) {
-      toast("Missing title", "Job title is required.", "error")
-      return
-    }
+    if (!check()) return
     setSaving(true)
     setPublishError(null)
     try {
@@ -184,16 +249,19 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
   const isDraft = job?.status === "Draft"
   const chargesOnPublish = isDraft && !job?.publishedAt
   const publishCost = usePublishCost(
-    { remote: job?.remote, salary: job?.salary || undefined, categoryId: job?.categoryId },
+    {
+      remote: job?.remote,
+      salaryMax: job?.salaryMax ?? null,
+      salaryCurrency: job?.salaryCurrency ?? null,
+      salaryPeriod: job?.salaryPeriod ?? null,
+      categoryId: job?.categoryId,
+    },
     !!job && chargesOnPublish
   )
 
   const handlePublish = async () => {
     if (!job) return
-    if (!title.trim()) {
-      toast("Missing title", "Job title is required.", "error")
-      return
-    }
+    if (!check()) return
     setPublishing(true)
     setPublishError(null)
     setCreditError(null)
@@ -228,8 +296,10 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
               id="edit-job-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              required
+              aria-invalid={!!errors.title || undefined}
+              aria-describedby={errors.title ? "edit-job-title-error" : undefined}
             />
+            <FieldError id="edit-job-title-error" message={errors.title} />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -240,7 +310,9 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
                 id="edit-job-location"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
+                aria-invalid={!!errors.location || undefined}
               />
+              <FieldError id="edit-job-location-error" message={errors.location} />
             </div>
             <div>
               <label htmlFor="edit-job-type" className={labelCls}>
@@ -263,6 +335,24 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
           <div>
             <span className={labelCls}>Description</span>
             <RichTextEditor value={description} onChange={setDescription} minHeight="200px" />
+            <FieldError id="edit-job-description-error" message={errors.description} />
+          </div>
+          <div>
+            <SalaryRangeInput
+              id="edit-job-salary"
+              label="Salary range (optional)"
+              value={salary}
+              onChange={(next) => {
+                setSalary(next)
+                setSalaryTouched(true)
+              }}
+              errors={scopeErrors(errors, "salary")}
+            />
+            {!salaryTouched && job?.salary && job.salaryMin == null && (
+              <p className="mt-1 text-[11.5px] text-txt-caption">
+                Currently shown as "{job.salary}". Set a range to replace it.
+              </p>
+            )}
           </div>
           <div>
             <label htmlFor="edit-job-requirement" className={labelCls}>
@@ -311,6 +401,7 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
                 <Plus className="w-4 h-4" />
               </Button>
             </div>
+            <FieldError id="edit-job-requirements-error" message={errors.requirements} />
           </div>
 
           <div>

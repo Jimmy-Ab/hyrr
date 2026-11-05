@@ -7,6 +7,7 @@ import { CacheService } from "../cache/cache.service"
 import { AccessService, Actor } from "../core/access/access.service"
 import { EmailService } from "../core/delivery/email.service"
 import { AppException, NotFoundAppException } from "../core/exceptions/app-exception"
+import { formatSalaryRange } from "../core/validation/structured"
 import { EmbeddingsService } from "../embeddings/embeddings.service"
 import { MessagesGateway } from "../messages/messages.gateway"
 import { NotificationsService } from "../notifications/notifications.service"
@@ -44,6 +45,30 @@ const DAY_MS = 24 * 60 * 60 * 1000
 const APPLICANT_COUNT = {
   _count: { select: { applications: { where: { status: { not: ApplicationStatus.SAVED } } } } },
 } as const
+
+/** Structured salary columns + their generated display text (all null clears the range). */
+function salaryData(dto: {
+  salaryMin?: number | null
+  salaryMax?: number | null
+  salaryCurrency?: string | null
+  salaryPeriod?: "YEAR" | "MONTH" | "HOUR" | null
+}) {
+  if (dto.salaryMin == null || dto.salaryMax == null || !dto.salaryCurrency)
+    return {
+      salary: null,
+      salaryMin: null,
+      salaryMax: null,
+      salaryCurrency: null,
+      salaryPeriod: null,
+    }
+  return {
+    salary: formatSalaryRange(dto.salaryMin, dto.salaryMax, dto.salaryCurrency, dto.salaryPeriod),
+    salaryMin: dto.salaryMin,
+    salaryMax: dto.salaryMax,
+    salaryCurrency: dto.salaryCurrency,
+    salaryPeriod: dto.salaryPeriod ?? "YEAR",
+  }
+}
 
 @Injectable()
 export class JobsService {
@@ -132,7 +157,9 @@ export class JobsService {
     const cost = publishing
       ? await this.pricing.publishCost({
           remote: dto.remote ?? false,
-          salary: dto.salary,
+          salaryMax: dto.salaryMax,
+          salaryCurrency: dto.salaryCurrency,
+          salaryPeriod: dto.salaryPeriod,
           categoryId: dto.categoryId,
         })
       : 0
@@ -147,7 +174,7 @@ export class JobsService {
           title: dto.title,
           location: dto.location,
           type: dto.type,
-          salary: dto.salary,
+          ...salaryData(dto),
           description: dto.description,
           requirements: dto.requirements ?? [],
           skills: dto.skills,
@@ -263,19 +290,13 @@ export class JobsService {
         benefits: dto.benefits ?? current.benefits,
       })
 
-    const { salaryMin, salaryMax, employmentType, ...rest } = dto
+    const { salaryMin, salaryMax, salaryCurrency, salaryPeriod, employmentType, ...rest } = dto
     const data: Prisma.JobUncheckedUpdateInput = { ...rest }
     if (actor.role !== "ADMIN" && current.status === JobStatus.FLAGGED) delete data.status
     if (employmentType && !rest.type) data.type = employmentType
-    if (rest.salary === undefined && (salaryMin !== undefined || salaryMax !== undefined)) {
-      const fmt = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`
-      data.salary =
-        salaryMin !== undefined && salaryMax !== undefined
-          ? `${fmt(salaryMin)} – ${fmt(salaryMax)}`
-          : salaryMin !== undefined
-            ? `From ${fmt(salaryMin)}`
-            : `Up to ${fmt(salaryMax)}`
-    }
+    // The DTO guarantees all four salary fields arrive together (or all null to clear).
+    if (salaryMin !== undefined || salaryMax !== undefined)
+      Object.assign(data, salaryData({ salaryMin, salaryMax, salaryCurrency, salaryPeriod }))
 
     // First publication (publishedAt still null) is charged once; reopening a published job is free.
     const firstPublish =
@@ -287,7 +308,10 @@ export class JobsService {
       firstPublish && !isAdmin
         ? await this.pricing.publishCost({
             remote: (data.remote as boolean | undefined) ?? current.remote,
-            salary: (data.salary as string | undefined) ?? current.salary,
+            salary: current.salary,
+            salaryMax: salaryMax !== undefined ? salaryMax : current.salaryMax,
+            salaryCurrency: salaryMax !== undefined ? salaryCurrency : current.salaryCurrency,
+            salaryPeriod: salaryMax !== undefined ? salaryPeriod : current.salaryPeriod,
             categoryId: (data.categoryId as string | undefined) ?? current.categoryId,
           })
         : 0

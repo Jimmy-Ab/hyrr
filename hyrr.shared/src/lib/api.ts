@@ -12,6 +12,8 @@ export class ApiError extends Error {
   readonly status: number
   readonly errorCode: string
   readonly details: unknown
+  /** Per-field messages on 400 VALIDATION_FAILED ("experiences.0.endDate" → message). */
+  readonly fields: Record<string, string> | null
   readonly timestamp: string
 
   constructor(init: {
@@ -19,6 +21,7 @@ export class ApiError extends Error {
     errorCode?: string
     message: string
     details?: unknown
+    fields?: Record<string, string> | null
     timestamp?: string
   }) {
     super(init.message)
@@ -26,6 +29,7 @@ export class ApiError extends Error {
     this.status = init.status
     this.errorCode = init.errorCode || "HTTP_ERROR"
     this.details = init.details ?? null
+    this.fields = init.fields ?? null
     this.timestamp = init.timestamp || new Date().toISOString()
   }
 }
@@ -161,6 +165,7 @@ async function handleResponse(response: Response): Promise<any> {
       errorCode: data?.errorCode || "HTTP_ERROR",
       message,
       details: data?.details ?? null,
+      fields: data?.fields && typeof data.fields === "object" ? data.fields : null,
       timestamp: data?.timestamp,
     })
   }

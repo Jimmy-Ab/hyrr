@@ -3,6 +3,12 @@ import { DocType, Prisma } from "@prisma/client"
 import { AiService } from "../ai/ai.service"
 import { CvSuggestions } from "../ai/cv-profile"
 import { AppException, NotFoundAppException } from "../core/exceptions/app-exception"
+import {
+  formatMonthRange,
+  formatSalaryRange,
+  formatYearRange,
+  parseMonth,
+} from "../core/validation/structured"
 import { EmbeddingsService } from "../embeddings/embeddings.service"
 import { MatchingService } from "../matching/matching.service"
 import { computeProfileStrength } from "../matching/scoring"
@@ -10,7 +16,7 @@ import { PrismaService } from "../prisma/prisma.service"
 import { CvTextService } from "../uploads/cv-text.service"
 import { UploadsService } from "../uploads/uploads.service"
 import { ImportCvDto } from "./dtos/import-cv.dto"
-import { UpdateProfileDto } from "./dtos/profile.dto"
+import { EducationDto, ExperienceDto, UpdateProfileDto } from "./dtos/profile.dto"
 
 /** Public user fields embedded in profile responses — never passwordHash or OAuth ids. */
 const PROFILE_USER_SELECT = {
@@ -37,13 +43,38 @@ const NULLABLE_TEXT_FIELDS = [
   "github",
   "linkedin",
   "bio",
-  "expectedSalary",
   "preferredType",
   "availability",
   "phone",
   "yearsOfExperience",
 ] as const
 const LIST_FIELDS = ["skills", "languages", "preferredLocations"] as const // null → []
+
+/** Experience row from the DTO: dates are the source of truth, `duration` is generated. */
+function experienceData(exp: ExperienceDto) {
+  const start = parseMonth(exp.startDate)
+  const current = !!exp.current
+  const end = current ? null : parseMonth(exp.endDate ?? null)
+  return {
+    role: exp.role,
+    company: exp.company,
+    startDate: start,
+    endDate: end,
+    current,
+    duration: start ? formatMonthRange(start, end, current) : (exp.duration ?? ""),
+    desc: exp.desc || "",
+  }
+}
+
+function educationData(edu: EducationDto) {
+  return {
+    school: edu.school,
+    degree: edu.degree,
+    startYear: edu.startYear ?? null,
+    endYear: edu.endYear ?? null,
+    duration: edu.startYear ? formatYearRange(edu.startYear, edu.endYear) : (edu.duration ?? ""),
+  }
+}
 
 @Injectable()
 export class ProfileService {
@@ -121,6 +152,22 @@ export class ProfileService {
       if (data[key] === undefined) continue
       updateData[key] = (data[key] ?? []).map((v: string) => v.trim()).filter(Boolean)
     }
+    // Expected salary: the DTO guarantees the four fields arrive together (null clears).
+    if (data.expectedSalaryMin !== undefined || data.expectedSalaryMax !== undefined) {
+      const set = data.expectedSalaryMin != null && data.expectedSalaryMax != null
+      updateData.expectedSalaryMin = set ? data.expectedSalaryMin : null
+      updateData.expectedSalaryMax = set ? data.expectedSalaryMax : null
+      updateData.expectedSalaryCurrency = set ? data.expectedSalaryCurrency : null
+      updateData.expectedSalaryPeriod = set ? (data.expectedSalaryPeriod ?? "YEAR") : null
+      updateData.expectedSalary = set
+        ? formatSalaryRange(
+            data.expectedSalaryMin,
+            data.expectedSalaryMax,
+            data.expectedSalaryCurrency,
+            data.expectedSalaryPeriod ?? "YEAR"
+          )
+        : null
+    }
     if (data.visibility !== undefined && data.visibility !== null) {
       updateData.visibility = data.visibility
     }
@@ -154,13 +201,7 @@ export class ProfileService {
           where: { profileId: profile.id },
         })
         await tx.workExperience.createMany({
-          data: experiences.map((exp: any) => ({
-            profileId: profile.id,
-            role: exp.role,
-            company: exp.company,
-            duration: exp.duration,
-            desc: exp.desc || "",
-          })),
+          data: experiences.map((exp) => ({ profileId: profile.id, ...experienceData(exp) })),
         })
       }
 
@@ -168,12 +209,7 @@ export class ProfileService {
       if (Array.isArray(educations)) {
         await tx.education.deleteMany({ where: { profileId: profile.id } })
         await tx.education.createMany({
-          data: educations.map((edu: any) => ({
-            profileId: profile.id,
-            school: edu.school,
-            degree: edu.degree,
-            duration: edu.duration,
-          })),
+          data: educations.map((edu) => ({ profileId: profile.id, ...educationData(edu) })),
         })
       }
 
@@ -188,19 +224,10 @@ export class ProfileService {
     return withStrength(updated)
   }
 
-  async addExperience(
-    userId: string,
-    exp: { role: string; company: string; duration: string; desc?: string }
-  ) {
+  async addExperience(userId: string, exp: ExperienceDto) {
     const profile = await this.getProfile(userId)
     const created = await this.prisma.workExperience.create({
-      data: {
-        profileId: profile.id,
-        role: exp.role,
-        company: exp.company,
-        duration: exp.duration,
-        desc: exp.desc,
-      },
+      data: { profileId: profile.id, ...experienceData(exp) },
     })
     await this.matching.invalidate(userId)
     await this.embeddings?.embedProfileSoon(userId)
@@ -217,15 +244,10 @@ export class ProfileService {
     return deleted
   }
 
-  async addEducation(userId: string, edu: { school: string; degree: string; duration: string }) {
+  async addEducation(userId: string, edu: EducationDto) {
     const profile = await this.getProfile(userId)
     const created = await this.prisma.education.create({
-      data: {
-        profileId: profile.id,
-        school: edu.school,
-        degree: edu.degree,
-        duration: edu.duration,
-      },
+      data: { profileId: profile.id, ...educationData(edu) },
     })
     await this.matching.invalidate(userId)
     await this.embeddings?.embedProfileSoon(userId)

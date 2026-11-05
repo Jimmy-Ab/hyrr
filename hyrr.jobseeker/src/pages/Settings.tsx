@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   errorMessage,
+  FieldError,
   Input,
   useJobStore,
   useToast,
@@ -133,9 +134,18 @@ export function SettingsPage() {
       .finally(() => setPrefsLoading(false))
   }, [])
 
+  const [nameError, setNameError] = useState<string | null>(null)
   const handleSaveGeneral = async () => {
-    if (!generalName.trim()) {
-      toast("Name required", "Please enter your name.", "error")
+    const trimmed = generalName.trim()
+    const problem =
+      trimmed.length < 2
+        ? "Name must be at least 2 characters"
+        : trimmed.length > 120
+          ? "At most 120 characters"
+          : null
+    setNameError(problem)
+    if (problem) {
+      document.getElementById("settings-name")?.focus()
       return
     }
     try {
@@ -195,10 +205,17 @@ export function SettingsPage() {
               <Input
                 id="settings-name"
                 value={generalName}
-                onChange={(e) => setGeneralName(e.target.value)}
+                onChange={(e) => {
+                  setGeneralName(e.target.value)
+                  setNameError(null)
+                }}
                 placeholder="Your display name"
+                maxLength={120}
+                aria-invalid={!!nameError || undefined}
+                aria-describedby={nameError ? "settings-name-error" : undefined}
                 className="max-w-sm"
               />
+              <FieldError id="settings-name-error" message={nameError ?? undefined} />
             </div>
             <div className="space-y-3">
               <label

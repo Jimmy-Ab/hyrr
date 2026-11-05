@@ -132,6 +132,10 @@ export function mapJob(j: any): Job {
     companyVerified: j.company?.verified === true,
     remote: !!j.remote,
     salary: j.salary ?? undefined,
+    salaryMin: j.salaryMin ?? null,
+    salaryMax: j.salaryMax ?? null,
+    salaryCurrency: j.salaryCurrency ?? null,
+    salaryPeriod: j.salaryPeriod ?? null,
     categoryId: j.categoryId ?? j.category?.id ?? undefined,
     featured: !!j.featured,
     featuredUntil: j.featuredUntil ?? null,
@@ -544,6 +548,9 @@ export function mapTeamMember(m: any): TeamMember {
   }
 }
 
+/** ISO date (first of month, UTC) → "YYYY-MM"; "" when missing. */
+const isoToMonth = (iso: string | null | undefined) => (iso ? String(iso).slice(0, 7) : "")
+
 export function mapSeekerProfile(p: any): SeekerProfileData {
   return {
     title: p.title || "",
@@ -553,6 +560,10 @@ export function mapSeekerProfile(p: any): SeekerProfileData {
     skills: p.skills || [],
     languages: p.languages || [],
     expectedSalary: p.expectedSalary || "",
+    expectedSalaryMin: p.expectedSalaryMin ?? null,
+    expectedSalaryMax: p.expectedSalaryMax ?? null,
+    expectedSalaryCurrency: p.expectedSalaryCurrency ?? null,
+    expectedSalaryPeriod: p.expectedSalaryPeriod ?? null,
     preferredType: p.preferredType || JOB_TYPE_OPTIONS[0],
     availability: p.availability || "",
     yearsOfExperience: p.yearsOfExperience || "",
@@ -561,7 +572,23 @@ export function mapSeekerProfile(p: any): SeekerProfileData {
     website: p.website || "",
     github: p.github || "",
     linkedin: p.linkedin || "",
-    experiences: p.experiences || [],
-    educations: p.educations || [],
+    experiences: (p.experiences || []).map((e: any) => ({
+      id: e.id,
+      role: e.role || "",
+      company: e.company || "",
+      duration: e.duration || "",
+      startDate: isoToMonth(e.startDate),
+      endDate: e.current ? null : isoToMonth(e.endDate) || null,
+      current: !!e.current,
+      desc: e.desc || "",
+    })),
+    educations: (p.educations || []).map((e: any) => ({
+      id: e.id,
+      school: e.school || "",
+      degree: e.degree || "",
+      duration: e.duration || "",
+      startYear: typeof e.startYear === "number" ? e.startYear : null,
+      endYear: typeof e.endYear === "number" ? e.endYear : null,
+    })),
   }
 }

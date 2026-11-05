@@ -188,7 +188,11 @@ model SeekerProfile {
   github             String?    // Public URL link
   linkedin           String?    // Public URL link
   bio                String?    @db.Text
-  expectedSalary     String?
+  expectedSalary     String? // display text, derived from the structured range below
+  expectedSalaryMin      Int?
+  expectedSalaryMax      Int?
+  expectedSalaryCurrency String?
+  expectedSalaryPeriod   SalaryPeriod?
   preferredType      String?    // Full Time, Part Time, Contract, Remote
   availability       String?    // e.g. "2 weeks notice"
   preferredLocations String[]
@@ -211,7 +215,10 @@ model WorkExperience {
   profile         SeekerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
   role            String
   company         String
-  duration        String
+  duration        String // display text, derived from the dates below
+  startDate       DateTime? // first day of the start month
+  endDate         DateTime? // null with current = true
+  current         Boolean       @default(false)
   desc            String?       @db.Text
 }
 
@@ -221,7 +228,15 @@ model Education {
   profile         SeekerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
   school          String
   degree          String
-  duration        String
+  duration        String // display text, derived from the years below
+  startYear       Int?
+  endYear         Int?
+}
+
+enum SalaryPeriod {
+  YEAR
+  MONTH
+  HOUR
 }
 
 model Document {
@@ -263,7 +278,11 @@ model Job {
   title         String
   location      String
   type          EmploymentType
-  salary        String?
+  salary        String? // display text, derived from the structured range below
+  salaryMin      Int?
+  salaryMax      Int?
+  salaryCurrency String? // ISO 4217, e.g. USD, ETB
+  salaryPeriod   SalaryPeriod?
   status        JobStatus   @default(ACTIVE)
   color         String      @default("purple")
   description   String      @db.Text

@@ -6,6 +6,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  FieldError,
   Input,
   useToast,
 } from "hyrr.shared"
@@ -59,16 +60,19 @@ export function AddCandidateDialog() {
     }
   }, [isAddCandidateOpen]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const [nameError, setNameError] = useState<string | null>(null)
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!jobId) {
       toast("No job selected", "Create a job before adding candidates.", "error")
       return
     }
-    if (!name.trim()) {
-      toast("Missing name", "Please enter the candidate's name.", "error")
+    if (name.trim().length < 2) {
+      setNameError("Enter the candidate's full name")
+      document.getElementById("add-candidate-name")?.focus()
       return
     }
+    setNameError(null)
     if (!EMAIL_RE.test(email.trim())) {
       setEmailError("Enter a valid email address.")
       return
@@ -151,10 +155,16 @@ export function AddCandidateDialog() {
               id="add-candidate-name"
               placeholder="e.g. Emily Carter"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value)
+                setNameError(null)
+              }}
+              aria-invalid={!!nameError || undefined}
+              aria-describedby={nameError ? "add-candidate-name-error" : undefined}
               required
               autoComplete="off"
             />
+            <FieldError id="add-candidate-name-error" message={nameError ?? undefined} />
           </div>
           <div>
             <label htmlFor="add-candidate-email" className={labelCls}>

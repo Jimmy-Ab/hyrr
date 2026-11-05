@@ -1,4 +1,4 @@
-import { Button, Card, Input, Skeleton, useToast, VerifiedBadge } from "hyrr.shared"
+import { Button, Card, FieldError, Input, Skeleton, useToast, VerifiedBadge } from "hyrr.shared"
 import { Check, Loader2, ShieldCheck } from "lucide-react"
 import { useEffect, useState } from "react"
 import { errorMessage } from "../../lib/recruiter"
@@ -85,16 +85,19 @@ export function CompanyProfileSettings() {
 
   const set = (key: keyof FormState) => (value: string) => setForm((f) => ({ ...f, [key]: value }))
 
+  const [nameError, setNameError] = useState<string | null>(null)
   const websiteInvalid = !!form.website.trim() && !isHttpUrl(form.website.trim())
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.name.trim()) {
-      toast("Missing name", "Company name is required.", "error")
-      return
-    }
-    if (websiteInvalid) {
-      toast("Invalid website", "Use a full address like https://example.com.", "error")
+    const name = form.name.trim()
+    setNameError(
+      !name ? "Company name is required" : name.length > 120 ? "At most 120 characters" : null
+    )
+    if (!name || name.length > 120 || websiteInvalid) {
+      document
+        .getElementById(!name || name.length > 120 ? "company-name" : "company-website")
+        ?.focus()
       return
     }
     setSaving(true)
@@ -225,9 +228,15 @@ export function CompanyProfileSettings() {
                 <Input
                   id="company-name"
                   value={form.name}
-                  onChange={(e) => set("name")(e.target.value)}
-                  required
+                  onChange={(e) => {
+                    set("name")(e.target.value)
+                    setNameError(null)
+                  }}
+                  maxLength={120}
+                  aria-invalid={!!nameError || undefined}
+                  aria-describedby={nameError ? "company-name-error" : undefined}
                 />
+                <FieldError id="company-name-error" message={nameError ?? undefined} />
               </div>
               <div>
                 <label htmlFor="company-website" className={labelCls}>

@@ -17,6 +17,8 @@ type NormalizedError = {
   errorCode: string
   message: string
   details?: any
+  /** Per-field validation messages (VALIDATION_FAILED). */
+  fields?: Record<string, string>
 }
 
 const PRISMA_ERROR_MAP: Record<string, { statusCode: number; errorCode: string; message: string }> =
@@ -89,6 +91,8 @@ export function normalizeException(exception: unknown): NormalizedError {
         HTTP_STATUS_CODES[statusCode] ||
         (typeof res.error === "string" && res.error ? toCode(res.error) : fallbackCode)
       details = res.details || (Array.isArray(res.message) ? res.message : undefined)
+      if (res.fields && typeof res.fields === "object")
+        return { statusCode, errorCode, message, details, fields: res.fields }
     }
     return { statusCode, errorCode, message, details }
   }
@@ -145,13 +149,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
       })
     }
 
-    const { statusCode, errorCode, message, details } = normalized
+    const { statusCode, errorCode, message, details, fields } = normalized
     const errorResponse = {
       success: false,
       statusCode,
       errorCode,
       message,
       ...(details ? { details } : {}),
+      ...(fields ? { fields } : {}),
       timestamp: new Date().toISOString(),
       path: request.url,
       correlationId,

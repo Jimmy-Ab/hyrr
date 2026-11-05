@@ -29,7 +29,14 @@ export const createJobsSlice: StateCreator<JobState, [], [], JobsSlice> = (set, 
         title: jobData.title,
         location: jobData.location,
         type: employmentTypeCode(jobData.type as JobType),
-        salary: jobData.salary,
+        ...(jobData.salaryMin != null && jobData.salaryMax != null && jobData.salaryCurrency
+          ? {
+              salaryMin: jobData.salaryMin,
+              salaryMax: jobData.salaryMax,
+              salaryCurrency: jobData.salaryCurrency,
+              salaryPeriod: jobData.salaryPeriod ?? "YEAR",
+            }
+          : {}),
         description: jobData.description,
         requirements: jobData.requirements,
         skills: jobData.skills,

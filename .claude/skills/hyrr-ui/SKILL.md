@@ -57,3 +57,7 @@ async function onSave() {
 
 ## Before finishing
 `npx tsc --noEmit -p <app>/tsconfig.app.json` and `npm run build --workspace=<app>`, plus `npx prettier --write` on touched files.
+
+
+## Forms
+Follow the `hyrr-validation` skill: zod rules from `hyrr.shared` (same as the backend DTO), inline `<FieldError>` under each field (not toasts), structured inputs for money and dates.

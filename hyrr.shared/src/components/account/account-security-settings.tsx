@@ -1,7 +1,8 @@
 import { Download, Eye, EyeOff, Loader2, Lock, Trash2 } from "lucide-react"
 import * as React from "react"
-import { errorMessage } from "../../lib/api"
+import { errorMessage, isApiError } from "../../lib/api"
 import { useJobStore } from "../../store/useJobStore"
+import { FieldError } from "../forms/structured-fields"
 import { Button } from "../ui/button"
 import { ConfirmDialog } from "../ui/confirm-dialog"
 import { Input } from "../ui/input"
@@ -77,27 +78,36 @@ export function AccountSecuritySettings({ deleteDescription }: AccountSecuritySe
   const [deleteOpen, setDeleteOpen] = React.useState(false)
   const [deletePassword, setDeletePassword] = React.useState("")
 
+  const [pwErrors, setPwErrors] = React.useState<{
+    current?: string
+    next?: string
+    confirm?: string
+  }>({})
+
   const onChangePassword = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!pw.current || !pw.next) {
-      toast("Missing fields", "Please fill in all password fields.", "error")
-      return
-    }
-    if (pw.next.length < 8) {
-      toast("Password too short", "New password must be at least 8 characters.", "error")
-      return
-    }
-    if (pw.next !== pw.confirm) {
-      toast("Passwords don't match", "Please re-enter the new password.", "error")
-      return
-    }
+    const found: { current?: string; next?: string; confirm?: string } = {}
+    if (!pw.current) found.current = "Enter your current password"
+    if (pw.next.length < 8) found.next = "Use at least 8 characters"
+    else if (pw.next.length > 128) found.next = "At most 128 characters"
+    else if (pw.next === pw.current) found.next = "Choose a password different from the current one"
+    if (pw.next && pw.confirm !== pw.next) found.confirm = "Passwords don't match"
+    setPwErrors(found)
+    if (Object.keys(found).length) return
     setPwBusy(true)
     try {
       await changePassword(pw.current, pw.next)
       toast("Password changed", "Other devices have been signed out.", "success")
       setPw({ current: "", next: "", confirm: "" })
     } catch (err) {
-      toast("Couldn't change password", errorMessage(err), "error")
+      // A wrong current password is shown on that field; anything else as a toast.
+      if (
+        isApiError(err) &&
+        (err.status === 401 || err.status === 400) &&
+        /current/i.test(err.message)
+      )
+        setPwErrors({ current: err.message })
+      else toast("Couldn't change password", errorMessage(err), "error")
     } finally {
       setPwBusy(false)
     }
@@ -148,6 +158,7 @@ export function AccountSecuritySettings({ deleteDescription }: AccountSecuritySe
             onChange={(v) => setPw((p) => ({ ...p, current: v }))}
             autoComplete="current-password"
           />
+          <FieldError id={`${id}-pw-current-error`} message={pwErrors.current} />
           <PasswordField
             id={`${id}-pw-new`}
             label="New password"
@@ -156,6 +167,7 @@ export function AccountSecuritySettings({ deleteDescription }: AccountSecuritySe
             autoComplete="new-password"
             placeholder="Minimum 8 characters"
           />
+          <FieldError id={`${id}-pw-new-error`} message={pwErrors.next} />
           <PasswordField
             id={`${id}-pw-confirm`}
             label="Confirm new password"
@@ -163,6 +175,7 @@ export function AccountSecuritySettings({ deleteDescription }: AccountSecuritySe
             onChange={(v) => setPw((p) => ({ ...p, confirm: v }))}
             autoComplete="new-password"
           />
+          <FieldError id={`${id}-pw-confirm-error`} message={pwErrors.confirm} />
           <Button type="submit" size="sm" disabled={pwBusy}>
             {pwBusy && <Loader2 className="h-4 w-4 animate-spin" />}
             Update password

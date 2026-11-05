@@ -7,6 +7,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogTitle,
+  FieldError,
   toIsoFromLocal,
   useToast,
 } from "hyrr.shared"
@@ -98,12 +99,16 @@ export function CandidateDetailDialog() {
     }
   }
 
+  const [meetingErrors, setMeetingErrors] = useState<{ title?: string; date?: string }>({})
   const handleScheduleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!meetingTitle || !meetingDate) {
-      toast("Error", "Please fill in all meeting fields.", "error")
-      return
-    }
+    const found: { title?: string; date?: string } = {}
+    if (!meetingTitle.trim()) found.title = "Add a meeting title"
+    if (!meetingDate) found.date = "Choose a date"
+    else if (meetingDate < new Date().toISOString().slice(0, 10))
+      found.date = "Choose today or a future date"
+    setMeetingErrors(found)
+    if (found.title || found.date) return
     setScheduling(true)
     try {
       await createEvent({
@@ -391,9 +396,11 @@ export function CandidateDetailDialog() {
                   placeholder="e.g. Technical Round 1"
                   value={meetingTitle}
                   onChange={(e) => setMeetingTitle(e.target.value)}
-                  required
+                  maxLength={200}
+                  aria-invalid={!!meetingErrors.title || undefined}
                   className="w-full h-10 px-3.5 rounded-[12px] border border-bg-border bg-bg-secondary text-txt-heading text-[13px] placeholder:text-txt-caption focus:outline-none focus:border-primary/30 transition-all font-medium"
                 />
+                <FieldError id="schedule-title-error" message={meetingErrors.title} />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -409,9 +416,11 @@ export function CandidateDetailDialog() {
                     type="date"
                     value={meetingDate}
                     onChange={(e) => setMeetingDate(e.target.value)}
-                    required
+                    min={new Date().toISOString().slice(0, 10)}
+                    aria-invalid={!!meetingErrors.date || undefined}
                     className="w-full h-10 px-3.5 rounded-[12px] border border-bg-border bg-bg-secondary text-txt-heading text-[13px] focus:outline-none focus:border-primary/30 transition-all cursor-pointer font-medium"
                   />
+                  <FieldError id="schedule-date-error" message={meetingErrors.date} />
                 </div>
                 <div>
                   <label

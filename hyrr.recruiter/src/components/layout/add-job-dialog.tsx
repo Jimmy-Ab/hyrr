@@ -7,12 +7,23 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  emptySalaryRange,
+  FieldError,
+  fieldErrorsOf,
   Input,
   insufficientCreditsDetails,
+  isSalaryRangeEmpty,
   JOB_TYPE_OPTIONS,
+  jobBasicsSchema,
   RichTextEditor,
+  SalaryRangeInput,
+  salaryRangeSchema,
+  scopeErrors,
   useToast,
+  validate,
+  type FieldErrors,
   type JobType,
+  type SalaryRangeValue,
 } from "hyrr.shared"
 import { Briefcase, ChevronLeft, ChevronRight, FileText, Plus, Sparkles, X } from "lucide-react"
 import { useEffect, useState, type FormEvent } from "react"
@@ -201,7 +212,8 @@ export function AddJobDialog() {
   const [title, setTitle] = useState("")
   const [location, setLocation] = useState("")
   const [type, setType] = useState<JobType>(JOB_TYPE_OPTIONS[0])
-  const [salary, setSalary] = useState("")
+  const [salary, setSalary] = useState<SalaryRangeValue>(emptySalaryRange("USD"))
+  const [errors, setErrors] = useState<FieldErrors>({})
   const [categoryId, setCategoryId] = useState("")
   const [remote, setRemote] = useState(false)
   const [creditError, setCreditError] = useState<{ required: number; balance: number } | null>(null)
@@ -239,7 +251,8 @@ export function AddJobDialog() {
     setTitle("")
     setLocation("")
     setType(JOB_TYPE_OPTIONS[0])
-    setSalary("")
+    setSalary(emptySalaryRange("USD"))
+    setErrors({})
     setCategoryId(categories[0]?.id || "")
     setRemote(false)
     setCreditError(null)
@@ -256,27 +269,51 @@ export function AddJobDialog() {
     setAddJobOpen(false)
   }
 
+  /** Inline field errors for the current step (same rules as the backend DTO). */
+  const stepErrors = (which: number): FieldErrors => {
+    if (which === 0)
+      return {
+        ...validate(jobBasicsSchema, { title, location: location || "Remote", categoryId }),
+        ...validate(salaryRangeSchema, salary, "salary"),
+      }
+    if (which === 1) {
+      const text = description
+        .replace(/<[^>]*>/g, " ")
+        .replace(/&nbsp;/g, " ")
+        .trim()
+      return text.length < 20 ? { description: "Description must be at least 20 characters" } : {}
+    }
+    const out: FieldErrors = {}
+    if (skills.length === 0) out.skills = "Add at least one required skill"
+    if (requirements.length === 0) out.requirements = "Add at least one requirement"
+    return out
+  }
+
   const validateStep = () => {
-    if (step === 0 && !title.trim()) {
-      toast("Error", "Job Title is required.", "error")
-      return false
+    const found = stepErrors(step)
+    setErrors(found)
+    return Object.keys(found).length === 0
+  }
+
+  /** Server-side 400 VALIDATION_FAILED → the same inline errors, on the step that has them. */
+  const showServerErrors = (err: unknown) => {
+    const server = fieldErrorsOf(err)
+    if (Object.keys(server).length === 0) return false
+    const mapped: FieldErrors = {}
+    for (const [key, message] of Object.entries(server)) {
+      const salaryKey = /^salary(Min|Max|Currency|Period)$/.exec(key)
+      mapped[salaryKey ? `salary.${salaryKey[1].toLowerCase()}` : key.split(".")[0]] = message
     }
-    if (step === 0 && (!categoryId || categoriesError)) {
-      toast("Error", "Please select a category.", "error")
-      return false
-    }
-    if (step === 1 && description.trim().length < 20) {
-      toast("Error", "Description must be at least 20 characters.", "error")
-      return false
-    }
-    if (step === 2 && requirements.length === 0) {
-      toast("Error", "Add at least one requirement.", "error")
-      return false
-    }
-    if (step === 2 && skills.length === 0) {
-      toast("Error", "Add at least one required skill.", "error")
-      return false
-    }
+    setErrors(mapped)
+    const keys = Object.keys(mapped)
+    if (
+      keys.some(
+        (k) => ["title", "location", "categoryId", "type"].includes(k) || k.startsWith("salary")
+      )
+    )
+      setStep(0)
+    else if (keys.includes("description")) setStep(1)
+    else setStep(2)
     return true
   }
 
@@ -289,7 +326,14 @@ export function AddJobDialog() {
     title,
     location: location || "Remote",
     type,
-    salary: salary || undefined,
+    ...(isSalaryRangeEmpty(salary)
+      ? {}
+      : {
+          salaryMin: salary.min,
+          salaryMax: salary.max,
+          salaryCurrency: salary.currency || null,
+          salaryPeriod: salary.period,
+        }),
     description,
     requirements,
     skills,
@@ -299,7 +343,13 @@ export function AddJobDialog() {
   })
 
   const publishCost = usePublishCost(
-    { remote, salary: salary.trim() || undefined, categoryId: categoryId || undefined },
+    {
+      remote,
+      salaryMax: isSalaryRangeEmpty(salary) ? null : salary.max,
+      salaryCurrency: salary.currency || null,
+      salaryPeriod: salary.period,
+      categoryId: categoryId || undefined,
+    },
     isAddJobOpen && !!categoryId
   )
 
@@ -328,6 +378,7 @@ export function AddJobDialog() {
       setCreditError(credits)
       return
     }
+    if (showServerErrors(err)) return
     const inline = jobPublishError(err)
     if (inline) setPublishError(inline)
     else toast(failTitle, errorMessage(err), "error")
@@ -438,8 +489,11 @@ export function AddJobDialog() {
                     placeholder="e.g. Senior Frontend Developer"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    required
+                    aria-invalid={!!errors.title || undefined}
+                    aria-describedby={errors.title ? "job-title-error" : undefined}
+                    className={errors.title ? "border-sec-red/70" : undefined}
                   />
+                  <FieldError id="job-title-error" message={errors.title} />
                 </div>
                 <div>
                   <label htmlFor="job-location" className={labelCls}>
@@ -450,17 +504,18 @@ export function AddJobDialog() {
                     placeholder="e.g. San Francisco, CA"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
+                    aria-invalid={!!errors.location || undefined}
+                    aria-describedby={errors.location ? "job-location-error" : undefined}
                   />
+                  <FieldError id="job-location-error" message={errors.location} />
                 </div>
-                <div>
-                  <label htmlFor="job-salary" className={labelCls}>
-                    Salary Range
-                  </label>
-                  <Input
+                <div className="sm:col-span-2">
+                  <SalaryRangeInput
                     id="job-salary"
-                    placeholder="e.g. $120k – $180k"
+                    label="Salary range (optional)"
                     value={salary}
-                    onChange={(e) => setSalary(e.target.value)}
+                    onChange={setSalary}
+                    errors={scopeErrors(errors, "salary")}
                   />
                 </div>
                 <div>
@@ -502,6 +557,7 @@ export function AddJobDialog() {
                       </option>
                     ))}
                   </select>
+                  <FieldError id="job-category-field-error" message={errors.categoryId} />
                   {categoriesError && (
                     <p
                       id="job-category-error"
@@ -550,6 +606,7 @@ export function AddJobDialog() {
                   placeholder="We are seeking an experienced Senior Software Developer to design, develop, and maintain..."
                   minHeight="240px"
                 />
+                <FieldError id="job-description-error" message={errors.description} />
               </div>
             </div>
           )}
@@ -571,6 +628,7 @@ export function AddJobDialog() {
                   onRemove={(v) => setSkills(skills.filter((s) => s !== v))}
                   placeholder="e.g. React, TypeScript…"
                 />
+                <FieldError id="job-skills-error" message={errors.skills} />
               </div>
               <div>
                 <label htmlFor="job-requirements" className={labelCls}>
@@ -584,6 +642,7 @@ export function AddJobDialog() {
                   items={requirements}
                   onChange={setRequirements}
                 />
+                <FieldError id="job-requirements-error" message={errors.requirements} />
               </div>
               <div>
                 <label htmlFor="job-benefits" className={labelCls}>

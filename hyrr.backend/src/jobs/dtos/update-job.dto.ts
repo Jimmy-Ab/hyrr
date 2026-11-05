@@ -5,15 +5,14 @@ import {
   IsBoolean,
   IsEnum,
   IsNotEmpty,
-  IsNumber,
   IsOptional,
   IsString,
   MaxLength,
-  Min,
 } from "class-validator"
+import { JobSalaryFields } from "./job-salary.dto"
 
 /** Partial job update. Recruiters may set status ACTIVE|CLOSED|DRAFT; FLAGGED is admin-only. */
-export class UpdateJobDto {
+export class UpdateJobDto extends JobSalaryFields {
   @ApiPropertyOptional({ example: JobStatus.CLOSED, enum: JobStatus })
   @IsOptional()
   @IsEnum(JobStatus)
@@ -36,24 +35,6 @@ export class UpdateJobDto {
   @IsString()
   @MaxLength(200)
   location?: string
-
-  @ApiPropertyOptional({ example: "$120k – $180k" })
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  salary?: string
-
-  @ApiPropertyOptional({ description: "Composed into `salary` when `salary` is not sent" })
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  salaryMin?: number
-
-  @ApiPropertyOptional({ description: "Composed into `salary` when `salary` is not sent" })
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  salaryMax?: number
 
   @ApiPropertyOptional({ enum: EmploymentType })
   @IsOptional()

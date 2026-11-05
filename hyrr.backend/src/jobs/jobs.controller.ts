@@ -11,8 +11,8 @@ import {
   Res,
   UseGuards,
 } from "@nestjs/common"
-import type { Response } from "express"
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from "@nestjs/swagger"
+import type { Response } from "express"
 import { Roles } from "../auth/decorators/roles.decorator"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { OptionalJwtAuthGuard } from "../auth/guards/optional-jwt-auth.guard"

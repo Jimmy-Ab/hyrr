@@ -1,4 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common"
+import { approxYearlyUsd } from "../core/validation/structured"
 import { PrismaService } from "../prisma/prisma.service"
 
 export type MomentumConfig = {
@@ -16,7 +17,11 @@ export type MomentumConfig = {
 
 export type PublishCostInput = {
   remote?: boolean | null
+  /** Legacy free text; used only when no structured range is given. */
   salary?: string | null
+  salaryMax?: number | null
+  salaryCurrency?: string | null
+  salaryPeriod?: string | null
   categoryId?: string | null
 }
 
@@ -138,7 +143,11 @@ export class PricingService {
     const config = await this.getConfig()
     const multipliers: { name: string; factor: number }[] = []
     if (job.remote) multipliers.push({ name: "remote", factor: config.multipliers.remote })
-    const salaryMax = parseSalaryMax(job.salary)
+    // Structured range -> approximate yearly USD; legacy text -> its largest number (assumed USD).
+    const salaryMax =
+      job.salaryMax != null
+        ? approxYearlyUsd(job.salaryMax, job.salaryCurrency, job.salaryPeriod)
+        : parseSalaryMax(job.salary)
     if (salaryMax !== null && salaryMax >= config.highSalaryThresholdUsd)
       multipliers.push({ name: "highSalary", factor: config.multipliers.highSalary })
     if (job.categoryId && (await this.isPremiumCategory(job.categoryId)))

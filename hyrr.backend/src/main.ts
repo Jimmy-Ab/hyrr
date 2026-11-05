@@ -14,6 +14,7 @@ import { jwtSecret } from "./auth/jwt.config"
 import cookieParser = require("cookie-parser")
 
 import { getAllowedOrigins } from "./core/config/origins"
+import { validationException } from "./core/validation/validation-errors"
 import { AllExceptionsFilter } from "./core/filters/all-exceptions.filter"
 import {
   createRateLimiter,
@@ -123,6 +124,8 @@ async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      // 400 VALIDATION_FAILED + per-field `fields` map for inline form errors.
+      exceptionFactory: validationException,
     })
   )
 

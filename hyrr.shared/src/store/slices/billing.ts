@@ -241,7 +241,11 @@ export const createBillingSlice: StateCreator<JobState, [], [], BillingSlice> = 
   getPublishCost: async (input) => {
     const params = new URLSearchParams()
     if (input.remote !== undefined) params.set("remote", String(!!input.remote))
-    if (input.salary) params.set("salary", input.salary)
+    if (input.salaryMax != null && input.salaryCurrency) {
+      params.set("salaryMax", String(input.salaryMax))
+      params.set("salaryCurrency", input.salaryCurrency)
+      params.set("salaryPeriod", input.salaryPeriod ?? "YEAR")
+    }
     if (input.categoryId) params.set("categoryId", input.categoryId)
     const data = await apiFetch(`/jobs/publish-cost?${params}`)
     const result: PublishCost = {

@@ -88,7 +88,9 @@ export function Jobs() {
   const publishCost = usePublishCost(
     {
       remote: publishingJob?.remote,
-      salary: publishingJob?.salary || undefined,
+      salaryMax: publishingJob?.salaryMax ?? null,
+      salaryCurrency: publishingJob?.salaryCurrency ?? null,
+      salaryPeriod: publishingJob?.salaryPeriod ?? null,
       categoryId: publishingJob?.categoryId,
     },
     !!publishingJob && !publishingJob.publishedAt,
