@@ -15,7 +15,7 @@ import { PricingService } from "./pricing.service"
 import { ChapaProvider } from "./providers/chapa.provider"
 import { StripeProvider } from "./providers/stripe.provider"
 import { effectivePlanCode, seatUsage } from "./seats"
-import { WalletService } from "./wallet.service"
+import { ownerWhere, WalletOwner, WalletService } from "./wallet.service"
 
 const trimSlash = (v: string) => v.replace(/\/+$/, "")
 const recruiterAppUrl = () => trimSlash(process.env.RECRUITER_APP_URL || "http://localhost:5173")
@@ -91,7 +91,18 @@ export class BillingService {
     return membership
   }
 
+  /** Seekers own a personal wallet; everyone else spends their company's. */
+  private async walletOwner(actor: Actor): Promise<WalletOwner> {
+    if (actor.role === "SEEKER") return { userId: actor.userId }
+    const { companyId } = await this.member(actor)
+    return { companyId }
+  }
+
   async getWallet(actor: Actor) {
+    if (actor.role === "SEEKER") {
+      const wallet = await this.wallet.ensureOwnerWallet({ userId: actor.userId })
+      return { balance: wallet.balance, plan: null, subscription: null, seats: null }
+    }
     const { companyId } = await this.member(actor)
     const [wallet, subscription, seats] = await Promise.all([
       this.wallet.ensureWallet(companyId),
@@ -129,10 +140,10 @@ export class BillingService {
   }
 
   async listTransactions(actor: Actor, take = 50, cursor?: string) {
-    const { companyId } = await this.member(actor)
+    const owner = ownerWhere(await this.walletOwner(actor))
     const size = Math.min(Math.max(take || 50, 1), 200)
     const rows = await this.prisma.creditTransaction.findMany({
-      where: { companyId },
+      where: owner,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: size + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -162,24 +173,27 @@ export class BillingService {
   }
 
   async listPayments(actor: Actor) {
-    const { companyId } = await this.member(actor)
+    const owner = await this.walletOwner(actor)
     return this.prisma.payment.findMany({
-      where: { companyId },
+      where: owner.companyId
+        ? { companyId: owner.companyId }
+        : { userId: owner.userId, companyId: null },
       orderBy: { createdAt: "desc" },
       take: 100,
       select: PAYMENT_FIELDS,
     })
   }
 
-  async listPackages() {
+  async listPackages(audience: "RECRUITER" | "SEEKER" = "RECRUITER") {
     const rows = await this.prisma.creditPackage.findMany({
-      where: { active: true },
+      where: { active: true, audience },
       orderBy: [{ sortOrder: "asc" }, { credits: "asc" }],
     })
     return rows.map((p) => ({
       id: p.id,
       code: p.code,
       name: p.name,
+      audience: p.audience,
       credits: p.credits,
       bonusCredits: p.bonusCredits,
       totalCredits: p.credits + p.bonusCredits,
@@ -208,6 +222,7 @@ export class BillingService {
       featureCost: c.featureCost,
       featureDays: c.featureDays,
       aiRerunCost: c.aiRerunCost,
+      applyCost: c.applyCost,
     }
   }
 
@@ -218,12 +233,13 @@ export class BillingService {
   // ─── Checkout ───────────────────────────────────────────────────────────────
 
   async checkout(actor: Actor, packageId: string, provider: "stripe" | "chapa") {
-    const { companyId } = await requireCompanyWriter(this.prisma, actor)
+    const isSeeker = actor.role === "SEEKER"
+    const companyId = isSeeker ? null : (await requireCompanyWriter(this.prisma, actor)).companyId
     if (provider === "stripe" && !this.stripe.isConfigured()) throw unavailable("Stripe")
     if (provider === "chapa" && !this.chapa.isConfigured()) throw unavailable("Chapa")
 
     const pkg = await this.prisma.creditPackage.findUnique({ where: { id: packageId } })
-    if (!pkg || !pkg.active)
+    if (!pkg || !pkg.active || pkg.audience !== (isSeeker ? "SEEKER" : "RECRUITER"))
       throw new NotFoundAppException("Credit package not found", "PACKAGE_NOT_FOUND")
     if (provider === "chapa" && !(pkg.priceEtbCents > 0))
       throw new AppException(
@@ -234,8 +250,9 @@ export class BillingService {
     const credits = pkg.credits + pkg.bonusCredits
     const description = `${pkg.name}: ${credits} Momentum credits`
     const paymentId = randomUUID()
-    const returnUrl = `${recruiterAppUrl()}/momentum?checkout=success&payment=${paymentId}`
-    const cancelUrl = `${recruiterAppUrl()}/momentum?checkout=cancelled`
+    const momentumUrl = isSeeker ? appUrl("SEEKER", "/momentum") : `${recruiterAppUrl()}/momentum`
+    const returnUrl = `${momentumUrl}?checkout=success&payment=${paymentId}`
+    const cancelUrl = `${momentumUrl}?checkout=cancelled`
     const isStripe = provider === "stripe"
 
     await this.prisma.payment.create({
@@ -271,8 +288,20 @@ export class BillingService {
               },
             },
           ],
-          metadata: { paymentId, companyId, packageId: pkg.id },
-          payment_intent_data: { metadata: { paymentId, companyId, packageId: pkg.id } },
+          metadata: {
+            paymentId,
+            companyId: companyId ?? "",
+            userId: actor.userId,
+            packageId: pkg.id,
+          },
+          payment_intent_data: {
+            metadata: {
+              paymentId,
+              companyId: companyId ?? "",
+              userId: actor.userId,
+              packageId: pkg.id,
+            },
+          },
           success_url: returnUrl,
           cancel_url: cancelUrl,
         })
@@ -398,10 +427,12 @@ export class BillingService {
 
   /** Re-checks a PENDING payment with its provider (success page) and fulfils it when paid. */
   async confirm(actor: Actor, paymentId: string) {
-    const { companyId } = await this.member(actor)
+    const owner = await this.walletOwner(actor)
     const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } })
-    if (!payment || payment.companyId !== companyId)
-      throw new NotFoundAppException("Payment not found", "PAYMENT_NOT_FOUND")
+    const mine = owner.companyId
+      ? payment?.companyId === owner.companyId
+      : !payment?.companyId && payment?.userId === owner.userId
+    if (!payment || !mine) throw new NotFoundAppException("Payment not found", "PAYMENT_NOT_FOUND")
     if (payment.status === "PENDING") {
       try {
         if (payment.provider === "STRIPE" && this.stripe.isConfigured()) {
@@ -433,9 +464,11 @@ export class BillingService {
       if (flipped.count !== 1) return null
       const payment = await tx.payment.findUnique({ where: { id: paymentId } })
       if (!payment) return null
+      if (!payment.companyId && !payment.userId)
+        throw new Error(`Payment ${paymentId} has no owner`)
       const { balanceAfter } = await this.wallet.credit(
         {
-          companyId: payment.companyId,
+          ...(payment.companyId ? { companyId: payment.companyId } : { userId: payment.userId! }),
           amount: payment.credits,
           type: "PURCHASE",
           referenceId: payment.id,
@@ -471,7 +504,7 @@ export class BillingService {
       balance: balanceAfter,
       reference: payment.id,
       provider: payment.provider === "STRIPE" ? "Stripe" : "Chapa",
-      url: appUrl("RECRUITER", "/momentum"),
+      url: appUrl(payment.companyId ? "RECRUITER" : "SEEKER", "/momentum"),
     })
     await this.email.send({ to: user.email, ...mail })
   }

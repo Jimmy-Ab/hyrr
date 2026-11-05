@@ -100,6 +100,12 @@ const loadSeeker = async (set: StoreSet, get: StoreGet) => {
       loadSettings(set),
       get().fetchEvents(),
       get().fetchDocuments(),
+      get()
+        .fetchWallet()
+        .catch((e) => console.warn("Failed to load Momentum wallet.", e)),
+      get()
+        .fetchBillingCatalog()
+        .catch((e) => console.warn("Failed to load Momentum pricing.", e)),
       get().fetchConversations(),
       get().fetchUnreadCount(),
       get().fetchNotifications(),

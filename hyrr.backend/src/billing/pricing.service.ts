@@ -9,6 +9,9 @@ export type MomentumConfig = {
   featureDays: number
   aiRerunCost: number
   signupBonus: number
+  /** Seeker side: credits per application and the new-seeker welcome bonus. */
+  applyCost: number
+  seekerSignupBonus: number
 }
 
 export type PublishCostInput = {
@@ -33,6 +36,8 @@ const DEFAULTS: MomentumConfig = {
   featureDays: 14,
   aiRerunCost: 2,
   signupBonus: 20,
+  applyCost: 1,
+  seekerSignupBonus: 10,
 }
 
 const num = (value: unknown, fallback: number, min = 0): number => {
@@ -86,6 +91,8 @@ export class PricingService {
       featureDays: num(env.MOMENTUM_FEATURE_DAYS, DEFAULTS.featureDays, 1),
       aiRerunCost: num(env.MOMENTUM_AI_RERUN_COST, DEFAULTS.aiRerunCost),
       signupBonus: num(env.MOMENTUM_SIGNUP_BONUS, DEFAULTS.signupBonus),
+      applyCost: num(env.MOMENTUM_APPLY_COST, DEFAULTS.applyCost),
+      seekerSignupBonus: num(env.MOMENTUM_SEEKER_SIGNUP_BONUS, DEFAULTS.seekerSignupBonus),
     }
     try {
       const setting = await this.prisma.systemSetting.findFirst({
@@ -106,6 +113,8 @@ export class PricingService {
           featureDays: num(o.featureDays, config.featureDays, 1),
           aiRerunCost: num(o.aiRerunCost, config.aiRerunCost),
           signupBonus: num(o.signupBonus, config.signupBonus),
+          applyCost: num(o.applyCost, config.applyCost),
+          seekerSignupBonus: num(o.seekerSignupBonus, config.seekerSignupBonus),
         }
       }
     } catch (err: any) {

@@ -68,9 +68,9 @@ export const createApplicationsSlice: StateCreator<JobState, [], [], Application
       method: "POST",
       body: JSON.stringify(applicantBody(get, input)),
     })
-    // The apply response is seeker-safe but lacks job relations; reload the list.
+    // The apply response is seeker-safe but lacks job relations; reload the list (and the balance).
     try {
-      await get().fetchApplications()
+      await Promise.all([get().fetchApplications(), get().fetchWallet()])
     } catch (e) {
       console.warn("Applied, but failed to refresh applications.", e)
     }

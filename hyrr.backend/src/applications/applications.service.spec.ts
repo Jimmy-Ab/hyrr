@@ -73,7 +73,7 @@ describe("ApplicationsService", () => {
         { provide: WalletService, useValue: wallet },
         {
           provide: PricingService,
-          useValue: { getConfig: jest.fn().mockResolvedValue({ aiRerunCost: 2 }) },
+          useValue: { getConfig: jest.fn().mockResolvedValue({ aiRerunCost: 2, applyCost: 1 }) },
         },
       ],
     }).compile()
@@ -153,32 +153,6 @@ describe("ApplicationsService", () => {
       ).rejects.toMatchObject({ status: 409, errorCode: "ALREADY_APPLIED" })
     })
 
-    it("guest duplicate gets 409 without linking users, leaking data or creating tracking links", async () => {
-      prismaMock.job.findUnique.mockResolvedValue(activeJob)
-      prismaMock.application.findFirst.mockResolvedValue({ id: "existing-app" })
-
-      const error: any = await service.applyToJob("job-1", applyDto, null).catch((e) => e)
-
-      expect(error.status).toBe(409)
-      expect(error.errorCode).toBe("ALREADY_APPLIED")
-      expect(JSON.stringify(error.getResponse())).not.toContain("existing-app")
-      expect(prismaMock.user.findUnique).not.toHaveBeenCalled()
-      expect(prismaMock.application.create).not.toHaveBeenCalled()
-    })
-
-    it("guest application never links to an existing user and returns only id/status", async () => {
-      prismaMock.job.findUnique.mockResolvedValue(activeJob)
-      prismaMock.application.findFirst.mockResolvedValue(null)
-      prismaMock.application.create.mockResolvedValue({ id: "app-guest", status: "APPLIED" })
-
-      const result = await service.applyToJob("job-1", applyDto, null)
-
-      expect(prismaMock.application.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ userId: null }) })
-      )
-      expect(Object.keys(result ?? {}).sort()).toEqual(["id", "status"])
-    })
-
     it("seekers with an unverified e-mail get 403 EMAIL_NOT_VERIFIED", async () => {
       prismaMock.job.findUnique.mockResolvedValue(activeJob)
       prismaMock.user.findUnique.mockResolvedValue({ emailVerifiedAt: null })
@@ -189,42 +163,61 @@ describe("ApplicationsService", () => {
       expect(prismaMock.application.update).not.toHaveBeenCalled()
     })
 
-    it("guests pass the captcha token and IP to CaptchaService and it is not persisted", async () => {
-      prismaMock.job.findUnique.mockResolvedValue(activeJob)
-      prismaMock.application.findFirst.mockResolvedValue(null)
-      prismaMock.application.create.mockResolvedValue({ id: "app-guest", status: "APPLIED" })
-
-      await service.applyToJob("job-1", { ...applyDto, captchaToken: "tok" }, null, "1.2.3.4")
-
-      expect(captcha.verify).toHaveBeenCalledWith("tok", "1.2.3.4")
-      expect(JSON.stringify(prismaMock.application.create.mock.calls[0][0])).not.toContain("tok")
-    })
-
-    it("a failed guest captcha blocks the application", async () => {
-      prismaMock.job.findUnique.mockResolvedValue(activeJob)
-      const { AppException } = await import("../core/exceptions/app-exception")
-      captcha.verify.mockRejectedValue(new AppException("captcha", 400, "CAPTCHA_REQUIRED"))
-      await expect(service.applyToJob("job-1", applyDto, null)).rejects.toMatchObject({
-        errorCode: "CAPTCHA_REQUIRED",
-      })
-      expect(prismaMock.application.create).not.toHaveBeenCalled()
-    })
-
     it("recruiters cannot apply (403)", async () => {
       await expect(
         service.applyToJob("job-1", applyDto, { userId: "rec-1", role: "RECRUITER" })
       ).rejects.toMatchObject({ status: 403 })
     })
 
-    it("starts background AI analysis for a guest application", async () => {
+    it("guests must sign in: 401 LOGIN_REQUIRED and nothing is written", async () => {
+      prismaMock.job.findUnique.mockResolvedValue(activeJob)
+      await expect(service.applyToJob("job-1", applyDto, null)).rejects.toMatchObject({
+        status: 401,
+        errorCode: "LOGIN_REQUIRED",
+      })
+      expect(prismaMock.application.create).not.toHaveBeenCalled()
+      expect(wallet.debit).not.toHaveBeenCalled()
+    })
+
+    it("charges the apply cost to the seeker's wallet inside the apply transaction", async () => {
       prismaMock.job.findUnique.mockResolvedValue(activeJob)
       prismaMock.application.findFirst.mockResolvedValue(null)
-      prismaMock.application.create.mockResolvedValue({ id: "app-guest", status: "APPLIED" })
+      prismaMock.application.create.mockResolvedValue({ id: "app-77", status: "APPLIED" })
+      prismaMock.application.findUnique.mockResolvedValue({ id: "app-77", status: "APPLIED" })
+      await service.applyToJob("job-1", applyDto, { userId: "seeker-1", role: "SEEKER" })
+      expect(wallet.debit).toHaveBeenCalledTimes(1)
+      expect(wallet.debit.mock.calls[0][0]).toMatchObject({
+        userId: "seeker-1",
+        amount: 1,
+        type: "APPLICATION",
+        referenceId: "app-77",
+      })
+    })
 
-      await service.applyToJob("job-1", applyDto, null)
+    it("402 INSUFFICIENT_CREDITS propagates (the transaction rolls back)", async () => {
+      prismaMock.job.findUnique.mockResolvedValue(activeJob)
+      prismaMock.application.findFirst.mockResolvedValue(null)
+      prismaMock.application.create.mockResolvedValue({ id: "app-78", status: "APPLIED" })
+      const { AppException } = await import("../core/exceptions/app-exception")
+      wallet.debit.mockRejectedValueOnce(
+        new AppException("no credits", 402, "INSUFFICIENT_CREDITS", { balance: 0, required: 1 })
+      )
+      await expect(
+        service.applyToJob("job-1", applyDto, { userId: "seeker-1", role: "SEEKER" })
+      ).rejects.toMatchObject({ status: 402, errorCode: "INSUFFICIENT_CREDITS" })
+      expect(ai.scoreApplication).not.toHaveBeenCalled()
+    })
+
+    it("starts background AI analysis after a seeker applies", async () => {
+      prismaMock.job.findUnique.mockResolvedValue(activeJob)
+      prismaMock.application.findFirst.mockResolvedValue(null)
+      prismaMock.application.create.mockResolvedValue({ id: "app-s", status: "APPLIED" })
+      prismaMock.application.findUnique.mockResolvedValue({ id: "app-s", status: "APPLIED" })
+
+      await service.applyToJob("job-1", applyDto, { userId: "seeker-1", role: "SEEKER" })
       await flush()
 
-      expect(ai.scoreApplication).toHaveBeenCalledWith("app-guest")
+      expect(ai.scoreApplication).toHaveBeenCalledWith("app-s")
     })
 
     it("seeker payload never selects any ai* field", async () => {

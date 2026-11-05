@@ -158,9 +158,11 @@ export const createBillingSlice: StateCreator<JobState, [], [], BillingSlice> = 
   },
 
   fetchBillingCatalog: async () => {
+    // Seekers buy their own packs and have no plans.
+    const seeker = get().user?.role === "SEEKER"
     const [packages, plans, providers, pricing] = await Promise.all([
-      apiFetch("/billing/packages"),
-      apiFetch("/billing/plans"),
+      apiFetch(seeker ? "/billing/packages?audience=SEEKER" : "/billing/packages"),
+      seeker ? Promise.resolve([]) : apiFetch("/billing/plans"),
       apiFetch("/billing/providers"),
       apiFetch("/billing/pricing"),
     ])
@@ -173,6 +175,7 @@ export const createBillingSlice: StateCreator<JobState, [], [], BillingSlice> = 
         featureCost: num(pricing?.featureCost, 25),
         featureDays: num(pricing?.featureDays, 14) || 14,
         aiRerunCost: num(pricing?.aiRerunCost, 2),
+        applyCost: num(pricing?.applyCost, 1),
       },
     })
   },

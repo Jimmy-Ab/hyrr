@@ -4,6 +4,7 @@ import {
   Button,
   CookieNotice,
   EmailVerificationBanner,
+  MomentumView,
   OAuthCallback,
   RoleMismatch,
   type SeekerView,
@@ -40,6 +41,7 @@ const VIEW_PATHS: Record<SeekerView, string> = {
   Notifications: "/notifications",
   Calendar: "/calendar",
   Documents: "/documents",
+  Momentum: "/momentum",
   Profile: "/profile",
   Settings: "/settings",
 }
@@ -221,6 +223,8 @@ function AppContent() {
         return <CandidateCalendar />
       case "Documents":
         return <Documents />
+      case "Momentum":
+        return <MomentumView audience="seeker" />
       case "Profile":
         return <ProfilePage />
       case "Settings":

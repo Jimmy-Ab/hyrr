@@ -11,6 +11,7 @@ import {
   Settings,
   User,
   X,
+  Zap,
 } from "lucide-react"
 import { type ElementType, useEffect } from "react"
 
@@ -83,6 +84,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
     },
     { id: "Calendar", label: "Calendar", icon: Calendar },
     { id: "Documents", label: "Documents", icon: FileText },
+    { id: "Momentum", label: "Momentum", icon: Zap },
     { id: "Profile", label: "Profile", icon: User },
     { id: "Settings", label: "Settings", icon: Settings },
   ]

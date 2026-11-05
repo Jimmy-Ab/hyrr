@@ -239,44 +239,38 @@ export class ApplicationsService implements OnModuleInit {
     })
     if (!job || job.status !== "ACTIVE")
       throw new NotFoundAppException("Job not found", "JOB_NOT_FOUND")
-    // Guests prove they are human (when captcha is configured); accounts prove their e-mail.
-    if (actor) await assertEmailVerified(this.prisma, actor.userId)
-    else await this.captcha?.verify(dto.captchaToken, ip)
+    // Applying costs Momentum credits, so it needs an account (guest apply was removed).
+    if (!actor)
+      throw new AppException(
+        "Please sign in or create a free account to apply",
+        HttpStatus.UNAUTHORIZED,
+        "LOGIN_REQUIRED"
+      )
+    await assertEmailVerified(this.prisma, actor.userId)
     const { captchaToken: _captcha, answers: rawAnswers, ...fields } = dto
-    dto = { ...fields, resumeUrl: this.normalizeResumeUrl(dto.resumeUrl, actor?.userId ?? null) }
+    dto = { ...fields, resumeUrl: this.normalizeResumeUrl(dto.resumeUrl, actor.userId) }
     // Required screening questions must be answered (400 SCREENING_ANSWERS_REQUIRED).
     const answers: AnswerInput[] = this.screening
       ? await this.screening.validateAnswers(jobId, rawAnswers)
       : []
     const saveAnswers = (tx: Prisma.TransactionClient, applicationId: string) =>
       this.screening?.saveAnswers(tx, applicationId, answers)
-
-    // Guest: never link to an existing account and never reveal an existing record.
-    if (!actor) {
-      const duplicate = await this.prisma.application.findFirst({
-        where: { jobId, email: { equals: dto.email, mode: "insensitive" } },
-        select: { id: true },
-      })
-      if (duplicate) throw alreadyApplied()
-
-      const app = await this.prisma.$transaction(async (tx) => {
-        const created = await tx.application.create({
-          data: {
-            ...this.applicantData(dto),
-            jobId,
-            userId: null,
-            status: ApplicationStatus.APPLIED,
-            source: ApplicationSource.GUEST,
-          },
-          select: { id: true, status: true },
-        })
-        await saveAnswers(tx, created.id)
-        return created
-      })
-      await this.afterSubmitted(app.id, job, dto.name, null)
-      // Guests get status updates by e-mail; nothing else is returned to an anonymous caller.
-      return { id: app.id, status: app.status }
-    }
+    const applyCost = this.pricing ? (await this.pricing.getConfig()).applyCost : 0
+    // Debited in the application's transaction: a 402 INSUFFICIENT_CREDITS leaves nothing behind.
+    const charge = (tx: Prisma.TransactionClient, applicationId: string) =>
+      this.wallet && applyCost > 0
+        ? this.wallet.debit(
+            {
+              userId: actor.userId,
+              amount: applyCost,
+              type: "APPLICATION",
+              referenceId: applicationId,
+              actorId: actor.userId,
+              note: `Applied to "${job.title}"`,
+            },
+            tx
+          )
+        : undefined
 
     // Authenticated seeker
     const existing = await this.prisma.application.findFirst({
@@ -315,6 +309,7 @@ export class ApplicationsService implements OnModuleInit {
           },
         })
         await saveAnswers(tx, existing.id)
+        await charge(tx, existing.id)
       })
       applicationId = existing.id
     } else {
@@ -330,6 +325,7 @@ export class ApplicationsService implements OnModuleInit {
           select: { id: true },
         })
         await saveAnswers(tx, created.id)
+        await charge(tx, created.id)
         return created.id
       })
     }

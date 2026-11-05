@@ -57,11 +57,11 @@ describe("ApplicationsService – pipeline", () => {
   describe("source on every create path (R8)", () => {
     beforeEach(() => prisma.job.findUnique.mockResolvedValue(activeJob))
 
-    it("guest → GUEST", async () => {
-      prisma.application.findFirst.mockResolvedValue(null)
-      prisma.application.create.mockResolvedValue({ id: "a", status: "APPLIED" })
-      await service.applyToJob("job-1", applyDto, null)
-      expect(prisma.application.create.mock.calls[0][0].data.source).toBe("GUEST")
+    it("guests can no longer apply (applying costs credits)", async () => {
+      await expect(service.applyToJob("job-1", applyDto, null)).rejects.toMatchObject({
+        errorCode: "LOGIN_REQUIRED",
+      })
+      expect(prisma.application.create).not.toHaveBeenCalled()
     })
 
     it("signed-in seeker → DIRECT (new and SAVED upgrade)", async () => {
@@ -94,7 +94,7 @@ describe("ApplicationsService – pipeline", () => {
     })
 
     it("rejects a missing required answer before anything is written", async () => {
-      await expect(service.applyToJob("job-1", applyDto, null)).rejects.toMatchObject({
+      await expect(service.applyToJob("job-1", applyDto, seeker)).rejects.toMatchObject({
         status: 400,
         errorCode: "SCREENING_ANSWERS_REQUIRED",
         details: ["q1"],
@@ -107,7 +107,7 @@ describe("ApplicationsService – pipeline", () => {
       await service.applyToJob(
         "job-1",
         { ...applyDto, answers: [{ questionId: "q1", answer: "Yes" }] },
-        null
+        seeker
       )
       expect(prisma.$transaction).toHaveBeenCalled()
       expect(prisma.screeningAnswer.createMany).toHaveBeenCalledWith({

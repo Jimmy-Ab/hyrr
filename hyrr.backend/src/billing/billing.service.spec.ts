@@ -50,6 +50,7 @@ describe("BillingService", () => {
       id: PKG,
       code: "STARTER",
       name: "Starter Bundle",
+      audience: "RECRUITER",
       credits: 100,
       bonusCredits: 10,
       priceUsdCents: 1999,
@@ -100,12 +101,10 @@ describe("BillingService", () => {
 
   describe("checkout", () => {
     it("creates a PENDING payment and a Stripe Checkout session (payment mode, USD)", async () => {
-      const create = jest
-        .spyOn(stripe, "createCheckoutSession")
-        .mockResolvedValue({
-          id: "cs_test_1",
-          url: "https://checkout.stripe.com/c/cs_test_1",
-        } as any)
+      const create = jest.spyOn(stripe, "createCheckoutSession").mockResolvedValue({
+        id: "cs_test_1",
+        url: "https://checkout.stripe.com/c/cs_test_1",
+      } as any)
       const res = await service.checkout(owner, PKG, "stripe")
       expect(res.url).toBe("https://checkout.stripe.com/c/cs_test_1")
       const params: any = create.mock.calls[0][0]
@@ -114,6 +113,7 @@ describe("BillingService", () => {
       expect(params.metadata).toEqual({
         paymentId: res.paymentId,
         companyId: "co-1",
+        userId: "u1",
         packageId: PKG,
       })
       expect(params.line_items[0].price_data).toEqual(
@@ -446,13 +446,11 @@ describe("BillingService", () => {
         description: "Starter Bundle",
       })
     const verifyReturns = (data: any) =>
-      jest
-        .spyOn(global, "fetch")
-        .mockResolvedValue({
-          ok: true,
-          status: 200,
-          json: async () => ({ status: "success", data }),
-        } as any)
+      jest.spyOn(global, "fetch").mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: "success", data }),
+      } as any)
 
     it("verifies server-side and fulfils once (webhook + GET callback replay)", async () => {
       pendingChapa()
@@ -606,6 +604,7 @@ describe("BillingService", () => {
           id: PKG,
           code: "STARTER",
           name: "Starter Bundle",
+          audience: "RECRUITER",
           credits: 100,
           bonusCredits: 10,
           totalCredits: 110,

@@ -20,9 +20,10 @@ import { TwoFactorService } from "./two-factor.service"
 /** Wallet/pricing doubles: the sign-up bonus is 20 credits. */
 const walletMock = () => ({
   ensureWallet: jest.fn().mockResolvedValue({ balance: 0 }),
+  ensureOwnerWallet: jest.fn().mockResolvedValue({ balance: 0 }),
   credit: jest.fn().mockResolvedValue({ balanceAfter: 20, transactionId: "t1" }),
 })
-const pricingMock = () => ({ getConfig: jest.fn().mockResolvedValue({ signupBonus: 20 }) })
+const pricingMock = () => ({ getConfig: jest.fn().mockResolvedValue({ signupBonus: 20, seekerSignupBonus: 10 }) })
 
 /** Minimal stand-in for CacheService (in-memory, no TTL handling needed for these tests). */
 function memoryCache() {
@@ -140,7 +141,7 @@ describe("AuthService", () => {
     )
   })
 
-  it("seekers get no wallet or bonus", async () => {
+  it("seekers get a personal wallet with the seeker welcome bonus", async () => {
     prismaMock.user.findUnique.mockResolvedValue(null)
     prismaMock.user.create.mockResolvedValue({ id: "s-1", email: "s@x.io", role: "SEEKER" })
     await service.register({
@@ -149,8 +150,13 @@ describe("AuthService", () => {
       password: "password123",
       role: "SEEKER",
     })
-    expect(wallet.credit).not.toHaveBeenCalled()
     expect(wallet.ensureWallet).not.toHaveBeenCalled()
+    expect(wallet.ensureOwnerWallet.mock.calls[0][0]).toEqual({ userId: "s-1" })
+    expect(wallet.credit.mock.calls[0][0]).toMatchObject({
+      userId: "s-1",
+      amount: 10,
+      type: "SIGNUP_BONUS",
+    })
   })
 
   it("should throw ConflictException if email already exists during registration", async () => {

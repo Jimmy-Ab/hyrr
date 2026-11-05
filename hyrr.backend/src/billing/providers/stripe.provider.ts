@@ -37,7 +37,7 @@ export class StripeProvider {
   }
 
   createCheckoutSession(
-    params: Stripe.Checkout.SessionCreateParams,
+    params: Stripe.Checkout.SessionCreateParams
   ): Promise<Stripe.Response<Stripe.Checkout.Session>> {
     return this.sdk().checkout.sessions.create(params)
   }
@@ -52,7 +52,7 @@ export class StripeProvider {
 
   createPortalSession(
     customer: string,
-    returnUrl: string,
+    returnUrl: string
   ): Promise<Stripe.Response<Stripe.BillingPortal.Session>> {
     return this.sdk().billingPortal.sessions.create({ customer, return_url: returnUrl })
   }

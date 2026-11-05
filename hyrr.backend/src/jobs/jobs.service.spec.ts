@@ -33,6 +33,7 @@ describe("JobsService", () => {
       credit: jest.fn().mockResolvedValue({ balanceAfter: 20, transactionId: "t2" }),
       ensureWallet: jest.fn().mockResolvedValue({ balance: 0 }),
       getBalance: jest.fn().mockResolvedValue(10),
+      refundUnreviewedApplications: jest.fn().mockResolvedValue(0),
     }
     pricing = {
       publishCost: jest.fn().mockResolvedValue(10),

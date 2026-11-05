@@ -26,8 +26,9 @@ export class BillingController {
   constructor(private readonly billing: BillingService) {}
 
   // Public catalogue
-  @Get("packages") packages() {
-    return this.billing.listPackages()
+  /** `?audience=SEEKER` lists the seeker packs; default is the recruiter packs. */
+  @Get("packages") packages(@Query("audience") audience?: string) {
+    return this.billing.listPackages(audience?.toUpperCase() === "SEEKER" ? "SEEKER" : "RECRUITER")
   }
 
   @Get("plans") plans() {
@@ -56,7 +57,7 @@ export class BillingController {
 
   @Get("pricing")
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("RECRUITER", "ADMIN")
+  @Roles("RECRUITER", "ADMIN", "SEEKER")
   @ApiBearerAuth()
   pricing() {
     return this.billing.getPricing()

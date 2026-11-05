@@ -596,6 +596,8 @@ export interface MomentumPricing {
   featureCost: number
   featureDays: number
   aiRerunCost: number
+  /** Seeker side: credits per job application. */
+  applyCost: number
 }
 
 export type CreditTransactionType =
@@ -605,6 +607,7 @@ export type CreditTransactionType =
   | "JOB_PUBLISH"
   | "JOB_FEATURE"
   | "AI_ANALYSIS"
+  | "APPLICATION"
   | "REFUND"
   | "ADJUSTMENT"
 
@@ -615,6 +618,7 @@ export const CREDIT_TRANSACTION_LABEL: Record<CreditTransactionType, string> = {
   JOB_PUBLISH: "Job published",
   JOB_FEATURE: "Job featured",
   AI_ANALYSIS: "AI analysis",
+  APPLICATION: "Job application",
   REFUND: "Refund",
   ADJUSTMENT: "Adjustment",
 }

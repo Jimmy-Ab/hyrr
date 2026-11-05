@@ -87,7 +87,8 @@ export class AuthService {
 
   /** Momentum credits a new recruiter company starts with (read before the signup transaction). */
   private async signupBonusFor(role: SignupRole): Promise<number> {
-    return role === "RECRUITER" ? (await this.pricing.getConfig()).signupBonus : 0
+    const config = await this.pricing.getConfig()
+    return role === "RECRUITER" ? config.signupBonus : config.seekerSignupBonus
   }
 
   async register(dto: RegisterDto, ip?: string) {
@@ -126,7 +127,7 @@ export class AuthService {
       providerField?: "googleId" | "githubId" | "linkedinId"
       providerId?: string
       emailVerifiedAt?: Date
-      /** SIGNUP_BONUS credited to a new recruiter company's wallet. */
+      /** SIGNUP_BONUS credited to the new recruiter company's or seeker's wallet. */
       signupBonus?: number
     }
   ): Promise<User> {
@@ -145,6 +146,19 @@ export class AuthService {
 
     if (role === UserRole.SEEKER) {
       await tx.seekerProfile.create({ data: { userId: user.id, title: "", location: "" } })
+      await this.wallet.ensureOwnerWallet({ userId: user.id }, tx)
+      if (data.signupBonus && data.signupBonus > 0)
+        await this.wallet.credit(
+          {
+            userId: user.id,
+            amount: data.signupBonus,
+            type: "SIGNUP_BONUS",
+            referenceId: user.id,
+            actorId: user.id,
+            note: "Welcome bonus",
+          },
+          tx
+        )
     } else {
       const company = await tx.company.create({
         data: {

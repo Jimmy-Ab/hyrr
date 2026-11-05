@@ -135,6 +135,8 @@ model User {
   postedJobs   Job[]       @relation("RecruiterJobs")
   auditLogs    AuditLog[]
   payments     Payment[]
+  creditWallet       CreditWallet?       @relation("UserCreditWallet")
+  creditTransactions CreditTransaction[] @relation("UserCreditTransactions")
   setting      UserSetting?
   sentMessages Message[]   @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
@@ -433,8 +435,8 @@ model Notification {
 // confirms the payment (idempotent on providerRef).
 model Payment {
   id          String          @id @default(uuid())
-  companyId   String
-  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId   String? // null = a seeker's own purchase (userId)
+  company     Company?        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   userId      String?
   user        User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
   provider    PaymentProvider
@@ -453,6 +455,7 @@ model Payment {
   updatedAt   DateTime        @updatedAt
 
   @@index([companyId, createdAt])
+  @@index([userId, createdAt])
 }
 
 model AuditLog {
@@ -651,15 +654,19 @@ enum CreditTransactionType {
   JOB_PUBLISH
   JOB_FEATURE
   AI_ANALYSIS
+  APPLICATION
   REFUND
   ADJUSTMENT
 }
 
 // One wallet per company, shared by the whole hiring team.
+/// Owned by exactly one company (recruiter team) or one user (seeker); enforced by a CHECK.
 model CreditWallet {
   id        String   @id @default(uuid())
-  companyId String   @unique
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String?  @unique
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String?  @unique
+  user      User?    @relation("UserCreditWallet", fields: [userId], references: [id], onDelete: Cascade)
   balance   Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -668,8 +675,10 @@ model CreditWallet {
 // Append-only ledger: every balance change, with the balance right after it.
 model CreditTransaction {
   id           String                @id @default(uuid())
-  companyId    String
-  company      Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId    String?
+  company      Company?              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId       String?
+  user         User?                 @relation("UserCreditTransactions", fields: [userId], references: [id], onDelete: Cascade)
   amount       Int // positive = credit, negative = debit
   type         CreditTransactionType
   balanceAfter Int
@@ -679,13 +688,20 @@ model CreditTransaction {
   createdAt    DateTime              @default(now())
 
   @@index([companyId, createdAt])
+  @@index([userId, createdAt])
   @@index([type, referenceId])
 }
 
+enum CreditAudience {
+  RECRUITER
+  SEEKER
+}
+
 model CreditPackage {
-  id            String    @id @default(uuid())
-  code          String    @unique
+  id            String         @id @default(uuid())
+  code          String         @unique
   name          String
+  audience      CreditAudience @default(RECRUITER)
   credits       Int
   bonusCredits  Int       @default(0)
   priceUsdCents Int

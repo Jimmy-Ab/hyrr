@@ -134,6 +134,7 @@ export const SEEKER_VIEW = {
   NOTIFICATIONS: "Notifications",
   CALENDAR: "Calendar",
   DOCUMENTS: "Documents",
+  MOMENTUM: "Momentum",
   PROFILE: "Profile",
   SETTINGS: "Settings",
 } as const

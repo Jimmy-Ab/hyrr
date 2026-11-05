@@ -39,6 +39,8 @@ describe("PricingService", () => {
       featureDays: 14,
       aiRerunCost: 2,
       signupBonus: 20,
+      applyCost: 1,
+      seekerSignupBonus: 10,
     })
   })
 

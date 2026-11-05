@@ -22,7 +22,9 @@ import {
   RichTextRenderer,
   VerifiedBadge,
   errorMessage,
+  insufficientCreditsDetails,
   isApiError,
+  isInsufficientCredits,
   useJobStore,
   useToast,
   type JobMatch,
@@ -51,6 +53,7 @@ import {
   Star,
   Trash2,
   UserPen,
+  Zap,
 } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 
@@ -145,7 +148,12 @@ export function DiscoverJobs() {
     createSavedSearch,
     deleteSavedSearch,
     fetchScreeningQuestions,
+    wallet,
+    pricing,
   } = useJobStore()
+  const applyCost = pricing?.applyCost ?? 1
+  const balance = wallet?.balance ?? null
+  const [noCredits, setNoCredits] = useState<{ balance: number; required: number } | null>(null)
   const { toast } = useToast()
 
   // ── Matches ─────────────────────────────────────────────────────────────
@@ -354,6 +362,7 @@ export function DiscoverJobs() {
     setResumeId(active?.id ?? "")
     setCoverLetter("")
     setApplyBlocked(false)
+    setNoCredits(null)
     setAnswers({})
     setAnswerErrors(new Set())
     setApplyJob(job)
@@ -385,7 +394,11 @@ export function DiscoverJobs() {
       setApplyJob(null)
       setCandidateActiveView("Applications")
     } catch (err) {
-      if (isApiError(err) && err.errorCode === "EMAIL_NOT_VERIFIED") {
+      if (isInsufficientCredits(err)) {
+        setNoCredits(
+          insufficientCreditsDetails(err) ?? { balance: balance ?? 0, required: applyCost }
+        )
+      } else if (isApiError(err) && err.errorCode === "EMAIL_NOT_VERIFIED") {
         setApplyBlocked(true)
         useJobStore.setState((s) => (s.user ? { user: { ...s.user, emailVerified: false } } : {}))
       } else if (isApiError(err) && err.errorCode === "SCREENING_ANSWERS_REQUIRED") {
@@ -943,6 +956,31 @@ export function DiscoverJobs() {
             </DialogDescription>
           </DialogHeader>
           <div className="mt-4 flex flex-col gap-4">
+            {noCredits && (
+              <div
+                role="alert"
+                className="flex flex-col gap-2 rounded-xl border border-sec-orange/30 bg-sec-orange/10 p-3"
+              >
+                <p className="flex items-start gap-2 text-[13px] text-txt-heading">
+                  <Zap className="mt-0.5 h-4 w-4 shrink-0 text-sec-orange" aria-hidden="true" />
+                  <span>
+                    Applying needs {noCredits.required} Momentum credit
+                    {noCredits.required === 1 ? "" : "s"}; you have {noCredits.balance}.
+                  </span>
+                </p>
+                <div>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setApplyJob(null)
+                      setCandidateActiveView("Momentum")
+                    }}
+                  >
+                    Buy credits
+                  </Button>
+                </div>
+              </div>
+            )}
             {applyBlocked && (
               <div
                 role="alert"
@@ -1099,6 +1137,11 @@ export function DiscoverJobs() {
             </div>
           </div>
           <DialogFooter>
+            {balance !== null && (
+              <p className="mr-auto self-center text-[12px] text-txt-caption">
+                Balance: {balance} credit{balance === 1 ? "" : "s"}
+              </p>
+            )}
             <Button
               variant="secondary"
               size="sm"
@@ -1110,9 +1153,11 @@ export function DiscoverJobs() {
             <Button
               size="sm"
               onClick={submitApplication}
-              disabled={submitting || (questions === null && !questionsError)}
+              disabled={submitting || !!noCredits || (questions === null && !questionsError)}
             >
-              {submitting ? "Submitting…" : "Submit application"}
+              {submitting
+                ? "Submitting…"
+                : `Apply · ${applyCost} credit${applyCost === 1 ? "" : "s"}`}
             </Button>
           </DialogFooter>
         </DialogContent>

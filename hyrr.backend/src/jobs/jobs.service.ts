@@ -7,11 +7,11 @@ import { CacheService } from "../cache/cache.service"
 import { AccessService, Actor } from "../core/access/access.service"
 import { EmailService } from "../core/delivery/email.service"
 import { AppException, NotFoundAppException } from "../core/exceptions/app-exception"
+import { EmbeddingsService } from "../embeddings/embeddings.service"
 import { MessagesGateway } from "../messages/messages.gateway"
 import { NotificationsService } from "../notifications/notifications.service"
 import { PrismaService } from "../prisma/prisma.service"
 import { SearchService } from "../search/search.service"
-import { EmbeddingsService } from "../embeddings/embeddings.service"
 import { AlertsService } from "../seeker-tools/alerts.service"
 import { CreateJobDto } from "./dtos/create-job.dto"
 import { UpdateJobDto } from "./dtos/update-job.dto"
@@ -314,11 +314,15 @@ export class JobsService {
             tx
           )
       }
-      return tx.job.update({
+      const updated = await tx.job.update({
         where: { id: jobId },
         data,
         include: { company: true, category: true, ...APPLICANT_COUNT },
       })
+      // Closing a job refunds seekers whose applications were never reviewed.
+      if (updated.status === JobStatus.CLOSED && current.status !== JobStatus.CLOSED)
+        await this.wallet.refundUnreviewedApplications(jobId, tx)
+      return updated
     })
     await this.cache.delByPattern("jobs:public*")
     this.afterJobChange(job.id, {
@@ -421,7 +425,10 @@ export class JobsService {
         HttpStatus.FORBIDDEN,
         "JOB_FLAGGED"
       )
-    await this.prisma.job.delete({ where: { id: jobId } })
+    await this.prisma.$transaction(async (tx) => {
+      await this.wallet.refundUnreviewedApplications(jobId, tx)
+      await tx.job.delete({ where: { id: jobId } })
+    })
     await this.cache.delByPattern("jobs:public*")
     try {
       this.search?.removeJobSoon(jobId)
@@ -494,7 +501,8 @@ export class JobsService {
       }
     }
 
-    if (!result) result = await this.searchPublicJobsPostgres(q, type, categorySlug, remote, limit, offset)
+    if (!result)
+      result = await this.searchPublicJobsPostgres(q, type, categorySlug, remote, limit, offset)
 
     await this.cache.set(cacheKey, result, 120) // 2-minute TTL
     return result
