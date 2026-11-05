@@ -47,6 +47,9 @@ jobs:
       - name: Typecheck all workspaces (root TypeScript, project references)
         run: npm run typecheck
 
+      - name: React hook rules (a broken hook order crashes the page)
+        run: npm run lint:hooks
+
       - name: Backend unit tests
         working-directory: hyrr.backend
         run: npx jest --ci

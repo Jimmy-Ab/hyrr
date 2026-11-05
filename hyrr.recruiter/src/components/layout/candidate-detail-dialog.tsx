@@ -60,6 +60,7 @@ export function CandidateDetailDialog() {
   const [meetingTime, setMeetingTime] = useState("10:00")
   const [scheduling, setScheduling] = useState(false)
   const [statusUpdating, setStatusUpdating] = useState(false)
+  const [meetingErrors, setMeetingErrors] = useState<{ title?: string; date?: string }>({})
 
   // Find candidate details
   const candidate = candidates.find((c) => c.id === selectedCandidateId) || null
@@ -99,7 +100,6 @@ export function CandidateDetailDialog() {
     }
   }
 
-  const [meetingErrors, setMeetingErrors] = useState<{ title?: string; date?: string }>({})
   const handleScheduleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const found: { title?: string; date?: string } = {}

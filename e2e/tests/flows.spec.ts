@@ -210,3 +210,40 @@ test("unverified e-mail and missing credits are explained in the UI", async ({ p
   await page.getByRole("button", { name: "Buy credits" }).click()
   await expect(page).toHaveURL(/\/momentum/)
 })
+
+test("recruiter opens a candidate from the list view (no crash)", async ({ page }) => {
+  const errors: string[] = []
+  page.on("pageerror", (e) => errors.push(e.message))
+  const rec = await createUser("RECRUITER", "Bea")
+  const seeker = await createUser("SEEKER", "Kalkidan")
+  const job = await api(
+    "POST",
+    "/jobs",
+    {
+      title: `E2E List View ${uid()}`,
+      location: "Berlin",
+      type: "FULL_TIME",
+      description: "<p>Open the candidate from the list view.</p>",
+      requirements: ["X"],
+      skills: ["X"],
+      categoryId: await firstCategoryId(),
+    },
+    rec.token
+  )
+  await api(
+    "POST",
+    `/applications/jobs/${job.id}/apply`,
+    { name: "Kalkidan", email: seeker.email, title: "Dev", location: "Berlin" },
+    seeker.token
+  )
+  await login(page, RECRUITER_URL, rec.email)
+  await page.goto(`${RECRUITER_URL}/applications`)
+  await page
+    .getByRole("button", { name: /^list$/i })
+    .first()
+    .click()
+  await page.getByText("Kalkidan", { exact: true }).first().click()
+  await expect(page.getByRole("dialog")).toBeVisible()
+  await expect(page.getByRole("dialog").getByText("Kalkidan").first()).toBeVisible()
+  expect(errors).toEqual([])
+})
