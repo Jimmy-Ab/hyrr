@@ -1,5 +1,6 @@
 import {
   APPLICATION_STATUS,
+  ActiveIndicator,
   Badge,
   Button,
   Card,
@@ -502,12 +503,16 @@ export function DiscoverJobs() {
               role="tab"
               aria-selected={matchTab === t.id}
               onClick={() => switchTab(t.id)}
-              className={`flex items-center gap-1.5 rounded-[10px] px-3.5 py-1.5 text-[13px] font-bold transition-all cursor-pointer ${
-                matchTab === t.id
-                  ? "bg-primary text-white"
-                  : "text-txt-body hover:bg-bg-hover hover:text-txt-heading"
+              className={`press relative isolate flex items-center gap-1.5 rounded-[10px] px-3.5 py-1.5 text-[13px] font-bold transition-colors duration-200 cursor-pointer ${
+                matchTab === t.id ? "text-white" : "text-txt-body hover:text-txt-heading"
               }`}
             >
+              {matchTab === t.id && (
+                <ActiveIndicator
+                  layoutId="discover-tab"
+                  className="rounded-[10px] bg-primary shadow-button"
+                />
+              )}
               {t.id === "for-you" && <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />}
               {t.label}
             </button>
@@ -704,10 +709,10 @@ export function DiscoverJobs() {
                   type="button"
                   aria-pressed={active}
                   onClick={() => selectJob(job)}
-                  className={`w-full text-left p-4 rounded-card border transition-all cursor-pointer block ${
+                  className={`spotlight w-full text-left p-4 rounded-card border transition-[transform,box-shadow,border-color,background-color] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] cursor-pointer block active:scale-[0.99] ${
                     active
-                      ? "border-primary bg-bg-secondary ring-2 ring-primary/10 shadow-card"
-                      : "border-bg-border/60 bg-bg-secondary/60 hover:bg-bg-secondary hover:border-primary/20"
+                      ? "border-primary bg-bg-secondary ring-[3px] ring-primary/10 shadow-card"
+                      : "border-bg-border/60 bg-bg-secondary/60 hover:bg-bg-secondary hover:border-primary/25 hover:-translate-y-px hover:shadow-card"
                   }`}
                 >
                   <div className="flex items-start gap-3">

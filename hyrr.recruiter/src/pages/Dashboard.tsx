@@ -1,4 +1,4 @@
-import { Card, notificationConversationId } from "hyrr.shared"
+import { AnimatedNumber, Card, notificationConversationId } from "hyrr.shared"
 import { ArrowUpRight, Briefcase, Calendar, CheckSquare, TrendingUp, Users } from "lucide-react"
 import { isRecruiterView } from "../lib/recruiter"
 import { useJobStore } from "../store/useJobStore"
@@ -97,13 +97,14 @@ export function Dashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 relative z-10">
+      <div className="stagger grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 relative z-10">
         {stats.map((stat, idx) => {
           const Icon = stat.icon
           return (
             <Card
               key={idx}
-              className={`p-6 flex flex-col justify-between h-36 relative overflow-hidden ${statsAccents[idx]}`}
+              hoverEffect
+              className={`group p-6 flex flex-col justify-between h-36 relative overflow-hidden ${statsAccents[idx]}`}
             >
               <div className="flex items-start justify-between relative z-10">
                 <span className="text-[11px] font-bold tracking-wider text-txt-caption uppercase">
@@ -114,8 +115,12 @@ export function Dashboard() {
                 </div>
               </div>
               <div className="mt-4 flex items-baseline gap-2 relative z-10">
-                <span className="text-[30px] font-black text-txt-title leading-none tabular-nums">
-                  {stat.value}
+                <span className="text-[30px] font-black tracking-[-0.02em] text-txt-title leading-none tabular-nums">
+                  {typeof stat.value === "number" ? (
+                    <AnimatedNumber value={stat.value} />
+                  ) : (
+                    stat.value
+                  )}
                 </span>
                 <span className="text-[11.5px] text-txt-caption font-semibold">{stat.caption}</span>
               </div>

@@ -1,3 +1,4 @@
+import { ActiveIndicator } from "hyrr.shared"
 import {
   BarChart2,
   BriefcaseBusiness,
@@ -112,15 +113,16 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                   if (item.id === "Applications") selectJob("")
                   onClose()
                 }}
-                className={`flex items-center justify-between h-[40px] px-3.5 rounded-xl transition-colors duration-150 group text-left cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary/30 w-full ${
+                className={`press relative isolate flex items-center justify-between h-[40px] px-3.5 rounded-xl transition-colors duration-200 group text-left cursor-pointer outline-none focus-visible:ring-[3px] focus-visible:ring-primary/25 w-full ${
                   isActive
-                    ? "bg-primary-light text-primary font-semibold"
-                    : "text-txt-body hover:bg-bg-hover hover:text-txt-heading font-medium"
+                    ? "text-primary font-semibold"
+                    : "text-txt-body hover:bg-bg-hover/70 hover:text-txt-heading font-medium"
                 }`}
               >
+                {isActive && <ActiveIndicator layoutId="recruiter-nav-active" />}
                 <div className="flex items-center gap-3">
                   <Icon
-                    className={`w-[18px] h-[18px] shrink-0 transition-colors ${
+                    className={`w-[18px] h-[18px] shrink-0 transition-[color,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-110 ${
                       isActive ? "text-primary" : "text-txt-caption group-hover:text-txt-heading"
                     }`}
                   />

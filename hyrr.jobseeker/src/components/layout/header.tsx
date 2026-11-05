@@ -80,7 +80,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   }, [])
 
   return (
-    <div className="relative h-12 border-b border-bg-border bg-bg-secondary flex items-center gap-2 px-3 sm:px-5 select-none shrink-0 animate-in fade-in duration-200">
+    <div className="glass relative z-30 h-12 border-b border-bg-border/70 flex items-center gap-2 px-3 sm:px-5 select-none shrink-0 animate-in fade-in duration-200">
       <button
         type="button"
         onClick={onMenuClick}

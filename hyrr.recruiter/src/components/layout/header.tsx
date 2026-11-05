@@ -346,7 +346,7 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
     run(() => setTheme(isDark ? "light" : "dark"), null, "Could not save theme")
 
   return (
-    <header className="h-[68px] border-b border-bg-border bg-bg-secondary flex items-center justify-between gap-3 px-4 md:px-6 select-none shrink-0">
+    <header className="glass relative z-30 h-[68px] border-b border-bg-border/70 flex items-center justify-between gap-3 px-4 md:px-6 select-none shrink-0">
       {/* ─── Left: Menu + Logo ─── */}
       <div className="flex items-center gap-2 md:gap-3 shrink-0">
         <button

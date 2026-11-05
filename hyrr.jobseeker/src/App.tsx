@@ -6,6 +6,7 @@ import {
   EmailVerificationBanner,
   MomentumView,
   OAuthCallback,
+  PageTransition,
   RoleMismatch,
   type SeekerView,
   Skeleton,
@@ -240,8 +241,10 @@ function AppContent() {
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <EmailVerificationBanner />
         <Header onMenuClick={() => setNavOpen(true)} />
-        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-bg-primary p-4 lg:p-5">
-          <div className="mx-auto w-full min-w-0 max-w-[1480px]">{renderView()}</div>
+        <main className="app-canvas flex-1 overflow-y-auto overflow-x-hidden p-4 lg:p-5">
+          <div className="mx-auto w-full min-w-0 max-w-[1480px]">
+            <PageTransition viewKey={candidateActiveView}>{renderView()}</PageTransition>
+          </div>
         </main>
       </div>
 

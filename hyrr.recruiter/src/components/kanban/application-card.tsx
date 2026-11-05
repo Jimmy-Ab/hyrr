@@ -114,7 +114,7 @@ export function ApplicationCard({ candidate, isOverlay = false, jobTitle }: Appl
           className={`p-4 relative border border-bg-border bg-bg-card rounded-2xl transition-all shadow-xs ${
             isOverlay
               ? "shadow-floating scale-[1.03] rotate-[1deg] border-primary-border ring-2 ring-primary/10"
-              : "hover:shadow-card-hover hover:border-primary-border/60"
+              : "hover:shadow-card-hover hover:border-primary-border/60 hover:-translate-y-0.5"
           } ${withdrawn ? "opacity-70" : ""}`}
         >
           <div className="flex items-start justify-between gap-2.5">

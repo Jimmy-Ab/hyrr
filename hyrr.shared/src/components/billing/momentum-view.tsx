@@ -24,6 +24,7 @@ import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
 import { Card } from "../ui/card"
 import { EmptyState } from "../ui/empty-state"
+import { AnimatedNumber } from "../ui/motion"
 import { Skeleton } from "../ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table"
 import { useToast } from "../ui/toast"
@@ -407,7 +408,7 @@ export function MomentumView({ audience = "recruiter" }: { audience?: MomentumAu
                   Available credits
                 </p>
                 <p className="mt-1 text-[44px] leading-none font-extrabold text-txt-title tabular-nums">
-                  {wallet.balance.toLocaleString()}
+                  <AnimatedNumber value={wallet.balance} />
                 </p>
               </div>
               {!seeker && (

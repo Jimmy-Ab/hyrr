@@ -5,6 +5,7 @@ import {
   CookieNotice,
   EmailVerificationBanner,
   OAuthCallback,
+  PageTransition,
   RoleMismatch,
   Skeleton,
   ToastProvider,
@@ -222,8 +223,10 @@ function AppContent() {
         <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
         {/* Right Scrollable Content Area */}
-        <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 md:p-8 bg-bg-primary">
-          <div className="max-w-[1440px] mx-auto w-full h-full">{renderView()}</div>
+        <main className="app-canvas flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 md:p-8">
+          <div className="max-w-[1440px] mx-auto w-full h-full">
+            <PageTransition viewKey={activeView}>{renderView()}</PageTransition>
+          </div>
         </main>
       </div>
 

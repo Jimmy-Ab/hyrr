@@ -10,21 +10,69 @@ import { isApiError } from "./api"
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 export const CURRENCIES = [
-  "USD", "EUR", "GBP", "ETB", "KES", "NGN", "ZAR", "EGP", "GHS", "UGX", "TZS", "RWF",
-  "AED", "SAR", "QAR", "INR", "PKR", "CNY", "JPY", "SGD", "AUD", "CAD", "CHF", "SEK",
-  "NOK", "DKK", "PLN", "TRY", "BRL", "MXN",
+  "USD",
+  "EUR",
+  "GBP",
+  "ETB",
+  "KES",
+  "NGN",
+  "ZAR",
+  "EGP",
+  "GHS",
+  "UGX",
+  "TZS",
+  "RWF",
+  "AED",
+  "SAR",
+  "QAR",
+  "INR",
+  "PKR",
+  "CNY",
+  "JPY",
+  "SGD",
+  "AUD",
+  "CAD",
+  "CHF",
+  "SEK",
+  "NOK",
+  "DKK",
+  "PLN",
+  "TRY",
+  "BRL",
+  "MXN",
 ] as const
 export type Currency = (typeof CURRENCIES)[number]
 
 export const CURRENCY_NAME: Record<Currency, string> = {
-  USD: "US dollar", EUR: "Euro", GBP: "British pound", ETB: "Ethiopian birr",
-  KES: "Kenyan shilling", NGN: "Nigerian naira", ZAR: "South African rand",
-  EGP: "Egyptian pound", GHS: "Ghanaian cedi", UGX: "Ugandan shilling",
-  TZS: "Tanzanian shilling", RWF: "Rwandan franc", AED: "UAE dirham", SAR: "Saudi riyal",
-  QAR: "Qatari riyal", INR: "Indian rupee", PKR: "Pakistani rupee", CNY: "Chinese yuan",
-  JPY: "Japanese yen", SGD: "Singapore dollar", AUD: "Australian dollar",
-  CAD: "Canadian dollar", CHF: "Swiss franc", SEK: "Swedish krona", NOK: "Norwegian krone",
-  DKK: "Danish krone", PLN: "Polish złoty", TRY: "Turkish lira", BRL: "Brazilian real",
+  USD: "US dollar",
+  EUR: "Euro",
+  GBP: "British pound",
+  ETB: "Ethiopian birr",
+  KES: "Kenyan shilling",
+  NGN: "Nigerian naira",
+  ZAR: "South African rand",
+  EGP: "Egyptian pound",
+  GHS: "Ghanaian cedi",
+  UGX: "Ugandan shilling",
+  TZS: "Tanzanian shilling",
+  RWF: "Rwandan franc",
+  AED: "UAE dirham",
+  SAR: "Saudi riyal",
+  QAR: "Qatari riyal",
+  INR: "Indian rupee",
+  PKR: "Pakistani rupee",
+  CNY: "Chinese yuan",
+  JPY: "Japanese yen",
+  SGD: "Singapore dollar",
+  AUD: "Australian dollar",
+  CAD: "Canadian dollar",
+  CHF: "Swiss franc",
+  SEK: "Swedish krona",
+  NOK: "Norwegian krone",
+  DKK: "Danish krone",
+  PLN: "Polish złoty",
+  TRY: "Turkish lira",
+  BRL: "Brazilian real",
   MXN: "Mexican peso",
 }
 
@@ -38,8 +86,18 @@ export const SALARY_PERIOD_LABEL: Record<SalaryPeriod, string> = {
 export const SALARY_MAX_VALUE = 100_000_000
 
 export const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ]
 
 export const thisYear = () => new Date().getFullYear()
@@ -85,7 +143,8 @@ export function parseAmount(text: string): number | null {
   return /^\d+$/.test(cleaned) ? Number(cleaned) : Number.NaN
 }
 
-export const formatAmount = (n: number | null) => (n == null || Number.isNaN(n) ? "" : n.toLocaleString("en-US"))
+export const formatAmount = (n: number | null) =>
+  n == null || Number.isNaN(n) ? "" : n.toLocaleString("en-US")
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
@@ -109,15 +168,27 @@ export const salaryRangeSchema = z
     if (v.min == null && v.max == null) return
     const check = (key: "min" | "max", label: string) => {
       const r = amount(label).safeParse(v[key] ?? undefined)
-      if (!r.success) ctx.addIssue({ code: "custom", path: [key], message: r.error.issues[0].message })
+      if (!r.success)
+        ctx.addIssue({ code: "custom", path: [key], message: r.error.issues[0].message })
     }
     check("min", "minimum")
     check("max", "maximum")
-    if (!v.currency) ctx.addIssue({ code: "custom", path: ["currency"], message: "Choose a currency" })
+    if (!v.currency)
+      ctx.addIssue({ code: "custom", path: ["currency"], message: "Choose a currency" })
     else if (!(CURRENCIES as readonly string[]).includes(v.currency))
       ctx.addIssue({ code: "custom", path: ["currency"], message: "Choose a supported currency" })
-    if (v.min != null && v.max != null && !Number.isNaN(v.min) && !Number.isNaN(v.max) && v.max < v.min)
-      ctx.addIssue({ code: "custom", path: ["max"], message: "Maximum must be at least the minimum" })
+    if (
+      v.min != null &&
+      v.max != null &&
+      !Number.isNaN(v.min) &&
+      !Number.isNaN(v.max) &&
+      v.max < v.min
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["max"],
+        message: "Maximum must be at least the minimum",
+      })
   })
 
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/
@@ -160,12 +231,24 @@ export const educationSchema = z
   })
   .superRefine((v, ctx) => {
     if (v.startYear > thisYear())
-      ctx.addIssue({ code: "custom", path: ["startYear"], message: "Start year can't be in the future" })
+      ctx.addIssue({
+        code: "custom",
+        path: ["startYear"],
+        message: "Start year can't be in the future",
+      })
     if (v.endYear == null) return
     if (v.endYear < v.startYear)
-      ctx.addIssue({ code: "custom", path: ["endYear"], message: "End year can't be before the start year" })
+      ctx.addIssue({
+        code: "custom",
+        path: ["endYear"],
+        message: "End year can't be before the start year",
+      })
     if (v.endYear > thisYear() + 8)
-      ctx.addIssue({ code: "custom", path: ["endYear"], message: "End year is too far in the future" })
+      ctx.addIssue({
+        code: "custom",
+        path: ["endYear"],
+        message: "End year is too far in the future",
+      })
   })
 export type EducationInput = z.infer<typeof educationSchema>
 
@@ -180,8 +263,16 @@ const optionalUrl = z
 export const PHONE_PATTERN = /^\+?[0-9 ()\-.]{6,25}$/
 
 export const profileBasicsSchema = z.object({
-  name: z.string().trim().min(2, "Name must be at least 2 characters").max(120, "At most 120 characters"),
-  title: z.string().trim().min(2, "Add a headline, e.g. Frontend Developer").max(120, "At most 120 characters"),
+  name: z
+    .string()
+    .trim()
+    .min(2, "Name must be at least 2 characters")
+    .max(120, "At most 120 characters"),
+  title: z
+    .string()
+    .trim()
+    .min(2, "Add a headline, e.g. Frontend Developer")
+    .max(120, "At most 120 characters"),
   location: z.string().trim().min(2, "Add your city or region").max(160, "At most 160 characters"),
   phone: z
     .string()
@@ -199,7 +290,11 @@ export const profileBasicsSchema = z.object({
 })
 
 export const jobBasicsSchema = z.object({
-  title: z.string().trim().min(3, "Job title must be at least 3 characters").max(200, "At most 200 characters"),
+  title: z
+    .string()
+    .trim()
+    .min(3, "Job title must be at least 3 characters")
+    .max(200, "At most 200 characters"),
   location: z.string().trim().min(2, "Location is required").max(200, "At most 200 characters"),
   categoryId: z.string().min(1, "Choose a category"),
 })
@@ -229,7 +324,8 @@ export function fieldErrorsOf(err: unknown): FieldErrors {
 /** Errors under `prefix.` with the prefix removed (e.g. one salary range or one list item). */
 export function scopeErrors(errors: FieldErrors, prefix: string): FieldErrors {
   const out: FieldErrors = {}
-  for (const [k, v] of Object.entries(errors)) if (k.startsWith(`${prefix}.`)) out[k.slice(prefix.length + 1)] = v
+  for (const [k, v] of Object.entries(errors))
+    if (k.startsWith(`${prefix}.`)) out[k.slice(prefix.length + 1)] = v
   return out
 }
 

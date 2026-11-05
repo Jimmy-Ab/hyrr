@@ -61,3 +61,10 @@ async function onSave() {
 
 ## Forms
 Follow the `hyrr-validation` skill: zod rules from `hyrr.shared` (same as the backend DTO), inline `<FieldError>` under each field (not toasts), structured inputs for money and dates.
+
+## Motion & premium feel (Apple-style: quick, smooth, no bounce)
+- Curves: `--ease-apple` (cubic-bezier(.32,.72,0,1)) for UI state, `--ease-out-expo` for entrances. In TS: `EASE_APPLE`, `EASE_OUT_EXPO`, `SPRING_SMOOTH` from `hyrr.shared`. Durations 150–400 ms; never springy overshoot.
+- Shared components already animate: `Button` (press scale, lift, shine on primary/danger), `Card` (cursor glow; `hoverEffect` lifts), `Dialog` (frosted backdrop + blur-in), `Toast`, dropdowns, `Skeleton` (shimmer), `Input` (focus glow). Prefer them over hand-rolled markup.
+- Utilities (index.css): `hover-lift`, `press`, `spotlight` (glow follows the cursor; `installPointerEffects()` runs in main.tsx), `btn-shine`, `glass`, `stagger` (children rise in sequence), `ring-gradient`, `skeleton-shimmer`, `app-canvas` (ambient wash on <main>).
+- Components (`components/ui/motion.tsx`): `PageTransition` (wraps the active view in App.tsx), `ActiveIndicator` (sliding pill: nav items and segmented tabs; parent needs `relative isolate`), `AnimatedNumber` (stats, balances), `Reveal` (in-view entrance).
+- Everything respects `prefers-reduced-motion`. Animate transform/opacity (and short blur); never animate layout-heavy properties on large lists.

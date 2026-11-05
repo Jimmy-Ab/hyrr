@@ -1,6 +1,7 @@
 import {
   APPLICATION_STATUS,
   APPLICATION_STATUS_LABEL,
+  AnimatedNumber,
   Badge,
   Button,
   Card,
@@ -130,7 +131,7 @@ export function CandidateDashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 relative z-10">
+      <div className="stagger grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 relative z-10">
         {stats.map((stat, idx) => {
           const Icon = stat.icon
           const accentClass = statsAccents[idx % statsAccents.length]
@@ -138,7 +139,7 @@ export function CandidateDashboard() {
             <Card
               key={idx}
               hoverEffect
-              className={`p-6 flex flex-col justify-between h-36 relative overflow-hidden group hover-lift ${accentClass}`}
+              className={`p-6 flex flex-col justify-between h-36 relative overflow-hidden group ${accentClass}`}
             >
               {/* Subtle gradient shimmer on hover */}
               <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none rounded-inherit" />
@@ -151,8 +152,12 @@ export function CandidateDashboard() {
                 </div>
               </div>
               <div className="mt-4 flex items-baseline gap-2 relative z-10">
-                <span className="text-[30px] font-black text-txt-title leading-none tabular-nums">
-                  {stat.value}
+                <span className="text-[30px] font-black tracking-[-0.02em] text-txt-title leading-none tabular-nums">
+                  {typeof stat.value === "number" ? (
+                    <AnimatedNumber value={stat.value} />
+                  ) : (
+                    stat.value
+                  )}
                 </span>
                 <span className="text-[12.5px] text-txt-caption font-semibold">{stat.change}</span>
               </div>
