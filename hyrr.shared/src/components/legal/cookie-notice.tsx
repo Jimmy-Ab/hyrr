@@ -30,7 +30,7 @@ export function CookieNotice() {
     <div
       role="region"
       aria-label="Cookie notice"
-      className="fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-xl flex-col gap-3 rounded-2xl border border-bg-border bg-bg-secondary p-4 shadow-floating sm:flex-row sm:items-center"
+      className="glass fixed inset-x-4 bottom-4 z-[60] mx-auto flex max-w-xl flex-col gap-3 rounded-2xl border border-bg-border/70 p-4 shadow-floating animate-rise sm:flex-row sm:items-center"
     >
       <Cookie className="hidden h-5 w-5 shrink-0 text-primary sm:block" aria-hidden="true" />
       <p className="flex-1 text-[13px] text-txt-body">

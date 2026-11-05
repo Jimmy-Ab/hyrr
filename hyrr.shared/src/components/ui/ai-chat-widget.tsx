@@ -1,47 +1,58 @@
-import { Bot, ChevronDown, Loader2, Send, Sparkles, Trash2, X } from "lucide-react"
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
+import { ArrowUp, Loader2, RotateCcw, Sparkles, X } from "lucide-react"
 import * as React from "react"
 import { escapeHtml, sanitizeHtml } from "../../lib/sanitize"
+import { cn } from "../../lib/utils"
 import { useJobStore } from "../../store/useJobStore"
+import { EASE_APPLE, EASE_OUT_EXPO } from "./motion"
 
 function formatBold(text: string): string {
   return sanitizeHtml(escapeHtml(text).replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>"))
 }
 
+/** Minimal markdown: **bold** lines/inline, "-"/"•" bullets, numbered lists, blank lines. */
 function MarkdownText({ text }: { text: string }) {
-  // Simple markdown renderer for bold and bullets
   const lines = text.split("\n")
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5">
       {lines.map((line, i) => {
-        if (line.startsWith("**") && line.endsWith("**")) {
+        const trimmed = line.trim()
+        if (trimmed === "") return <div key={i} className="h-0.5" />
+        if (/^\*\*[^*]+\*\*:?$/.test(trimmed))
           return (
-            <p key={i} className="font-bold">
-              {line.slice(2, -2)}
+            <p key={i} className="font-semibold text-txt-title">
+              {trimmed.replace(/\*\*/g, "")}
             </p>
           )
-        }
-        if (line.startsWith("• ") || line.startsWith("- ")) {
+        const bullet = /^([•\-*]|\d+\.)\s+(.*)$/.exec(trimmed)
+        if (bullet)
           return (
             <div key={i} className="flex gap-2">
-              <span className="shrink-0 mt-0.5">•</span>
               <span
-                dangerouslySetInnerHTML={{
-                  __html: formatBold(line.slice(2)),
-                }}
+                className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-primary/70"
+                aria-hidden="true"
               />
+              <span dangerouslySetInnerHTML={{ __html: formatBold(bullet[2]) }} />
             </div>
           )
-        }
-        if (line.trim() === "") return <div key={i} className="h-1" />
-        return (
-          <p
-            key={i}
-            dangerouslySetInnerHTML={{
-              __html: formatBold(line),
-            }}
-          />
-        )
+        return <p key={i} dangerouslySetInnerHTML={{ __html: formatBold(line) }} />
       })}
+    </div>
+  )
+}
+
+/** Three dots that breathe (opacity wave), Apple-style, instead of bouncing. */
+function TypingDots() {
+  return (
+    <div className="flex items-center gap-1 py-1" aria-label="Hyrr AI is typing" role="status">
+      {[0, 1, 2].map((i) => (
+        <motion.span
+          key={i}
+          className="h-1.5 w-1.5 rounded-full bg-primary"
+          animate={{ opacity: [0.25, 1, 0.25], scale: [0.85, 1, 0.85] }}
+          transition={{ duration: 1.1, repeat: Infinity, delay: i * 0.16, ease: "easeInOut" }}
+        />
+      ))}
     </div>
   )
 }
@@ -50,235 +61,343 @@ interface AiChatWidgetProps {
   role?: "SEEKER" | "RECRUITER"
 }
 
+const PROMPTS = {
+  SEEKER: [
+    "How can I improve my profile?",
+    "Prepare me for an interview",
+    "Help me negotiate salary",
+    "Write a cover letter",
+  ],
+  RECRUITER: [
+    "Write a job description",
+    "Interview questions for a React developer",
+    "How do I evaluate a candidate?",
+    "Pipeline best practices",
+  ],
+}
+
 export function AiChatWidget({ role = "SEEKER" }: AiChatWidgetProps) {
   const { aiChatMessages, aiChatLoading, aiChatOpen, sendAiChat, clearAiChat, setAiChatOpen } =
     useJobStore()
+  const reduce = useReducedMotion()
   const [input, setInput] = React.useState("")
-  const messagesEndRef = React.useRef<HTMLDivElement>(null)
+  const listRef = React.useRef<HTMLDivElement>(null)
+  const inputRef = React.useRef<HTMLTextAreaElement>(null)
+  const triggerRef = React.useRef<HTMLButtonElement>(null)
+  // Replies that arrived while the panel was closed (the badge), not every reply ever.
+  const assistantCount = aiChatMessages.filter((m) => m.role === "assistant").length
+  const [seen, setSeen] = React.useState(assistantCount)
+  const unread = aiChatOpen ? 0 : Math.max(0, assistantCount - seen)
 
   React.useEffect(() => {
-    if (aiChatOpen && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
-    }
-  }, [aiChatMessages, aiChatOpen])
+    if (aiChatOpen) setSeen(assistantCount)
+  }, [aiChatOpen, assistantCount])
 
-  const handleSend = async () => {
-    if (!input.trim() || aiChatLoading) return
-    const msg = input.trim()
+  // Keep the newest message in view.
+  React.useEffect(() => {
+    const el = listRef.current
+    if (aiChatOpen && el)
+      el.scrollTo({ top: el.scrollHeight, behavior: reduce ? "auto" : "smooth" })
+  }, [aiChatMessages.length, aiChatLoading, aiChatOpen, reduce])
+
+  // Focus the input on open; Escape closes and returns focus to the button.
+  React.useEffect(() => {
+    if (!aiChatOpen) return
+    const t = window.setTimeout(() => inputRef.current?.focus(), 120)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setAiChatOpen(false)
+        triggerRef.current?.focus()
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => {
+      window.clearTimeout(t)
+      window.removeEventListener("keydown", onKey)
+    }
+  }, [aiChatOpen, setAiChatOpen])
+
+  // Auto-grow the composer up to 5 lines.
+  React.useLayoutEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = "0px"
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`
+  }, [input, aiChatOpen])
+
+  const send = async (text: string) => {
+    const msg = text.trim()
+    if (!msg || aiChatLoading) return
     setInput("")
     await sendAiChat(msg)
   }
 
-  const quickPrompts =
-    role === "SEEKER"
-      ? [
-          "Improve my resume",
-          "Prepare for interviews",
-          "Salary negotiation tips",
-          "Write a cover letter",
-        ]
-      : [
-          "Write a job description",
-          "Interview questions for React dev",
-          "Evaluate a candidate",
-          "Pipeline best practices",
-        ]
+  const subtitle = role === "SEEKER" ? "Career assistant" : "Recruiting assistant"
 
   return (
     <>
-      {/* Floating trigger button */}
-      <button
+      {/* ─── Floating button ─── */}
+      <motion.button
+        ref={triggerRef}
         id="ai-chat-trigger"
+        type="button"
         onClick={() => setAiChatOpen(!aiChatOpen)}
-        style={{
-          position: "fixed",
-          bottom: "24px",
-          right: "24px",
-          zIndex: 50,
-        }}
-        className="w-14 h-14 rounded-full bg-primary text-white flex items-center justify-center shadow-[0_8px_32px_rgba(108,99,255,0.4)] hover:shadow-[0_12px_40px_rgba(108,99,255,0.5)] hover:scale-110 transition-all duration-200 cursor-pointer group"
-        title="Ask Hyrr AI"
+        aria-label={aiChatOpen ? "Close Hyrr AI" : "Ask Hyrr AI"}
+        aria-expanded={aiChatOpen}
+        aria-controls="ai-chat-panel"
+        initial={reduce ? false : { scale: 0.6, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        whileHover={reduce ? undefined : { scale: 1.06 }}
+        whileTap={{ scale: 0.92 }}
+        transition={{ duration: 0.35, ease: EASE_OUT_EXPO }}
+        className="group fixed bottom-5 right-5 z-50 flex h-14 w-14 cursor-pointer items-center justify-center rounded-full text-white outline-none focus-visible:ring-4 focus-visible:ring-primary/30 sm:bottom-6 sm:right-6"
       >
-        {aiChatOpen ? (
-          <ChevronDown className="w-5 h-5" />
-        ) : (
-          <>
-            <Bot className="w-6 h-6" />
-            {aiChatMessages.length > 0 && !aiChatOpen && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-sec-green text-white text-[9px] font-bold flex items-center justify-center border-2 border-bg-primary">
-                {aiChatMessages.filter((m) => m.role === "assistant").length}
-              </span>
-            )}
-          </>
+        {/* Soft breathing halo (off with reduced motion and while open). */}
+        {!aiChatOpen && !reduce && (
+          <motion.span
+            aria-hidden="true"
+            className="absolute inset-0 rounded-full bg-primary/40"
+            animate={{ scale: [1, 1.35], opacity: [0.45, 0] }}
+            transition={{ duration: 2.4, repeat: Infinity, ease: "easeOut", repeatDelay: 1.2 }}
+          />
         )}
-      </button>
+        <span
+          aria-hidden="true"
+          className="absolute inset-0 rounded-full bg-[conic-gradient(from_180deg_at_50%_50%,#8b7dff,#6c63ff,#4f8ef7,#8b7dff)] shadow-[0_10px_30px_-6px_rgba(108,99,255,0.65),inset_0_1px_0_rgba(255,255,255,0.35)] transition-shadow duration-300 group-hover:shadow-[0_16px_40px_-8px_rgba(108,99,255,0.8),inset_0_1px_0_rgba(255,255,255,0.4)]"
+        />
+        <span
+          aria-hidden="true"
+          className="absolute inset-[1.5px] rounded-full bg-gradient-to-b from-white/20 to-transparent"
+        />
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.span
+            key={aiChatOpen ? "close" : "open"}
+            initial={{ rotate: -90, scale: 0.5, opacity: 0 }}
+            animate={{ rotate: 0, scale: 1, opacity: 1 }}
+            exit={{ rotate: 90, scale: 0.5, opacity: 0 }}
+            transition={{ duration: 0.22, ease: EASE_APPLE }}
+            className="relative"
+          >
+            {aiChatOpen ? <X className="h-5 w-5" /> : <Sparkles className="h-6 w-6" />}
+          </motion.span>
+        </AnimatePresence>
+        <AnimatePresence>
+          {unread > 0 && (
+            <motion.span
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0 }}
+              transition={{ duration: 0.25, ease: EASE_OUT_EXPO }}
+              className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-bg-primary bg-sec-green px-1 text-[10px] font-bold text-white"
+            >
+              <span className="sr-only">New replies: </span>
+              {unread}
+            </motion.span>
+          )}
+        </AnimatePresence>
+        {/* Hover label */}
+        {!aiChatOpen && (
+          <span className="pointer-events-none absolute right-[calc(100%+10px)] top-1/2 hidden -translate-y-1/2 translate-x-1 whitespace-nowrap rounded-full glass border border-bg-border/70 px-3 py-1.5 text-[12px] font-semibold text-txt-heading opacity-0 shadow-card transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:translate-x-0 group-hover:opacity-100 sm:block">
+            Ask Hyrr AI
+          </span>
+        )}
+      </motion.button>
 
-      {/* Chat panel */}
-      {aiChatOpen && (
-        <div
-          id="ai-chat-panel"
-          style={{
-            position: "fixed",
-            bottom: "96px",
-            right: "24px",
-            zIndex: 50,
-          }}
-          className="w-[380px] h-[520px] bg-bg-secondary border border-bg-border/60 rounded-[20px] shadow-[0_20px_60px_rgba(0,0,0,0.15)] flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200"
-        >
-          {/* Header */}
-          <div className="flex items-center gap-3 p-4 border-b border-bg-border/40 bg-gradient-to-r from-primary/10 to-purple-500/5 shrink-0">
-            <div className="w-9 h-9 rounded-[12px] bg-primary flex items-center justify-center shadow-button">
-              <Sparkles className="w-4.5 h-4.5 text-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[14px] font-bold text-txt-heading">Hyrr AI</p>
-              <p className="text-[11px] text-txt-caption">
-                {role === "SEEKER" ? "Career Assistant" : "Recruiting Assistant"} · Always online
-              </p>
-            </div>
-            <div className="flex items-center gap-1">
+      {/* ─── Panel ─── */}
+      <AnimatePresence>
+        {aiChatOpen && (
+          <motion.div
+            id="ai-chat-panel"
+            role="dialog"
+            aria-label="Hyrr AI assistant"
+            initial={
+              reduce ? { opacity: 0 } : { opacity: 0, scale: 0.92, y: 16, filter: "blur(8px)" }
+            }
+            animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
+            exit={
+              reduce
+                ? { opacity: 0 }
+                : {
+                    opacity: 0,
+                    scale: 0.95,
+                    y: 10,
+                    filter: "blur(6px)",
+                    transition: { duration: 0.2, ease: EASE_APPLE },
+                  }
+            }
+            transition={{ duration: 0.42, ease: EASE_OUT_EXPO }}
+            style={{ transformOrigin: "bottom right" }}
+            className="glass fixed inset-x-3 bottom-[84px] z-50 flex h-[min(72vh,600px)] flex-col overflow-hidden rounded-[24px] border border-bg-border/70 shadow-floating sm:inset-x-auto sm:bottom-24 sm:right-6 sm:w-[400px]"
+          >
+            {/* Header */}
+            <div className="relative flex shrink-0 items-center gap-3 border-b border-bg-border/50 px-4 py-3.5">
+              <div className="relative flex h-9 w-9 items-center justify-center rounded-[12px] bg-[conic-gradient(from_180deg_at_50%_50%,#8b7dff,#6c63ff,#4f8ef7,#8b7dff)] shadow-button">
+                <Sparkles className="h-4.5 w-4.5 text-white" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[14px] font-semibold tracking-[-0.01em] text-txt-title">
+                  Hyrr AI
+                </p>
+                <p className="text-[11.5px] text-txt-caption">{subtitle}</p>
+              </div>
               {aiChatMessages.length > 0 && (
                 <button
+                  type="button"
                   onClick={clearAiChat}
-                  className="p-1.5 rounded-full hover:bg-bg-hover text-txt-caption hover:text-txt-heading transition-colors cursor-pointer"
-                  title="Clear chat"
+                  className="press rounded-full p-2 text-txt-caption transition-colors hover:bg-bg-hover hover:text-txt-heading cursor-pointer"
+                  title="New conversation"
+                  aria-label="New conversation"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <RotateCcw className="h-3.5 w-3.5" />
                 </button>
               )}
               <button
+                type="button"
                 onClick={() => setAiChatOpen(false)}
-                className="p-1.5 rounded-full hover:bg-bg-hover text-txt-caption hover:text-txt-heading transition-colors cursor-pointer"
+                className="press rounded-full p-2 text-txt-caption transition-[color,background-color,transform] duration-300 hover:rotate-90 hover:bg-bg-hover hover:text-txt-heading cursor-pointer"
+                aria-label="Close"
               >
-                <X className="w-4 h-4" />
+                <X className="h-4 w-4" />
               </button>
             </div>
-          </div>
 
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-bg-primary/30">
-            {aiChatMessages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-center gap-4 pb-4">
-                <div className="w-14 h-14 rounded-[18px] bg-primary-light border border-primary-border/30 flex items-center justify-center">
-                  <Sparkles className="w-7 h-7 text-primary" />
-                </div>
-                <div>
-                  <p className="text-[14px] font-bold text-txt-heading">Hi! I'm Hyrr AI</p>
-                  <p className="text-[12px] text-txt-caption mt-1 leading-relaxed">
-                    {role === "SEEKER"
-                      ? "Your personal career assistant. Ask me anything about resumes, interviews, or job hunting."
-                      : "Your recruiting assistant. Ask about candidates, job descriptions, or hiring strategies."}
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-2 w-full">
-                  {quickPrompts.map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => {
-                        setInput(p)
-                      }}
-                      className="text-[11px] font-medium text-primary bg-primary-light border border-primary-border/30 rounded-[10px] px-3 py-2 hover:bg-primary hover:text-white transition-all cursor-pointer text-left leading-tight"
-                    >
-                      {p}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <>
-                {aiChatMessages.map((msg, i) => {
-                  const isUser = msg.role === "user"
-                  return (
-                    <div
-                      key={i}
-                      className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}
-                    >
-                      {!isUser && (
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center">
-                            <Bot className="w-3 h-3 text-white" />
-                          </div>
-                          <span className="text-[10px] text-txt-caption font-semibold">
-                            Hyrr AI
-                          </span>
-                        </div>
-                      )}
-                      <div
-                        className={`max-w-[88%] rounded-[16px] px-4 py-3 text-[12.5px] leading-relaxed ${
-                          isUser
-                            ? "bg-primary text-white rounded-tr-[4px]"
-                            : "bg-bg-secondary border border-bg-border/60 text-txt-heading rounded-tl-[4px]"
-                        }`}
-                      >
-                        {isUser ? msg.content : <MarkdownText text={msg.content} />}
-                      </div>
-                    </div>
-                  )
-                })}
-                {aiChatLoading && (
-                  <div className="flex items-start gap-2">
-                    <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center shrink-0">
-                      <Bot className="w-3 h-3 text-white" />
-                    </div>
-                    <div className="bg-bg-secondary border border-bg-border/60 rounded-[16px] rounded-tl-[4px] px-4 py-3">
-                      <div className="flex gap-1 items-center">
-                        <div
-                          className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce"
-                          style={{ animationDelay: "0ms" }}
-                        />
-                        <div
-                          className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce"
-                          style={{ animationDelay: "150ms" }}
-                        />
-                        <div
-                          className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce"
-                          style={{ animationDelay: "300ms" }}
-                        />
-                      </div>
-                    </div>
+            {/* Messages (native scroll, contained) */}
+            <div ref={listRef} className="flex-1 overflow-y-auto px-4 py-4" data-lenis-prevent>
+              {aiChatMessages.length === 0 ? (
+                <div className="flex h-full flex-col items-center justify-center gap-5 pb-2 text-center">
+                  <motion.div
+                    initial={reduce ? false : { scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.5, ease: EASE_OUT_EXPO }}
+                    className="flex h-14 w-14 items-center justify-center rounded-[18px] bg-primary-light ring-1 ring-primary-border/50"
+                  >
+                    <Sparkles className="h-7 w-7 text-primary" />
+                  </motion.div>
+                  <div>
+                    <p className="text-[16px] font-semibold tracking-[-0.01em] text-txt-title">
+                      How can I help?
+                    </p>
+                    <p className="mt-1 text-[12.5px] leading-relaxed text-txt-caption">
+                      {role === "SEEKER"
+                        ? "Ask about your job search, applications, interviews or your profile."
+                        : "Ask about hiring, job descriptions, candidates or your pipeline."}
+                    </p>
                   </div>
-                )}
-                <div ref={messagesEndRef} />
-              </>
-            )}
-          </div>
-
-          {/* Input */}
-          <div className="p-3 border-t border-bg-border/40 bg-bg-secondary shrink-0">
-            <div className="flex gap-2 items-end">
-              <textarea
-                id="ai-chat-input"
-                placeholder="Ask Hyrr AI anything…"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault()
-                    handleSend()
-                  }
-                }}
-                rows={1}
-                className="flex-1 resize-none h-10 px-3 py-2.5 rounded-[12px] border border-bg-border bg-bg-primary text-[12.5px] placeholder:text-txt-caption focus:outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/10 transition-all leading-5"
-                style={{ maxHeight: "80px", overflowY: "auto" }}
-              />
-              <button
-                onClick={handleSend}
-                disabled={!input.trim() || aiChatLoading}
-                className="w-10 h-10 rounded-[12px] bg-primary flex items-center justify-center text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary-hover transition-all cursor-pointer shrink-0 shadow-button"
-              >
-                {aiChatLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Send className="w-4 h-4" />
-                )}
-              </button>
+                  <div className="stagger flex w-full flex-col gap-2">
+                    {PROMPTS[role].map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => void send(p)}
+                        className="spotlight press flex w-full items-center justify-between rounded-[14px] border border-bg-border/70 bg-bg-secondary/70 px-3.5 py-2.5 text-left text-[12.5px] font-medium text-txt-heading transition-[border-color,background-color] duration-200 hover:border-primary/30 hover:bg-bg-secondary cursor-pointer"
+                      >
+                        {p}
+                        <ArrowUp
+                          className="h-3.5 w-3.5 rotate-45 text-txt-caption"
+                          aria-hidden="true"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {aiChatMessages.map((msg, i) => {
+                    const isUser = msg.role === "user"
+                    return (
+                      <motion.div
+                        key={`${msg.timestamp}-${i}`}
+                        initial={reduce ? false : { opacity: 0, y: 8, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={{ duration: 0.35, ease: EASE_OUT_EXPO }}
+                        style={{ transformOrigin: isUser ? "bottom right" : "bottom left" }}
+                        className={cn("flex", isUser ? "justify-end" : "justify-start")}
+                      >
+                        <div
+                          className={cn(
+                            "max-w-[86%] px-3.5 py-2.5 text-[13px] leading-relaxed",
+                            isUser
+                              ? "rounded-[18px] rounded-br-[6px] bg-gradient-to-b from-[#7a72ff] to-primary text-white shadow-[0_4px_14px_-6px_rgba(108,99,255,0.6)]"
+                              : "rounded-[18px] rounded-bl-[6px] border border-bg-border/60 bg-bg-secondary text-txt-heading shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+                          )}
+                        >
+                          {isUser ? (
+                            <span className="whitespace-pre-wrap">{msg.content}</span>
+                          ) : (
+                            <MarkdownText text={msg.content} />
+                          )}
+                        </div>
+                      </motion.div>
+                    )
+                  })}
+                  <AnimatePresence>
+                    {aiChatLoading && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.25, ease: EASE_APPLE }}
+                        className="flex justify-start"
+                      >
+                        <div className="rounded-[18px] rounded-bl-[6px] border border-bg-border/60 bg-bg-secondary px-4 py-2.5">
+                          <TypingDots />
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
             </div>
-            <p className="text-[10px] text-txt-disabled text-center mt-2">
-              Hyrr AI · Powered by Gemini
-            </p>
-          </div>
-        </div>
-      )}
+
+            {/* Composer */}
+            <div className="shrink-0 border-t border-bg-border/50 p-3">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  void send(input)
+                }}
+                className="flex items-end gap-2 rounded-[18px] border border-bg-border bg-bg-secondary p-1.5 pl-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-[border-color,box-shadow] duration-200 focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10"
+              >
+                <label htmlFor="ai-chat-input" className="sr-only">
+                  Message Hyrr AI
+                </label>
+                <textarea
+                  ref={inputRef}
+                  id="ai-chat-input"
+                  placeholder="Ask Hyrr AI…"
+                  value={input}
+                  maxLength={2000}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault()
+                      void send(input)
+                    }
+                  }}
+                  rows={1}
+                  className="max-h-[120px] min-h-[36px] flex-1 resize-none bg-transparent py-2 text-[13px] leading-5 text-txt-heading placeholder:text-txt-caption focus:outline-none"
+                />
+                <motion.button
+                  type="submit"
+                  disabled={!input.trim() || aiChatLoading}
+                  whileTap={{ scale: 0.9 }}
+                  aria-label="Send"
+                  className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-gradient-to-b from-[#7a72ff] to-primary text-white shadow-button transition-opacity disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none"
+                >
+                  {aiChatLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ArrowUp className="h-4 w-4" />
+                  )}
+                </motion.button>
+              </form>
+              <p className="mt-2 text-center text-[10.5px] text-txt-disabled">
+                AI can make mistakes. Check important details.
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   )
 }
