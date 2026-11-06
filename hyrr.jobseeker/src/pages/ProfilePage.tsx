@@ -1,4 +1,5 @@
 import {
+  AnimatedNumber,
   apiFetch,
   Button,
   Card,
@@ -8,6 +9,7 @@ import {
   experienceSchema,
   FieldError,
   fieldErrorsOf,
+  IconTile,
   Input,
   isSalaryRangeEmpty,
   MonthRangeInput,
@@ -32,6 +34,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
+  Code2,
   DollarSign,
   Download,
   ExternalLink,
@@ -657,12 +660,10 @@ export function ProfilePage() {
       </div>
 
       {/* ── Stats Row ────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="stagger grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Profile Completeness */}
-        <Card className="p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-            <CheckCircle2 className="w-5 h-5 text-primary" />
-          </div>
+        <Card hoverEffect className="tone-card tone-violet group p-4 flex items-center gap-3">
+          <IconTile icon={CheckCircle2} tone="violet" />
           <div className="flex-1 min-w-0">
             <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider">
               Profile Strength
@@ -675,7 +676,7 @@ export function ProfilePage() {
                 className="h-full rounded-full transition-all duration-700"
                 style={{
                   width: `${profileStrength}%`,
-                  background: "linear-gradient(90deg,#7c5cfc,#3b7ff5)",
+                  background: "linear-gradient(90deg, var(--tone-fg), #3b7bf0)",
                 }}
               />
             </div>
@@ -686,42 +687,36 @@ export function ProfilePage() {
         </Card>
 
         {/* Skills */}
-        <Card className="p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-sec-blue/10 flex items-center justify-center shrink-0">
-            <span className="text-[14px] font-black text-sec-blue">&lt;/&gt;</span>
-          </div>
+        <Card hoverEffect className="tone-card tone-blue group p-4 flex items-center gap-3">
+          <IconTile icon={Code2} tone="blue" />
           <div>
             <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider">
               Skills Listed
             </p>
             <p className="text-[22px] font-black text-txt-title leading-none mt-0.5">
-              {skills.length}
+              <AnimatedNumber value={skills.length} />
             </p>
             <p className="text-[11.5px] text-txt-caption">proficiencies</p>
           </div>
         </Card>
 
         {/* Work History */}
-        <Card className="p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-sec-green/10 flex items-center justify-center shrink-0">
-            <Briefcase className="w-5 h-5 text-sec-green" />
-          </div>
+        <Card hoverEffect className="tone-card tone-emerald group p-4 flex items-center gap-3">
+          <IconTile icon={Briefcase} tone="emerald" />
           <div>
             <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider">
               Work History
             </p>
             <p className="text-[22px] font-black text-txt-title leading-none mt-0.5">
-              {experience.length}
+              <AnimatedNumber value={experience.length} />
             </p>
             <p className="text-[11.5px] text-txt-caption">recorded positions</p>
           </div>
         </Card>
 
         {/* Resume */}
-        <Card className="p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-sec-orange/10 flex items-center justify-center shrink-0">
-            <FileText className="w-5 h-5 text-sec-orange" />
-          </div>
+        <Card hoverEffect className="tone-card tone-amber group p-4 flex items-center gap-3">
+          <IconTile icon={FileText} tone="amber" />
           <div>
             <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider">
               Resume

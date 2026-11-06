@@ -4,11 +4,15 @@ import {
   Card,
   ConfirmDialog,
   errorMessage,
+  eventTone,
+  PageHeader,
   toIsoFromLocal,
+  toneClass,
   useJobStore,
   useToast,
 } from "hyrr.shared"
 import {
+  CalendarDays,
   Calendar as CalendarIcon,
   ChevronLeft,
   ChevronRight,
@@ -19,12 +23,9 @@ import {
 } from "lucide-react"
 import { useState } from "react"
 
-const typeStyle = (type: string) => {
-  if (type === "interview") return "bg-primary-light border-primary-border/30 text-primary"
-  if (type === "deadline") return "bg-sec-orange/10 border-sec-orange/20 text-sec-orange"
-  if (type === "offer") return "bg-sec-green/10 border-sec-green/20 text-sec-green"
-  return "bg-bg-primary border-bg-border text-txt-body"
-}
+/** Event colours come from the shared tone map (interview violet, deadline rose, …). */
+const typeStyle = (type: string) =>
+  `${toneClass(eventTone(type))} bg-[var(--tone-bg)] border-[var(--tone-ring)] text-[var(--tone-fg)]`
 
 function AddEventModal({
   onClose,
@@ -247,22 +248,17 @@ export function CandidateCalendar() {
         onConfirm={handleDelete}
       />
 
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-[28px] sm:text-[36px] font-extrabold tracking-tight">
-            <span className="premium-gradient-text text-glow">Calendar</span>
-          </h1>
-          <p className="text-body text-txt-body mt-1 font-medium">
-            Interviews, deadlines, and important dates for your job search.
-          </p>
-        </div>
-        <Button
-          onClick={() => setAddModalOpen(true)}
-          className="cursor-pointer font-semibold shadow-button"
-        >
-          <Plus className="w-4 h-4 mr-2" /> Add Event
-        </Button>
-      </div>
+      <PageHeader
+        icon={CalendarDays}
+        tone="violet"
+        title="Calendar"
+        subtitle="Interviews, deadlines and important dates for your job search."
+        actions={
+          <Button onClick={() => setAddModalOpen(true)} className="cursor-pointer font-semibold">
+            <Plus className="w-4 h-4 mr-2" /> Add Event
+          </Button>
+        }
+      />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Calendar grid */}
@@ -344,7 +340,7 @@ export function CandidateCalendar() {
                       {dayEvts.slice(0, 2).map((e, i) => (
                         <div
                           key={i}
-                          className={`w-1.5 h-1.5 rounded-full ${e.type === "interview" ? (isToday ? "bg-white" : "bg-primary") : e.type === "deadline" ? "bg-sec-orange" : "bg-sec-green"}`}
+                          className={`w-1.5 h-1.5 rounded-full ${toneClass(eventTone(e.type))} ${isToday ? "bg-white" : "bg-[var(--tone-fg)]"}`}
                         />
                       ))}
                     </div>
@@ -423,12 +419,16 @@ export function CandidateCalendar() {
             <h3 className="text-[14px] font-bold text-txt-heading mb-3">Legend</h3>
             <div className="space-y-2">
               {[
-                { color: "bg-primary", label: "Interview" },
-                { color: "bg-sec-orange", label: "Deadline" },
-                { color: "bg-sec-green", label: "Offer / Onboarding" },
+                { type: "interview", label: "Interview" },
+                { type: "deadline", label: "Deadline" },
+                { type: "offer", label: "Offer / Onboarding" },
+                { type: "other", label: "Other" },
               ].map((l) => (
-                <div key={l.label} className="flex items-center gap-2 text-[13.5px] text-txt-body">
-                  <div className={`w-2.5 h-2.5 rounded-full ${l.color}`} />
+                <div
+                  key={l.label}
+                  className={`flex items-center gap-2 text-[13.5px] text-txt-body ${toneClass(eventTone(l.type))}`}
+                >
+                  <div className="w-2.5 h-2.5 rounded-full bg-[var(--tone-fg)] shadow-[0_0_8px_var(--tone-glow)]" />
                   {l.label}
                 </div>
               ))}

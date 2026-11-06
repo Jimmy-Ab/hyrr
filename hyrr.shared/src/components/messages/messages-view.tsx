@@ -35,6 +35,8 @@ export interface MessagesViewProps {
   emptyAction?: { label: string; onClick: () => void }
   /** Show the contact details column on extra-wide screens. */
   showDetailsPanel?: boolean
+  /** Only show conversations about this job ("" or undefined = all). */
+  jobId?: string
   className?: string
 }
 
@@ -52,6 +54,7 @@ export function MessagesView({
   side,
   emptyAction,
   showDetailsPanel = false,
+  jobId,
   className,
 }: MessagesViewProps) {
   const conversations = useJobStore((s) => s.conversations)
@@ -178,10 +181,11 @@ export function MessagesView({
   const q = search.trim().toLowerCase()
   const filtered = conversations.filter(
     (c) =>
-      !q ||
-      c.candidateName.toLowerCase().includes(q) ||
-      c.jobTitle.toLowerCase().includes(q) ||
-      c.company.toLowerCase().includes(q)
+      (!jobId || c.jobId === jobId) &&
+      (!q ||
+        c.candidateName.toLowerCase().includes(q) ||
+        c.jobTitle.toLowerCase().includes(q) ||
+        c.company.toLowerCase().includes(q))
   )
 
   const typing =

@@ -69,3 +69,10 @@ Follow the `hyrr-validation` skill: zod rules from `hyrr.shared` (same as the ba
 - Components (`components/ui/motion.tsx`): `PageTransition` (wraps the active view in App.tsx), `ActiveIndicator` (sliding pill: nav items and segmented tabs; parent needs `relative isolate`), `AnimatedNumber` (stats, balances), `Reveal` (in-view entrance).
 - Everything respects `prefers-reduced-motion`. Animate transform/opacity (and short blur); never animate layout-heavy properties on large lists.
 - Scrolling: each app's `<main>` uses `useSmoothScroll(mainEl, activeView)` (Lenis, wheel only, nested scroll areas stay native, resets to top on view change). Inner scroll areas use `overflow-y-auto` (gets `overscroll-behavior: contain`); add `data-lenis-prevent` only if a custom widget fights the wheel.
+
+## Tones (colour with meaning)
+- Never hard-code `sec-*`/hex colours for statuses or categories. Pick a tone from `hyrr.shared/src/lib/tones.ts`: `stageTone` (Applied blue, In process amber, Interviewing violet, Offer emerald, Rejected rose, Archived/Withdrawn slate), `jobStatusTone`, `eventTone`, `notificationTone`, `documentTone`, `scoreTone`, `jobColorTone`, or `TONE_CYCLE` for equal items.
+- Apply with `toneClass(tone)` + `var(--tone-fg|bg|ring|glow)` (light/dark handled by `.tone-*` in index.css).
+- Components (`components/ui/tone.tsx`): `StatCard` (every metric tile; four tiles = four different tones), `IconTile`, `TonePill` (statuses), `FilterChips` (filters with counts + sliding highlight), `PageHeader` (every page title). `EmptyState` takes a `tone`.
+- Recruiter pages that list job-related data show `JobFilter` (`hyrr.recruiter/src/components/jobs/job-filter.tsx`): bound to the store's `selectedJobId`, synced to `?job=`, shared across Board, List, Dashboard, Calendar, Messages and Analytics.
+- Call hooks (e.g. `useApplicantCounts`) before any early return; `npm run lint:hooks` enforces it.

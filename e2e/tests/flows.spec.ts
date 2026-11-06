@@ -247,3 +247,70 @@ test("recruiter opens a candidate from the list view (no crash)", async ({ page 
   await expect(page.getByRole("dialog").getByText("Kalkidan").first()).toBeVisible()
   expect(errors).toEqual([])
 })
+
+test("candidates list filters by job (kept across reload and board/list)", async ({ page }) => {
+  const rec = await createUser("RECRUITER", "Fia")
+  const cat = await firstCategoryId()
+  const mkJob = (title: string) =>
+    api(
+      "POST",
+      "/jobs",
+      {
+        title,
+        location: "Berlin",
+        type: "FULL_TIME",
+        description: "<p>A job used to check the job filter.</p>",
+        requirements: ["X"],
+        skills: ["X"],
+        categoryId: cat,
+      },
+      rec.token
+    )
+  const jobA = await mkJob(`Filter Alpha ${uid()}`)
+  const jobB = await mkJob(`Filter Beta ${uid()}`)
+  for (const [name, job] of [
+    ["Abebe", jobA],
+    ["Bethel", jobB],
+  ] as const) {
+    const s = await createUser("SEEKER", name)
+    await api(
+      "POST",
+      `/applications/jobs/${job.id}/apply`,
+      { name, email: s.email, title: "Dev", location: "Berlin" },
+      s.token
+    )
+  }
+  await login(page, RECRUITER_URL, rec.email)
+  await page.goto(`${RECRUITER_URL}/candidates`)
+  const jobs = page.getByRole("group", { name: "Filter by job" })
+  await jobs.getByRole("button", { name: new RegExp(jobA.title) }).click()
+  await expect(page.getByText("Abebe", { exact: true }).first()).toBeVisible()
+  await expect(page.getByText("Bethel", { exact: true })).toHaveCount(0)
+  await expect(page).toHaveURL(new RegExp(`job=${jobA.id}`))
+
+  await page.reload()
+  await expect(page.getByText("Abebe", { exact: true }).first()).toBeVisible()
+  await expect(page.getByText("Bethel", { exact: true })).toHaveCount(0)
+
+  await page
+    .getByRole("group", { name: "Pipeline view" })
+    .getByRole("button", { name: "Board" })
+    .click()
+  await expect(
+    page
+      .getByRole("group", { name: "Filter by job" })
+      .getByRole("button", { name: new RegExp(jobA.title) })
+  ).toHaveAttribute("aria-pressed", "true")
+})
+
+test("seeker dashboard stat cards use four different colours", async ({ page }) => {
+  const s = await createUser("SEEKER", "Hana")
+  await login(page, SEEKER_URL, s.email)
+  await page.goto(`${SEEKER_URL}/dashboard`)
+  const cards = page.locator(".tone-card")
+  await expect(cards.first()).toBeVisible()
+  const colours = await cards.evaluateAll((els) =>
+    els.slice(0, 4).map((el) => getComputedStyle(el.querySelector("svg")!).color)
+  )
+  expect(new Set(colours).size).toBe(4)
+})

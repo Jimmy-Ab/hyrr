@@ -1,4 +1,5 @@
 import {
+  AnimatedNumber,
   APPLICATION_STATUS,
   APPLICATION_STATUS_COLUMNS,
   APPLICATION_STATUS_LABEL,
@@ -12,7 +13,10 @@ import {
   DropdownMenuTrigger,
   errorMessage,
   formatDateTime,
+  PageHeader,
   Skeleton,
+  stageTone,
+  toneClass,
   useJobStore,
   useToast,
   VerifiedBadge,
@@ -118,15 +122,9 @@ function ApplicationTimeline({ applicationId }: { applicationId: string }) {
 }
 
 // ─── Kanban Column ─────────────────────────────────────────────────────────────
-const columnColors: Record<ApplicationStatusCode, string> = {
-  [APPLICATION_STATUS.SAVED]: "text-primary bg-primary-light border-primary-border/40",
-  [APPLICATION_STATUS.APPLIED]: "text-sec-blue bg-sec-blue/10 border-sec-blue/20",
-  [APPLICATION_STATUS.IN_PROCESS]: "text-sec-orange bg-sec-orange/10 border-sec-orange/20",
-  [APPLICATION_STATUS.INTERVIEWING]: "text-primary bg-primary-light border-primary-border/40",
-  [APPLICATION_STATUS.OFFER]: "text-sec-green bg-sec-green/10 border-sec-green/20",
-  [APPLICATION_STATUS.ARCHIVED]: "text-txt-caption bg-bg-primary border-bg-border/40",
-  [APPLICATION_STATUS.WITHDRAWN]: "text-txt-caption bg-bg-primary border-bg-border/40",
-}
+/** Column/stat colours come from the shared stage tones (lib/tones). */
+const columnColors = (id: ApplicationStatusCode) =>
+  `${toneClass(stageTone(id))} text-[var(--tone-fg)] bg-[var(--tone-bg)] border-[var(--tone-ring)]`
 
 function JobColumn({
   id,
@@ -140,12 +138,14 @@ function JobColumn({
   onRequestRemove: (application: JobApplication) => void
 }) {
   return (
-    <div className="flex flex-col w-[260px] min-w-[260px] sm:w-[280px] sm:min-w-[280px] shrink-0 rounded-[20px] bg-bg-secondary/60 border border-bg-border/40">
+    <div
+      className={`tone-card ${toneClass(stageTone(id))} flex flex-col w-[260px] min-w-[260px] sm:w-[280px] sm:min-w-[280px] shrink-0 rounded-[20px] bg-bg-secondary/60 border border-bg-border/40`}
+    >
       {/* Column Header */}
       <div className="flex items-center justify-between px-4 py-3.5 border-b border-bg-border/30">
         <div className="flex items-center gap-2.5">
           <span
-            className={`inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full text-[12px] font-bold border ${columnColors[id]}`}
+            className={`inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full text-[12px] font-bold border ${columnColors(id)}`}
           >
             {items.length}
           </span>
@@ -369,36 +369,28 @@ export function ApplicationsBoard() {
 
   return (
     <div className="flex flex-col gap-5 animate-in fade-in duration-200 relative">
-      <div>
-        <h1 className="text-[22px] font-bold text-txt-title tracking-tight leading-none">
-          My Applications
-        </h1>
-        <p className="text-[13px] text-txt-caption mt-1.5 font-normal">
-          Track your search pipeline across saved, applied, process, offer, and archived stages.
-        </p>
-      </div>
+      <PageHeader
+        icon={LayoutList}
+        tone="blue"
+        title="My Applications"
+        subtitle="Track every application from saved to offer."
+      />
 
       {/* Stats strip */}
-      <div className="grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4">
+      <div className="stagger grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4">
         {columns.map((col) => {
           const count = jobApplications.filter((a) => columnOf(a) === col.id).length
           return (
             <Card
               key={col.id}
-              className="p-3.5 flex flex-col items-center border border-bg-border bg-bg-card rounded-xl shadow-xs"
+              hoverEffect
+              className={`tone-card group ${toneClass(stageTone(col.id))} p-3.5 flex flex-col items-center rounded-xl`}
             >
-              <span
-                className={`text-[20px] font-bold ${
-                  col.id === APPLICATION_STATUS.OFFER
-                    ? "text-sec-green"
-                    : col.id === APPLICATION_STATUS.ARCHIVED
-                      ? "text-txt-caption"
-                      : "text-txt-title"
-                }`}
-              >
-                {count}
+              <span className="tone-wash" aria-hidden="true" />
+              <span className="relative text-[22px] font-bold tabular-nums text-[var(--tone-fg)]">
+                <AnimatedNumber value={count} />
               </span>
-              <span className="text-[12.5px] text-txt-caption font-medium mt-0.5 text-center">
+              <span className="relative text-[12.5px] text-txt-caption font-medium mt-0.5 text-center">
                 {col.title}
               </span>
             </Card>

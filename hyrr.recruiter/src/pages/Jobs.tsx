@@ -2,9 +2,14 @@ import {
   Badge,
   Button,
   Card,
+  FilterChips,
+  IconTile,
   insufficientCreditsDetails,
+  jobColorTone,
+  jobStatusTone,
   RichTextRenderer,
   ConfirmDialog as SharedConfirmDialog,
+  toneClass,
   useToast,
   VerifiedBadge,
   type Job,
@@ -44,7 +49,7 @@ import {
 } from "../lib/recruiter"
 import { useJobStore } from "../store/useJobStore"
 
-type StatusFilter = "All" | "Active" | "Closed"
+type StatusFilter = "All" | "Active" | "Draft" | "Closed" | "Flagged"
 
 function FeaturedBadge({ job }: { job: Job }) {
   if (!isFeaturedNow(job)) return null
@@ -201,27 +206,21 @@ export function Jobs() {
             className="w-full h-11 pl-10 pr-4 rounded-input border border-bg-border bg-bg-secondary text-body text-txt-heading placeholder:text-txt-caption focus:outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/10 transition-all duration-200"
           />
         </div>
-        <div
-          role="group"
-          aria-label="Filter by status"
-          className="flex gap-2 bg-bg-secondary p-1 border border-bg-border rounded-[14px] shrink-0 self-start"
-        >
-          {(["All", "Active", "Closed"] as const).map((filter) => (
-            <button
-              key={filter}
-              type="button"
-              aria-pressed={statusFilter === filter}
-              onClick={() => setStatusFilter(filter)}
-              className={`px-4 py-1.5 rounded-[10px] text-caption font-semibold cursor-pointer transition-all ${
-                statusFilter === filter
-                  ? "bg-primary text-white"
-                  : "text-txt-body hover:bg-bg-hover hover:text-txt-heading"
-              }`}
-            >
-              {filter}
-            </button>
-          ))}
-        </div>
+        <FilterChips
+          id="jobs-status"
+          label="Filter by status"
+          value={statusFilter}
+          onChange={setStatusFilter}
+          className="shrink-0 self-start"
+          options={(["All", "Active", "Draft", "Closed", "Flagged"] as const)
+            .filter((f) => f === "All" || f === "Active" || jobs.some((j) => j.status === f))
+            .map((f) => ({
+              value: f,
+              label: f === "Flagged" ? "Under review" : f,
+              count: f === "All" ? jobs.length : jobs.filter((j) => j.status === f).length,
+              tone: f === "All" ? "violet" : jobStatusTone(f),
+            }))}
+        />
       </div>
 
       {/* Grid split: Job Lists & Detail Panel */}
@@ -238,7 +237,7 @@ export function Jobs() {
                 type="button"
                 aria-pressed={isSelected}
                 onClick={() => setSelectedJobId(job.id)}
-                className={`text-left w-full p-5 rounded-card bg-bg-card cursor-pointer transition-all border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 ${
+                className={`group spotlight tone-card ${toneClass(jobStatusTone(job.status))} text-left w-full p-5 rounded-card bg-bg-card cursor-pointer transition-[transform,box-shadow,border-color] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] border hover:-translate-y-0.5 active:scale-[0.995] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-primary/30 ${
                   isSelected
                     ? "border-primary ring-2 ring-primary/10 shadow-card-hover"
                     : "border-bg-border/60 hover:border-bg-border hover:shadow-card-hover"
@@ -246,9 +245,12 @@ export function Jobs() {
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex gap-4 min-w-0">
-                    <div className="hidden sm:flex w-12 h-12 rounded-2xl bg-primary-light border border-primary-border/30 items-center justify-center text-primary shrink-0">
-                      <Briefcase className="w-6 h-6 stroke-[1.8]" />
-                    </div>
+                    <IconTile
+                      icon={Briefcase}
+                      tone={jobColorTone(job.color)}
+                      size="lg"
+                      className="hidden sm:inline-flex"
+                    />
                     <div className="min-w-0">
                       <h3 className="text-card-title font-semibold text-txt-heading leading-snug break-words">
                         {job.title}

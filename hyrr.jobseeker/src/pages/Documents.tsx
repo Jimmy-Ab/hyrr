@@ -8,7 +8,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  documentTone,
   errorMessage,
+  FilterChips,
+  PageHeader,
+  StatCard,
   useJobStore,
   useToast,
   type Document as SeekerDocument,
@@ -18,6 +22,7 @@ import {
   Download,
   Eye,
   FileText,
+  FolderOpen,
   History,
   Loader2,
   Plus,
@@ -288,80 +293,57 @@ export function Documents() {
         onConfirm={handleDelete}
       />
 
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-[28px] sm:text-[36px] font-extrabold tracking-tight">
-            <span className="premium-gradient-text text-glow">Documents</span>
-          </h1>
-          <p className="text-body text-txt-body mt-1 font-medium">
-            Manage your resumes, cover letters, certificates, and portfolio files.
-          </p>
-        </div>
-        <Button
-          onClick={() => setShowUpload(true)}
-          className="gap-2 cursor-pointer shadow-button font-semibold"
-        >
-          <Upload className="w-4 h-4" /> Upload File
-        </Button>
-      </div>
+      <PageHeader
+        icon={FolderOpen}
+        tone="teal"
+        title="Documents"
+        subtitle="Your resumes, cover letters, certificates and portfolio files."
+        actions={
+          <Button
+            onClick={() => setShowUpload(true)}
+            className="gap-2 cursor-pointer font-semibold"
+          >
+            <Upload className="w-4 h-4" /> Upload File
+          </Button>
+        }
+      />
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: "Total Files", value: documents.length, color: "text-primary bg-primary-light" },
-          {
-            label: "Resumes",
-            value: documents.filter((d) => d.type === "resume").length,
-            color: "text-primary bg-primary-light",
-          },
-          {
-            label: "Cover Letters",
-            value: documents.filter((d) => d.type === "cover").length,
-            color: "text-sec-blue bg-sec-blue/10",
-          },
-          {
-            label: "Certificates",
-            value: documents.filter((d) => d.type === "cert").length,
-            color: "text-sec-green bg-sec-green/10",
-          },
-        ].map((s) => (
-          <Card
-            key={s.label}
-            className="p-4 flex items-center gap-3 hover:shadow-card-hover transition-shadow"
-          >
-            <div
-              className={`w-10 h-10 rounded-[12px] border flex items-center justify-center shrink-0 ${s.color}`}
-            >
-              <FileText className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-[22px] font-extrabold text-txt-title leading-none">{s.value}</p>
-              <p className="text-[12px] text-txt-caption font-semibold uppercase tracking-wider mt-0.5">
-                {s.label}
-              </p>
-            </div>
-          </Card>
-        ))}
+      <div className="stagger grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard title="Total files" value={documents.length} icon={FolderOpen} tone="teal" />
+        <StatCard
+          title="Resumes"
+          value={documents.filter((d) => d.type === "resume").length}
+          icon={FileText}
+          tone={documentTone("resume")}
+        />
+        <StatCard
+          title="Cover letters"
+          value={documents.filter((d) => d.type === "cover").length}
+          icon={FileText}
+          tone={documentTone("cover")}
+        />
+        <StatCard
+          title="Certificates"
+          value={documents.filter((d) => d.type === "cert").length}
+          icon={FileText}
+          tone={documentTone("cert")}
+        />
       </div>
 
-      {/* Filter tabs */}
-      <div className="flex max-w-full overflow-x-auto custom-scrollbar-none gap-1 bg-bg-secondary p-1 border border-bg-border rounded-[14px] w-fit">
-        {groups.map((g) => (
-          <button
-            key={g}
-            type="button"
-            aria-pressed={activeType === g}
-            onClick={() => setActiveType(g)}
-            className={`shrink-0 whitespace-nowrap px-4 py-1.5 rounded-[11px] text-[13.5px] font-semibold cursor-pointer transition-all ${
-              activeType === g
-                ? "bg-primary text-white shadow-button"
-                : "text-txt-body hover:bg-bg-hover hover:text-txt-heading"
-            }`}
-          >
-            {g === "all" ? "All Files" : typeLabel[g as DocType]}
-          </button>
-        ))}
-      </div>
+      <FilterChips
+        id="documents"
+        label="Filter documents"
+        value={activeType}
+        onChange={(v) => setActiveType(v as DocType | "all")}
+        className="w-fit"
+        options={groups.map((g) => ({
+          value: g,
+          label: g === "all" ? "All files" : typeLabel[g as DocType],
+          count: g === "all" ? documents.length : documents.filter((d) => d.type === g).length,
+          tone: g === "all" ? "teal" : documentTone(g),
+        }))}
+      />
 
       {documentsLoading ? (
         <div className="flex items-center justify-center py-16">

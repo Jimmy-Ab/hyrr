@@ -13,6 +13,7 @@ import {
   EMPLOYMENT_TYPE_LABEL,
   EmptyState,
   Input,
+  PageHeader,
   Skeleton,
   errorMessage,
   formatDateTime,
@@ -387,14 +388,12 @@ export function AlertsPage() {
   return (
     <div className="flex flex-col gap-5 animate-in fade-in duration-200">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-[22px] font-bold leading-none tracking-tight text-txt-title">
-            Job Alerts
-          </h1>
-          <p className="mt-1.5 text-[13px] text-txt-caption">
-            Get new jobs that match your criteria by e-mail and in your notifications.
-          </p>
-        </div>
+        <PageHeader
+          icon={BellRing}
+          tone="amber"
+          title="Job Alerts"
+          subtitle="Get new jobs that match your criteria by e-mail and in your notifications."
+        />
         <div className="flex flex-col items-end gap-1">
           <Button size="sm" onClick={openCreate} disabled={atLimit || !!error}>
             <Plus className="h-4 w-4" aria-hidden="true" />

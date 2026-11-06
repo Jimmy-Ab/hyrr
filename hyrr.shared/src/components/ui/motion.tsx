@@ -182,9 +182,8 @@ export function useSmoothScroll(wrapper: HTMLElement | null, resetKey?: unknown)
         smoothWheel: true,
         syncTouch: false,
         allowNestedScroll: true,
-        duration: 1.05,
-        easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)), // expo out
-        wheelMultiplier: 0.95,
+        lerp: 0.14,
+        wheelMultiplier: 1.1,
       })
       lenisRef.current = instance
     })
