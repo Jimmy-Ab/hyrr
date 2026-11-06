@@ -112,6 +112,8 @@ model User {
   status       UserStatus  @default(ACTIVE)
   joinedAt     DateTime    @default(now())
   lastLogin    DateTime    @default(now())
+  /// Last authenticated activity (login or API use, updated at most hourly); powers active-user analytics.
+  lastActiveAt DateTime?
 
   // Account security
   emailVerifiedAt        DateTime?
@@ -146,6 +148,8 @@ model User {
   authTokens         AuthToken[]
   jobAlerts     JobAlert[]
   savedSearches  SavedSearch[]
+  @@index([joinedAt])
+  @@index([lastActiveAt])
 }
 
 model Company {
@@ -173,6 +177,7 @@ model Company {
   transactions CreditTransaction[]
   payments     Payment[]
   subscription Subscription?
+  @@index([joinedAt])
 }
 
 // ==========================================
@@ -299,6 +304,7 @@ model Job {
   // Relations
   applications  Application[]
   screeningQuestions ScreeningQuestion[]
+  @@index([publishedAt])
 }
 
 // ==========================================
@@ -349,6 +355,7 @@ model Application {
   answers            ScreeningAnswer[]
   stageEvents        ApplicationStageEvent[]
   conversationStates ConversationState[]
+  @@index([appliedAt])
 }
 
 // ==========================================
@@ -371,6 +378,7 @@ model Message {
 
   @@unique([senderId, clientId])
   @@index([applicationId, createdAt])
+  @@index([createdAt])
 }
 
 // Per-user conversation state: read position and "delete for me".
@@ -475,6 +483,7 @@ model Payment {
 
   @@index([companyId, createdAt])
   @@index([userId, createdAt])
+  @@index([paidAt])
 }
 
 model AuditLog {
@@ -484,9 +493,13 @@ model AuditLog {
   action    String
   target    String
   details   String   @db.Text
+  /// Structured context (reason, before/after values).
+  meta      Json?
   ip        String
   severity  String
   createdAt DateTime @default(now())
+  @@index([createdAt])
+  @@index([userId, createdAt])
 }
 
 // ==========================================
@@ -562,6 +575,7 @@ model ApplicationStageEvent {
   toStatus      ApplicationStatus
   actorId       String?
   createdAt     DateTime          @default(now())
+  @@index([toStatus, createdAt])
 }
 
 
@@ -709,6 +723,7 @@ model CreditTransaction {
   @@index([companyId, createdAt])
   @@index([userId, createdAt])
   @@index([type, referenceId])
+  @@index([createdAt])
 }
 
 enum CreditAudience {
