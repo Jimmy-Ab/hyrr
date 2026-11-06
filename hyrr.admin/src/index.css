@@ -163,3 +163,23 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/*
+ * Chart palette (categorical, fixed order). Validated with the dataviz validator:
+ * light vs #ffffff and dark vs #111217 pass lightness band, chroma, CVD and contrast
+ * (light slot 2 amber is < 3:1, so every chart keeps a legend, tooltips and CSV export).
+ */
+:root {
+  --chart-1: #3b7bf0;
+  --chart-2: #d98a0b;
+  --chart-3: #0f9f8f;
+  --chart-4: #7c5cfc;
+  --chart-grid: var(--color-bg-border);
+  --chart-axis: var(--color-txt-caption);
+}
+.dark {
+  --chart-1: #5b8ff0;
+  --chart-2: #c4841a;
+  --chart-3: #1f9f8f;
+  --chart-4: #8a74f0;
+}

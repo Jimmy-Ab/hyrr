@@ -1,6 +1,6 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from "@nestjs/common"
 import Redis from "ioredis"
-import { redisOptions } from "../core/redis/redis-options"
+import { isRedisConfigured, redisOptions } from "../core/redis/redis-options"
 
 const MEMORY_MAX_ENTRIES = 1000
 
@@ -15,6 +15,9 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
   private readonly memory = new Map<string, { value: string; expiresAt: number }>()
 
   onModuleInit() {
+    // Redis is optional and only used when configured (REDIS_HOST); otherwise the in-memory
+    // cache serves, so separate local backends never share cached data by accident.
+    if (!isRedisConfigured()) return
     try {
       this.client = new Redis({
         ...redisOptions(),

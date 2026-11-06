@@ -75,7 +75,8 @@ export class MeiliClient {
         signal: controller.signal,
       })
     } catch (err: any) {
-      const reason = err?.name === "AbortError" ? `timed out after ${this.timeoutMs} ms` : err?.message
+      const reason =
+        err?.name === "AbortError" ? `timed out after ${this.timeoutMs} ms` : err?.message
       throw new MeiliError(`Meilisearch ${method} ${path} failed: ${reason}`)
     } finally {
       clearTimeout(timer)
@@ -108,7 +109,11 @@ export class MeiliClient {
   }
 
   /** Polls a task until it settles; throws when it failed or did not finish within `timeoutMs`. */
-  async waitForTask(taskUid: number, timeoutMs = 30_000, intervalMs = 100): Promise<MeiliTaskStatus> {
+  async waitForTask(
+    taskUid: number,
+    timeoutMs = 30_000,
+    intervalMs = 100
+  ): Promise<MeiliTaskStatus> {
     const deadline = Date.now() + timeoutMs
     for (;;) {
       const task = await this.getTask(taskUid)
@@ -120,7 +125,9 @@ export class MeiliClient {
           task.error?.code
         )
       if (Date.now() >= deadline)
-        throw new MeiliError(`Meilisearch task ${taskUid} still ${task.status} after ${timeoutMs} ms`)
+        throw new MeiliError(
+          `Meilisearch task ${taskUid} still ${task.status} after ${timeoutMs} ms`
+        )
       await new Promise((resolve) => setTimeout(resolve, intervalMs))
     }
   }
@@ -130,7 +137,11 @@ export class MeiliClient {
   }
 
   updateSettings(uid: string, settings: MeiliIndexSettings): Promise<MeiliTask> {
-    return this.request<MeiliTask>("PATCH", `/indexes/${encodeURIComponent(uid)}/settings`, settings)
+    return this.request<MeiliTask>(
+      "PATCH",
+      `/indexes/${encodeURIComponent(uid)}/settings`,
+      settings
+    )
   }
 
   /** Add-or-replace (POST) so stale fields never survive an update. */
@@ -149,7 +160,10 @@ export class MeiliClient {
     )
   }
 
-  search<T = { id: string }>(uid: string, body: MeiliSearchRequest): Promise<MeiliSearchResponse<T>> {
+  search<T = { id: string }>(
+    uid: string,
+    body: MeiliSearchRequest
+  ): Promise<MeiliSearchResponse<T>> {
     return this.request<MeiliSearchResponse<T>>(
       "POST",
       `/indexes/${encodeURIComponent(uid)}/search`,

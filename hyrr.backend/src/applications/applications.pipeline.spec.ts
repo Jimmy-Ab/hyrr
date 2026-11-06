@@ -20,6 +20,8 @@ describe("ApplicationsService – pipeline", () => {
 
   beforeEach(() => {
     prisma = mockDeep<PrismaClient>()
+    // Apply looks the job up with findFirst + PUBLIC_JOB_WHERE; tests stub findUnique.
+    prisma.job.findFirst.mockImplementation(((args: any) => prisma.job.findUnique(args)) as any)
     prisma.$transaction.mockImplementation((fn: any) =>
       typeof fn === "function" ? fn(prisma) : Promise.all(fn)
     )

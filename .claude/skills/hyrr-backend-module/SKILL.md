@@ -42,3 +42,10 @@ Use the `hyrr-migration` skill (never `prisma migrate dev` against the user's DB
 
 ## Verify
 `cd hyrr.backend && npx tsc --noEmit -p . && npx jest src/<feature>`, then the full `npx jest`. For API/socket behaviour, run a live check with the `hyrr-smoke` skill.
+
+## Admin endpoints (`src/admin/`)
+- Every `/api/admin/*` route: `@UseGuards(JwtAuthGuard, AdminGuard)` (ADMIN role + 2FA, read from the DB each request).
+- Every mutation calls `AuditService.record({ actorId, action, target, details, reason?, meta?, ip, severity }, tx)` inside the same transaction. Targets: `user:<id>`, `company:<id>`, `job:<id>`, `package:<id>`, `plan:<CODE>`, `pricing`, `ai`. Destructive/monetary actions require a `reason` (3..500).
+- Stats use grouped `prisma.$queryRaw` with `Prisma.sql` bound params + `generate_series` zero-fill, cached 5 min.
+- Public visibility of a job = `PUBLIC_JOB_WHERE` (`src/jobs/public-job.ts`: ACTIVE and company not SUSPENDED); use it for search, detail, apply and the search index. Writes by members of a suspended company return 403 `COMPANY_SUSPENDED` (AccessService, `requireCompanyWriter`).
+- Admin accounts only via `npm run admin:create|admin:revoke --workspace=hyrr.backend` (audited with ip "cli").

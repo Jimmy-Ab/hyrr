@@ -164,6 +164,22 @@ services:
     depends_on:
       - backend
 
+  # ─── Admin SPA (sign-in needs an admin account: npm run admin:create) ─────────
+  admin:
+    build:
+      context: .
+      dockerfile: hyrr.admin/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:${BACKEND_PORT:-3000}/api}
+        VITE_SOCKET_URL: ${VITE_SOCKET_URL:-http://localhost:${BACKEND_PORT:-3000}}
+        VITE_TURNSTILE_SITE_KEY: ${VITE_TURNSTILE_SITE_KEY:-}
+        VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
+    container_name: hyrr_admin
+    ports:
+      - "5175:5175"
+    depends_on:
+      - backend
+
   # ─── Job seeker SPA ───────────────────────────────────────────────────────────
   jobseeker:
     build:

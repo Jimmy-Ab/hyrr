@@ -1,283 +1,414 @@
-import { Badge, Button, Card, Input, useToast } from "hyrr.shared"
-import { Ban, CheckCircle2, Eye, Globe, Search, XCircle } from "lucide-react"
-import { useState } from "react"
-import { useAdminStore, type AdminCompany } from "../store/useAdminStore"
+import {
+  Button,
+  EmptyState,
+  FilterChips,
+  PageHeader,
+  Skeleton,
+  TonePill,
+  VerifiedBadge,
+  jobStatusTone,
+} from "hyrr.shared"
+import { BadgeCheck, BadgeX, Ban, Building2, Coins, RotateCcw } from "lucide-react"
+import * as React from "react"
+import { ActionConfirm } from "../components/ui/action-confirm"
+import { AuditList } from "../components/ui/audit-list"
+import {
+  Avatar,
+  DataTable,
+  ErrorBlock,
+  LoadMore,
+  LoadingRows,
+  RowButton,
+  SearchBox,
+  td,
+} from "../components/ui/common"
+import { ReasonDialog } from "../components/ui/reason-dialog"
+import { KeyValues, SheetSection, SideSheet } from "../components/ui/side-sheet"
+import { api, useAdminAction, useAdminQuery, useCursorList } from "../lib/api"
+import { date, dateTime, humanize, money, num } from "../lib/format"
+import { useNav } from "../lib/nav"
+import { companyStatusTone, paymentStatusTone, userStatusTone } from "../lib/tones"
+import type { AdminCompany, AdminCompanyDetail, CompanyStatus } from "../lib/types"
 
-const colorBg: Record<string, string> = {
-  purple: "bg-primary text-white",
-  blue: "bg-sec-blue text-white",
-  green: "bg-sec-green text-white",
-  orange: "bg-sec-orange text-white",
-}
+type StatusFilter = "ALL" | CompanyStatus
 
-export function CompaniesPage() {
-  const { companies, updateCompanyStatus } = useAdminStore()
-  const { toast } = useToast()
-  const [search, setSearch] = useState("")
-  const [filter, setFilter] = useState<AdminCompany["status"] | "all">("all")
-  const [selected, setSelected] = useState<AdminCompany | null>(null)
-
-  const filtered = companies.filter((c) => {
-    const matchSearch = c.name.toLowerCase().includes(search.toLowerCase())
-    const matchFilter = filter === "all" || c.status === filter
-    return matchSearch && matchFilter
+export function Companies() {
+  const focus = useNav((s) => s.focus)
+  const clearFocus = useNav((s) => s.clearFocus)
+  const [q, setQ] = React.useState("")
+  const [status, setStatus] = React.useState<StatusFilter>("ALL")
+  const [openId, setOpenId] = React.useState<string | null>(null)
+  const list = useCursorList<AdminCompany>("/companies", {
+    q,
+    status: status === "ALL" ? undefined : status,
   })
 
+  React.useEffect(() => {
+    if (focus?.view === "companies") {
+      setOpenId(focus.id)
+      clearFocus()
+    }
+  }, [focus, clearFocus])
+
+  const filtered = !!q || status !== "ALL"
+
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div>
-        <h1 className="text-[36px] font-bold text-txt-title tracking-tight">Companies</h1>
-        <p className="text-body text-txt-body mt-1 font-medium">
-          Review, approve, and manage employer organizations on the platform.
-        </p>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
-        {[
-          { label: "Total Companies", value: companies.length, color: "text-primary" },
-          {
-            label: "Verified",
-            value: companies.filter((c) => c.status === "verified").length,
-            color: "text-sec-green",
-          },
-          {
-            label: "Awaiting Review",
-            value: companies.filter((c) => c.status === "pending").length,
-            color: "text-sec-orange",
-          },
-          {
-            label: "Total Active Jobs",
-            value: companies.reduce((a, c) => a + c.activeJobs, 0),
-            color: "text-sec-blue",
-          },
-        ].map((s) => (
-          <Card key={s.label} className="p-4 text-center">
-            <p className={`text-[28px] font-extrabold ${s.color}`}>{s.value}</p>
-            <p className="text-[11px] text-txt-caption font-semibold uppercase tracking-wider mt-0.5">
-              {s.label}
-            </p>
-          </Card>
-        ))}
-      </div>
-
-      {/* Filters */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-txt-caption" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search company…"
-            className="pl-9 h-9 text-[13px]"
+    <div className="flex flex-col gap-6 pb-10">
+      <PageHeader
+        title="Companies"
+        icon={Building2}
+        tone="blue"
+        subtitle="Hiring teams, verification and credits"
+        actions={
+          <SearchBox
+            value={q}
+            onChange={setQ}
+            placeholder="Search companies"
+            label="Search companies"
           />
-        </div>
-        <div className="flex gap-1 bg-bg-secondary border border-bg-border p-1 rounded-[12px]">
-          {(["all", "verified", "pending", "suspended"] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => setFilter(s)}
-              className={`px-3 py-1 rounded-[9px] text-[12px] font-semibold cursor-pointer capitalize transition-all ${filter === s ? "bg-primary text-white" : "text-txt-body hover:bg-bg-hover"}`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      </div>
+        }
+      />
+      <FilterChips
+        id="companies-status"
+        label="Status"
+        value={status}
+        onChange={setStatus}
+        className="self-start"
+        options={[
+          { value: "ALL", label: "All", tone: "slate" },
+          { value: "VERIFIED", label: "Verified", tone: "emerald" },
+          { value: "PENDING", label: "Pending", tone: "amber" },
+          { value: "SUSPENDED", label: "Suspended", tone: "rose" },
+        ]}
+      />
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Company cards */}
-        <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filtered.map((company) => (
-            <Card
-              key={company.id}
-              hoverEffect
-              onClick={() => setSelected(selected?.id === company.id ? null : company)}
-              className={`p-5 cursor-pointer transition-all ${selected?.id === company.id ? "ring-2 ring-primary/30" : ""}`}
-            >
-              <div className="flex items-start gap-3 mb-4">
-                <div
-                  className={`w-12 h-12 rounded-[14px] flex items-center justify-center font-bold text-[18px] shrink-0 ${colorBg[company.color] ?? "bg-primary text-white"}`}
-                >
-                  {company.logo}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-[14px] font-bold text-txt-heading truncate">
-                    {company.name}
-                  </h3>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <Globe className="w-3 h-3 text-txt-caption" />
-                    <span className="text-[11.5px] text-txt-caption">{company.country}</span>
-                  </div>
-                </div>
-                <Badge
-                  variant={
-                    company.status === "verified"
-                      ? "success"
-                      : company.status === "pending"
-                        ? "secondary"
-                        : "destructive"
-                  }
-                >
-                  {company.status}
-                </Badge>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 mb-4 text-center">
-                {[
-                  { label: "Recruiters", value: company.recruiters },
-                  { label: "Active Jobs", value: company.activeJobs },
-                  { label: "Total Hires", value: company.totalHires },
-                ].map((s) => (
-                  <div key={s.label} className="p-2 bg-bg-primary rounded-[10px]">
-                    <p className="text-[16px] font-extrabold text-txt-heading">{s.value}</p>
-                    <p className="text-[10px] text-txt-caption">{s.label}</p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex items-center justify-between pt-3 border-t border-bg-border/30">
-                <span className="text-[11px] font-bold text-primary bg-primary-light px-2 py-0.5 rounded-full border border-primary/20">
-                  {company.plan}
-                </span>
-                <span className="text-[11px] text-txt-caption">Since {company.joined}</span>
-              </div>
-
-              <div className="flex gap-2 mt-3">
-                {company.status === "pending" && (
-                  <>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        updateCompanyStatus(company.id, "verified")
-                        toast("Approved", `${company.name} verified.`, "success")
-                      }}
-                      className="flex items-center gap-1 text-[11px] font-semibold text-sec-green hover:bg-sec-green/10 px-2 py-1 rounded-[8px] cursor-pointer transition-colors"
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Approve
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        updateCompanyStatus(company.id, "suspended")
-                        toast("Rejected", `${company.name} rejected.`, "warning")
-                      }}
-                      className="flex items-center gap-1 text-[11px] font-semibold text-sec-red hover:bg-sec-red/10 px-2 py-1 rounded-[8px] cursor-pointer transition-colors"
-                    >
-                      <XCircle className="w-3.5 h-3.5" /> Reject
-                    </button>
-                  </>
-                )}
-                {company.status === "verified" && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      updateCompanyStatus(company.id, "suspended")
-                      toast("Suspended", `${company.name} suspended.`, "warning")
-                    }}
-                    className="flex items-center gap-1 text-[11px] font-semibold text-sec-red hover:bg-sec-red/10 px-2 py-1 rounded-[8px] cursor-pointer transition-colors"
-                  >
-                    <Ban className="w-3.5 h-3.5" /> Suspend
-                  </button>
-                )}
-                {company.status === "suspended" && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      updateCompanyStatus(company.id, "verified")
-                      toast("Reinstated", `${company.name} reactivated.`, "success")
-                    }}
-                    className="flex items-center gap-1 text-[11px] font-semibold text-sec-green hover:bg-sec-green/10 px-2 py-1 rounded-[8px] cursor-pointer transition-colors"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Reinstate
-                  </button>
-                )}
-              </div>
-            </Card>
-          ))}
-        </div>
-
-        {/* Detail panel */}
-        {selected ? (
-          <Card className="p-6 space-y-5">
-            <div className="text-center space-y-3">
-              <div
-                className={`w-20 h-20 rounded-[18px] flex items-center justify-center font-bold text-[32px] mx-auto ${colorBg[selected.color]}`}
-              >
-                {selected.logo}
-              </div>
-              <div>
-                <h2 className="text-[17px] font-bold text-txt-heading">{selected.name}</h2>
-                <p className="text-[12px] text-txt-caption">{selected.country}</p>
-              </div>
-              <Badge
-                variant={
-                  selected.status === "verified"
-                    ? "success"
-                    : selected.status === "pending"
-                      ? "secondary"
-                      : "destructive"
-                }
-              >
-                {selected.status}
-              </Badge>
-            </div>
-
-            <div className="space-y-2">
-              {[
-                { label: "Plan", value: selected.plan },
-                { label: "Since", value: selected.joined },
-                { label: "Recruiters", value: selected.recruiters },
-                { label: "Active Jobs", value: selected.activeJobs },
-                { label: "Total Hires", value: selected.totalHires },
-              ].map((row) => (
-                <div
-                  key={row.label}
-                  className="flex items-center justify-between py-1.5 border-b border-bg-border/30 last:border-0"
-                >
-                  <span className="text-[12px] text-txt-caption">{row.label}</span>
-                  <span className="text-[12.5px] font-semibold text-txt-heading">{row.value}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <Button
-                size="sm"
-                className="w-full cursor-pointer text-[12px]"
-                onClick={() => toast("View jobs", `Jobs from ${selected.name}`, "info")}
-              >
-                View All Jobs
-              </Button>
+      {list.error && !list.data ? (
+        <ErrorBlock error={list.error} onRetry={() => void list.refetch()} />
+      ) : list.isLoading ? (
+        <LoadingRows />
+      ) : list.items.length === 0 ? (
+        <EmptyState
+          icon={Building2}
+          tone="blue"
+          title={filtered ? "No matching companies" : "No companies yet"}
+          description={
+            filtered ? "Try another name or status." : "Companies appear when recruiters sign up."
+          }
+          action={
+            filtered ? (
               <Button
                 size="sm"
                 variant="secondary"
-                className="w-full cursor-pointer text-[12px]"
-                onClick={() => toast("Contact", `Emailing ${selected.name}`, "info")}
+                onClick={() => {
+                  setQ("")
+                  setStatus("ALL")
+                }}
               >
-                Contact Company
+                Clear filters
               </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="w-full cursor-pointer text-[12px] text-sec-red hover:text-sec-red"
-                onClick={() => toast("Deleted", `${selected.name} removed.`, "warning")}
-              >
-                Delete Company
-              </Button>
-            </div>
-          </Card>
-        ) : (
-          <Card className="p-6 flex flex-col items-center justify-center gap-3 min-h-[280px] border-dashed">
-            <Eye className="w-8 h-8 text-txt-disabled" />
-            <p className="text-[13px] text-txt-caption text-center">
-              Click a company card
-              <br />
-              to view details
-            </p>
-          </Card>
-        )}
-      </div>
+            ) : undefined
+          }
+        />
+      ) : (
+        <div>
+          <DataTable head={["Company", "Status", "Members", "Jobs", "Credits", "Plan", "Joined"]}>
+            {list.items.map((c) => (
+              <RowButton key={c.id} label={`Open ${c.name}`} onOpen={() => setOpenId(c.id)}>
+                <td className={td}>
+                  <span className="flex items-center gap-3">
+                    <Avatar name={c.name} src={c.logo} />
+                    <span className="inline-flex items-center gap-1.5 font-semibold text-txt-heading">
+                      {c.name}
+                      {c.verified && <VerifiedBadge focusable={false} />}
+                    </span>
+                  </span>
+                </td>
+                <td className={td}>
+                  <TonePill tone={companyStatusTone(c.status)}>{humanize(c.status)}</TonePill>
+                </td>
+                <td className={`${td} tabular-nums`}>{num(c.members)}</td>
+                <td className={`${td} tabular-nums`}>
+                  <span className="font-semibold text-txt-heading">{num(c.liveJobs)}</span>
+                  <span className="text-txt-caption"> live / {num(c.jobs)}</span>
+                </td>
+                <td className={`${td} tabular-nums font-semibold text-txt-heading`}>
+                  {num(c.balance)}
+                </td>
+                <td className={`${td} text-txt-body`}>{c.plan ? humanize(c.plan) : "—"}</td>
+                <td className={`${td} whitespace-nowrap text-txt-body`}>{date(c.joinedAt)}</td>
+              </RowButton>
+            ))}
+          </DataTable>
+          <LoadMore
+            shown={list.items.length}
+            hasMore={!!list.hasNextPage}
+            loading={list.isFetchingNextPage}
+            onClick={() => void list.fetchNextPage()}
+          />
+        </div>
+      )}
+
+      <CompanySheet companyId={openId} onClose={() => setOpenId(null)} />
     </div>
+  )
+}
+
+type Pending = "verify" | "unverify" | "suspend" | "reactivate" | "credits" | null
+
+function CompanySheet({ companyId, onClose }: { companyId: string | null; onClose: () => void }) {
+  const go = useNav((s) => s.go)
+  const { data, error, isLoading, refetch } = useAdminQuery<AdminCompanyDetail>(
+    `/companies/${companyId}`,
+    undefined,
+    { enabled: !!companyId }
+  )
+  const [pending, setPending] = React.useState<Pending>(null)
+  const act = useAdminAction(({ path, body }: { path: string; body?: object }) =>
+    api.post(`/companies/${companyId}/${path}`, body)
+  )
+  const c = data && data.id === companyId ? data : undefined
+  const planName = c?.subscription?.plan?.name ?? c?.subscription?.planCode ?? c?.plan
+
+  return (
+    <SideSheet
+      open={!!companyId}
+      onOpenChange={(o) => !o && onClose()}
+      title={c?.name ?? "Company"}
+      subtitle={c?.website ?? undefined}
+      header={
+        c && (
+          <>
+            <TonePill tone={companyStatusTone(c.status)}>{humanize(c.status)}</TonePill>
+            {c.verified && <TonePill tone="emerald">Verified badge</TonePill>}
+            {planName && <TonePill tone="violet">{humanize(String(planName))}</TonePill>}
+          </>
+        )
+      }
+      footer={
+        c && (
+          <>
+            {c.verified ? (
+              <Button size="sm" variant="ghost" onClick={() => setPending("unverify")}>
+                <BadgeX className="h-3.5 w-3.5" /> Remove badge
+              </Button>
+            ) : (
+              <Button size="sm" variant="secondary" onClick={() => setPending("verify")}>
+                <BadgeCheck className="h-3.5 w-3.5" /> Verify
+              </Button>
+            )}
+            <Button size="sm" variant="secondary" onClick={() => setPending("credits")}>
+              <Coins className="h-3.5 w-3.5" /> Adjust credits
+            </Button>
+            {c.status === "SUSPENDED" ? (
+              <Button size="sm" onClick={() => setPending("reactivate")}>
+                <RotateCcw className="h-3.5 w-3.5" /> Reactivate
+              </Button>
+            ) : (
+              <Button size="sm" variant="danger" onClick={() => setPending("suspend")}>
+                <Ban className="h-3.5 w-3.5" /> Suspend
+              </Button>
+            )}
+          </>
+        )
+      }
+    >
+      {error && !c ? (
+        <ErrorBlock error={error} onRetry={() => void refetch()} />
+      ) : isLoading || !c ? (
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-28" />
+          <Skeleton className="h-40" />
+        </div>
+      ) : (
+        <>
+          <SheetSection title="Profile">
+            <KeyValues
+              rows={[
+                ["Joined", date(c.joinedAt)],
+                ["Website", c.website || "—"],
+                ["Verified domain", c.verifiedDomain || "—"],
+                [
+                  "Plan",
+                  planName
+                    ? `${humanize(String(planName))}${c.subscription?.status ? ` · ${humanize(c.subscription.status)}` : ""}`
+                    : "—",
+                ],
+              ]}
+            />
+          </SheetSection>
+
+          <SheetSection title="Wallet">
+            <div className="tone-violet mb-3 flex items-baseline gap-2 rounded-2xl border border-bg-border/70 bg-[var(--tone-bg)] p-4">
+              <span className="text-[26px] font-bold tabular-nums text-txt-title">
+                {num(c.wallet?.balance ?? c.balance)}
+              </span>
+              <span className="text-[12.5px] text-txt-body">credits</span>
+            </div>
+            {c.wallet?.recent.length ? (
+              <ul className="divide-y divide-bg-border/60 rounded-2xl border border-bg-border/70">
+                {c.wallet.recent.map((t) => (
+                  <li
+                    key={t.id}
+                    className="flex items-center justify-between gap-3 px-3.5 py-2.5 text-[12.5px]"
+                  >
+                    <span className="min-w-0">
+                      <span className="block font-medium text-txt-heading">{humanize(t.type)}</span>
+                      <span className="block truncate text-[11.5px] text-txt-caption">
+                        {t.note ? `${t.note} · ` : ""}
+                        {dateTime(t.createdAt)}
+                      </span>
+                    </span>
+                    <span
+                      className={`shrink-0 font-semibold tabular-nums ${t.amount >= 0 ? "tone-emerald" : "tone-rose"} text-[var(--tone-fg)]`}
+                    >
+                      {t.amount > 0 ? "+" : ""}
+                      {num(t.amount)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-[13px] text-txt-caption">No ledger entries yet.</p>
+            )}
+          </SheetSection>
+
+          <SheetSection title={`Members (${c.members.length})`}>
+            <ul className="flex flex-col gap-1.5">
+              {c.members.map((m) => (
+                <li key={m.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose()
+                      go("users", { focusId: m.id })
+                    }}
+                    className="flex w-full cursor-pointer items-center gap-3 rounded-xl px-2 py-1.5 text-left hover:bg-bg-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                  >
+                    <Avatar name={m.name} size={28} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-semibold text-txt-heading">
+                        {m.name}
+                      </span>
+                      <span className="block truncate text-[11.5px] text-txt-caption">
+                        {m.email}
+                      </span>
+                    </span>
+                    <span className="text-[11.5px] text-txt-caption">{humanize(m.role)}</span>
+                    {m.status !== "ACTIVE" && (
+                      <TonePill tone={userStatusTone(m.status)}>{humanize(m.status)}</TonePill>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </SheetSection>
+
+          <SheetSection title={`Jobs (${c.jobs.length})`}>
+            {c.jobs.length ? (
+              <ul className="divide-y divide-bg-border/60 rounded-2xl border border-bg-border/70">
+                {c.jobs.map((j) => (
+                  <li
+                    key={j.id}
+                    className="flex items-center justify-between gap-3 px-3.5 py-2.5 text-[12.5px]"
+                  >
+                    <span className="truncate font-medium text-txt-heading">{j.title}</span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span className="tabular-nums text-txt-caption">
+                        {num(j.applicants)} applicants
+                      </span>
+                      <TonePill tone={jobStatusTone(j.status)}>{humanize(j.status)}</TonePill>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-[13px] text-txt-caption">No jobs yet.</p>
+            )}
+          </SheetSection>
+
+          <SheetSection title="Payments">
+            {c.payments.length ? (
+              <ul className="divide-y divide-bg-border/60 rounded-2xl border border-bg-border/70">
+                {c.payments.map((p) => (
+                  <li
+                    key={p.id}
+                    className="flex items-center justify-between gap-3 px-3.5 py-2.5 text-[12.5px]"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium text-txt-heading">
+                        {p.description || humanize(p.kind)}
+                      </span>
+                      <span className="block text-[11.5px] text-txt-caption">
+                        {humanize(p.provider)} · {dateTime(p.paidAt ?? p.createdAt)}
+                      </span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span className="font-semibold tabular-nums text-txt-heading">
+                        {money(p.amount, p.currency)}
+                      </span>
+                      <TonePill tone={paymentStatusTone(p.status)}>{humanize(p.status)}</TonePill>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-[13px] text-txt-caption">No payments yet.</p>
+            )}
+          </SheetSection>
+
+          <SheetSection title="Admin history">
+            <AuditList rows={c.audit} />
+          </SheetSection>
+        </>
+      )}
+
+      <ActionConfirm
+        open={pending === "verify"}
+        onOpenChange={(o) => !o && setPending(null)}
+        title={`Verify ${c?.name ?? "company"}?`}
+        description="The verified badge shows on their jobs and company page."
+        confirmLabel="Verify"
+        successTitle="Company verified"
+        run={() => act.run({ path: "verify" })}
+      />
+      <ReasonDialog
+        open={pending === "unverify"}
+        onOpenChange={(o) => !o && setPending(null)}
+        title="Remove the verified badge?"
+        description="The badge disappears from their jobs. The company stays active."
+        confirmLabel="Remove badge"
+        successTitle="Badge removed"
+        onConfirm={(body) => act.run({ path: "unverify", body })}
+      />
+      <ReasonDialog
+        open={pending === "suspend"}
+        onOpenChange={(o) => !o && setPending(null)}
+        title={`Suspend ${c?.name ?? "company"}?`}
+        description="Its jobs leave search, publishing is blocked and members can't make changes until you reactivate it."
+        confirmLabel="Suspend company"
+        successTitle="Company suspended"
+        onConfirm={(body) => act.run({ path: "suspend", body })}
+      />
+      <ActionConfirm
+        open={pending === "reactivate"}
+        onOpenChange={(o) => !o && setPending(null)}
+        title={`Reactivate ${c?.name ?? "company"}?`}
+        description="Its jobs return to search and members can work again."
+        confirmLabel="Reactivate"
+        successTitle="Company reactivated"
+        run={() => act.run({ path: "reactivate" })}
+      />
+      <ReasonDialog
+        open={pending === "credits"}
+        onOpenChange={(o) => !o && setPending(null)}
+        mode="credits"
+        destructive={false}
+        title="Adjust credits"
+        description={`Current balance: ${num(c?.wallet?.balance ?? c?.balance ?? 0)} credits. The change is written to the ledger and the audit log.`}
+        confirmLabel="Apply adjustment"
+        successTitle="Credits adjusted"
+        onConfirm={(body) => act.run({ path: "credits", body })}
+      />
+    </SideSheet>
   )
 }

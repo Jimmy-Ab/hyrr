@@ -101,23 +101,23 @@ describe("SearchService", () => {
   })
 
   it("processor upserts ACTIVE jobs and deletes everything else", async () => {
-    const prisma: any = { job: { findUnique: jest.fn() } }
+    const prisma: any = { job: { findFirst: jest.fn() } }
     const client = fakeClient()
     const service = new SearchService(prisma, undefined, client as any)
-    prisma.job.findUnique.mockResolvedValueOnce(jobRow())
+    prisma.job.findFirst.mockResolvedValueOnce(jobRow())
     await expect(service.syncJob("j1")).resolves.toBe("indexed")
     expect(client.addDocuments).toHaveBeenCalledWith("jobs", [
       expect.objectContaining({ id: "j1", companyName: "Acme" }),
     ])
-    prisma.job.findUnique.mockResolvedValueOnce(jobRow({ status: "CLOSED" }))
+    prisma.job.findFirst.mockResolvedValueOnce(null) // CLOSED: excluded by PUBLIC_JOB_WHERE
     await expect(service.syncJob("j1")).resolves.toBe("removed")
-    prisma.job.findUnique.mockResolvedValueOnce(null)
+    prisma.job.findFirst.mockResolvedValueOnce(null)
     await expect(service.syncJob("gone")).resolves.toBe("removed")
     expect(client.deleteDocument).toHaveBeenLastCalledWith("jobs", "gone")
   })
 
   it("processor errors propagate so the queue retries", async () => {
-    const prisma: any = { job: { findUnique: jest.fn().mockResolvedValue(jobRow()) } }
+    const prisma: any = { job: { findFirst: jest.fn().mockResolvedValue(jobRow()) } }
     const client = fakeClient()
     client.addDocuments.mockRejectedValue(new Error("down"))
     const service = new SearchService(prisma, undefined, client as any)
@@ -196,7 +196,11 @@ describe("SearchService", () => {
       })
     )
     expect(client.waitForTask).toHaveBeenCalledWith(4)
-    expect(prisma.job.findMany.mock.calls[0][0].where).toEqual({ status: "ACTIVE" })
+    // Only publicly visible jobs: ACTIVE and the company not suspended.
+    expect(prisma.job.findMany.mock.calls[0][0].where).toEqual({
+      status: "ACTIVE",
+      company: { status: { not: "SUSPENDED" } },
+    })
     expect(client.addDocuments.mock.calls[0][1]).toHaveLength(2)
   })
 
@@ -217,11 +221,11 @@ describe("SearchService", () => {
 
   it("without a queue, indexing runs in-process after the debounce", async () => {
     jest.useFakeTimers()
-    const prisma: any = { job: { findUnique: jest.fn().mockResolvedValue(null) } }
+    const prisma: any = { job: { findFirst: jest.fn().mockResolvedValue(null) } }
     const client = fakeClient()
     const service = new SearchService(prisma, undefined, client as any)
     service.indexJobSoon("j9")
-    expect(prisma.job.findUnique).not.toHaveBeenCalled()
+    expect(prisma.job.findFirst).not.toHaveBeenCalled()
     await jest.advanceTimersByTimeAsync(500)
     expect(client.deleteDocument).toHaveBeenCalledWith("jobs", "j9")
   })

@@ -56,6 +56,50 @@ describe("access token verification", () => {
     expect(() => verifyAccessToken(jwt, access.slice(0, -2) + "xx")).toThrow(UnauthorizedException)
   })
 
+  describe("JwtStrategy lastActiveAt tracking", () => {
+    it("writes lastActiveAt at most once per throttle window (cache key active:<id>)", async () => {
+      const store = new Map<string, unknown>()
+      const cache: any = {
+        get: jest.fn(async (k: string) => store.get(k) ?? null),
+        set: jest.fn(async (k: string, v: unknown) => void store.set(k, v)),
+      }
+      const prisma: any = {
+        user: {
+          findUnique: jest.fn().mockResolvedValue({
+            id: "u1",
+            status: "ACTIVE",
+            role: "SEEKER",
+            email: "a@b.c",
+            tokenVersion: 0,
+          }),
+          update: jest.fn().mockResolvedValue({}),
+        },
+      }
+      const strategy = new JwtStrategy(prisma, cache)
+      await strategy.validate({ sub: "u1", role: "SEEKER", email: "a@b.c" })
+      await strategy.validate({ sub: "u1", role: "SEEKER", email: "a@b.c" })
+      expect(prisma.user.update).toHaveBeenCalledTimes(1)
+      expect(prisma.user.update.mock.calls[0][0]).toMatchObject({
+        where: { id: "u1" },
+        data: { lastActiveAt: expect.any(Date) },
+      })
+      expect(cache.set).toHaveBeenCalledWith("active:u1", 1, 3600)
+    })
+
+    it("never fails the request when the write fails", async () => {
+      const cache: any = { get: jest.fn().mockResolvedValue(null), set: jest.fn() }
+      const prisma: any = {
+        user: {
+          findUnique: jest.fn().mockResolvedValue({ id: "u1", status: "ACTIVE", tokenVersion: 0 }),
+          update: jest.fn().mockRejectedValue(new Error("db down")),
+        },
+      }
+      await expect(
+        new JwtStrategy(prisma, cache).validate({ sub: "u1", role: "SEEKER", email: "a@b.c" })
+      ).resolves.toMatchObject({ userId: "u1" })
+    })
+  })
+
   describe("JwtStrategy.validate", () => {
     const prisma: any = { user: { findUnique: jest.fn() } }
     const strategy = new JwtStrategy(prisma)

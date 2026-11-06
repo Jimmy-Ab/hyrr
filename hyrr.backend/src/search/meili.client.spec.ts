@@ -35,7 +35,9 @@ describe("MeiliClient", () => {
   it("maps HTTP errors to MeiliError with status and code", async () => {
     const fetchImpl = jest
       .fn()
-      .mockResolvedValue(response(404, { message: "Index `jobs` not found.", code: "index_not_found" }))
+      .mockResolvedValue(
+        response(404, { message: "Index `jobs` not found.", code: "index_not_found" })
+      )
     const client = new MeiliClient("http://meili", "k", 2000, fetchImpl)
     const err = await client.search("jobs", { q: "x" }).catch((e) => e)
     expect(err).toBeInstanceOf(MeiliError)

@@ -218,9 +218,10 @@ export class AuthService {
       return { mfaRequired: true, mfaToken }
     }
 
+    const now = new Date()
     await this.prisma.user.update({
       where: { id: user.id },
-      data: { lastLogin: new Date() },
+      data: { lastLogin: now, lastActiveAt: now },
     })
 
     return this.generateTokens(user)
@@ -259,7 +260,11 @@ export class AuthService {
       )
     }
     await this.attempts.reset(keys)
-    await this.prisma.user.update({ where: { id: user.id }, data: { lastLogin: new Date() } })
+    const now = new Date()
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastLogin: now, lastActiveAt: now },
+    })
     return this.generateTokens(user)
   }
 
@@ -363,7 +368,11 @@ export class AuthService {
       !user.emailVerifiedAt && !!verifiedEmail && verifiedEmail === user.email.toLowerCase()
     user = await this.prisma.user.update({
       where: { id: user.id },
-      data: { lastLogin: new Date(), ...(markVerified ? { emailVerifiedAt: new Date() } : {}) },
+      data: {
+        lastLogin: new Date(),
+        lastActiveAt: new Date(),
+        ...(markVerified ? { emailVerifiedAt: new Date() } : {}),
+      },
     })
     await this.accountEmail.refreshCompanyVerification(user.id)
     return this.generateTokens(user)

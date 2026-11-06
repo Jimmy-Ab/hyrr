@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common"
 import { ConfigModule } from "@nestjs/config"
+import { AdminModule } from "./admin/admin.module"
 import { AiModule } from "./ai/ai.module"
 import { ApplicationsModule } from "./applications/applications.module"
 import { AuthModule } from "./auth/auth.module"
@@ -62,6 +63,7 @@ import { UploadsModule } from "./uploads/uploads.module"
     SeekerToolsModule,
     SettingsModule,
     TalentModule,
+    AdminModule,
   ],
 })
 export class AppModule {}

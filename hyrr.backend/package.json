@@ -17,7 +17,9 @@
     "test:ci": "jest --ci",
     "typecheck": "tsc --noEmit -p .",
     "build:seed": "tsc prisma/seed.ts --outDir dist/prisma --module commonjs --target es2021 --esModuleInterop --skipLibCheck",
-    "email:test": "node scripts/send-test-email.cjs"
+    "email:test": "node scripts/send-test-email.cjs",
+    "admin:create": "node scripts/admin-create.cjs",
+    "admin:revoke": "node scripts/admin-revoke.cjs"
   },
   "prisma": {
     "seed": "node prisma/seed-runner.js"

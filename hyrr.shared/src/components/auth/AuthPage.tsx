@@ -10,7 +10,8 @@ import { TurnstileWidget } from "./turnstile-widget"
 
 /* ─── Props ───────────────────────────────────────────────────────────────── */
 interface AuthPageProps {
-  forcedRole: "SEEKER" | "RECRUITER"
+  /** "ADMIN": sign-in only (no sign-up, no OAuth); the two-factor step still applies. */
+  forcedRole: "SEEKER" | "RECRUITER" | "ADMIN"
   /** Screen to open on (default "login"). */
   initialMode?: "login" | "register" | "forgot"
 }
@@ -110,7 +111,10 @@ export function AuthPage({ forcedRole, initialMode = "login" }: AuthPageProps) {
   const authError = useJobStore((s) => s.authError)
   const mfaPending = useJobStore((s) => s.mfaPending)
 
-  const [mode, setMode] = React.useState<"login" | "register" | "forgot">(initialMode)
+  const isAdmin = forcedRole === "ADMIN"
+  const [mode, setMode] = React.useState<"login" | "register" | "forgot">(
+    isAdmin && initialMode === "register" ? "login" : initialMode
+  )
   const [email, setEmail] = React.useState("")
   const [password, setPassword] = React.useState("")
   const [name, setName] = React.useState("")
@@ -145,7 +149,7 @@ export function AuthPage({ forcedRole, initialMode = "login" }: AuthPageProps) {
     if (mode === "login") {
       const result = await loginUser(email, password, token)
       if (result === "CAPTCHA_REQUIRED") setNeedLoginCaptcha(true)
-    } else {
+    } else if (forcedRole !== "ADMIN") {
       await registerUser(name, email, password, forcedRole, token)
     }
     // Turnstile tokens are single-use.
@@ -153,15 +157,18 @@ export function AuthPage({ forcedRole, initialMode = "login" }: AuthPageProps) {
   }
 
   const handleOAuth = (provider: "google" | "github" | "linkedin") => {
+    if (forcedRole === "ADMIN") return
     window.location.assign(getOAuthUrl(provider, forcedRole))
   }
 
   const isSeeker = forcedRole === "SEEKER"
+  // Admins get the plain centred card (no marketing hero).
+  const shellRole = isAdmin ? undefined : forcedRole
   const error = localError || authError
 
   if (mfaPending) {
     return (
-      <AuthShell forcedRole={forcedRole}>
+      <AuthShell forcedRole={shellRole}>
         <MfaStep />
       </AuthShell>
     )
@@ -169,23 +176,25 @@ export function AuthPage({ forcedRole, initialMode = "login" }: AuthPageProps) {
 
   if (mode === "forgot") {
     return (
-      <AuthShell forcedRole={forcedRole}>
+      <AuthShell forcedRole={shellRole}>
         <ForgotPasswordForm initialEmail={email} onBack={() => switchMode("login")} />
       </AuthShell>
     )
   }
 
   return (
-    <AuthShell forcedRole={forcedRole}>
+    <AuthShell forcedRole={shellRole}>
       {/* Header */}
       <div className="auth-card-header">
         <h2 className="auth-card-title">
-          {mode === "login" ? "Welcome back 👋" : "Create your account"}
+          {isAdmin ? "Hyrr admin" : mode === "login" ? "Welcome back 👋" : "Create your account"}
         </h2>
         <p className="auth-card-sub">
-          {mode === "login"
-            ? "Sign in to continue to your dashboard."
-            : `Start your journey as a ${isSeeker ? "job seeker" : "recruiter"}.`}
+          {isAdmin
+            ? "Sign in with your admin account. Two-factor authentication is required."
+            : mode === "login"
+              ? "Sign in to continue to your dashboard."
+              : `Start your journey as a ${isSeeker ? "job seeker" : "recruiter"}.`}
         </p>
       </div>
 
@@ -196,40 +205,44 @@ export function AuthPage({ forcedRole, initialMode = "login" }: AuthPageProps) {
         </div>
       )}
 
-      {/* OAuth */}
-      <div className="auth-oauth-grid">
-        <button
-          id="oauth-google"
-          type="button"
-          className="auth-oauth-btn"
-          onClick={() => handleOAuth("google")}
-        >
-          <GoogleIcon /> <span>Google</span>
-        </button>
-        <button
-          id="oauth-github"
-          type="button"
-          className="auth-oauth-btn"
-          onClick={() => handleOAuth("github")}
-        >
-          <GithubIcon /> <span>GitHub</span>
-        </button>
-        <button
-          id="oauth-linkedin"
-          type="button"
-          className="auth-oauth-btn"
-          onClick={() => handleOAuth("linkedin")}
-        >
-          <LinkedInIcon /> <span>LinkedIn</span>
-        </button>
-      </div>
+      {/* OAuth (not for admins) */}
+      {!isAdmin && (
+        <>
+          <div className="auth-oauth-grid">
+            <button
+              id="oauth-google"
+              type="button"
+              className="auth-oauth-btn"
+              onClick={() => handleOAuth("google")}
+            >
+              <GoogleIcon /> <span>Google</span>
+            </button>
+            <button
+              id="oauth-github"
+              type="button"
+              className="auth-oauth-btn"
+              onClick={() => handleOAuth("github")}
+            >
+              <GithubIcon /> <span>GitHub</span>
+            </button>
+            <button
+              id="oauth-linkedin"
+              type="button"
+              className="auth-oauth-btn"
+              onClick={() => handleOAuth("linkedin")}
+            >
+              <LinkedInIcon /> <span>LinkedIn</span>
+            </button>
+          </div>
 
-      {/* Divider */}
-      <div className="auth-divider">
-        <div className="auth-divider-line" />
-        <span className="auth-divider-text">or continue with email</span>
-        <div className="auth-divider-line" />
-      </div>
+          {/* Divider */}
+          <div className="auth-divider">
+            <div className="auth-divider-line" />
+            <span className="auth-divider-text">or continue with email</span>
+            <div className="auth-divider-line" />
+          </div>
+        </>
+      )}
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="auth-form">
@@ -331,16 +344,18 @@ export function AuthPage({ forcedRole, initialMode = "login" }: AuthPageProps) {
       </form>
 
       {/* Switch mode */}
-      <p className="auth-switch">
-        {mode === "login" ? "Don't have an account? " : "Already have an account? "}
-        <button
-          type="button"
-          className="auth-switch-btn"
-          onClick={() => switchMode(mode === "login" ? "register" : "login")}
-        >
-          {mode === "login" ? "Sign Up" : "Sign In"}
-        </button>
-      </p>
+      {!isAdmin && (
+        <p className="auth-switch">
+          {mode === "login" ? "Don't have an account? " : "Already have an account? "}
+          <button
+            type="button"
+            className="auth-switch-btn"
+            onClick={() => switchMode(mode === "login" ? "register" : "login")}
+          >
+            {mode === "login" ? "Sign Up" : "Sign In"}
+          </button>
+        </p>
+      )}
 
       <p className="auth-terms">
         By continuing you agree to our{" "}

@@ -29,6 +29,7 @@ import {
 } from "../core/exceptions/app-exception"
 import { CaptchaService } from "../core/security/captcha.service"
 import { PUBLIC_COMPANY_SELECT } from "../jobs/public-company"
+import { PUBLIC_JOB_WHERE } from "../jobs/public-job"
 import { MessagesGateway } from "../messages/messages.gateway"
 import { MessagesService } from "../messages/messages.service"
 import { NotificationsService } from "../notifications/notifications.service"
@@ -233,12 +234,12 @@ export class ApplicationsService implements OnModuleInit {
       )
     }
 
-    const job = await this.prisma.job.findUnique({
-      where: { id: jobId },
+    // Same visibility as public search: ACTIVE and the company not suspended.
+    const job = await this.prisma.job.findFirst({
+      where: { id: jobId, ...PUBLIC_JOB_WHERE },
       select: { id: true, status: true, title: true, recruiterId: true },
     })
-    if (!job || job.status !== "ACTIVE")
-      throw new NotFoundAppException("Job not found", "JOB_NOT_FOUND")
+    if (!job) throw new NotFoundAppException("Job not found", "JOB_NOT_FOUND")
     // Applying costs Momentum credits, so it needs an account (guest apply was removed).
     if (!actor)
       throw new AppException(

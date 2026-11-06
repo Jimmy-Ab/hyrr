@@ -6,7 +6,7 @@
 | `hyrr.shared` | Source-only lib: zustand store, API client, contracts, UI kit, auth pages, `MessagesView` | React 19, consumed via Vite alias `hyrr.shared` |
 | `hyrr.recruiter` | Recruiter app (port 5173) | Vite 8, Tailwind 4, dnd-kit, recharts |
 | `hyrr.jobseeker` | Job-seeker app (port 5174) | Vite 8, Tailwind 4 |
-| `hyrr.admin` | **On hold**: mock UI, no API calls. Don't touch unless asked. | |
+| `hyrr.admin` | Admin app (port 5175): dashboard, analytics, moderation, users, companies, money, AI settings, audit log. API under `/api/admin` (AdminGuard: ADMIN + 2FA). Admins are created only with `npm run admin:create --workspace=hyrr.backend -- <email> "<name>"`. | Vite 8, react-query, recharts |
 
 Roles: `SEEKER`, `RECRUITER`, `ADMIN`; company roles `OWNER | RECRUITER | HIRING_MANAGER | VIEWER`.
 

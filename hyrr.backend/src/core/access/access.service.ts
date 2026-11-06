@@ -1,5 +1,6 @@
-import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common"
+import { ForbiddenException, HttpStatus, Injectable, NotFoundException } from "@nestjs/common"
 import { PrismaService } from "../../prisma/prisma.service"
+import { AppException } from "../exceptions/app-exception"
 
 export type Actor = { userId: string; role: string; email?: string; companyId?: string | null }
 
@@ -9,9 +10,19 @@ const MANAGE_ROLES = ["OWNER", "RECRUITER"]
 export type CompanyScope = {
   /** Companies whose data the actor may read. */
   companyIds: string[]
-  /** Companies whose data the actor may mutate. */
+  /** Companies whose data the actor may mutate (never a SUSPENDED company). */
   manageCompanyIds: string[]
+  /** Companies of the actor that an admin suspended (read-only while suspended). */
+  suspendedCompanyIds: string[]
 }
+
+/** 403 COMPANY_SUSPENDED: the company was suspended by an admin, members can't make changes. */
+export const companySuspended = () =>
+  new AppException(
+    "Your company is suspended. Contact Hyrr support to restore access.",
+    HttpStatus.FORBIDDEN,
+    "COMPANY_SUSPENDED"
+  )
 
 /** Centralizes resource ownership rules so controllers cannot accidentally expose cross-account data. */
 @Injectable()
@@ -26,22 +37,32 @@ export class AccessService {
     const [memberships, user] = await Promise.all([
       this.prisma.companyMember.findMany({
         where: { userId },
-        select: { companyId: true, role: true },
+        select: { companyId: true, role: true, company: { select: { status: true } } },
       }),
-      this.prisma.user.findUnique({ where: { id: userId }, select: { companyId: true } }),
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { companyId: true, company: { select: { status: true } } },
+      }),
     ])
     const companyIds = new Set<string>()
     const manageCompanyIds = new Set<string>()
+    const suspendedCompanyIds = new Set<string>()
     for (const m of memberships || []) {
       companyIds.add(m.companyId)
-      if (MANAGE_ROLES.includes(m.role)) manageCompanyIds.add(m.companyId)
+      if (m.company?.status === "SUSPENDED") suspendedCompanyIds.add(m.companyId)
+      else if (MANAGE_ROLES.includes(m.role)) manageCompanyIds.add(m.companyId)
     }
     const legacyCompanyId = user?.companyId
     if (legacyCompanyId && !companyIds.has(legacyCompanyId)) {
       companyIds.add(legacyCompanyId)
-      manageCompanyIds.add(legacyCompanyId)
+      if (user?.company?.status === "SUSPENDED") suspendedCompanyIds.add(legacyCompanyId)
+      else manageCompanyIds.add(legacyCompanyId)
     }
-    return { companyIds: [...companyIds], manageCompanyIds: [...manageCompanyIds] }
+    return {
+      companyIds: [...companyIds],
+      manageCompanyIds: [...manageCompanyIds],
+      suspendedCompanyIds: [...suspendedCompanyIds],
+    }
   }
 
   /** Prisma `Job` where-clause for every job the recruiter can see (ADMIN: all). */
@@ -57,8 +78,8 @@ export class AccessService {
   }
 
   private async jobAccess(actor: Actor, job: { recruiterId: string; companyId: string }) {
-    if (actor.role === "ADMIN") return { canView: true, canManage: true }
-    if (actor.role === "SEEKER") return { canView: false, canManage: false }
+    if (actor.role === "ADMIN") return { canView: true, canManage: true, suspended: false }
+    if (actor.role === "SEEKER") return { canView: false, canManage: false, suspended: false }
     const scope = await this.companyScope(actor.userId)
     const isMember = scope.companyIds.includes(job.companyId)
     const membershipAllowsManage = scope.manageCompanyIds.includes(job.companyId)
@@ -66,8 +87,15 @@ export class AccessService {
     return {
       canView: isPoster || isMember,
       // A poster demoted to VIEWER loses mutation rights; a poster outside the company keeps them.
+      // Members of a SUSPENDED company keep read access but can't change anything.
       canManage: isMember ? membershipAllowsManage : isPoster,
+      suspended: isMember && (scope.suspendedCompanyIds || []).includes(job.companyId),
     }
+  }
+
+  /** 403 COMPANY_SUSPENDED when the missing manage right comes from a suspension, else FORBIDDEN. */
+  private manageDenied(suspended: boolean, message: string) {
+    return suspended ? companySuspended() : new ForbiddenException(message)
   }
 
   async applicationFor(actor: Actor, applicationId: string, mode: "view" | "manage" = "view") {
@@ -88,8 +116,10 @@ export class AccessService {
 
     // A SAVED record is a seeker's private bookmark, not an application: invisible to recruiters.
     if (application.status === "SAVED") throw new NotFoundException("Application not found")
-    const { canView, canManage } = await this.jobAccess(actor, application.job)
+    const { canView, canManage, suspended } = await this.jobAccess(actor, application.job)
     if (mode === "view" ? canView : canManage) return application
+    if (mode === "manage" && canView)
+      throw this.manageDenied(suspended, "You do not have access to this application")
     throw new ForbiddenException("You do not have access to this application")
   }
 
@@ -113,9 +143,9 @@ export class AccessService {
   async jobForManagement(actor: Actor, jobId: string) {
     const job = await this.prisma.job.findUnique({ where: { id: jobId } })
     if (!job) throw new NotFoundException("Job not found")
-    const { canManage } = await this.jobAccess(actor, job)
+    const { canManage, suspended } = await this.jobAccess(actor, job)
     if (canManage) return job
-    throw new ForbiddenException("You do not have access to this job")
+    throw this.manageDenied(suspended, "You do not have access to this job")
   }
 
   /**
