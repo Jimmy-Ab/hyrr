@@ -13,11 +13,12 @@ const Card = React.forwardRef<
 >(({ className, hoverEffect = false, ...props }, ref) => (
   <motion.div
     ref={ref}
-    whileHover={hoverEffect ? { y: -4, scale: 1.005 } : undefined}
-    transition={{ type: "spring", stiffness: 350, damping: 25 }}
+    whileHover={hoverEffect ? { y: -3 } : undefined}
+    transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
     className={cn(
-      "rounded-card border border-bg-border bg-bg-card text-txt-body shadow-card transition-shadow duration-300",
-      hoverEffect && "hover:shadow-card-hover",
+      "spotlight rounded-card border border-bg-border/80 bg-bg-card text-txt-body shadow-card transition-[box-shadow,border-color] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
+      hoverEffect &&
+        "hover:shadow-card-hover hover:border-primary-border dark:hover:border-[#2d2a5e]",
       className
     )}
     {...props}

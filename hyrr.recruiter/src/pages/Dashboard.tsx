@@ -1,5 +1,6 @@
+import { AnimatedNumber, Card, notificationConversationId } from "hyrr.shared"
 import { ArrowUpRight, Briefcase, Calendar, CheckSquare, TrendingUp, Users } from "lucide-react"
-import { Card } from "../components/ui/card"
+import { isRecruiterView } from "../lib/recruiter"
 import { useJobStore } from "../store/useJobStore"
 
 const statsAccents = [
@@ -10,12 +11,16 @@ const statsAccents = [
 ]
 
 export function Dashboard() {
-  const { candidates, jobs, notifications, setActiveView, events, user } = useJobStore()
+  const { candidates, jobs, notifications, setActiveView, openConversation, events, user } =
+    useJobStore()
 
   const totalCandidates = candidates.length
   const activeJobs = jobs.filter((j) => j.status === "Active").length
   const offersSent = candidates.filter((c) => c.status === "Offer").length
-  const interviewsCount = events.filter((e) => e.type === "interview").length
+  const now = Date.now()
+  const interviewsCount = events.filter(
+    (e) => e.type === "interview" && new Date(e.startTime).getTime() >= now
+  ).length
 
   const greeting = (() => {
     const h = new Date().getHours()
@@ -26,20 +31,15 @@ export function Dashboard() {
   const firstName = user?.name?.split(" ")[0] || "there"
 
   const stats = [
+    { title: "Total Candidates", value: totalCandidates, icon: Users, caption: "in pipeline" },
     {
-      title: "Total Candidates",
-      value: totalCandidates,
-      icon: Users,
-      change: "+12% vs last month",
+      title: "Active Openings",
+      value: activeJobs,
+      icon: Briefcase,
+      caption: `of ${jobs.length} jobs`,
     },
-    { title: "Active Openings", value: activeJobs, icon: Briefcase, change: "2 new this week" },
-    {
-      title: "Interviews Booked",
-      value: interviewsCount,
-      icon: Calendar,
-      change: `${interviewsCount} upcoming`,
-    },
-    { title: "Offers Sent", value: offersSent, icon: CheckSquare, change: "+25% vs last month" },
+    { title: "Interviews Booked", value: interviewsCount, icon: Calendar, caption: "upcoming" },
+    { title: "Offers Sent", value: offersSent, icon: CheckSquare, caption: "at offer stage" },
   ]
 
   const pipeline = [
@@ -56,20 +56,20 @@ export function Dashboard() {
       glow: "rgba(196,127,0,0.3)",
     },
     {
-      label: "Offered",
-      count: candidates.filter((c) => c.status === "Offer").length,
-      color: "bg-sec-green",
-      glow: "rgba(27,158,60,0.3)",
-    },
-    {
       label: "Interviewing",
       count: candidates.filter((c) => c.status === "Interviewing").length,
       color: "bg-primary",
       glow: "rgba(108,99,255,0.3)",
     },
     {
+      label: "Offered",
+      count: candidates.filter((c) => c.status === "Offer").length,
+      color: "bg-sec-green",
+      glow: "rgba(27,158,60,0.3)",
+    },
+    {
       label: "Archived",
-      count: candidates.filter((c) => c.status === "Archived").length,
+      count: candidates.filter((c) => c.status === "Archived" || c.status === "Withdrawn").length,
       color: "bg-sec-gray",
       glow: "rgba(107,116,133,0.3)",
     },
@@ -84,7 +84,7 @@ export function Dashboard() {
 
       {/* Header */}
       <div className="relative z-10">
-        <h1 className="text-[36px] font-extrabold tracking-tight">
+        <h1 className="text-[28px] md:text-[36px] font-extrabold tracking-tight">
           <span className="premium-gradient-text text-glow">
             {greeting}, {firstName}
           </span>{" "}
@@ -97,16 +97,15 @@ export function Dashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 relative z-10">
+      <div className="stagger grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 relative z-10">
         {stats.map((stat, idx) => {
           const Icon = stat.icon
           return (
             <Card
               key={idx}
               hoverEffect
-              className={`p-6 flex flex-col justify-between h-36 relative overflow-hidden group hover-lift ${statsAccents[idx]}`}
+              className={`group p-6 flex flex-col justify-between h-36 relative overflow-hidden ${statsAccents[idx]}`}
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
               <div className="flex items-start justify-between relative z-10">
                 <span className="text-[11px] font-bold tracking-wider text-txt-caption uppercase">
                   {stat.title}
@@ -116,10 +115,14 @@ export function Dashboard() {
                 </div>
               </div>
               <div className="mt-4 flex items-baseline gap-2 relative z-10">
-                <span className="text-[30px] font-black text-txt-title leading-none tabular-nums">
-                  {stat.value}
+                <span className="text-[30px] font-black tracking-[-0.02em] text-txt-title leading-none tabular-nums">
+                  {typeof stat.value === "number" ? (
+                    <AnimatedNumber value={stat.value} />
+                  ) : (
+                    stat.value
+                  )}
                 </span>
-                <span className="text-[11.5px] text-txt-caption font-semibold">{stat.change}</span>
+                <span className="text-[11.5px] text-txt-caption font-semibold">{stat.caption}</span>
               </div>
             </Card>
           )
@@ -129,8 +132,8 @@ export function Dashboard() {
       {/* Main Grid */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 relative z-10">
         {/* Recent Activities */}
-        <Card className="xl:col-span-2 p-6 flex flex-col gap-5 glass-panel hover-lift border-bg-border/60">
-          <div className="flex items-center justify-between">
+        <Card className="xl:col-span-2 p-6 flex flex-col gap-5 glass-panel border-bg-border/60 min-w-0">
+          <div className="flex items-center justify-between gap-3">
             <div>
               <h3 className="text-card-title font-bold text-txt-heading text-glow">
                 Recent Activities
@@ -149,20 +152,44 @@ export function Dashboard() {
           </div>
 
           <div className="flex flex-col gap-3">
-            {notifications.slice(0, 5).map((notif) => (
-              <div
-                key={notif.id}
-                className="flex items-center justify-between p-3.5 rounded-[16px] bg-bg-primary/40 border border-bg-border/30 hover:border-primary/30 hover:bg-bg-primary/80 hover:shadow-[0_2px_12px_rgba(108,99,255,0.06)] transition-all duration-200 cursor-pointer group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_8px_rgba(108,99,255,0.5)] group-hover:scale-125 transition-transform" />
-                  <span className="text-[13.5px] font-semibold text-txt-heading">
-                    {notif.title}
+            {notifications.slice(0, 5).map((notif) => {
+              const target = notif.actionView as string | undefined
+              const content = (
+                <>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-2.5 h-2.5 rounded-full bg-primary shrink-0" />
+                    <span className="text-[13.5px] font-semibold text-txt-heading truncate">
+                      {notif.title}
+                    </span>
+                  </div>
+                  <span className="text-caption text-txt-caption font-bold shrink-0">
+                    {notif.time}
                   </span>
+                </>
+              )
+              const rowCls =
+                "flex items-center justify-between gap-3 p-3.5 rounded-[16px] bg-bg-primary/40 border border-bg-border/30 text-left w-full"
+              const conversationId = notificationConversationId(notif)
+              return conversationId || isRecruiterView(target) ? (
+                <button
+                  key={notif.id}
+                  type="button"
+                  onClick={() => {
+                    if (conversationId) {
+                      setActiveView("Messages")
+                      openConversation(conversationId).catch(() => {})
+                    } else if (isRecruiterView(target)) setActiveView(target)
+                  }}
+                  className={`${rowCls} hover:border-primary/30 hover:bg-bg-hover transition-colors cursor-pointer`}
+                >
+                  {content}
+                </button>
+              ) : (
+                <div key={notif.id} className={rowCls}>
+                  {content}
                 </div>
-                <span className="text-caption text-txt-caption font-bold">{notif.time}</span>
-              </div>
-            ))}
+              )
+            })}
             {notifications.length === 0 && (
               <div className="py-10 flex flex-col items-center gap-2 text-center">
                 <TrendingUp className="w-8 h-8 text-txt-disabled" />
@@ -173,7 +200,7 @@ export function Dashboard() {
         </Card>
 
         {/* Pipeline Distribution */}
-        <Card className="p-6 glass-panel hover-lift border-bg-border/60">
+        <Card className="p-6 glass-panel border-bg-border/60">
           <div className="flex items-center justify-between mb-5">
             <h3 className="text-card-title font-bold text-txt-heading text-glow">Pipeline</h3>
             <button

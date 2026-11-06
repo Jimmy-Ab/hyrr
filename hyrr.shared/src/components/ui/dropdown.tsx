@@ -17,12 +17,13 @@ const DropdownMenuContent = React.forwardRef<
   <DropdownMenuPortal>
     <DropdownMenuPrimitive.Content asChild ref={ref} sideOffset={sideOffset} {...props}>
       <motion.div
-        initial={{ opacity: 0, scale: 0.96, y: -4 }}
+        initial={{ opacity: 0, scale: 0.96, y: -6 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.96, y: -4 }}
-        transition={{ type: "spring", stiffness: 420, damping: 22 }}
+        exit={{ opacity: 0, scale: 0.97, y: -4 }}
+        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+        style={{ transformOrigin: "var(--radix-dropdown-menu-content-transform-origin)" }}
         className={cn(
-          "z-50 min-w-[12rem] overflow-hidden rounded-input border border-bg-border bg-bg-secondary p-1.5 text-txt-body shadow-floating focus:outline-none",
+          "glass z-50 min-w-[12rem] overflow-hidden rounded-input border border-bg-border/70 p-1.5 text-txt-body shadow-floating focus:outline-none",
           className
         )}
       >

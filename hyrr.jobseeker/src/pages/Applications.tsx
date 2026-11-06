@@ -4,18 +4,25 @@ import {
   APPLICATION_STATUS_LABEL,
   Badge,
   Card,
+  ConfirmDialog,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
+  errorMessage,
+  formatDateTime,
+  Skeleton,
   useJobStore,
+  useToast,
+  VerifiedBadge,
   type ApplicationStatusCode,
   type JobApplication,
+  type TimelineEntry,
 } from "hyrr.shared"
 import {
-  Bookmark,
   Calendar,
+  ChevronDown,
   DollarSign,
   LayoutList,
   MapPin,
@@ -23,7 +30,92 @@ import {
   MoreHorizontal,
   User,
 } from "lucide-react"
-import { useEffect } from "react"
+import { useId, useState } from "react"
+
+// ─── Stage timeline ───────────────────────────────────────────────────────────
+function ApplicationTimeline({ applicationId }: { applicationId: string }) {
+  const fetchTimeline = useJobStore((s) => s.fetchTimeline)
+  const [open, setOpen] = useState(false)
+  const [entries, setEntries] = useState<TimelineEntry[] | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const panelId = useId()
+
+  const load = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      setEntries(await fetchTimeline(applicationId))
+    } catch (err) {
+      setError(errorMessage(err, "Could not load the timeline."))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const toggle = () => {
+    const next = !open
+    setOpen(next)
+    // Reload on every open so status changes since the last look show up.
+    if (next && !loading) void load()
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-bg-border/30">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        aria-controls={panelId}
+        className="flex w-full items-center justify-between rounded-lg px-1 py-0.5 text-[12px] font-semibold text-txt-caption hover:text-txt-heading cursor-pointer"
+      >
+        Timeline
+        <ChevronDown
+          className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`}
+          aria-hidden="true"
+        />
+      </button>
+      {open && (
+        <div id={panelId} className="mt-2">
+          {loading && !entries ? (
+            <div className="space-y-2" aria-busy="true">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-4 w-1/2" />
+            </div>
+          ) : error ? (
+            <div role="alert" className="flex items-center justify-between gap-2">
+              <p className="text-[12px] text-sec-red">{error}</p>
+              <button
+                type="button"
+                onClick={() => void load()}
+                className="text-[12px] font-semibold text-primary hover:underline cursor-pointer"
+              >
+                Retry
+              </button>
+            </div>
+          ) : !entries || entries.length === 0 ? (
+            <p className="text-[12px] text-txt-caption">No status changes yet.</p>
+          ) : (
+            <ol className="relative ml-1.5 border-l border-bg-border pl-4 space-y-2.5">
+              {entries.map((e, i) => (
+                <li key={`${e.status}-${e.at}-${i}`} className="relative">
+                  <span
+                    className={`absolute -left-[21px] top-1 h-2 w-2 rounded-full ${
+                      i === entries.length - 1 ? "bg-primary" : "bg-bg-border"
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <p className="text-[12.5px] font-semibold text-txt-heading">{e.label}</p>
+                  <p className="text-[11.5px] text-txt-caption">{formatDateTime(e.at)}</p>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ─── Kanban Column ─────────────────────────────────────────────────────────────
 const columnColors: Record<ApplicationStatusCode, string> = {
@@ -33,24 +125,27 @@ const columnColors: Record<ApplicationStatusCode, string> = {
   [APPLICATION_STATUS.INTERVIEWING]: "text-primary bg-primary-light border-primary-border/40",
   [APPLICATION_STATUS.OFFER]: "text-sec-green bg-sec-green/10 border-sec-green/20",
   [APPLICATION_STATUS.ARCHIVED]: "text-txt-caption bg-bg-primary border-bg-border/40",
+  [APPLICATION_STATUS.WITHDRAWN]: "text-txt-caption bg-bg-primary border-bg-border/40",
 }
 
 function JobColumn({
   id,
   title,
   items,
+  onRequestRemove,
 }: {
   id: JobApplication["status"]
   title: string
   items: JobApplication[]
+  onRequestRemove: (application: JobApplication) => void
 }) {
   return (
-    <div className="flex flex-col w-[280px] min-w-[280px] shrink-0 rounded-[20px] bg-bg-secondary/60 border border-bg-border/40">
+    <div className="flex flex-col w-[260px] min-w-[260px] sm:w-[280px] sm:min-w-[280px] shrink-0 rounded-[20px] bg-bg-secondary/60 border border-bg-border/40">
       {/* Column Header */}
       <div className="flex items-center justify-between px-4 py-3.5 border-b border-bg-border/30">
         <div className="flex items-center gap-2.5">
           <span
-            className={`inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full text-[11px] font-bold border ${columnColors[id]}`}
+            className={`inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full text-[12px] font-bold border ${columnColors[id]}`}
           >
             {items.length}
           </span>
@@ -61,12 +156,12 @@ function JobColumn({
       {/* Cards */}
       <div className="flex flex-col gap-3 p-3 flex-1 min-h-[480px]">
         {items.map((app) => (
-          <JobCard key={app.id} application={app} />
+          <JobCard key={app.id} application={app} onRequestRemove={onRequestRemove} />
         ))}
         {items.length === 0 && (
           <div className="flex flex-col items-center justify-center flex-1 gap-2 text-txt-disabled">
             <LayoutList className="w-8 h-8 opacity-30" />
-            <p className="text-[12px] font-medium">No jobs here</p>
+            <p className="text-[13px] font-medium">No jobs here</p>
           </div>
         )}
       </div>
@@ -82,16 +177,25 @@ const companyDotColors: Record<string, string> = {
   orange: "bg-sec-orange text-white",
 }
 
-function JobCard({ application }: { application: JobApplication }) {
-  const { toggleJobBookmark, setCandidateActiveView, setActiveConversation } = useJobStore()
+function JobCard({
+  application,
+  onRequestRemove,
+}: {
+  application: JobApplication
+  onRequestRemove: (application: JobApplication) => void
+}) {
+  const { setCandidateActiveView, openConversation } = useJobStore()
+  const { toast } = useToast()
 
-  const tag = application.tag
+  const isSaved = application.status === APPLICATION_STATUS.SAVED
+  const isWithdrawn = application.status === APPLICATION_STATUS.WITHDRAWN
+  const tag = isWithdrawn ? "Withdrawn" : application.tag
   const tagVariant =
-    tag === "Offer Received"
+    tag === "Offer Received" || tag === "Offer Sent"
       ? ("success" as const)
       : tag === "Not a fit"
         ? ("destructive" as const)
-        : tag === "Technical Interview"
+        : tag === "Technical Interview" || tag === "Interview Stage"
           ? ("warning" as const)
           : ("secondary" as const)
 
@@ -100,7 +204,7 @@ function JobCard({ application }: { application: JobApplication }) {
       <Card className="p-4 relative border border-bg-border/60 bg-bg-secondary transition-all hover:shadow-card-hover hover:border-bg-border/90">
         <div className="flex items-start justify-between gap-2">
           {/* Company Logo + Info */}
-          <div className="flex gap-3">
+          <div className="flex min-w-0 gap-3">
             <div
               className={`w-10 h-10 rounded-[12px] shrink-0 flex items-center justify-center font-bold text-[13px] ${companyDotColors[application.companyColor] ?? "bg-primary text-white"}`}
             >
@@ -110,46 +214,74 @@ function JobCard({ application }: { application: JobApplication }) {
               <h4 className="text-body font-semibold text-txt-heading truncate">
                 {application.title}
               </h4>
-              <p className="text-caption text-txt-body mt-0.5 font-medium">{application.company}</p>
+              <p className="text-caption text-txt-body mt-0.5 font-medium flex items-center gap-1">
+                {application.company}
+                {application.companyVerified && <VerifiedBadge focusable={false} />}
+              </p>
             </div>
           </div>
 
           {/* Context Menu */}
-          <div
-            onClick={(e) => e.stopPropagation()}
-            onPointerDown={(e) => e.stopPropagation()}
-            className="shrink-0"
-          >
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="text-txt-caption hover:text-txt-heading hover:bg-bg-hover p-1 rounded-full transition-colors cursor-pointer outline-none">
-                  <MoreHorizontal className="w-4 h-4" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-48" align="end">
-                <DropdownMenuLabel>Application Actions</DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => toggleJobBookmark(application.id)}>
-                  {application.bookmarked ? "Remove Bookmark" : "Bookmark"}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          {!isWithdrawn && (
+            <div className="shrink-0">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={`Actions for ${application.title}`}
+                    className="text-txt-caption hover:text-txt-heading hover:bg-bg-hover p-1 rounded-full transition-colors cursor-pointer outline-none"
+                  >
+                    <MoreHorizontal className="w-4 h-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-52" align="end">
+                  <DropdownMenuLabel>Application Actions</DropdownMenuLabel>
+                  {isSaved ? (
+                    <>
+                      <DropdownMenuItem onClick={() => setCandidateActiveView("Discover")}>
+                        Apply from Discover
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => onRequestRemove(application)}
+                        className="text-sec-red focus:text-sec-red"
+                      >
+                        Remove from saved
+                      </DropdownMenuItem>
+                    </>
+                  ) : (
+                    <DropdownMenuItem
+                      onClick={() => onRequestRemove(application)}
+                      className="text-sec-red focus:text-sec-red"
+                    >
+                      Withdraw application
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
         </div>
 
         {/* Meta */}
         <div className="mt-3 space-y-1.5">
-          <div className="flex items-center gap-1.5 text-[11.5px] text-txt-caption font-medium">
+          <div className="flex items-center gap-1.5 text-[12.5px] text-txt-caption font-medium">
             <MapPin className="w-3.5 h-3.5 shrink-0" />
             <span className="truncate">{application.location}</span>
             <span className="mx-0.5">·</span>
             <span>{application.type}</span>
           </div>
-          <div className="flex items-center gap-1.5 text-[11.5px] text-txt-caption font-medium">
+          <div className="flex items-center gap-1.5 text-[12.5px] text-txt-caption font-medium">
             <DollarSign className="w-3.5 h-3.5 shrink-0" />
             <span>{application.salary}</span>
           </div>
-          {application.interviewDate && (
-            <div className="flex items-center gap-1.5 text-[11.5px] text-primary font-semibold">
+          {application.offerAmount && application.status === APPLICATION_STATUS.OFFER && (
+            <div className="flex items-center gap-1.5 text-[12.5px] text-sec-green font-semibold">
+              <DollarSign className="w-3.5 h-3.5 shrink-0" />
+              <span>Offer: {application.offerAmount}</span>
+            </div>
+          )}
+          {application.interviewDate && !isWithdrawn && (
+            <div className="flex items-center gap-1.5 text-[12.5px] text-primary font-semibold">
               <Calendar className="w-3.5 h-3.5 shrink-0" />
               <span>Interview: {application.interviewDate}</span>
             </div>
@@ -157,51 +289,41 @@ function JobCard({ application }: { application: JobApplication }) {
         </div>
 
         {/* Recruiter */}
-        <div
-          onClick={(e) => e.stopPropagation()}
-          onPointerDown={(e) => e.stopPropagation()}
-          className="flex items-center gap-2 mt-3 pt-3 border-t border-bg-border/30"
-        >
+        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-bg-border/30">
           <img
             src={application.recruiterAvatar}
-            alt={application.recruiterName}
+            alt=""
             className="w-5 h-5 rounded-full object-cover pointer-events-none"
           />
-          <span className="text-[11px] text-txt-caption font-medium flex items-center gap-1">
-            <User className="w-3 h-3" /> {application.recruiterName}
+          <span className="min-w-0 truncate text-[12px] text-txt-caption font-medium flex items-center gap-1">
+            <User className="w-3 h-3 shrink-0" /> {application.recruiterName}
           </span>
           <div className="ml-auto flex items-center gap-1.5">
             {tag && <Badge variant={tagVariant}>{tag}</Badge>}
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                setActiveConversation(application.id)
-                setCandidateActiveView("Messages")
-              }}
-              onPointerDown={(e) => e.stopPropagation()}
-              title="Message Recruiter"
-              className="cursor-pointer transition-colors p-1 -m-1 rounded-full text-txt-caption hover:text-primary hover:bg-bg-hover"
-            >
-              <MessageSquare className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                toggleJobBookmark(application.id)
-              }}
-              onPointerDown={(e) => e.stopPropagation()}
-              title={application.bookmarked ? "Remove Bookmark" : "Bookmark"}
-              className={`cursor-pointer transition-colors p-1 -m-1 rounded-full hover:bg-bg-hover ${
-                application.bookmarked ? "text-primary" : "text-txt-caption hover:text-txt-heading"
-              }`}
-            >
-              <Bookmark
-                className="w-3.5 h-3.5"
-                fill={application.bookmarked ? "currentColor" : "none"}
-              />
-            </button>
+            {!isSaved && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCandidateActiveView("Messages")
+                  openConversation(application.id).catch((err: unknown) =>
+                    toast("Couldn't open conversation", errorMessage(err), "error")
+                  )
+                }}
+                aria-label={
+                  isWithdrawn
+                    ? `View messages about ${application.title}`
+                    : `Message recruiter about ${application.title}`
+                }
+                title={isWithdrawn ? "View messages" : "Message Recruiter"}
+                className="cursor-pointer transition-colors p-1 -m-1 rounded-full text-txt-caption hover:text-primary hover:bg-bg-hover"
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
+
+        {!isSaved && <ApplicationTimeline applicationId={application.id} />}
       </Card>
     </div>
   )
@@ -209,11 +331,36 @@ function JobCard({ application }: { application: JobApplication }) {
 
 // ─── Kanban Board ─────────────────────────────────────────────────────────────
 export function ApplicationsBoard() {
-  const { jobApplications, fetchInitialData } = useJobStore()
+  const { jobApplications, withdrawApplication } = useJobStore()
+  const { toast } = useToast()
+  const [pending, setPending] = useState<JobApplication | null>(null)
 
-  useEffect(() => {
-    fetchInitialData()
-  }, []) // eslint-disable-line
+  // WITHDRAWN applications live in the Archived column (with a "Withdrawn" badge).
+  const columnOf = (a: JobApplication): ApplicationStatusCode =>
+    a.status === APPLICATION_STATUS.WITHDRAWN ? APPLICATION_STATUS.ARCHIVED : a.status
+
+  const pendingIsSaved = pending?.status === APPLICATION_STATUS.SAVED
+
+  const confirmRemove = async () => {
+    if (!pending) return
+    try {
+      await withdrawApplication(pending.id)
+      toast(
+        pendingIsSaved ? "Removed" : "Application withdrawn",
+        pendingIsSaved
+          ? `${pending.title} was removed from your saved jobs.`
+          : `Your application to ${pending.company} was withdrawn.`,
+        "success"
+      )
+    } catch (err) {
+      toast(
+        pendingIsSaved ? "Couldn't remove job" : "Couldn't withdraw",
+        errorMessage(err, "Please try again."),
+        "error"
+      )
+      throw err
+    }
+  }
 
   const columns = APPLICATION_STATUS_COLUMNS.map((id) => ({
     id,
@@ -223,35 +370,37 @@ export function ApplicationsBoard() {
   return (
     <div className="flex flex-col gap-5 animate-in fade-in duration-200 relative">
       <div>
-        <h1 className="text-[22px] font-bold text-[#111827] tracking-tight leading-none">
+        <h1 className="text-[22px] font-bold text-txt-title tracking-tight leading-none">
           My Applications
         </h1>
-        <p className="text-[13px] text-slate-400 mt-1.5 font-normal">
+        <p className="text-[13px] text-txt-caption mt-1.5 font-normal">
           Track your search pipeline across saved, applied, process, offer, and archived stages.
         </p>
       </div>
 
       {/* Stats strip */}
-      <div className="grid grid-cols-6 gap-4">
+      <div className="grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4">
         {columns.map((col) => {
-          const count = jobApplications.filter((a) => a.status === col.id).length
+          const count = jobApplications.filter((a) => columnOf(a) === col.id).length
           return (
             <Card
               key={col.id}
-              className="p-3.5 flex flex-col items-center border border-slate-100 bg-white rounded-xl shadow-xs"
+              className="p-3.5 flex flex-col items-center border border-bg-border bg-bg-card rounded-xl shadow-xs"
             >
               <span
                 className={`text-[20px] font-bold ${
                   col.id === APPLICATION_STATUS.OFFER
-                    ? "text-emerald-600"
+                    ? "text-sec-green"
                     : col.id === APPLICATION_STATUS.ARCHIVED
-                      ? "text-slate-400"
-                      : "text-slate-900"
+                      ? "text-txt-caption"
+                      : "text-txt-title"
                 }`}
               >
                 {count}
               </span>
-              <span className="text-[11.5px] text-slate-400 font-medium mt-0.5">{col.title}</span>
+              <span className="text-[12.5px] text-txt-caption font-medium mt-0.5 text-center">
+                {col.title}
+              </span>
             </Card>
           )
         })}
@@ -264,10 +413,24 @@ export function ApplicationsBoard() {
             key={col.id}
             id={col.id}
             title={col.title}
-            items={jobApplications.filter((a) => a.status === col.id)}
+            items={jobApplications.filter((a) => columnOf(a) === col.id)}
+            onRequestRemove={setPending}
           />
         ))}
       </div>
+
+      <ConfirmDialog
+        open={!!pending}
+        onOpenChange={(open) => !open && setPending(null)}
+        title={pendingIsSaved ? "Remove saved job?" : "Withdraw application?"}
+        description={
+          pendingIsSaved
+            ? `${pending?.title} at ${pending?.company} will be removed from your saved jobs.`
+            : `Your application for ${pending?.title} at ${pending?.company} will be withdrawn and the hiring team will be notified. This cannot be undone.`
+        }
+        confirmLabel={pendingIsSaved ? "Remove" : "Withdraw"}
+        onConfirm={confirmRemove}
+      />
     </div>
   )
 }

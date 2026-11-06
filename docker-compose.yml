@@ -17,7 +17,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # ─── Redis (for session caching / BullMQ queues if needed) ───────────────────
+  # ─── Redis (cache, queues, shared rate limits, socket.io fan-out) ─────────────
   redis:
     image: redis:7-alpine
     container_name: hyrr_redis
@@ -26,27 +26,200 @@ services:
     volumes:
       - redis_data:/data
 
+  # ─── Meilisearch (public job search; the backend falls back to Postgres without it) ─
+  meilisearch:
+    image: getmeili/meilisearch:v1.11
+    container_name: hyrr_meilisearch
+    environment:
+      # Set MEILI_MASTER_KEY in the shell or the root .env for anything shared; the backend
+      # receives the same value below.
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-hyrr-dev-meili-master-key}
+      MEILI_ENV: ${MEILI_ENV:-development}
+      MEILI_NO_ANALYTICS: "true"
+    ports:
+      - "7701:7700"
+    volumes:
+      - meili_data:/meili_data
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # ─── NestJS Backend API ───────────────────────────────────────────────────────
   backend:
-    build:
+    build: &backend-build
       context: ./hyrr.backend
       dockerfile: Dockerfile
     container_name: hyrr_backend
     env_file:
       - ./hyrr.backend/.env
-    environment:
+    environment: &backend-env
       DATABASE_URL: postgresql://hyrr_user:hyrr_password@postgres:5432/hyrr_db?schema=public
       NODE_ENV: production
+      # JWT_SECRET comes from ./hyrr.backend/.env (env_file above). The backend refuses to start
+      # in production if it is missing, shorter than 32 chars, or the .env.example placeholder.
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      # Search: Meilisearch above (unset MEILI_HOST → Postgres search).
+      MEILI_HOST: http://meilisearch:7700
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-hyrr-dev-meili-master-key}
+      # Background jobs (BullMQ on Redis). QUEUE_WORKER=true: this instance also processes jobs.
+      # Scaling: run API replicas with QUEUE_WORKER=false and dedicated workers via the "worker"
+      # profile, e.g. `QUEUE_WORKER=false docker compose --profile worker up --scale worker=2`.
+      # With Redis, rate limits and socket.io events are shared across all instances.
+      QUEUE_WORKER: ${QUEUE_WORKER:-true}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:3000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:5175}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5174}
+      UPLOAD_DIR: /app/uploads
+      # Demo data is only loaded when explicitly requested: SEED_DEMO_DATA=true docker compose up
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
+      # Virus scanning: `CLAMAV_HOST=clamav docker compose --profile security up`
+      # (empty → scanning disabled; this compose-level value wins over hyrr.backend/.env).
+      CLAMAV_HOST: ${CLAMAV_HOST:-}
+      CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+      # SMTP_*, EMAIL_FROM, STORAGE_DRIVER / S3_*, SENTRY_DSN, TURNSTILE_SECRET_KEY,
+      # TWO_FACTOR_ENCRYPTION_KEY, RECRUITER_APP_URL ... are passed through from
+      # ./hyrr.backend/.env (env_file above), see hyrr.backend/.env.example. They are deliberately
+      # NOT repeated here: an `environment:` entry, even an empty one, overrides the env_file value.
     ports:
       - "3000:3000"
+    volumes:
+      - uploads_data:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_started
+      meilisearch:
+        condition: service_started
+        required: false
+      clamav:
+        condition: service_started
+        required: false
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      # migrations run before the server starts
+      start_period: 60s
     command: >
-      sh -c "npx prisma migrate deploy && npx prisma db seed && node dist/main"
+      sh -c "npx prisma migrate deploy &&
+             if [ \"$$SEED_DEMO_DATA\" = \"true\" ]; then npx prisma db seed; fi &&
+             node dist/main"
+
+  # ─── Queue worker (optional): `docker compose --profile worker up [--scale worker=N]` ─
+  # Same image and settings as the backend, processing BullMQ jobs (e-mail, AI scoring, alerts,
+  # maintenance, search indexing). Migrations stay with the backend service, which it waits for.
+  # Its HTTP port is internal only (used by the health check).
+  worker:
+    build: *backend-build
+    profiles: ["worker"]
+    env_file:
+      - ./hyrr.backend/.env
+    environment:
+      <<: *backend-env
+      QUEUE_WORKER: "true"
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["node", "dist/main"]
+
+  # ─── Recruiter SPA ────────────────────────────────────────────────────────────
+  recruiter:
+    build:
+      context: .
+      dockerfile: hyrr.recruiter/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000/api}
+        VITE_SOCKET_URL: ${VITE_SOCKET_URL:-http://localhost:3000}
+        VITE_TURNSTILE_SITE_KEY: ${VITE_TURNSTILE_SITE_KEY:-}
+        VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
+    container_name: hyrr_recruiter
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+  # ─── Job seeker SPA ───────────────────────────────────────────────────────────
+  jobseeker:
+    build:
+      context: .
+      dockerfile: hyrr.jobseeker/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000/api}
+        VITE_SOCKET_URL: ${VITE_SOCKET_URL:-http://localhost:3000}
+        VITE_TURNSTILE_SITE_KEY: ${VITE_TURNSTILE_SITE_KEY:-}
+        VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
+    container_name: hyrr_jobseeker
+    ports:
+      - "5174:5174"
+    depends_on:
+      - backend
+
+  # ─── Nightly Postgres backups (7 daily + 4 weekly kept in the backups_data volume) ─
+  # Restore: gunzip -c <file>.sql.gz | docker compose exec -T postgres psql -U hyrr_user -d hyrr_db
+  backup:
+    image: prodrigestivill/postgres-backup-local:16
+    container_name: hyrr_backup
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: hyrr_db
+      POSTGRES_USER: hyrr_user
+      POSTGRES_PASSWORD: hyrr_password
+      POSTGRES_EXTRA_OPTS: "-Z6 --no-owner --no-privileges"
+      SCHEDULE: ${BACKUP_SCHEDULE:-@daily}
+      BACKUP_KEEP_DAYS: 7
+      BACKUP_KEEP_WEEKS: 4
+      BACKUP_KEEP_MONTHS: 0
+      HEALTHCHECK_PORT: 8080
+    volumes:
+      - backups_data:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ─── ClamAV (optional virus scanning for uploads) ────────────────────────────
+  # docker compose --profile security up  (and set CLAMAV_HOST=clamav for the backend)
+  clamav:
+    image: clamav/clamav-debian:stable
+    container_name: hyrr_clamav
+    profiles: ["security"]
+    volumes:
+      - clamav_data:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 300s
 
 volumes:
   postgres_data:
   redis_data:
+  meili_data:
+  uploads_data:
+  backups_data:
+  clamav_data:

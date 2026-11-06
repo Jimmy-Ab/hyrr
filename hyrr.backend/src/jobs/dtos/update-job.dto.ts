@@ -1,8 +1,18 @@
 import { ApiPropertyOptional } from "@nestjs/swagger"
-import { JobStatus } from "@prisma/client"
-import { IsEnum, IsOptional, IsString } from "class-validator"
+import { EmploymentType, JobStatus } from "@prisma/client"
+import {
+  IsArray,
+  IsBoolean,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from "class-validator"
+import { JobSalaryFields } from "./job-salary.dto"
 
-export class UpdateJobDto {
+/** Partial job update. Recruiters may set status ACTIVE|CLOSED|DRAFT; FLAGGED is admin-only. */
+export class UpdateJobDto extends JobSalaryFields {
   @ApiPropertyOptional({ example: JobStatus.CLOSED, enum: JobStatus })
   @IsOptional()
   @IsEnum(JobStatus)
@@ -11,10 +21,56 @@ export class UpdateJobDto {
   @ApiPropertyOptional({ example: "Updated job title" })
   @IsOptional()
   @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
   title?: string
 
   @ApiPropertyOptional({ example: "New description..." })
   @IsOptional()
   @IsString()
   description?: string
+
+  @ApiPropertyOptional({ example: "Remote, EU" })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  location?: string
+
+  @ApiPropertyOptional({ enum: EmploymentType })
+  @IsOptional()
+  @IsEnum(EmploymentType)
+  type?: EmploymentType
+
+  @ApiPropertyOptional({ enum: EmploymentType, description: "Alias of `type`" })
+  @IsOptional()
+  @IsEnum(EmploymentType)
+  employmentType?: EmploymentType
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  requirements?: string[]
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  skills?: string[]
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  benefits?: string[]
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  remote?: boolean
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  categoryId?: string
 }

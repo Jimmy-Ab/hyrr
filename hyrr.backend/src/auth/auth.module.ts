@@ -1,13 +1,17 @@
 import { Module } from "@nestjs/common"
 import { JwtModule } from "@nestjs/jwt"
 import { PassportModule } from "@nestjs/passport"
+import { AccountEmailService } from "./account-email.service"
+import { AccountExportService } from "./account-export.service"
 import { AuthController } from "./auth.controller"
 import { AuthService } from "./auth.service"
 import { jwtSecret } from "./jwt.config"
+import { LoginAttemptsService } from "./login-attempts.service"
 import { GithubStrategy } from "./strategies/github.strategy"
 import { GoogleStrategy } from "./strategies/google.strategy"
 import { JwtStrategy } from "./strategies/jwt.strategy"
 import { LinkedinStrategy } from "./strategies/linkedin.strategy"
+import { TwoFactorService } from "./two-factor.service"
 
 @Module({
   imports: [
@@ -18,7 +22,18 @@ import { LinkedinStrategy } from "./strategies/linkedin.strategy"
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, GithubStrategy, GoogleStrategy, LinkedinStrategy],
+  providers: [
+    AuthService,
+    AccountEmailService,
+    AccountExportService,
+    LoginAttemptsService,
+    TwoFactorService,
+    JwtStrategy,
+    GithubStrategy,
+    GoogleStrategy,
+    LinkedinStrategy,
+  ],
+  // JwtModule is exported so other modules (e.g. the socket gateway) can use verifyAccessToken().
   exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

@@ -1,7 +1,22 @@
 import { useDroppable } from "@dnd-kit/core"
-import { Archive, Bookmark, CheckCircle2, Clock, MoreHorizontal, Plus, Send } from "lucide-react"
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "hyrr.shared"
+import {
+  Archive,
+  CheckCircle2,
+  Clock,
+  MoreHorizontal,
+  Plus,
+  Send,
+  Users,
+  type LucideIcon,
+} from "lucide-react"
 import { type Candidate } from "../../store/useJobStore"
-import { Button } from "../ui/button"
 import { ApplicationCard } from "./application-card"
 
 interface KanbanColumnProps {
@@ -9,79 +24,89 @@ interface KanbanColumnProps {
   title: string
   candidates: Candidate[]
   onAddCandidate: (column: Candidate["status"]) => void
+  /** jobId -> title; when given, each card shows its job (All jobs board). */
+  jobTitles?: Record<string, string>
 }
 
-export function KanbanColumn({ id, title, candidates, onAddCandidate }: KanbanColumnProps) {
-  const { setNodeRef, isOver } = useDroppable({
-    id,
-  })
+const COLUMN_ICON: Record<string, { icon: LucideIcon; cls: string }> = {
+  Applied: { icon: Send, cls: "bg-[var(--badge-info-bg)] text-[var(--badge-info-text)]" },
+  "In Process": {
+    icon: Clock,
+    cls: "bg-[var(--badge-warning-bg)] text-[var(--badge-warning-text)]",
+  },
+  Interviewing: {
+    icon: Users,
+    cls: "bg-[var(--badge-primary-bg)] text-[var(--badge-primary-text)]",
+  },
+  Offer: {
+    icon: CheckCircle2,
+    cls: "bg-[var(--badge-success-bg)] text-[var(--badge-success-text)]",
+  },
+  Archived: {
+    icon: Archive,
+    cls: "bg-[var(--badge-secondary-bg)] text-[var(--badge-secondary-text)]",
+  },
+}
 
-  // Determine header icon with background box matching screenshot
-  const getHeaderIcon = () => {
-    switch (id) {
-      case "Saved":
-        return (
-          <div className="w-7 h-7 rounded-lg bg-[#F2EFFF] flex items-center justify-center text-[#7C5CFC] shrink-0">
-            <Bookmark className="w-3.5 h-3.5" />
-          </div>
-        )
-      case "Applied":
-        return (
-          <div className="w-7 h-7 rounded-lg bg-[#EFF6FF] flex items-center justify-center text-[#3B82F6] shrink-0">
-            <Send className="w-3.5 h-3.5" />
-          </div>
-        )
-      case "In Process":
-      case "Interviewing":
-        return (
-          <div className="w-7 h-7 rounded-lg bg-[#FEF3C7] flex items-center justify-center text-[#D97706] shrink-0">
-            <Clock className="w-3.5 h-3.5" />
-          </div>
-        )
-      case "Offer":
-        return (
-          <div className="w-7 h-7 rounded-lg bg-[#E6F8ED] flex items-center justify-center text-[#10B981] shrink-0">
-            <CheckCircle2 className="w-3.5 h-3.5" />
-          </div>
-        )
-      case "Archived":
-        return (
-          <div className="w-7 h-7 rounded-lg bg-[#F1F5F9] flex items-center justify-center text-[#6B7280] shrink-0">
-            <Archive className="w-3.5 h-3.5" />
-          </div>
-        )
-    }
-  }
+export function KanbanColumn({
+  id,
+  title,
+  candidates,
+  onAddCandidate,
+  jobTitles,
+}: KanbanColumnProps) {
+  const { setNodeRef, isOver } = useDroppable({ id })
+  const iconDef = COLUMN_ICON[id] ?? COLUMN_ICON.Archived
+  const Icon = iconDef.icon
 
   return (
-    <div
+    <section
       ref={setNodeRef}
-      className={`flex flex-col w-[300px] shrink-0 rounded-2xl p-2.5 min-h-[640px] max-h-[calc(100vh-220px)] transition-colors duration-200 ${
-        isOver ? "bg-primary-light/10" : "bg-transparent"
+      aria-label={`${title} column, ${candidates.length} candidate${candidates.length === 1 ? "" : "s"}`}
+      className={`flex flex-col w-[280px] sm:w-[300px] shrink-0 rounded-2xl p-2.5 min-h-[480px] max-h-[calc(100dvh-220px)] transition-colors duration-200 ${
+        isOver ? "bg-primary-light/40" : "bg-transparent"
       }`}
     >
       {/* Column Header */}
       <div className="flex items-center justify-between mb-3 px-1 shrink-0">
         <div className="flex items-center gap-2">
-          {getHeaderIcon()}
-          <span className="text-[14px] font-bold text-[#111827]">{title}</span>
-          <span className="flex items-center justify-center min-w-[20px] h-[20px] px-1 rounded-full bg-slate-100 text-slate-500 text-[11px] font-semibold">
+          <div
+            className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${iconDef.cls}`}
+          >
+            <Icon className="w-3.5 h-3.5" />
+          </div>
+          <h2 className="text-[14px] font-bold text-txt-title">{title}</h2>
+          <span className="flex items-center justify-center min-w-[20px] h-[20px] px-1 rounded-full bg-bg-hover text-txt-body text-[11px] font-semibold">
             {candidates.length}
           </span>
         </div>
-        <button className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-100 transition-colors cursor-pointer outline-none">
-          <MoreHorizontal className="w-4 h-4" />
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label={`${title} column actions`}
+              className="text-txt-caption hover:text-txt-heading p-1 rounded-md hover:bg-bg-hover transition-colors cursor-pointer"
+            >
+              <MoreHorizontal className="w-4 h-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onSelect={() => setTimeout(() => onAddCandidate(id), 0)}>
+              <Plus className="w-3.5 h-3.5" />
+              Add candidate here
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Cards Stack */}
       <div className="flex-1 flex flex-col gap-3 overflow-y-auto custom-scrollbar-none pr-0.5 min-h-0">
         {candidates.map((c) => (
-          <ApplicationCard key={c.id} candidate={c} />
+          <ApplicationCard key={c.id} candidate={c} jobTitle={jobTitles?.[c.jobId]} />
         ))}
         {candidates.length === 0 && (
-          <div className="flex-1 flex flex-col items-center justify-center p-6 border border-dashed border-slate-200 rounded-xl text-center min-h-[140px] bg-slate-50/50">
-            <p className="text-xs text-slate-400 font-medium">No candidates</p>
+          <div className="flex-1 flex flex-col items-center justify-center p-6 border border-dashed border-bg-border rounded-xl text-center min-h-[140px] bg-bg-secondary/50">
+            <p className="text-xs text-txt-caption font-medium">No candidates</p>
           </div>
         )}
       </div>
@@ -90,11 +115,11 @@ export function KanbanColumn({ id, title, candidates, onAddCandidate }: KanbanCo
       <Button
         variant="ghost"
         onClick={() => onAddCandidate(id)}
-        className="w-full justify-start gap-1.5 mt-3 text-slate-400 hover:text-slate-600 rounded-xl text-[12.5px] hover:bg-slate-100/70 shadow-none font-medium h-9 shrink-0 cursor-pointer px-2"
+        className="w-full justify-start gap-1.5 mt-3 rounded-xl text-[12.5px] shadow-none font-medium h-9 shrink-0 cursor-pointer px-2"
       >
         <Plus className="w-4 h-4" />
         Add candidate
       </Button>
-    </div>
+    </section>
   )
 }

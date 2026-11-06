@@ -1,3 +1,5 @@
+import { escapeHtml, sanitizeHtml } from "../../lib/sanitize"
+
 export interface RichTextRendererProps {
   content: string
   className?: string
@@ -98,14 +100,14 @@ function parseContentToHtml(raw: string): string {
 }
 
 function parseInline(text: string): string {
-  return text
+  return escapeHtml(text)
     .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
     .replace(/\*(.*?)\*/g, "<em>$1</em>")
     .replace(/`(.*?)`/g, "<code>$1</code>")
 }
 
 export function RichTextRenderer({ content, className = "" }: RichTextRendererProps) {
-  const formattedHtml = parseContentToHtml(content)
+  const formattedHtml = sanitizeHtml(parseContentToHtml(content))
 
   return (
     <div

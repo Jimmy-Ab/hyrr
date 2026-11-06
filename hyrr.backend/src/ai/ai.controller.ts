@@ -3,7 +3,8 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from "@nestjs/swagg
 import { Roles } from "../auth/decorators/roles.decorator"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { RolesGuard } from "../auth/guards/roles.guard"
-import { AiService } from "./ai.service"
+import { AiService, ChatRole } from "./ai.service"
+import { ChatDto, UpdateAiSettingsDto } from "./dtos/ai.dto"
 
 @ApiTags("AI")
 @ApiBearerAuth()
@@ -17,16 +18,15 @@ export class AiController {
   @ApiOperation({ summary: "Get global AI model settings (Admin only)" })
   @ApiResponse({ status: 200, description: "Returns current AI configuration" })
   getSettings() {
-    return this.aiService.getSettings()
+    return this.aiService.getSettingsView()
   }
 
   @Put("settings")
   @Roles("ADMIN")
   @ApiOperation({ summary: "Update AI model, temperature, and system prompt (Admin only)" })
   @ApiResponse({ status: 200, description: "AI settings updated" })
-  updateSettings(
-    @Body() body: { activeModel?: string; temperature?: number; systemPrompt?: string }
-  ) {
+  @ApiResponse({ status: 400, description: "Unknown model" })
+  updateSettings(@Body() body: UpdateAiSettingsDto) {
     return this.aiService.updateSettings(body)
   }
 
@@ -42,12 +42,12 @@ export class AiController {
   @Roles("SEEKER", "RECRUITER", "ADMIN")
   @ApiOperation({ summary: "Send a message to the Hyrr AI assistant" })
   @ApiResponse({ status: 200, description: "Returns AI assistant response" })
-  async chat(
-    @Req() req: any,
-    @Body() body: { message: string; history?: { role: "user" | "assistant"; content: string }[] }
-  ) {
-    const role = req.user.role as "SEEKER" | "RECRUITER"
-    const reply = await this.aiService.chat(body.message, body.history || [], role)
+  async chat(@Req() req: any, @Body() body: ChatDto) {
+    const reply = await this.aiService.chat(
+      body.message,
+      body.history || [],
+      req.user.role as ChatRole
+    )
     return { reply }
   }
 }

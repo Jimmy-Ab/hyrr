@@ -5,20 +5,38 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  notificationConversationId,
+  SEEKER_VIEW,
   useJobStore,
   useToast,
 } from "hyrr.shared"
-import { Bell, ChevronDown, Command, LogOut, Moon, Search, Settings, Sun, User } from "lucide-react"
+import {
+  Bell,
+  ChevronDown,
+  Command,
+  LogOut,
+  Menu,
+  Moon,
+  Search,
+  Settings,
+  Sun,
+  User,
+} from "lucide-react"
 import * as React from "react"
 
-export function Header() {
+interface HeaderProps {
+  onMenuClick: () => void
+}
+
+export function Header({ onMenuClick }: HeaderProps) {
   const {
     theme,
-    toggleTheme,
+    setTheme,
     notifications,
     markNotificationsAsRead,
     markNotificationRead,
     setCandidateActiveView,
+    openConversation,
     discoverSearch,
     setDiscoverSearch,
     user,
@@ -29,6 +47,26 @@ export function Header() {
   const [notifOpen, setNotifOpen] = React.useState(false)
 
   const unreadCount = notifications.filter((n) => !n.read).length
+  const isDark =
+    theme === "dark" ||
+    (theme === "system" && window.matchMedia?.("(prefers-color-scheme: dark)").matches)
+
+  const handleThemeToggle = async () => {
+    try {
+      await setTheme(isDark ? "light" : "dark")
+    } catch (err) {
+      toast("Theme not saved", err instanceof Error ? err.message : "Please try again", "error")
+    }
+  }
+
+  const handleMarkAll = async () => {
+    try {
+      await markNotificationsAsRead()
+      toast("Done", "All marked as read", "success")
+    } catch (err) {
+      toast("Couldn't update", err instanceof Error ? err.message : "Please try again", "error")
+    }
+  }
 
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -42,10 +80,19 @@ export function Header() {
   }, [])
 
   return (
-    <div className="relative h-12 border-b border-slate-100 bg-white flex items-center justify-center px-5 select-none shrink-0 animate-in fade-in duration-200">
+    <div className="glass relative z-30 h-12 border-b border-bg-border/70 flex items-center gap-2 px-3 sm:px-5 select-none shrink-0 animate-in fade-in duration-200">
+      <button
+        type="button"
+        onClick={onMenuClick}
+        aria-label="Open navigation"
+        aria-controls="seeker-sidebar"
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-txt-caption hover:bg-bg-hover hover:text-txt-heading lg:hidden"
+      >
+        <Menu className="h-4 w-4" />
+      </button>
       {/* Center: Search */}
       <div
-        className={`relative w-full max-w-[330px] transition-all ${searchFocused ? "max-w-md" : ""}`}
+        className={`relative min-w-0 flex-1 lg:mx-auto lg:flex-none lg:w-full max-w-[330px] transition-all ${searchFocused ? "lg:max-w-md" : ""}`}
       >
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-txt-caption pointer-events-none" />
         <input
@@ -57,33 +104,40 @@ export function Header() {
             if (event.key === "Enter") setCandidateActiveView("Discover")
           }}
           placeholder="Search jobs, companies, skills…"
+          aria-label="Search jobs"
           onFocus={() => setSearchFocused(true)}
           onBlur={() => setSearchFocused(false)}
-          className="w-full h-7 pl-8 pr-12 rounded-md border border-slate-100 bg-slate-50 text-[9px] text-txt-heading placeholder:text-slate-400 focus:outline-none focus:border-primary/30 transition-all"
+          className="w-full h-8 pl-8 pr-12 rounded-md border border-bg-border bg-bg-primary text-[13px] text-txt-heading placeholder:text-txt-caption focus:outline-none focus:border-primary/30 transition-all"
         />
-        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5 text-txt-caption pointer-events-none">
+        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-0.5 text-txt-caption pointer-events-none">
           <Command className="w-3 h-3" />
-          <span className="text-[11px] font-semibold">K</span>
+          <span className="text-[12px] font-semibold">K</span>
         </div>
       </div>
 
       {/* Right: Actions */}
-      <div className="absolute right-5 flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1 sm:gap-2 lg:absolute lg:right-5">
         {/* Theme */}
         <button
-          onClick={toggleTheme}
+          type="button"
+          onClick={handleThemeToggle}
+          aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
           className="w-8 h-8 rounded-full flex items-center justify-center text-txt-caption hover:text-txt-heading hover:bg-bg-hover transition-all cursor-pointer"
         >
-          {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>
 
         {/* Notifications */}
         <DropdownMenu open={notifOpen} onOpenChange={setNotifOpen}>
           <DropdownMenuTrigger asChild>
-            <button className="relative w-8 h-8 rounded-full flex items-center justify-center text-txt-caption hover:text-txt-heading hover:bg-bg-hover transition-all cursor-pointer">
+            <button
+              type="button"
+              aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ""}`}
+              className="relative w-8 h-8 rounded-full flex items-center justify-center text-txt-caption hover:text-txt-heading hover:bg-bg-hover transition-all cursor-pointer"
+            >
               <Bell className="w-4 h-4" />
               {unreadCount > 0 && (
-                <span className="absolute top-0.5 right-0.5 min-w-[15px] h-[15px] px-0.5 bg-primary text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                <span className="absolute top-0.5 right-0.5 min-w-[15px] h-[15px] px-0.5 bg-primary text-white text-[10px] font-bold rounded-full flex items-center justify-center">
                   {unreadCount}
                 </span>
               )}
@@ -94,11 +148,8 @@ export function Header() {
               <span>Notifications</span>
               {unreadCount > 0 && (
                 <button
-                  onClick={() => {
-                    markNotificationsAsRead()
-                    toast("Done", "All marked as read", "success")
-                  }}
-                  className="text-[11px] text-primary font-semibold cursor-pointer hover:underline"
+                  onClick={handleMarkAll}
+                  className="text-[12px] text-primary font-semibold cursor-pointer hover:underline"
                 >
                   Mark all read
                 </button>
@@ -108,7 +159,14 @@ export function Header() {
             {notifications.slice(0, 5).map((n) => (
               <DropdownMenuItem
                 key={n.id}
-                onClick={() => markNotificationRead(n.id)}
+                onClick={() => {
+                  markNotificationRead(n.id).catch(() => {})
+                  const conversationId = notificationConversationId(n)
+                  if (conversationId) {
+                    setCandidateActiveView(SEEKER_VIEW.MESSAGES)
+                    openConversation(conversationId).catch(() => {})
+                  } else if (n.actionView) setCandidateActiveView(n.actionView)
+                }}
                 className="flex items-start gap-2 p-3"
               >
                 <div
@@ -116,16 +174,16 @@ export function Header() {
                 />
                 <div className="flex-1 min-w-0">
                   <p
-                    className={`text-[12.5px] leading-snug ${n.read ? "text-txt-body" : "text-txt-heading font-medium"}`}
+                    className={`text-[13.5px] leading-snug ${n.read ? "text-txt-body" : "text-txt-heading font-medium"}`}
                   >
                     {n.title}
                   </p>
-                  <p className="text-[11px] text-txt-caption mt-0.5">{n.time}</p>
+                  <p className="text-[12px] text-txt-caption mt-0.5">{n.time}</p>
                 </div>
               </DropdownMenuItem>
             ))}
             {notifications.length === 0 && (
-              <div className="py-6 text-center text-[12.5px] text-txt-caption">
+              <div className="py-6 text-center text-[13.5px] text-txt-caption">
                 No notifications yet
               </div>
             )}
@@ -135,7 +193,7 @@ export function Header() {
                 setCandidateActiveView("Notifications")
                 setNotifOpen(false)
               }}
-              className="text-center text-[12px] text-primary font-semibold"
+              className="text-center text-[13px] text-primary font-semibold"
             >
               View all notifications
             </DropdownMenuItem>
@@ -145,22 +203,26 @@ export function Header() {
         {/* Profile dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2 hover:bg-bg-hover px-2.5 py-1.5 rounded-[10px] transition-all cursor-pointer outline-none">
+            <button
+              type="button"
+              aria-label="Account menu"
+              className="flex items-center gap-2 hover:bg-bg-hover px-1.5 sm:px-2.5 py-1.5 rounded-[10px] transition-all cursor-pointer outline-none"
+            >
               <img
                 src={
                   user?.avatar ||
-                  "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150"
+                  `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || "User")}`
                 }
                 alt={user?.name || "User Avatar"}
                 className="w-7 h-7 rounded-full object-cover border border-bg-border/50"
               />
-              <div className="flex flex-col items-start">
-                <span className="text-[12.5px] font-semibold text-txt-heading leading-tight">
+              <div className="hidden sm:flex flex-col items-start">
+                <span className="text-[13.5px] font-semibold text-txt-heading leading-tight">
                   {user?.name || "Job Seeker"}
                 </span>
-                <span className="text-[10.5px] text-txt-caption">Candidate</span>
+                <span className="text-[11.5px] text-txt-caption">Candidate</span>
               </div>
-              <ChevronDown className="w-3 h-3 text-txt-caption ml-0.5" />
+              <ChevronDown className="hidden sm:block w-3 h-3 text-txt-caption ml-0.5" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-48" align="end">
@@ -175,7 +237,7 @@ export function Header() {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => {
-                logout()
+                void logout()
                 toast("Signed out", "See you next time!", "success")
               }}
               className="text-sec-red focus:text-sec-red"

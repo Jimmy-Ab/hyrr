@@ -1,0 +1,14 @@
+# Keep the Docker build context small and free of secrets/local artifacts
+**/node_modules
+**/dist
+**/dist-ssr
+**/.env
+**/.env.*
+!**/.env.example
+**/*.tsbuildinfo
+**/uploads
+.git
+.vscode
+.idea
+**/.DS_Store
+**/*.log

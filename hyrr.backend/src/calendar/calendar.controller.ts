@@ -15,7 +15,7 @@ export class CalendarController {
   @ApiOperation({ summary: "Get calendar events for the logged-in user (Seeker or Recruiter)" })
   @ApiResponse({ status: 200, description: "Returns list of calendar events" })
   getEvents(@Req() req: any) {
-    return this.calendarService.getEvents(req.user.userId, req.user.role)
+    return this.calendarService.getEvents(req.user)
   }
 
   @Post()

@@ -1,33 +1,47 @@
 # ─── Stage 1: Build ─────────────────────────────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 
 # Prevent socket flooding, memory spikes, and hanging in Docker Desktop
 ENV NPM_CONFIG_MAXSOCKETS=5
 ENV NPM_CONFIG_AUDIT=false
 ENV NPM_CONFIG_FUND=false
+# Survive flaky networks (ECONNRESET) instead of failing the whole build
+ENV NPM_CONFIG_FETCH_RETRIES=5 \
+    NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000 \
+    NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000 \
+    NPM_CONFIG_UPDATE_NOTIFIER=false
 
 COPY package*.json ./
-RUN npm install --legacy-peer-deps
+RUN --mount=type=cache,target=/root/.npm npm install --legacy-peer-deps
 
 COPY prisma ./prisma/
 COPY . .
 RUN npx prisma generate
 RUN npm run build
-RUN npx tsc prisma/seed.ts --outDir dist/prisma --module commonjs --target es2021 --esModuleInterop --skipLibCheck
+# Compiled seed so `npx prisma db seed` works without ts-node (see prisma/seed-runner.js)
+RUN npm run build:seed
 
 # Prune devDependencies to optimize production image
 RUN npm prune --omit=dev --legacy-peer-deps
 
 # ─── Stage 2: Production image ────────────────────────────────────────────────
-FROM node:20-alpine AS production
+FROM node:22-alpine AS production
 WORKDIR /app
 ENV NODE_ENV=production
+ENV UPLOAD_DIR=/app/uploads
 
 COPY package*.json ./
 COPY --from=builder /app/node_modules          ./node_modules
 COPY --from=builder /app/dist                  ./dist
 COPY --from=builder /app/prisma                ./prisma
 
+# Uploads live on a volume (see docker-compose.yml); pre-create it with the right owner.
+RUN mkdir -p /app/uploads && chown -R node:node /app/uploads
+USER node
+
 EXPOSE 3000
+# Liveness only (no DB); docker-compose adds a readiness check on /api/health/ready.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "dist/main"]

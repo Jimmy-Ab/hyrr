@@ -15,17 +15,18 @@
     "dev:jobseeker": "npm run dev --workspace=hyrr.jobseeker",
     "dev:admin": "npm run dev --workspace=hyrr.admin",
     "dev:backend": "npm run start:dev --workspace=hyrr.backend",
-    "dev": "vite",
     "build:all": "npm run build --workspaces",
-    "build": "tsc -b && vite build",
+    "build": "npm run build:all",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "format": "oxlint --fix && prettier --write .",
     "format:check": "npx prettier --check .",
-    "preview": "vite preview",
     "docker:up": "docker-compose up --build -d",
     "docker:down": "docker-compose down",
-    "db:migrate": "npm run prisma:migrate --workspace=hyrr.backend"
+    "db:migrate": "npm run prisma:migrate --workspace=hyrr.backend",
+    "typecheck": "tsc -b",
+    "e2e": "npm run build --workspace=hyrr.backend && playwright test -c e2e",
+    "lint:hooks": "oxlint -A all -D react/rules-of-hooks hyrr.recruiter/src hyrr.jobseeker/src hyrr.shared/src"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -48,13 +49,14 @@
     "react-hook-form": "^7.80.0",
     "react-router-dom": "^7.18.1",
     "recharts": "^3.9.1",
-    "tailwind-merge": "^3.6.0",
     "socket.io-client": "^4.7.5",
+    "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.2",
     "zod": "^4.4.3",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@playwright/test": "^1.56.1",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",

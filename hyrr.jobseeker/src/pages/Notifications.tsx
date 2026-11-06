@@ -1,25 +1,44 @@
-import { Button, Card, useJobStore, useToast } from "hyrr.shared"
 import {
-  Archive,
-  Bell,
-  Briefcase,
-  Calendar,
-  Check,
-  MessageSquare,
-  Star,
-  Trash2,
-} from "lucide-react"
-import { useEffect, useState } from "react"
+  Button,
+  Card,
+  ConfirmDialog,
+  errorMessage,
+  NOTIFICATION_TYPE_LABEL,
+  notificationConversationId,
+  SEEKER_VIEW,
+  useJobStore,
+  useToast,
+  type NotificationItem,
+  type NotificationType,
+} from "hyrr.shared"
+import { Bell, Briefcase, Calendar, Check, MessageSquare, Search, Star, Trash2 } from "lucide-react"
+import { useState } from "react"
 
-const notifIcons: Record<string, typeof Bell> = {
-  application: Briefcase,
-  interview: Calendar,
-  message: MessageSquare,
-  offer: Star,
-  system: Bell,
+const notifIcons: Record<NotificationType, typeof Bell> = {
+  APPLICATION: Briefcase,
+  INTERVIEW: Calendar,
+  MESSAGE: MessageSquare,
+  OFFER: Star,
+  JOB_ALERT: Search,
+  SYSTEM: Bell,
+}
+
+const notifColors: Record<NotificationType, string> = {
+  APPLICATION: "bg-primary-light text-primary",
+  INTERVIEW: "bg-sec-orange/10 text-sec-orange",
+  MESSAGE: "bg-sec-blue/10 text-sec-blue",
+  OFFER: "bg-sec-green/10 text-sec-green",
+  JOB_ALERT: "bg-primary-light text-primary",
+  SYSTEM: "bg-bg-primary text-txt-caption",
 }
 
 type Filter = "All" | "Unread" | "Applications" | "Interviews" | "Messages"
+
+const filterTypes: Partial<Record<Filter, NotificationType[]>> = {
+  Applications: ["APPLICATION", "OFFER", "JOB_ALERT"],
+  Interviews: ["INTERVIEW"],
+  Messages: ["MESSAGE"],
+}
 
 export function NotificationsPage() {
   const {
@@ -27,45 +46,55 @@ export function NotificationsPage() {
     markNotificationsAsRead,
     markNotificationRead,
     clearNotifications,
-    fetchNotifications,
+    setCandidateActiveView,
+    openConversation,
   } = useJobStore()
   const { toast } = useToast()
   const [filter, setFilter] = useState<Filter>("All")
+  const [confirmClear, setConfirmClear] = useState(false)
 
-  useEffect(() => {
-    fetchNotifications()
-  }, []) // eslint-disable-line
-
-  const formatted = notifications.map((n) => ({
-    ...n,
-    type: n.title.toLowerCase().includes("interview")
-      ? "interview"
-      : n.title.toLowerCase().includes("offer")
-        ? "offer"
-        : n.title.toLowerCase().includes("message")
-          ? "message"
-          : "application",
-  }))
-
-  const filtered = formatted.filter((n) => {
+  const filtered = notifications.filter((n) => {
     if (filter === "Unread") return !n.read
-    if (filter === "Applications") return n.type === "application"
-    if (filter === "Interviews") return n.type === "interview"
-    if (filter === "Messages") return n.type === "message"
-    return true
+    const types = filterTypes[filter]
+    return types ? types.includes(n.type) : true
   })
 
-  const unreadCount = formatted.filter((n) => !n.read).length
+  const unreadCount = notifications.filter((n) => !n.read).length
   const filters: Filter[] = ["All", "Unread", "Applications", "Interviews", "Messages"]
+
+  const openNotification = (n: NotificationItem) => {
+    markNotificationRead(n.id).catch(() => {})
+    const conversationId = notificationConversationId(n)
+    if (conversationId) {
+      setCandidateActiveView(SEEKER_VIEW.MESSAGES)
+      openConversation(conversationId).catch(() => {})
+    } else if (n.actionView) setCandidateActiveView(n.actionView)
+  }
+
+  const handleMarkAll = async () => {
+    try {
+      await markNotificationsAsRead()
+      toast("Done", "All marked as read", "success")
+    } catch (err) {
+      toast("Couldn't update notifications", errorMessage(err), "error")
+    }
+  }
+
+  const handleClear = async () => {
+    try {
+      await clearNotifications()
+      toast("Cleared", "Notifications cleared", "success")
+    } catch (err) {
+      toast("Couldn't clear notifications", errorMessage(err), "error")
+      throw err
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300 relative">
-      {/* Ambient glows */}
-      <div className="ambient-glow-1" />
-      <div className="ambient-glow-2" />
-      <div className="flex items-start justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-[36px] font-extrabold tracking-tight">
+          <h1 className="text-[28px] sm:text-[36px] font-extrabold tracking-tight">
             <span className="premium-gradient-text text-glow">Notifications</span>
           </h1>
           <p className="text-body text-txt-body mt-1 font-medium">
@@ -78,22 +107,18 @@ export function NotificationsPage() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => {
-              markNotificationsAsRead()
-              toast("Done", "All marked as read", "success")
-            }}
-            className="gap-1.5 cursor-pointer text-[12px]"
+            onClick={handleMarkAll}
+            disabled={unreadCount === 0}
+            className="gap-1.5 cursor-pointer text-[13px]"
           >
             <Check className="w-3.5 h-3.5" /> Mark all read
           </Button>
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => {
-              clearNotifications()
-              toast("Cleared", "Notifications cleared", "success")
-            }}
-            className="gap-1.5 cursor-pointer text-[12px] text-sec-red hover:text-sec-red"
+            onClick={() => setConfirmClear(true)}
+            disabled={notifications.length === 0}
+            className="gap-1.5 cursor-pointer text-[13px] text-sec-red hover:text-sec-red"
           >
             <Trash2 className="w-3.5 h-3.5" /> Clear all
           </Button>
@@ -101,12 +126,19 @@ export function NotificationsPage() {
       </div>
 
       {/* Filter tabs */}
-      <div className="flex gap-1 bg-bg-secondary p-1 border border-bg-border rounded-[14px] w-fit">
+      <div
+        role="tablist"
+        aria-label="Filter notifications"
+        className="flex max-w-full gap-1 overflow-x-auto custom-scrollbar-none bg-bg-secondary p-1 border border-bg-border rounded-[14px] w-fit"
+      >
         {filters.map((f) => (
           <button
             key={f}
+            type="button"
+            role="tab"
+            aria-selected={filter === f}
             onClick={() => setFilter(f)}
-            className={`px-4 py-1.5 rounded-[11px] text-[12.5px] font-semibold cursor-pointer transition-all ${
+            className={`shrink-0 px-4 py-1.5 rounded-[11px] text-[13.5px] font-semibold cursor-pointer transition-all ${
               filter === f
                 ? "bg-primary text-white"
                 : "text-txt-body hover:bg-bg-hover hover:text-txt-heading"
@@ -129,45 +161,47 @@ export function NotificationsPage() {
           filtered.map((n) => {
             const Icon = notifIcons[n.type] ?? Bell
             return (
-              <div
+              <button
+                type="button"
                 key={n.id}
-                className={`flex items-start gap-4 p-4 transition-colors hover:bg-bg-hover/50 ${n.read ? "opacity-70" : ""}`}
+                onClick={() => openNotification(n)}
+                className={`w-full text-left flex items-start gap-4 p-4 transition-colors hover:bg-bg-hover/50 cursor-pointer ${n.read ? "opacity-70" : ""}`}
               >
                 <div
-                  className={`w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0 mt-0.5 ${
-                    n.type === "offer"
-                      ? "bg-sec-green/10 text-sec-green"
-                      : n.type === "interview"
-                        ? "bg-sec-orange/10 text-sec-orange"
-                        : n.type === "message"
-                          ? "bg-sec-blue/10 text-sec-blue"
-                          : "bg-primary-light text-primary"
-                  }`}
+                  className={`w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0 mt-0.5 ${notifColors[n.type] ?? notifColors.SYSTEM}`}
                 >
-                  <Icon className="w-4 h-4" />
+                  <Icon className="w-4 h-4" aria-hidden="true" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p
-                    className={`text-[13px] leading-snug ${n.read ? "text-txt-body" : "text-txt-heading font-medium"}`}
+                    className={`text-[13px] leading-snug break-words ${n.read ? "text-txt-body" : "text-txt-heading font-medium"}`}
                   >
                     {n.title}
                   </p>
-                  <p className="text-[11.5px] text-txt-caption mt-0.5">{n.time}</p>
+                  <p className="text-[12.5px] text-txt-caption mt-0.5">
+                    {NOTIFICATION_TYPE_LABEL[n.type] ?? "Notification"} · {n.time}
+                  </p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {!n.read && <div className="w-2 h-2 rounded-full bg-primary" />}
-                  <button
-                    onClick={() => markNotificationRead(n.id)}
-                    className="p-1.5 rounded-[8px] hover:bg-bg-hover text-txt-caption hover:text-txt-heading transition-colors cursor-pointer"
-                  >
-                    <Archive className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
+                {!n.read && (
+                  <div
+                    className="w-2 h-2 rounded-full bg-primary shrink-0 mt-2"
+                    aria-label="Unread"
+                  />
+                )}
+              </button>
             )
           })
         )}
       </Card>
+
+      <ConfirmDialog
+        open={confirmClear}
+        onOpenChange={setConfirmClear}
+        title="Clear all notifications?"
+        description="This permanently deletes all of your notifications."
+        confirmLabel="Clear all"
+        onConfirm={handleClear}
+      />
     </div>
   )
 }

@@ -1,13 +1,15 @@
 import { ApiPropertyOptional } from "@nestjs/swagger"
 import { ApplicationStatus } from "@prisma/client"
-import { IsBoolean, IsEnum, IsOptional, IsString } from "class-validator"
+import { IsBoolean, IsIn, IsOptional, IsString } from "class-validator"
+import { RECRUITER_STATUSES } from "./create-candidate.dto"
 
 export class UpdateApplicationDto {
   @ApiPropertyOptional({
-    enum: ApplicationStatus,
+    enum: RECRUITER_STATUSES,
+    description: "Recruiter only. SAVED and WITHDRAWN cannot be set through this endpoint.",
   })
   @IsOptional()
-  @IsEnum(ApplicationStatus)
+  @IsIn(RECRUITER_STATUSES)
   status?: ApplicationStatus
 
   @ApiPropertyOptional({ example: "Technical Interview", description: "Pipeline sub-stage tag" })
@@ -29,9 +31,4 @@ export class UpdateApplicationDto {
   @IsOptional()
   @IsString()
   offerAmount?: string
-
-  @ApiPropertyOptional({ example: "Strong React skills..." })
-  @IsOptional()
-  @IsString()
-  notes?: string
 }

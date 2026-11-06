@@ -1,0 +1,6 @@
+{
+  // Production build (nest build): same options as tsconfig.json, without test files.
+  // tsconfig.json itself includes *.spec.ts so editors type-check tests with the project settings.
+  "extends": "./tsconfig.json",
+  "exclude": ["node_modules", "dist", "prisma", "src/**/*.spec.ts"]
+}

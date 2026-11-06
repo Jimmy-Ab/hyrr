@@ -1,0 +1,162 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22"
+  # Unit tests never talk to a real database; Prisma only needs a syntactically valid URL.
+  DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
+  JWT_SECRET: ci-only-jwt-secret-that-is-at-least-32-characters-long
+
+jobs:
+  typecheck-test-build:
+    name: Typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Prisma generate
+        working-directory: hyrr.backend
+        run: npx prisma generate
+
+      - name: Typecheck shared
+        run: npx tsc --noEmit -p hyrr.shared
+      - name: Typecheck recruiter
+        run: npx tsc --noEmit -p hyrr.recruiter/tsconfig.app.json
+      - name: Typecheck jobseeker
+        run: npx tsc --noEmit -p hyrr.jobseeker/tsconfig.app.json
+      - name: Typecheck backend
+        working-directory: hyrr.backend
+        run: npx tsc --noEmit -p .
+
+      - name: Typecheck all workspaces (root TypeScript, project references)
+        run: npm run typecheck
+
+      - name: React hook rules (a broken hook order crashes the page)
+        run: npm run lint:hooks
+
+      - name: Backend unit tests
+        working-directory: hyrr.backend
+        run: npx jest --ci
+
+      - name: Build recruiter
+        run: npm run build --workspace=hyrr.recruiter
+      - name: Build jobseeker
+        run: npm run build --workspace=hyrr.jobseeker
+      - name: Build admin
+        run: npm run build --workspace=hyrr.admin
+
+  migrations:
+    name: Migration parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
+      SHADOW_DATABASE_URL: postgresql://ci:ci@localhost:5432/ci_shadow?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Create shadow database
+        run: PGPASSWORD=ci psql -h localhost -U ci -d ci -c "CREATE DATABASE ci_shadow"
+      - name: Apply migrations
+        working-directory: hyrr.backend
+        run: npx prisma migrate deploy
+      - name: Deployed database matches schema.prisma
+        working-directory: hyrr.backend
+        run: >-
+          npx prisma migrate diff
+          --from-url "$DATABASE_URL"
+          --to-schema-datamodel prisma/schema.prisma
+          --exit-code
+      - name: Migration history matches schema.prisma (shadow replay)
+        working-directory: hyrr.backend
+        run: >-
+          npx prisma migrate diff
+          --from-migrations prisma/migrations
+          --to-schema-datamodel prisma/schema.prisma
+          --shadow-database-url "$SHADOW_DATABASE_URL"
+          --exit-code
+
+  # e2e:
+  #   name: Playwright e2e
+  #   runs-on: ubuntu-latest
+  #   needs: [typecheck-test-build]
+  #   # Placeholder: the coordinator adds the Playwright setup (postgres service, backend boot,
+  #   # `npx playwright install --with-deps`, `npx playwright test`).
+  #   steps:
+  #     - uses: actions/checkout@v4
+
+  e2e:
+    name: End-to-end (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/e2e?schema=public
+      E2E_DATABASE_URL: postgresql://ci:ci@localhost:5432/e2e?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Prisma generate + migrate + seed categories
+        working-directory: hyrr.backend
+        run: npx prisma generate && npx prisma migrate deploy && npx prisma db seed
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run e2e
+        run: npm run e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: e2e/playwright-report
+          retention-days: 7

@@ -1,8 +1,22 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Req, UseGuards } from "@nestjs/common"
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Put,
+  Req,
+  UseGuards,
+} from "@nestjs/common"
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from "@nestjs/swagger"
 import { Roles } from "../auth/decorators/roles.decorator"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { RolesGuard } from "../auth/guards/roles.guard"
+import { CompanyProfileService } from "./company-profile.service"
+import { UpdateCompanyProfileDto } from "./dtos/company-profile.dto"
+import { ImportCvDto } from "./dtos/import-cv.dto"
 import { EducationDto, ExperienceDto, UpdateProfileDto } from "./dtos/profile.dto"
 import { ProfileService } from "./profile.service"
 
@@ -11,7 +25,10 @@ import { ProfileService } from "./profile.service"
 @UseGuards(JwtAuthGuard)
 @Controller("profile")
 export class ProfileController {
-  constructor(private readonly profileService: ProfileService) {}
+  constructor(
+    private readonly profileService: ProfileService,
+    private readonly companyProfile: CompanyProfileService
+  ) {}
 
   // ─── Any authenticated role: get basic user + company info ──────────
   @Get("me")
@@ -25,10 +42,36 @@ export class ProfileController {
   @Get()
   @UseGuards(RolesGuard)
   @Roles("SEEKER")
-  @ApiOperation({ summary: "Get current seeker profile details" })
+  @ApiOperation({ summary: "Get current seeker profile details (+ profileStrength, missing)" })
   @ApiResponse({ status: 200, description: "Returns seeker profile details" })
   getProfile(@Req() req: any) {
-    return this.profileService.getProfile(req.user.userId)
+    return this.profileService.getProfileView(req.user.userId)
+  }
+
+  // ─── Recruiter: company profile ──────────────────────────────────────
+  @Get("company")
+  @UseGuards(RolesGuard)
+  @Roles("RECRUITER")
+  @ApiOperation({ summary: "Get the recruiter's company profile" })
+  getCompany(@Req() req: any) {
+    return this.companyProfile.get(req.user)
+  }
+
+  @Put("company")
+  @UseGuards(RolesGuard)
+  @Roles("RECRUITER")
+  @ApiOperation({ summary: "Update the company profile (OWNER / RECRUITER members)" })
+  updateCompany(@Req() req: any, @Body() body: UpdateCompanyProfileDto) {
+    return this.companyProfile.update(req.user, body)
+  }
+
+  @Post("import-cv")
+  @UseGuards(RolesGuard)
+  @Roles("SEEKER")
+  @HttpCode(200)
+  @ApiOperation({ summary: "Suggest profile fields from a CV (nothing is saved)" })
+  importCv(@Req() req: any, @Body() body: ImportCvDto) {
+    return this.profileService.importFromCv(req.user.userId, body)
   }
 
   @Put()

@@ -76,6 +76,15 @@ const SEEKER = {
 }
 
 async function main() {
+  // Demo data uses well-known passwords: never load it into production by accident.
+  if (process.env.NODE_ENV === "production" && process.env.SEED_DEMO_DATA !== "true") {
+    console.error(
+      "Refusing to seed demo data in production. Set SEED_DEMO_DATA=true to override explicitly."
+    )
+    process.exitCode = 1
+    return
+  }
+
   console.log("🌱  Seeding database…")
 
   // 1. Upsert categories
@@ -130,6 +139,12 @@ async function main() {
         companyId: companies[r.company].id,
       },
     })
+    // Every demo recruiter owns their demo company (matches email registration).
+    await prisma.companyMember.upsert({
+      where: { companyId_userId: { companyId: companies[r.company].id, userId: u.id } },
+      update: { role: "OWNER" },
+      create: { companyId: companies[r.company].id, userId: u.id, role: "OWNER" },
+    })
     recruiterUsers.push(u)
   }
   console.log(`     ✓ ${recruiterUsers.length} recruiters`)
@@ -150,6 +165,11 @@ async function main() {
       avatar: SEEKER.avatar,
       role: "SEEKER",
     },
+  })
+  await prisma.seekerProfile.upsert({
+    where: { userId: seeker.id },
+    update: {},
+    create: { userId: seeker.id, title: "", location: "" },
   })
   console.log(`     ✓ seeker: ${seeker.email}`)
 

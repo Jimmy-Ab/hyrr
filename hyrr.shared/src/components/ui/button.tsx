@@ -4,19 +4,19 @@ import * as React from "react"
 import { cn } from "../../lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-40 disabled:shadow-none select-none cursor-pointer",
+  "inline-flex items-center justify-center whitespace-nowrap font-semibold tracking-[-0.005em] transition-[background-color,border-color,color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-primary/30 focus-visible:ring-offset-0 disabled:pointer-events-none disabled:opacity-40 disabled:shadow-none select-none cursor-pointer",
   {
     variants: {
       variant: {
         /* Solid violet — white text, always readable */
         primary:
-          "bg-primary text-white shadow-button hover:bg-primary-hover active:scale-[0.98] border border-transparent",
+          "btn-shine bg-gradient-to-b from-[#7a72ff] to-primary text-white shadow-button hover:from-[#7068ff] hover:to-primary-hover hover:-translate-y-px hover:shadow-[0_1px_0_rgba(255,255,255,0.22)_inset,0_2px_4px_rgba(76,64,220,0.3),0_10px_24px_-8px_rgba(108,99,255,0.65)] border border-transparent",
         /* Outlined surface — strong dark heading text on white/light bg */
         secondary: [
           "bg-bg-secondary border border-bg-border",
           "text-[#23262F]" /* light mode: near-black */,
           "hover:bg-bg-hover hover:border-primary/30 hover:text-[#17181C]",
-          "shadow-[0_1px_3px_rgba(15,23,42,0.06)]",
+          "shadow-[0_1px_2px_rgba(15,23,42,0.05)] hover:-translate-y-px hover:shadow-[0_4px_12px_-4px_rgba(15,23,42,0.12)]",
           /* dark mode: flip to bright text */
           "dark:text-[#E4E6EB] dark:hover:text-white dark:border-[#1E2028] dark:hover:border-[#2D2A5E]",
         ].join(" "),
@@ -28,7 +28,7 @@ const buttonVariants = cva(
         ].join(" "),
         /* Danger — red bg, always white text */
         danger:
-          "bg-sec-red text-white hover:opacity-90 shadow-[0_4px_16px_rgba(217,48,48,0.22)] border border-transparent",
+          "btn-shine bg-sec-red text-white hover:brightness-105 hover:-translate-y-px shadow-[0_1px_2px_rgba(217,48,48,0.3),0_6px_16px_-6px_rgba(217,48,48,0.5)] border border-transparent",
       },
       size: {
         sm: "h-9 px-4 rounded-[14px] text-[12.5px] gap-1.5",
@@ -62,9 +62,8 @@ const Button = React.forwardRef<
   return (
     <motion.button
       ref={ref}
-      whileHover={animateClick ? { scale: 1.015 } : undefined}
-      whileTap={animateClick ? { scale: 0.985 } : undefined}
-      transition={{ type: "spring", stiffness: 400, damping: 15 }}
+      whileTap={animateClick ? { scale: 0.97 } : undefined}
+      transition={{ duration: 0.18, ease: [0.32, 0.72, 0, 1] }}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />

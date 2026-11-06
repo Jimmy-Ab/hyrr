@@ -1,18 +1,45 @@
-import { apiFetch, JOB_TYPE_OPTIONS, RichTextEditor, type JobType } from "hyrr.shared"
-import { Briefcase, ChevronLeft, ChevronRight, FileText, Plus, Sparkles, X } from "lucide-react"
-import { useEffect, useState, type FormEvent } from "react"
-import { useJobStore } from "../../store/useJobStore"
-import { Button } from "../ui/button"
 import {
+  apiFetch,
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "../ui/dialog"
-import { Input } from "../ui/input"
-import { useToast } from "../ui/toast"
+  emptySalaryRange,
+  FieldError,
+  fieldErrorsOf,
+  Input,
+  insufficientCreditsDetails,
+  isSalaryRangeEmpty,
+  JOB_TYPE_OPTIONS,
+  jobBasicsSchema,
+  RichTextEditor,
+  SalaryRangeInput,
+  salaryRangeSchema,
+  scopeErrors,
+  useToast,
+  validate,
+  type FieldErrors,
+  type JobType,
+  type SalaryRangeValue,
+} from "hyrr.shared"
+import { Briefcase, ChevronLeft, ChevronRight, FileText, Plus, Sparkles, X } from "lucide-react"
+import { useEffect, useState, type FormEvent } from "react"
+import { errorMessage, jobPublishError, type JobPublishError } from "../../lib/recruiter"
+import { useJobStore } from "../../store/useJobStore"
+import {
+  InsufficientCreditsNotice,
+  PublishCostNote,
+  usePublishCost,
+} from "../billing/momentum-cost"
+import { JobPublishErrorNotice } from "../jobs/job-publish-error"
+import {
+  ScreeningQuestionsEditor,
+  toScreeningQuestions,
+  type DraftQuestion,
+} from "../jobs/screening-questions-editor"
 
 interface Category {
   id: string
@@ -22,41 +49,6 @@ interface Category {
 
 const WORK_TYPES = JOB_TYPE_OPTIONS
 
-const FALLBACK_CATEGORIES: Category[] = [
-  { id: "software-development", name: "Software Development", slug: "software-development" },
-  {
-    id: "data-science-analytics",
-    name: "Data Science & Analytics",
-    slug: "data-science-analytics",
-  },
-  { id: "design-creative", name: "Design & Creative", slug: "design-creative" },
-  { id: "product-management", name: "Product Management", slug: "product-management" },
-  { id: "devops-infrastructure", name: "DevOps & Infrastructure", slug: "devops-infrastructure" },
-  { id: "cybersecurity", name: "Cybersecurity", slug: "cybersecurity" },
-  { id: "marketing-growth", name: "Marketing & Growth", slug: "marketing-growth" },
-  { id: "sales-business-dev", name: "Sales & Business Dev", slug: "sales-business-dev" },
-  { id: "finance-accounting", name: "Finance & Accounting", slug: "finance-accounting" },
-  { id: "human-resources", name: "Human Resources", slug: "human-resources" },
-  { id: "customer-success", name: "Customer Success", slug: "customer-success" },
-  { id: "legal-compliance", name: "Legal & Compliance", slug: "legal-compliance" },
-  { id: "operations-logistics", name: "Operations & Logistics", slug: "operations-logistics" },
-  { id: "healthcare-medical", name: "Healthcare & Medical", slug: "healthcare-medical" },
-  { id: "education-training", name: "Education & Training", slug: "education-training" },
-  { id: "content-copywriting", name: "Content & Copywriting", slug: "content-copywriting" },
-  { id: "machine-learning-ai", name: "Machine Learning & AI", slug: "machine-learning-ai" },
-  { id: "mobile-development", name: "Mobile Development", slug: "mobile-development" },
-  { id: "qa-testing", name: "QA & Testing", slug: "qa-testing" },
-  { id: "project-management", name: "Project Management", slug: "project-management" },
-  { id: "cloud-architecture", name: "Cloud Architecture", slug: "cloud-architecture" },
-  { id: "blockchain-web3", name: "Blockchain & Web3", slug: "blockchain-web3" },
-  { id: "research-development", name: "Research & Development", slug: "research-development" },
-  {
-    id: "administration-support",
-    name: "Administration & Support",
-    slug: "administration-support",
-  },
-]
-
 const selectCls =
   "w-full h-11 px-3.5 rounded-input border border-bg-border bg-bg-secondary text-[13px] text-txt-heading focus:outline-none focus:border-primary/30 focus:ring-2 focus:ring-primary/10 transition-all duration-200 cursor-pointer"
 const labelCls = "text-[12px] font-semibold text-txt-heading uppercase tracking-wider block mb-1.5"
@@ -64,12 +56,14 @@ const tagCls =
   "inline-flex items-center gap-1 text-[11.5px] font-bold px-2.5 py-1 rounded-full transition-colors"
 
 function TagInput({
+  id,
   tags,
   onAdd,
   onRemove,
   placeholder,
   colorClass = "bg-primary-light text-primary border border-primary-border/30",
 }: {
+  id: string
   tags: string[]
   onAdd: (v: string) => void
   onRemove: (v: string) => void
@@ -93,6 +87,7 @@ function TagInput({
             <button
               type="button"
               onClick={() => onRemove(t)}
+              aria-label={`Remove ${t}`}
               className="hover:opacity-70 cursor-pointer"
             >
               <X className="w-3 h-3" />
@@ -102,6 +97,7 @@ function TagInput({
       </div>
       <div className="flex gap-2">
         <Input
+          id={id}
           value={val}
           onChange={(e) => setVal(e.target.value)}
           onKeyDown={(e) => {
@@ -118,6 +114,7 @@ function TagInput({
           variant="secondary"
           size="sm"
           onClick={commit}
+          aria-label="Add"
           className="h-9 px-3 cursor-pointer shrink-0"
         >
           <Plus className="w-4 h-4" />
@@ -128,9 +125,11 @@ function TagInput({
 }
 
 function RequirementsList({
+  id,
   items,
   onChange,
 }: {
+  id: string
   items: string[]
   onChange: (v: string[]) => void
 }) {
@@ -154,7 +153,8 @@ function RequirementsList({
             <button
               type="button"
               onClick={() => onChange(items.filter((_, idx) => idx !== i))}
-              className="text-txt-disabled hover:text-sec-red cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+              aria-label={`Remove requirement: ${req}`}
+              className="text-txt-disabled hover:text-sec-red cursor-pointer opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -163,6 +163,7 @@ function RequirementsList({
       </ul>
       <div className="flex gap-2">
         <Input
+          id={id}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
@@ -179,6 +180,7 @@ function RequirementsList({
           variant="secondary"
           size="sm"
           onClick={add}
+          aria-label="Add requirement"
           className="h-9 px-3 cursor-pointer shrink-0"
         >
           <Plus className="w-4 h-4" />
@@ -195,21 +197,26 @@ const STEPS = [
 ]
 
 export function AddJobDialog() {
-  const { isAddJobOpen, setAddJobOpen, addJob } = useJobStore()
+  const { isAddJobOpen, setAddJobOpen, addJob, saveJobQuestions } = useJobStore()
   const { toast } = useToast()
 
   const [step, setStep] = useState(0)
   const [loading, setLoading] = useState(false)
-  const [categories, setCategories] = useState<Category[]>(FALLBACK_CATEGORIES)
+  const [savingDraft, setSavingDraft] = useState(false)
+  const [publishError, setPublishError] = useState<JobPublishError | null>(null)
+  const [categories, setCategories] = useState<Category[]>([])
+  const [categoriesLoading, setCategoriesLoading] = useState(false)
+  const [categoriesError, setCategoriesError] = useState<string | null>(null)
 
   // Step 1 – Basics
   const [title, setTitle] = useState("")
   const [location, setLocation] = useState("")
   const [type, setType] = useState<JobType>(JOB_TYPE_OPTIONS[0])
-  const [salary, setSalary] = useState("")
-  const [categoryId, setCategoryId] = useState(FALLBACK_CATEGORIES[0].id)
+  const [salary, setSalary] = useState<SalaryRangeValue>(emptySalaryRange("USD"))
+  const [errors, setErrors] = useState<FieldErrors>({})
+  const [categoryId, setCategoryId] = useState("")
   const [remote, setRemote] = useState(false)
-  const [featured, setFeatured] = useState(false)
+  const [creditError, setCreditError] = useState<{ required: number; balance: number } | null>(null)
 
   // Step 2 – Description
   const [description, setDescription] = useState("")
@@ -218,42 +225,43 @@ export function AddJobDialog() {
   const [skills, setSkills] = useState<string[]>([])
   const [requirements, setRequirements] = useState<string[]>([])
   const [benefits, setBenefits] = useState<string[]>([])
+  const [questions, setQuestions] = useState<DraftQuestion[]>([])
+
+  const loadCategories = async () => {
+    setCategoriesLoading(true)
+    setCategoriesError(null)
+    try {
+      const cats: Category[] = await apiFetch("/jobs/categories")
+      setCategories(cats ?? [])
+      setCategoryId((prev) => (cats?.some((c) => c.id === prev) ? prev : (cats?.[0]?.id ?? "")))
+      if (!cats?.length) setCategoriesError("No job categories are configured.")
+    } catch (err) {
+      setCategoriesError(errorMessage(err, "Could not load job categories."))
+    } finally {
+      setCategoriesLoading(false)
+    }
+  }
 
   useEffect(() => {
-    if (isAddJobOpen) {
-      // Pre-select the first fallback immediately so dialog opens ready
-      if (!categoryId) setCategoryId(FALLBACK_CATEGORIES[0].id)
-      // Then load real DB IDs in the background
-      apiFetch("/jobs/categories")
-        .then((cats: Category[]) => {
-          if (cats?.length) {
-            setCategories(cats)
-            // Re-map selection if current ID was a fallback slug
-            setCategoryId((prev) => {
-              const real = cats.find((c) => c.slug === prev || c.id === prev)
-              return real ? real.id : cats[0].id
-            })
-          }
-        })
-        .catch(() => {
-          /* keep fallbacks */
-        })
-    }
-  }, [isAddJobOpen]) // eslint-disable-line
+    if (isAddJobOpen && (categories.length === 0 || categoriesError)) loadCategories()
+  }, [isAddJobOpen]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const reset = () => {
     setStep(0)
     setTitle("")
     setLocation("")
     setType(JOB_TYPE_OPTIONS[0])
-    setSalary("")
-    setCategoryId(categories[0]?.id || FALLBACK_CATEGORIES[0].id)
+    setSalary(emptySalaryRange("USD"))
+    setErrors({})
+    setCategoryId(categories[0]?.id || "")
     setRemote(false)
-    setFeatured(false)
+    setCreditError(null)
     setDescription("")
     setSkills([])
     setRequirements([])
     setBenefits([])
+    setQuestions([])
+    setPublishError(null)
   }
 
   const handleClose = () => {
@@ -261,27 +269,51 @@ export function AddJobDialog() {
     setAddJobOpen(false)
   }
 
+  /** Inline field errors for the current step (same rules as the backend DTO). */
+  const stepErrors = (which: number): FieldErrors => {
+    if (which === 0)
+      return {
+        ...validate(jobBasicsSchema, { title, location: location || "Remote", categoryId }),
+        ...validate(salaryRangeSchema, salary, "salary"),
+      }
+    if (which === 1) {
+      const text = description
+        .replace(/<[^>]*>/g, " ")
+        .replace(/&nbsp;/g, " ")
+        .trim()
+      return text.length < 20 ? { description: "Description must be at least 20 characters" } : {}
+    }
+    const out: FieldErrors = {}
+    if (skills.length === 0) out.skills = "Add at least one required skill"
+    if (requirements.length === 0) out.requirements = "Add at least one requirement"
+    return out
+  }
+
   const validateStep = () => {
-    if (step === 0 && !title.trim()) {
-      toast("Error", "Job Title is required.", "error")
-      return false
+    const found = stepErrors(step)
+    setErrors(found)
+    return Object.keys(found).length === 0
+  }
+
+  /** Server-side 400 VALIDATION_FAILED → the same inline errors, on the step that has them. */
+  const showServerErrors = (err: unknown) => {
+    const server = fieldErrorsOf(err)
+    if (Object.keys(server).length === 0) return false
+    const mapped: FieldErrors = {}
+    for (const [key, message] of Object.entries(server)) {
+      const salaryKey = /^salary(Min|Max|Currency|Period)$/.exec(key)
+      mapped[salaryKey ? `salary.${salaryKey[1].toLowerCase()}` : key.split(".")[0]] = message
     }
-    if (step === 0 && !categoryId) {
-      toast("Error", "Please select a category.", "error")
-      return false
-    }
-    if (step === 1 && description.trim().length < 20) {
-      toast("Error", "Description must be at least 20 characters.", "error")
-      return false
-    }
-    if (step === 2 && requirements.length === 0) {
-      toast("Error", "Add at least one requirement.", "error")
-      return false
-    }
-    if (step === 2 && skills.length === 0) {
-      toast("Error", "Add at least one required skill.", "error")
-      return false
-    }
+    setErrors(mapped)
+    const keys = Object.keys(mapped)
+    if (
+      keys.some(
+        (k) => ["title", "location", "categoryId", "type"].includes(k) || k.startsWith("salary")
+      )
+    )
+      setStep(0)
+    else if (keys.includes("description")) setStep(1)
+    else setStep(2)
     return true
   }
 
@@ -290,36 +322,112 @@ export function AddJobDialog() {
     setStep((s) => s + 1)
   }
 
+  const jobInput = (): Parameters<typeof addJob>[0] => ({
+    title,
+    location: location || "Remote",
+    type,
+    ...(isSalaryRangeEmpty(salary)
+      ? {}
+      : {
+          salaryMin: salary.min,
+          salaryMax: salary.max,
+          salaryCurrency: salary.currency || null,
+          salaryPeriod: salary.period,
+        }),
+    description,
+    requirements,
+    skills,
+    benefits,
+    categoryId,
+    remote,
+  })
+
+  const publishCost = usePublishCost(
+    {
+      remote,
+      salaryMax: isSalaryRangeEmpty(salary) ? null : salary.max,
+      salaryCurrency: salary.currency || null,
+      salaryPeriod: salary.period,
+      categoryId: categoryId || undefined,
+    },
+    isAddJobOpen && !!categoryId
+  )
+
+  /** Creates the job, then saves its screening questions. false = questions failed (job exists). */
+  const createJob = async (input: Parameters<typeof addJob>[0]) => {
+    const created = await addJob(input)
+    const payload = toScreeningQuestions(questions)
+    if (payload.length === 0 || !created?.id) return true
+    try {
+      await saveJobQuestions(created.id, payload)
+      return true
+    } catch (err) {
+      toast(
+        "Job created, but questions weren't saved",
+        `${errorMessage(err)} Add them from Edit job.`,
+        "error"
+      )
+      return false
+    }
+  }
+
+  /** Shows content-policy / unverified-email errors inline; anything else is a toast. */
+  const handleError = (err: unknown, failTitle: string) => {
+    const credits = insufficientCreditsDetails(err)
+    if (credits) {
+      setCreditError(credits)
+      return
+    }
+    if (showServerErrors(err)) return
+    const inline = jobPublishError(err)
+    if (inline) setPublishError(inline)
+    else toast(failTitle, errorMessage(err), "error")
+  }
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!validateStep()) return
     setLoading(true)
+    setPublishError(null)
+    setCreditError(null)
     try {
-      await addJob({
-        title,
-        location: location || "Remote",
-        type,
-        salary: salary || undefined,
-        description,
-        requirements,
-        skills,
-        benefits,
-        categoryId,
-        featured,
-        remote,
-      })
-      toast("Job Created! 🎉", `"${title}" is now live in your job board.`, "success")
+      if (await createJob(jobInput())) {
+        toast("Job published", `"${title}" is now live in your job board.`, "success")
+      }
       handleClose()
-    } catch {
-      toast("Error", "Failed to create job. Please try again.", "error")
+    } catch (err) {
+      handleError(err, "Could not create job")
     } finally {
       setLoading(false)
     }
   }
 
+  // Drafts aren't visible to candidates, so they don't need a verified e-mail.
+  const handleSaveDraft = async () => {
+    setSavingDraft(true)
+    setCreditError(null)
+    try {
+      const draft = { ...jobInput(), status: "DRAFT" as const }
+      if (await createJob(draft)) {
+        toast(
+          "Draft saved",
+          `"${title}" was saved as a draft. Publish it once you're verified.`,
+          "success"
+        )
+      }
+      handleClose()
+    } catch (err) {
+      handleError(err, "Could not save draft")
+    } finally {
+      setSavingDraft(false)
+    }
+  }
+
+  const busy = loading || savingDraft
+
   return (
-    <Dialog open={isAddJobOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl">
+    <Dialog open={isAddJobOpen} onOpenChange={(open) => !open && !busy && handleClose()}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create Job Listing</DialogTitle>
           <DialogDescription>
@@ -371,35 +479,51 @@ export function AddJobDialog() {
           {/* ── Step 0: Basics ─────────────────────────────────────────────── */}
           {step === 0 && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <label className={labelCls}>Job Title *</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <label htmlFor="job-title" className={labelCls}>
+                    Job Title *
+                  </label>
                   <Input
+                    id="job-title"
                     placeholder="e.g. Senior Frontend Developer"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    required
+                    aria-invalid={!!errors.title || undefined}
+                    aria-describedby={errors.title ? "job-title-error" : undefined}
+                    className={errors.title ? "border-sec-red/70" : undefined}
                   />
+                  <FieldError id="job-title-error" message={errors.title} />
                 </div>
                 <div>
-                  <label className={labelCls}>Location</label>
+                  <label htmlFor="job-location" className={labelCls}>
+                    Location
+                  </label>
                   <Input
+                    id="job-location"
                     placeholder="e.g. San Francisco, CA"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
+                    aria-invalid={!!errors.location || undefined}
+                    aria-describedby={errors.location ? "job-location-error" : undefined}
                   />
+                  <FieldError id="job-location-error" message={errors.location} />
                 </div>
-                <div>
-                  <label className={labelCls}>Salary Range</label>
-                  <Input
-                    placeholder="e.g. $120k – $180k"
+                <div className="sm:col-span-2">
+                  <SalaryRangeInput
+                    id="job-salary"
+                    label="Salary range (optional)"
                     value={salary}
-                    onChange={(e) => setSalary(e.target.value)}
+                    onChange={setSalary}
+                    errors={scopeErrors(errors, "salary")}
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Job Type</label>
+                  <label htmlFor="job-type" className={labelCls}>
+                    Job Type
+                  </label>
                   <select
+                    id="job-type"
                     value={type}
                     onChange={(e) => setType(e.target.value)}
                     className={selectCls}
@@ -412,21 +536,47 @@ export function AddJobDialog() {
                   </select>
                 </div>
                 <div>
-                  <label className={labelCls}>Work Field / Category *</label>
+                  <label htmlFor="job-category" className={labelCls}>
+                    Work Field / Category *
+                  </label>
                   <select
+                    id="job-category"
                     value={categoryId}
                     onChange={(e) => setCategoryId(e.target.value)}
-                    className={selectCls}
+                    disabled={categoriesLoading || !!categoriesError}
+                    aria-invalid={!!categoriesError}
+                    aria-describedby={categoriesError ? "job-category-error" : undefined}
+                    className={`${selectCls} disabled:opacity-60 disabled:cursor-not-allowed`}
                   >
+                    {categoriesLoading && categories.length === 0 && (
+                      <option value="">Loading…</option>
+                    )}
                     {categories.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
                       </option>
                     ))}
                   </select>
+                  <FieldError id="job-category-field-error" message={errors.categoryId} />
+                  {categoriesError && (
+                    <p
+                      id="job-category-error"
+                      role="alert"
+                      className="mt-1.5 text-[12px] text-sec-red flex items-center gap-2"
+                    >
+                      {categoriesError}
+                      <button
+                        type="button"
+                        onClick={loadCategories}
+                        className="font-semibold text-primary hover:underline cursor-pointer"
+                      >
+                        Retry
+                      </button>
+                    </p>
+                  )}
                 </div>
               </div>
-              <div className="flex items-center gap-6 pt-2">
+              <div className="flex flex-wrap items-center gap-6 pt-2">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
@@ -436,15 +586,6 @@ export function AddJobDialog() {
                   />
                   <span className="text-[13px] font-medium text-txt-heading">Remote Friendly</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={featured}
-                    onChange={(e) => setFeatured(e.target.checked)}
-                    className="w-4 h-4 accent-primary rounded cursor-pointer"
-                  />
-                  <span className="text-[13px] font-medium text-txt-heading">Featured Listing</span>
-                </label>
               </div>
             </div>
           )}
@@ -453,7 +594,7 @@ export function AddJobDialog() {
           {step === 1 && (
             <div className="space-y-4">
               <div>
-                <label className={labelCls}>Job Description (Rich Text) *</label>
+                <span className={labelCls}>Job Description (Rich Text) *</span>
                 <p className="text-[11.5px] text-txt-caption mb-2.5">
                   Use formatting tools below to add section headings, bullet lists, bold text, or
                   click <strong className="text-primary font-bold">✨ AI Template</strong> to
@@ -465,6 +606,7 @@ export function AddJobDialog() {
                   placeholder="We are seeking an experienced Senior Software Developer to design, develop, and maintain..."
                   minHeight="240px"
                 />
+                <FieldError id="job-description-error" message={errors.description} />
               </div>
             </div>
           )}
@@ -473,30 +615,44 @@ export function AddJobDialog() {
           {step === 2 && (
             <div className="space-y-5 max-h-[60vh] overflow-y-auto pr-1">
               <div>
-                <label className={labelCls}>Required Skills *</label>
+                <label htmlFor="job-skills" className={labelCls}>
+                  Required Skills *
+                </label>
                 <p className="text-[11.5px] text-txt-caption mb-2">
                   Press Enter or click + to add. At least one required.
                 </p>
                 <TagInput
+                  id="job-skills"
                   tags={skills}
                   onAdd={(v) => setSkills([...skills, v])}
                   onRemove={(v) => setSkills(skills.filter((s) => s !== v))}
                   placeholder="e.g. React, TypeScript…"
                 />
+                <FieldError id="job-skills-error" message={errors.skills} />
               </div>
               <div>
-                <label className={labelCls}>Requirements *</label>
+                <label htmlFor="job-requirements" className={labelCls}>
+                  Requirements *
+                </label>
                 <p className="text-[11.5px] text-txt-caption mb-2">
                   Add hiring requirements one by one. At least one required.
                 </p>
-                <RequirementsList items={requirements} onChange={setRequirements} />
+                <RequirementsList
+                  id="job-requirements"
+                  items={requirements}
+                  onChange={setRequirements}
+                />
+                <FieldError id="job-requirements-error" message={errors.requirements} />
               </div>
               <div>
-                <label className={labelCls}>Benefits & Perks</label>
+                <label htmlFor="job-benefits" className={labelCls}>
+                  Benefits & Perks
+                </label>
                 <p className="text-[11.5px] text-txt-caption mb-2">
                   Optional — helps attract candidates.
                 </p>
                 <TagInput
+                  id="job-benefits"
                   tags={benefits}
                   onAdd={(v) => setBenefits([...benefits, v])}
                   onRemove={(v) => setBenefits(benefits.filter((b) => b !== v))}
@@ -504,7 +660,47 @@ export function AddJobDialog() {
                   colorClass="bg-sec-green/10 text-sec-green border border-sec-green/20"
                 />
               </div>
+              <div>
+                <span className={labelCls}>Screening questions</span>
+                <p className="text-[11.5px] text-txt-caption mb-2">
+                  Optional — up to 10 questions candidates answer when applying.
+                </p>
+                <ScreeningQuestionsEditor
+                  idPrefix="add-job"
+                  questions={questions}
+                  onChange={setQuestions}
+                />
+              </div>
             </div>
+          )}
+
+          {step === STEPS.length - 1 && !creditError && (
+            <div className="mt-4">
+              <PublishCostNote
+                quote={publishCost.quote}
+                loading={publishCost.loading}
+                error={publishCost.error}
+                onRetry={publishCost.retry}
+              />
+            </div>
+          )}
+
+          {creditError && (
+            <InsufficientCreditsNotice
+              required={creditError.required}
+              balance={creditError.balance}
+              onBuy={handleClose}
+              onSaveDraft={handleSaveDraft}
+              savingDraft={savingDraft}
+            />
+          )}
+
+          {publishError && (
+            <JobPublishErrorNotice
+              error={publishError}
+              onSaveDraft={publishError.kind === "unverified" ? handleSaveDraft : undefined}
+              savingDraft={savingDraft}
+            />
           )}
 
           <DialogFooter className="mt-6 flex justify-between">
@@ -523,32 +719,31 @@ export function AddJobDialog() {
                 type="button"
                 variant="ghost"
                 onClick={handleClose}
+                disabled={busy}
                 className="cursor-pointer"
               >
                 Cancel
               </Button>
             </div>
             {step < STEPS.length - 1 ? (
-              <Button
-                type="button"
-                onClick={handleNext}
-                className="cursor-pointer gap-1 shadow-button"
-              >
+              <Button type="button" onClick={handleNext} className="cursor-pointer gap-1">
                 Next <ChevronRight className="w-4 h-4" />
               </Button>
             ) : (
               <Button
                 type="submit"
-                disabled={loading}
-                className="cursor-pointer gap-1.5 shadow-button min-w-[140px]"
+                disabled={busy}
+                className="cursor-pointer gap-1.5 min-w-[140px]"
               >
                 {loading ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />{" "}
                     Creating…
                   </>
+                ) : publishCost.quote ? (
+                  `Publish · ${publishCost.quote.cost} credits`
                 ) : (
-                  "Post Job Listing"
+                  "Publish job"
                 )}
               </Button>
             )}

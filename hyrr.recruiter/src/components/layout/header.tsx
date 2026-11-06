@@ -1,28 +1,49 @@
 import {
-  Bell,
-  Briefcase,
-  ChevronDown,
-  Command,
-  LogOut,
-  Moon,
-  Plus,
-  Search,
-  Settings,
-  Sun,
-  User,
-} from "lucide-react"
-import { useEffect, useState } from "react"
-import { useJobStore } from "../../store/useJobStore"
-import { Button } from "../ui/button"
-import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "../ui/dropdown"
-import { useToast } from "../ui/toast"
+  FieldError,
+  Input,
+  notificationConversationId,
+  useToast,
+  VerifiedBadge,
+  type TeamMember,
+} from "hyrr.shared"
+import {
+  Bell,
+  Briefcase,
+  Command,
+  Loader2,
+  LogOut,
+  Menu,
+  Moon,
+  Plus,
+  Search,
+  Settings,
+  Sun,
+  Trash2,
+  User,
+  Users,
+  Zap,
+} from "lucide-react"
+import { useEffect, useState, type FormEvent } from "react"
+import {
+  avatarFallback,
+  errorMessage,
+  isRecruiterView,
+  useCompanyVerified,
+} from "../../lib/recruiter"
+import { useJobStore } from "../../store/useJobStore"
+import { ConfirmDialog } from "./confirm-dialog"
 
 /** HYRR custom brand icon — geometric "H" monogram with accent mark */
 function HyrrIcon({ size = 36 }: { size?: number }) {
@@ -33,44 +54,272 @@ function HyrrIcon({ size = 36 }: { size?: number }) {
       viewBox="0 0 36 36"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      aria-label="HYRR logo"
+      aria-hidden="true"
     >
-      {/* Background pill */}
       <rect width="36" height="36" rx="10" fill="#7C5CFC" />
-      {/* Left vertical bar of H */}
       <rect x="8" y="9" width="4" height="18" rx="2" fill="white" />
-      {/* Right vertical bar of H */}
       <rect x="24" y="9" width="4" height="18" rx="2" fill="white" />
-      {/* Cross bar of H */}
       <rect x="8" y="15.5" width="20" height="4" rx="2" fill="white" />
-      {/* Accent dot — top right */}
       <circle cx="28.5" cy="8.5" r="3" fill="#FFB547" />
     </svg>
   )
 }
 
-export function Header() {
+type InviteRole = "RECRUITER" | "HIRING_MANAGER" | "VIEWER"
+
+const ROLE_LABEL: Record<TeamMember["role"], string> = {
+  OWNER: "Owner",
+  RECRUITER: "Recruiter",
+  HIRING_MANAGER: "Hiring Manager",
+  VIEWER: "Viewer",
+}
+
+function usePrefersDark() {
+  const [prefersDark, setPrefersDark] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches
+  )
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)")
+    const onChange = (e: MediaQueryListEvent) => setPrefersDark(e.matches)
+    mq.addEventListener("change", onChange)
+    return () => mq.removeEventListener("change", onChange)
+  }, [])
+  return prefersDark
+}
+
+function TeamDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const { team, fetchTeam, addTeamMember, removeTeamMember, user, workspaceName } = useJobStore()
+  const companyVerified = useCompanyVerified()
+  const { toast } = useToast()
+  const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [email, setEmail] = useState("")
+  const [role, setRole] = useState<InviteRole>("RECRUITER")
+  const [inviting, setInviting] = useState(false)
+  const [pendingRemove, setPendingRemove] = useState<TeamMember | null>(null)
+
+  const load = async () => {
+    setLoading(true)
+    setLoadError(null)
+    try {
+      await fetchTeam()
+    } catch (err) {
+      setLoadError(errorMessage(err, "Could not load your team."))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (open) load()
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const isOwner = team.some((m) => m.userId === user?.id && m.role === "OWNER")
+
+  const [inviteError, setInviteError] = useState<string | null>(null)
+  const handleInvite = async (e: FormEvent) => {
+    e.preventDefault()
+    const trimmed = email.trim()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setInviteError("Enter a valid email address, e.g. name@company.com")
+      return
+    }
+    setInviteError(null)
+    setInviting(true)
+    try {
+      await addTeamMember(trimmed, role)
+      toast("Member added", `${trimmed} joined your team as ${ROLE_LABEL[role]}.`, "success")
+      setEmail("")
+    } catch (err) {
+      toast("Could not add member", errorMessage(err), "error")
+    } finally {
+      setInviting(false)
+    }
+  }
+
+  const handleRemove = async () => {
+    if (!pendingRemove) return
+    try {
+      await removeTeamMember(pendingRemove.id)
+      toast(
+        "Member removed",
+        `${pendingRemove.name || pendingRemove.email} was removed.`,
+        "success"
+      )
+    } catch (err) {
+      toast("Could not remove member", errorMessage(err), "error")
+      throw err
+    }
+  }
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Team</DialogTitle>
+            <DialogDescription>
+              People with access to{" "}
+              {workspaceName ? (
+                <span className="inline-flex items-center gap-1 font-semibold text-txt-heading">
+                  {workspaceName}
+                  {companyVerified && <VerifiedBadge />}
+                </span>
+              ) : (
+                "your company workspace"
+              )}
+              .
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-4 max-h-72 overflow-y-auto flex flex-col gap-1">
+            {loading && team.length === 0 ? (
+              <div className="flex justify-center py-6">
+                <Loader2 className="w-5 h-5 animate-spin text-primary" />
+              </div>
+            ) : loadError ? (
+              <div role="alert" className="flex flex-col items-center gap-2 py-6 text-center">
+                <p className="text-[13px] text-sec-red">{loadError}</p>
+                <Button size="sm" variant="secondary" onClick={load}>
+                  Retry
+                </Button>
+              </div>
+            ) : team.length === 0 ? (
+              <p className="py-6 text-center text-[13px] text-txt-caption">No team members yet.</p>
+            ) : (
+              team.map((member) => (
+                <div
+                  key={member.id}
+                  className="flex items-center gap-3 px-2 py-2 rounded-[12px] hover:bg-bg-hover"
+                >
+                  <img
+                    src={member.avatar || avatarFallback(member.name || member.email)}
+                    alt=""
+                    className="w-8 h-8 rounded-full object-cover shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-semibold text-txt-heading truncate">
+                      {member.name || member.email}
+                      {member.userId === user?.id && (
+                        <span className="text-txt-caption font-normal"> (you)</span>
+                      )}
+                    </p>
+                    <p className="text-[11.5px] text-txt-caption truncate">
+                      {member.email} · {ROLE_LABEL[member.role]}
+                    </p>
+                  </div>
+                  {isOwner && member.userId !== user?.id && (
+                    <button
+                      type="button"
+                      onClick={() => setPendingRemove(member)}
+                      aria-label={`Remove ${member.name || member.email}`}
+                      className="p-1.5 rounded-full text-txt-caption hover:text-sec-red hover:bg-sec-red/10 cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+
+          {isOwner && (
+            <form
+              onSubmit={handleInvite}
+              className="mt-4 pt-4 border-t border-bg-border/40 flex flex-col gap-3"
+            >
+              <p className="text-[12px] font-semibold text-txt-heading uppercase tracking-wider">
+                Add a member
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex-1">
+                  <label htmlFor="team-invite-email" className="sr-only">
+                    Email
+                  </label>
+                  <Input
+                    id="team-invite-email"
+                    type="email"
+                    required
+                    placeholder="colleague@company.com"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value)
+                      setInviteError(null)
+                    }}
+                    aria-invalid={!!inviteError || undefined}
+                    aria-describedby={inviteError ? "team-invite-email-error" : undefined}
+                  />
+                  <FieldError id="team-invite-email-error" message={inviteError ?? undefined} />
+                </div>
+                <label htmlFor="team-invite-role" className="sr-only">
+                  Role
+                </label>
+                <select
+                  id="team-invite-role"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as InviteRole)}
+                  className="h-11 px-3 rounded-input border border-bg-border bg-bg-secondary text-[13px] text-txt-heading cursor-pointer"
+                >
+                  <option value="RECRUITER">Recruiter</option>
+                  <option value="HIRING_MANAGER">Hiring Manager</option>
+                  <option value="VIEWER">Viewer</option>
+                </select>
+                <Button type="submit" disabled={inviting} className="gap-1.5">
+                  {inviting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4" />
+                  )}
+                  Add
+                </Button>
+              </div>
+              <p className="text-[11.5px] text-txt-caption">
+                The person must already have a HYRR recruiter account that isn't part of another
+                company.
+              </p>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        open={!!pendingRemove}
+        onOpenChange={(o) => !o && setPendingRemove(null)}
+        title="Remove team member?"
+        description={`${pendingRemove?.name || pendingRemove?.email || "This member"} will lose access to your company's jobs and candidates.`}
+        confirmLabel="Remove"
+        onConfirm={handleRemove}
+      />
+    </>
+  )
+}
+
+export function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const {
     searchQuery,
     setSearchQuery,
     theme,
-    toggleTheme,
+    setTheme,
     notifications,
-    markNotificationsAsRead,
+    markAllNotificationsRead,
     markNotificationRead,
     clearNotifications,
     setActiveView,
-    workspaceName,
-    setWorkspaceName,
+    openConversation,
     setAddCandidateOpen,
     setAddJobOpen,
     user,
     logout,
+    workspaceName,
+    wallet,
   } = useJobStore()
+  const companyVerified = useCompanyVerified()
   const { toast } = useToast()
-  const [searchFocused, setSearchFocused] = useState(false)
+  const [teamOpen, setTeamOpen] = useState(false)
+  const prefersDark = usePrefersDark()
 
   const unreadCount = notifications.filter((n) => !n.read).length
+  const isDark = theme === "dark" || (theme === "system" && prefersDark)
 
   // Global CMD/CTRL + K shortcut listener
   useEffect(() => {
@@ -84,273 +333,196 @@ export function Header() {
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [])
 
-  return (
-    <div className="h-[68px] border-b border-bg-border bg-bg-secondary flex items-center justify-between px-6 select-none shrink-0 animate-in fade-in duration-200">
-      {/* ─── Left: Logo + Brand name ─── */}
-      <div className="flex items-center gap-3">
-        <HyrrIcon size={36} />
+  const run = async (action: () => Promise<unknown>, success: string | null, failTitle: string) => {
+    try {
+      await action()
+      if (success) toast(success, undefined, "success")
+    } catch (err) {
+      toast(failTitle, errorMessage(err), "error")
+    }
+  }
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-1.5 font-bold text-txt-title hover:text-primary transition-colors cursor-pointer outline-none text-[15px]">
-              <span>{workspaceName}</span>
-              <ChevronDown className="w-3.5 h-3.5 text-txt-caption" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-52">
-            <DropdownMenuLabel>Switch Workspace</DropdownMenuLabel>
-            <DropdownMenuItem
-              onClick={() => {
-                setWorkspaceName("Acme Careers")
-                toast("Workspace Switched", "Active: Acme Careers", "success")
-              }}
-            >
-              Acme Careers {workspaceName === "Acme Careers" && "(Active)"}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => {
-                setWorkspaceName("Beta Labs")
-                toast("Workspace Switched", "Active: Beta Labs", "success")
-              }}
-            >
-              Beta Labs {workspaceName === "Beta Labs" && "(Active)"}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => {
-                const name = prompt("Enter new workspace name:")
-                if (name && name.trim()) {
-                  setWorkspaceName(name.trim())
-                  toast("Workspace Created", `Switched to ${name.trim()}`, "success")
-                }
-              }}
-            >
-              <Plus className="w-3.5 h-3.5 mr-1.5 text-txt-body" />
-              Add Workspace
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+  const toggleTheme = () =>
+    run(() => setTheme(isDark ? "light" : "dark"), null, "Could not save theme")
+
+  return (
+    <header className="glass relative z-30 h-[68px] border-b border-bg-border/70 flex items-center justify-between gap-3 px-4 md:px-6 select-none shrink-0">
+      {/* ─── Left: Menu + Logo ─── */}
+      <div className="flex items-center gap-2 md:gap-3 shrink-0">
+        <button
+          type="button"
+          onClick={onMenuClick}
+          aria-label="Open navigation"
+          className="lg:hidden p-1.5 rounded-full text-txt-caption hover:text-txt-heading hover:bg-bg-hover cursor-pointer"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+        <HyrrIcon size={32} />
+        <span className="hidden sm:inline font-bold text-txt-title text-[15px]">HYRR</span>
       </div>
 
       {/* ─── Centre: Search ─── */}
-      <div
-        className={`relative w-[480px] transition-all duration-200 ${searchFocused ? "w-[540px]" : ""}`}
-      >
+      <div className="relative hidden md:block flex-1 max-w-[540px]">
+        <label htmlFor="global-search" className="sr-only">
+          Search
+        </label>
         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-txt-caption pointer-events-none" />
         <input
-          type="text"
+          type="search"
           id="global-search"
           placeholder="Search candidates, jobs, skills…"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          onFocus={() => setSearchFocused(true)}
-          onBlur={() => setSearchFocused(false)}
           className="w-full h-[44px] pl-10 pr-12 rounded-input border border-transparent bg-bg-primary text-[13px] text-txt-heading placeholder:text-txt-caption focus:outline-none focus:bg-bg-secondary focus:border-primary/30 focus:ring-2 focus:ring-primary/10 transition-all duration-200"
         />
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-0.5 px-1.5 py-0.5 rounded-[5px] bg-bg-secondary border border-bg-border/60 text-txt-caption text-[10px] font-bold shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-0.5 px-1.5 py-0.5 rounded-[5px] bg-bg-secondary border border-bg-border/60 text-txt-caption text-[10px] font-bold">
           <Command className="w-2.5 h-2.5" />
           <span>K</span>
         </div>
       </div>
 
       {/* ─── Right: Actions ─── */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+        {/* Momentum balance */}
+        {wallet && (
+          <button
+            type="button"
+            onClick={() => setActiveView("Momentum")}
+            aria-label={`Momentum balance: ${wallet.balance.toLocaleString()} credits. Open Momentum`}
+            title="Momentum credits"
+            className="flex items-center gap-1.5 h-9 px-3 rounded-full border border-primary-border/40 bg-primary-light text-primary text-[13px] font-semibold hover:bg-primary/15 transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+          >
+            <Zap className="w-4 h-4" aria-hidden="true" />
+            <span className="tabular-nums">{wallet.balance.toLocaleString()}</span>
+          </button>
+        )}
         {/* Quick Add */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="w-8 h-8 p-0 rounded-full border border-bg-border hover:border-primary/20 shadow-none cursor-pointer"
+            <button
+              type="button"
+              aria-label="Quick add"
+              className="w-8 h-8 flex items-center justify-center rounded-full border border-bg-border bg-bg-secondary hover:border-primary/20 hover:bg-bg-hover cursor-pointer"
             >
               <Plus className="w-4 h-4 text-txt-heading" />
-            </Button>
+            </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-48" align="end">
             <DropdownMenuLabel>Quick Add</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => setAddCandidateOpen(true, "Applied")}>
+            <DropdownMenuItem onSelect={() => setAddCandidateOpen(true, "Applied")}>
               <User className="w-3.5 h-3.5 mr-1.5 text-txt-body" />
               Add Candidate
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setAddJobOpen(true)}>
+            <DropdownMenuItem onSelect={() => setAddJobOpen(true)}>
               <Briefcase className="w-3.5 h-3.5 mr-1.5 text-txt-body" />
               Add Job Listing
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Team Avatars Dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="flex -space-x-2 cursor-pointer outline-none hover:opacity-90 transition-opacity">
-              {[
-                {
-                  src: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80",
-                  alt: "Emily",
-                },
-                {
-                  src: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80",
-                  alt: "Michael",
-                },
-                {
-                  src: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=80",
-                  alt: "Sarah",
-                },
-              ].map((av) => (
-                <img
-                  key={av.alt}
-                  src={av.src}
-                  alt={av.alt}
-                  className="w-8 h-8 rounded-full object-cover border-2 border-bg-secondary"
-                />
-              ))}
-              <div className="w-8 h-8 rounded-full bg-bg-primary border border-bg-border flex items-center justify-center text-[10px] font-bold text-txt-body z-10">
-                +2
-              </div>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-64" align="end">
-            <DropdownMenuLabel>Team Directory</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <div className="max-h-60 overflow-y-auto py-1">
-              {[
-                {
-                  name: "Sarah Martinez",
-                  role: "Staff HR (You)",
-                  status: "Active Now",
-                  online: true,
-                  img: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80",
-                },
-                {
-                  name: "Emily Carter",
-                  role: "Senior Developer",
-                  status: "Active 5m ago",
-                  online: true,
-                  img: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80",
-                },
-                {
-                  name: "Michael Chen",
-                  role: "UI Engineer",
-                  status: "Active Now",
-                  online: true,
-                  img: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80",
-                },
-                {
-                  name: "Sarah Johnson",
-                  role: "React Developer",
-                  status: "Active 1h ago",
-                  online: false,
-                  img: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=80",
-                },
-                {
-                  name: "David Kim",
-                  role: "Frontend Engineer",
-                  status: "Offline",
-                  online: false,
-                  img: "https://images.unsplash.com/photo-1500000000000?w=80",
-                },
-              ].map((member, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center gap-3 px-3 py-1.5 hover:bg-bg-hover transition-colors rounded-[8px] mx-1"
-                >
-                  <img
-                    src={member.img}
-                    alt={member.name}
-                    className="w-7 h-7 rounded-full object-cover shrink-0"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-semibold text-txt-heading truncate">
-                      {member.name}
-                    </p>
-                    <p className="text-[10px] text-txt-caption truncate">{member.role}</p>
-                  </div>
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${member.online ? "bg-sec-green" : "bg-txt-disabled"}`}
-                  />
-                </div>
-              ))}
-            </div>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => {
-                const email = prompt("Enter email to invite:")
-                if (email && email.trim())
-                  toast("Invitation Sent", `Invite sent to ${email.trim()}`, "success")
-              }}
-            >
-              <Plus className="w-3.5 h-3.5 mr-1.5 text-txt-body" />
-              Invite Member
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* Team */}
+        <button
+          type="button"
+          onClick={() => setTeamOpen(true)}
+          aria-label="Team"
+          title="Team"
+          className="text-txt-caption hover:text-txt-heading p-1.5 rounded-full hover:bg-bg-hover transition-colors cursor-pointer"
+        >
+          <Users className="w-[18px] h-[18px]" />
+        </button>
 
         {/* Theme Toggle */}
         <button
+          type="button"
           id="theme-toggle"
           onClick={toggleTheme}
-          className="text-txt-caption hover:text-txt-heading p-1.5 rounded-full hover:bg-bg-hover transition-colors cursor-pointer outline-none"
-          title={theme === "light" ? "Switch to dark" : "Switch to light"}
+          className="text-txt-caption hover:text-txt-heading p-1.5 rounded-full hover:bg-bg-hover transition-colors cursor-pointer"
+          aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          title={isDark ? "Switch to light mode" : "Switch to dark mode"}
         >
-          {theme === "light" ? <Sun className="w-4.5 h-4.5" /> : <Moon className="w-4.5 h-4.5" />}
+          {isDark ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}
         </button>
 
         {/* Notifications */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
+              type="button"
               id="notifications-btn"
-              className="text-txt-caption hover:text-txt-heading p-1.5 rounded-full hover:bg-bg-hover transition-colors cursor-pointer relative outline-none"
+              aria-label={
+                unreadCount > 0 ? `Notifications (${unreadCount} unread)` : "Notifications"
+              }
+              className="text-txt-caption hover:text-txt-heading p-1.5 rounded-full hover:bg-bg-hover transition-colors cursor-pointer relative"
             >
-              <Bell className="w-4.5 h-4.5" />
+              <Bell className="w-[18px] h-[18px]" />
               {unreadCount > 0 && (
                 <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-sec-red ring-2 ring-bg-secondary" />
               )}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-80" align="end">
-            <DropdownMenuLabel className="flex justify-between items-center py-1">
-              <span>Notifications</span>
-              <div className="flex gap-2">
+          <DropdownMenuContent className="w-80 max-w-[calc(100vw-32px)]" align="end">
+            <div className="flex justify-between items-center px-2 py-1.5">
+              <span className="text-[13px] font-semibold text-txt-heading">Notifications</span>
+              <div className="flex gap-3">
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    markNotificationsAsRead()
-                    toast("Notifications", "All notifications marked as read.", "success")
-                  }}
-                  className="text-[10px] text-primary hover:underline cursor-pointer font-semibold outline-none bg-transparent border-0 p-0"
+                  type="button"
+                  onClick={() =>
+                    run(
+                      () => markAllNotificationsRead(),
+                      "All notifications marked as read",
+                      "Could not update notifications"
+                    )
+                  }
+                  className="text-[11px] text-primary hover:underline cursor-pointer font-semibold"
                 >
                   Mark all read
                 </button>
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    clearNotifications()
-                    toast("Notifications", "Cleared all notifications.", "success")
-                  }}
-                  className="text-[10px] text-sec-red hover:underline cursor-pointer font-semibold outline-none bg-transparent border-0 p-0"
+                  type="button"
+                  onClick={() =>
+                    run(
+                      () => clearNotifications(),
+                      "Notifications cleared",
+                      "Could not clear notifications"
+                    )
+                  }
+                  className="text-[11px] text-sec-red hover:underline cursor-pointer font-semibold"
                 >
                   Clear all
                 </button>
               </div>
-            </DropdownMenuLabel>
+            </div>
             <DropdownMenuSeparator />
-            <div className="max-h-60 overflow-y-auto custom-scrollbar-none">
+            <div className="max-h-72 overflow-y-auto custom-scrollbar-none">
               {notifications.map((notif) => (
-                <div
+                <DropdownMenuItem
                   key={notif.id}
-                  onClick={() => {
-                    markNotificationRead(notif.id)
-                    toast("Notification Detail", notif.title, "info")
+                  onSelect={() => {
+                    const target = notif.actionView as string | undefined
+                    const conversationId = notificationConversationId(notif)
+                    if (conversationId) {
+                      setActiveView("Messages")
+                      openConversation(conversationId).catch(() => {})
+                    } else if (isRecruiterView(target)) setActiveView(target)
+                    if (!notif.read) {
+                      run(
+                        () => markNotificationRead(notif.id),
+                        null,
+                        "Could not update notification"
+                      )
+                    }
                   }}
-                  className={`p-3 text-[12px] border-b border-bg-border/30 last:border-0 hover:bg-bg-hover transition-colors cursor-pointer ${
-                    !notif.read ? "bg-primary-light/10 font-semibold" : "font-normal"
+                  className={`flex flex-col items-start gap-0.5 p-3 text-[12px] cursor-pointer ${
+                    !notif.read ? "bg-primary-light/40 font-semibold" : "font-normal"
                   }`}
                 >
-                  <p className="text-txt-heading">{notif.title}</p>
-                  <span className="text-[11px] text-txt-caption mt-0.5 block">{notif.time}</span>
-                </div>
+                  <span className="text-txt-heading">
+                    {!notif.read && <span className="sr-only">Unread: </span>}
+                    {notif.title}
+                  </span>
+                  <span className="text-[11px] text-txt-caption">{notif.time}</span>
+                </DropdownMenuItem>
               ))}
               {notifications.length === 0 && (
                 <p className="p-4 text-center text-[12px] text-txt-caption">No notifications</p>
@@ -362,49 +534,57 @@ export function Header() {
         {/* Profile */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button id="profile-btn" className="outline-none cursor-pointer">
+            <button
+              type="button"
+              id="profile-btn"
+              aria-label="Account menu"
+              className="cursor-pointer rounded-full"
+            >
               <img
-                src={
-                  user?.avatar ||
-                  `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || user?.email || "Recruiter")}&background=6C63FF&color=fff`
-                }
-                alt={user?.name || "User Profile"}
+                src={user?.avatar || avatarFallback(user?.name || user?.email || "Recruiter")}
+                alt=""
                 className="w-8 h-8 rounded-full object-cover border border-bg-border/60 hover:ring-2 hover:ring-primary/20 transition-all"
               />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-52" align="end">
+          <DropdownMenuContent className="w-56" align="end">
             <DropdownMenuLabel>
               <p className="text-txt-heading font-semibold text-[13px] truncate">
                 {user?.name || "Recruiter Account"}
               </p>
-              <p className="text-txt-caption text-[11px] font-normal truncate">
-                {user?.email || workspaceName}
-              </p>
+              <p className="text-txt-caption text-[11px] font-normal truncate">{user?.email}</p>
+              {workspaceName && (
+                <p className="mt-1 flex items-center gap-1 text-txt-body text-[11px] font-medium min-w-0">
+                  <span className="truncate">{workspaceName}</span>
+                  {companyVerified && <VerifiedBadge />}
+                </p>
+              )}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => {
-                setActiveView("Dashboard")
-                toast("Navigate", "Navigating to Overview Dashboard", "info")
-              }}
-            >
-              <User className="w-3.5 h-3.5 mr-2 text-txt-body" />
-              View Profile
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => toast("Settings", "Account settings panel coming soon.", "info")}
-            >
+            <DropdownMenuItem onSelect={() => setActiveView("Settings")}>
               <Settings className="w-3.5 h-3.5 mr-2 text-txt-body" />
               Settings
             </DropdownMenuItem>
+            {/* Defer so the menu finishes closing before the dialog takes focus */}
+            <DropdownMenuItem onSelect={() => setTimeout(() => setTeamOpen(true), 0)}>
+              <Users className="w-3.5 h-3.5 mr-2 text-txt-body" />
+              Team
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={toggleTheme}>
+              {isDark ? (
+                <Sun className="w-3.5 h-3.5 mr-2 text-txt-body" />
+              ) : (
+                <Moon className="w-3.5 h-3.5 mr-2 text-txt-body" />
+              )}
+              {isDark ? "Light mode" : "Dark mode"}
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onClick={() => {
+              onSelect={() => {
                 logout()
                 toast("Signed Out", "You have been logged out successfully.", "success")
               }}
-              className="text-sec-red hover:bg-red-50 focus:text-sec-red cursor-pointer"
+              className="text-sec-red focus:text-sec-red cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5 mr-2" />
               Sign Out
@@ -412,6 +592,8 @@ export function Header() {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-    </div>
+
+      <TeamDialog open={teamOpen} onOpenChange={setTeamOpen} />
+    </header>
   )
 }

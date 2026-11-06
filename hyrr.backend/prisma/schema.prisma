@@ -39,6 +39,7 @@ enum ApplicationStatus {
   INTERVIEWING
   OFFER
   ARCHIVED
+  WITHDRAWN
 }
 
 enum DocType {
@@ -68,6 +69,12 @@ enum CompanyMemberRole {
   RECRUITER
   HIRING_MANAGER
   VIEWER
+}
+
+enum ApplicationSource {
+  DIRECT          // a signed-in job seeker applied
+  GUEST           // applied without an account
+  RECRUITER_ADDED // added manually by the hiring team
 }
 
 enum AlertFrequency {
@@ -106,6 +113,13 @@ model User {
   joinedAt     DateTime    @default(now())
   lastLogin    DateTime    @default(now())
 
+  // Account security
+  emailVerifiedAt        DateTime?
+  tokenVersion           Int       @default(0) // bump to revoke every session (password reset/change)
+  twoFactorEnabled       Boolean   @default(false)
+  twoFactorSecret        String?   // TOTP secret, AES-256-GCM encrypted at rest
+  twoFactorRecoveryCodes String[]  // sha256 hashes of one-time recovery codes
+
   // OAuth Credentials (Google, LinkedIn, GitHub)
   googleId     String?     @unique
   githubId     String?     @unique
@@ -121,11 +135,15 @@ model User {
   postedJobs   Job[]       @relation("RecruiterJobs")
   auditLogs    AuditLog[]
   payments     Payment[]
+  creditWallet       CreditWallet?       @relation("UserCreditWallet")
+  creditTransactions CreditTransaction[] @relation("UserCreditTransactions")
   setting      UserSetting?
   sentMessages Message[]   @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
   calendarEvents CalendarEvent[]
   companyMemberships CompanyMember[]
+  conversationStates ConversationState[]
+  authTokens         AuthToken[]
   jobAlerts     JobAlert[]
   savedSearches  SavedSearch[]
 }
@@ -137,6 +155,9 @@ model Company {
   color       String        @default("purple")
   status      CompanyStatus @default(PENDING)
   plan        String        @default("Starter") // Starter, Pro, Enterprise
+  verified       Boolean   @default(false) // a verified recruiter e-mail matches the company website domain
+  verifiedDomain String?
+  verifiedAt     DateTime?
   country     String
   city        String?
   website     String?
@@ -148,6 +169,10 @@ model Company {
   members     User[]
   teamMembers CompanyMember[]
   jobs        Job[]
+  wallet       CreditWallet?
+  transactions CreditTransaction[]
+  payments     Payment[]
+  subscription Subscription?
 }
 
 // ==========================================
@@ -163,7 +188,11 @@ model SeekerProfile {
   github             String?    // Public URL link
   linkedin           String?    // Public URL link
   bio                String?    @db.Text
-  expectedSalary     String?
+  expectedSalary     String? // display text, derived from the structured range below
+  expectedSalaryMin      Int?
+  expectedSalaryMax      Int?
+  expectedSalaryCurrency String?
+  expectedSalaryPeriod   SalaryPeriod?
   preferredType      String?    // Full Time, Part Time, Contract, Remote
   availability       String?    // e.g. "2 weeks notice"
   preferredLocations String[]
@@ -186,7 +215,10 @@ model WorkExperience {
   profile         SeekerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
   role            String
   company         String
-  duration        String
+  duration        String // display text, derived from the dates below
+  startDate       DateTime? // first day of the start month
+  endDate         DateTime? // null with current = true
+  current         Boolean       @default(false)
   desc            String?       @db.Text
 }
 
@@ -196,7 +228,15 @@ model Education {
   profile         SeekerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
   school          String
   degree          String
-  duration        String
+  duration        String // display text, derived from the years below
+  startYear       Int?
+  endYear         Int?
+}
+
+enum SalaryPeriod {
+  YEAR
+  MONTH
+  HOUR
 }
 
 model Document {
@@ -238,16 +278,22 @@ model Job {
   title         String
   location      String
   type          EmploymentType
-  salary        String?
+  salary        String? // display text, derived from the structured range below
+  salaryMin      Int?
+  salaryMax      Int?
+  salaryCurrency String? // ISO 4217, e.g. USD, ETB
+  salaryPeriod   SalaryPeriod?
   status        JobStatus   @default(ACTIVE)
   color         String      @default("purple")
   description   String      @db.Text
   requirements  String[]
   skills        String[]
   benefits      String[]
-  featured      Boolean     @default(false)
+  featured      Boolean     @default(false) // currently featured (kept in sync with featuredUntil)
+  featuredUntil DateTime?
+  publishedAt   DateTime? // first time the job went live (publishing is charged once)
   remote        Boolean     @default(false)
-  momentumCost  Int         @default(10)
+  momentumCost  Int         @default(0) // Momentum credits charged when it was published
   createdAt     DateTime    @default(now())
 
   // Relations
@@ -276,6 +322,7 @@ model Application {
   
   // Pipeline tracking
   status             ApplicationStatus @default(APPLIED)
+  source             ApplicationSource @default(DIRECT)
   tag                String?           // Substatus e.g. "Technical Test", "Offer Sent", "Not a fit"
   seekerBookmarked   Boolean           @default(false)
   recruiterBookmarked Boolean          @default(false)
@@ -283,12 +330,16 @@ model Application {
   updatedAt          DateTime          @updatedAt
   
   // AI score for this application matching
-  aiScore            Int               @default(0) // Match rating from 0 to 100
+  aiScore            Int?                // Match rating from 0 to 100; null = not scored yet
   aiSummary          String?           @db.Text    // Explanation generated by the AI
+  aiAnalysis         Json?             // Structured report: recommendation, matched/missing skills, strengths, concerns...
+  aiStatus           String?           // PENDING | DONE | FAILED | DISABLED
+  aiModel            String?           // Model that produced the current analysis
+  aiScoredAt         DateTime?
+  aiError            String?           @db.Text
   
   // Offer info if extended
   offerAmount        String?
-  notes              String?           @db.Text
 
   // Relations
   messages           Message[]
@@ -297,7 +348,7 @@ model Application {
   recruiterNotes     ApplicationNote[]
   answers            ScreeningAnswer[]
   stageEvents        ApplicationStageEvent[]
-  trackingLinks      ApplicationTrackingLink[]
+  conversationStates ConversationState[]
 }
 
 // ==========================================
@@ -315,8 +366,26 @@ model Message {
   text          String      @db.Text
   createdAt     DateTime    @default(now())
   read          Boolean     @default(false)
-  deletedBySeeker    Boolean @default(false)
-  deletedByRecruiter Boolean @default(false)
+  // Client-generated id so a retried send (socket timeout -> REST) is idempotent.
+  clientId      String?
+
+  @@unique([senderId, clientId])
+  @@index([applicationId, createdAt])
+}
+
+// Per-user conversation state: read position and "delete for me".
+model ConversationState {
+  id            String      @id @default(uuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt    DateTime?
+  clearedAt     DateTime?
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([applicationId, userId])
+  @@index([userId])
 }
 
 // ==========================================
@@ -362,7 +431,8 @@ model UserSetting {
 }
 model SystemSetting {
   id            String   @id @default("global-settings")
-  activeModel   String   @default("gemini-1.5-flash")
+  activeModel   String   @default("gemini-2.5-flash")
+  momentumConfig Json? // Momentum pricing overrides (publish base, multipliers, feature cost/days, AI re-run cost)
   temperature   Float    @default(0.2)
   systemPrompt  String   @db.Text
   updatedAt     DateTime @updatedAt
@@ -375,21 +445,36 @@ model Notification {
   title      String
   type       NotificationType @default(SYSTEM)
   actionView NotificationAction?
+  targetId   String? // e.g. applicationId of the conversation a message notification belongs to
   read       Boolean          @default(false)
   createdAt  DateTime         @default(now())
 }
 
+// A purchase through Stripe or Chapa. Credits are granted exactly once, when the provider
+// confirms the payment (idempotent on providerRef).
 model Payment {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  amount      Int
-  currency    String   @default("USD")
-  type        String
-  status      String
-  provider    String
+  id          String          @id @default(uuid())
+  companyId   String? // null = a seeker's own purchase (userId)
+  company     Company?        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  provider    PaymentProvider
+  providerRef String          @unique // Stripe Checkout Session id / Chapa tx_ref
+  kind        PaymentKind     @default(CREDIT_PACK)
+  packageId   String?
+  package     CreditPackage?  @relation(fields: [packageId], references: [id], onDelete: SetNull)
+  credits     Int             @default(0)
+  amount      Int // minor units (cents / santim)
+  currency    String
+  status      PaymentStatus   @default(PENDING)
   description String
-  createdAt   DateTime @default(now())
+  metadata    Json?
+  paidAt      DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([companyId, createdAt])
+  @@index([userId, createdAt])
 }
 
 model AuditLog {
@@ -464,6 +549,9 @@ model ApplicationNote {
   authorId      String
   body          String      @db.Text
   createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @default(now()) @updatedAt
+
+  @@index([applicationId, createdAt])
 }
 
 model ApplicationStageEvent {
@@ -476,14 +564,6 @@ model ApplicationStageEvent {
   createdAt     DateTime          @default(now())
 }
 
-model ApplicationTrackingLink {
-  id            String      @id @default(uuid())
-  applicationId String
-  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  tokenHash     String      @unique
-  expiresAt     DateTime
-  createdAt     DateTime    @default(now())
-}
 
 // ==========================================
 // 10. Seeker discovery, trust and billing foundations
@@ -500,6 +580,7 @@ model JobAlert {
   remoteOnly Boolean        @default(false)
   frequency  AlertFrequency @default(DAILY)
   active     Boolean        @default(true)
+  lastSentAt DateTime? // last digest sent; digests only include jobs posted after it
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
 }
@@ -526,37 +607,156 @@ model JobReport {
 }
 
 model Subscription {
+  id                     String             @id @default(uuid())
+  companyId              String             @unique
+  company                Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  plan                   String             @default("STARTER") // Plan.code
+  status                 SubscriptionStatus @default(ACTIVE)
+  provider               PaymentProvider?
+  providerCustomerId     String?
+  providerSubscriptionId String?            @unique
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean            @default(false)
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+}
+
+// One-time tokens for e-mail verification and password reset (only the hash is stored).
+model AuthToken {
+  id        String        @id @default(uuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      AuthTokenType
+  tokenHash String        @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime      @default(now())
+
+  @@index([userId, type])
+}
+
+enum AuthTokenType {
+  VERIFY_EMAIL
+  RESET_PASSWORD
+}
+
+// ─── Momentum credits ────────────────────────────────────────────────────────
+
+enum PaymentProvider {
+  STRIPE
+  CHAPA
+}
+
+enum PaymentKind {
+  CREDIT_PACK
+  SUBSCRIPTION
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELED
+}
+
+enum CreditTransactionType {
+  PURCHASE
+  SIGNUP_BONUS
+  PLAN_GRANT
+  JOB_PUBLISH
+  JOB_FEATURE
+  AI_ANALYSIS
+  APPLICATION
+  REFUND
+  ADJUSTMENT
+}
+
+// One wallet per company, shared by the whole hiring team.
+/// Owned by exactly one company (recruiter team) or one user (seeker); enforced by a CHECK.
+model CreditWallet {
   id        String   @id @default(uuid())
-  companyId String   @unique
-  plan      String   @default("Starter")
-  status    String   @default("TRIAL")
-  provider  String?
-  providerCustomerId String?
-  renewsAt  DateTime?
+  companyId String?  @unique
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String?  @unique
+  user      User?    @relation("UserCreditWallet", fields: [userId], references: [id], onDelete: Cascade)
+  balance   Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-model CompanyEmailTemplate {
-  id        String   @id @default(uuid())
-  companyId String
-  name      String
-  kind      String
-  subject   String
-  body      String   @db.Text
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  @@unique([companyId, name])
+// Append-only ledger: every balance change, with the balance right after it.
+model CreditTransaction {
+  id           String                @id @default(uuid())
+  companyId    String?
+  company      Company?              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId       String?
+  user         User?                 @relation("UserCreditTransactions", fields: [userId], references: [id], onDelete: Cascade)
+  amount       Int // positive = credit, negative = debit
+  type         CreditTransactionType
+  balanceAfter Int
+  referenceId  String? // job id, application id, payment id …
+  actorId      String?
+  note         String?
+  createdAt    DateTime              @default(now())
+
+  @@index([companyId, createdAt])
+  @@index([userId, createdAt])
+  @@index([type, referenceId])
 }
 
-model InterviewAvailability {
-  id                  String   @id @default(uuid())
-  companyId           String
-  jobId               String
-  createdById         String
-  startTime           DateTime
-  endTime             DateTime
-  meetingUrl          String?
-  bookedApplicationId String?  @unique
-  createdAt           DateTime @default(now())
+enum CreditAudience {
+  RECRUITER
+  SEEKER
+}
+
+model CreditPackage {
+  id            String         @id @default(uuid())
+  code          String         @unique
+  name          String
+  audience      CreditAudience @default(RECRUITER)
+  credits       Int
+  bonusCredits  Int       @default(0)
+  priceUsdCents Int
+  priceEtbCents Int
+  active        Boolean   @default(true)
+  sortOrder     Int       @default(0)
+  payments      Payment[]
+}
+
+model Plan {
+  id             String  @id @default(uuid())
+  code           String  @unique // STARTER | PRO | ENTERPRISE
+  name           String
+  monthlyCredits Int     @default(0)
+  seatLimit      Int? // null = unlimited
+  priceUsdCents  Int     @default(0) // per month; 0 = free
+  active         Boolean @default(true)
+  sortOrder      Int     @default(0)
+}
+
+enum EmbeddingKind {
+  JOB
+  PROFILE
+}
+
+/// Semantic vectors for "For you" matching. Plain float arrays (no pgvector needed);
+/// similarity is computed in the app over the active-job set.
+model Embedding {
+  id          String        @id @default(uuid())
+  kind        EmbeddingKind
+  refId       String // Job.id or Profile.userId
+  model       String
+  contentHash String
+  vector      Float[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([kind, refId])
 }

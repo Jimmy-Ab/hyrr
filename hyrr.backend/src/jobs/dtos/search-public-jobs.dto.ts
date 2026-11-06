@@ -1,6 +1,16 @@
 import { ApiPropertyOptional } from "@nestjs/swagger"
 import { EmploymentType } from "@prisma/client"
-import { IsBooleanString, IsEnum, IsOptional, IsString, MaxLength } from "class-validator"
+import { Type } from "class-transformer"
+import {
+  IsBooleanString,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from "class-validator"
 
 /** Query contract for public listings. API consumers use enum codes, not display labels. */
 export class SearchPublicJobsDto {
@@ -25,4 +35,20 @@ export class SearchPublicJobsDto {
   @IsOptional()
   @IsBooleanString()
   remote?: "true" | "false"
+
+  @ApiPropertyOptional({ description: "Page size (default 50, max 100)", minimum: 1, maximum: 100 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number
+
+  @ApiPropertyOptional({ description: "Results to skip (total in X-Total-Count)", minimum: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(10_000)
+  offset?: number
 }

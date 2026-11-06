@@ -11,4 +11,12 @@ export default defineConfig({
       "hyrr.shared/src/styles/index.css": resolve(__dirname, "../hyrr.shared/src/styles/index.css"),
     },
   },
+  server: {
+    port: 5173,
+    strictPort: true,
+  },
+  preview: {
+    port: 5173,
+    strictPort: true,
+  },
 })

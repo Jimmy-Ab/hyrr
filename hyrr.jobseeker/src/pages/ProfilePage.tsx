@@ -1,4 +1,30 @@
-import { apiFetch, Button, Card, Input, useJobStore, useToast } from "hyrr.shared"
+import {
+  apiFetch,
+  Button,
+  Card,
+  educationSchema,
+  emptySalaryRange,
+  errorMessage,
+  experienceSchema,
+  FieldError,
+  fieldErrorsOf,
+  Input,
+  isSalaryRangeEmpty,
+  MonthRangeInput,
+  PROFILE_VISIBILITY,
+  profileBasicsSchema,
+  SalaryRangeInput,
+  salaryRangeSchema,
+  scopeErrors,
+  useJobStore,
+  useToast,
+  validate,
+  YearRangeInput,
+  type Currency,
+  type CvSuggestions,
+  type FieldErrors,
+  type SalaryRangeValue,
+} from "hyrr.shared"
 import {
   Briefcase,
   Calendar,
@@ -20,19 +46,86 @@ import {
   Plus,
   Save,
   Settings,
+  Sparkles,
   Trash2,
   X,
 } from "lucide-react"
 import React, { useEffect, useRef, useState } from "react"
+import { CvImportDialog, type CvSection } from "../components/profile/cv-import-dialog"
+import { ProfileStrengthCard } from "../components/profile/profile-strength"
 
 /* ══════════════════════════════════════════════════════════════
    Small reusable helpers
 ══════════════════════════════════════════════════════════════ */
 
+const EMPTY_EXP = {
+  role: "",
+  company: "",
+  startDate: "",
+  endDate: null as string | null,
+  current: false,
+  desc: "",
+}
+const EMPTY_EDU = {
+  school: "",
+  degree: "",
+  startYear: null as number | null,
+  endYear: null as number | null,
+}
+const YEARS_OPTIONS = [...Array.from({ length: 20 }, (_, i) => String(i)), "20+"]
+
+/** API row → editable row ("YYYY-MM" dates). */
+const toExperienceRow = (e: any) => ({
+  ...e,
+  startDate: e?.startDate ? String(e.startDate).slice(0, 7) : "",
+  endDate: e?.current ? null : e?.endDate ? String(e.endDate).slice(0, 7) : null,
+  current: !!e?.current,
+})
+const toEducationRow = (e: any) => ({
+  ...e,
+  startYear: typeof e?.startYear === "number" ? e.startYear : null,
+  endYear: typeof e?.endYear === "number" ? e.endYear : null,
+})
+const toExperienceInput = (e: any) => ({
+  role: String(e.role ?? "").trim(),
+  company: String(e.company ?? "").trim(),
+  startDate: e.startDate || "",
+  endDate: e.current ? null : e.endDate || null,
+  current: !!e.current,
+  ...(e.desc ? { desc: String(e.desc) } : {}),
+})
+const toEducationInput = (e: any) => ({
+  school: String(e.school ?? "").trim(),
+  degree: String(e.degree ?? "").trim(),
+  startYear: e.startYear as number,
+  endYear: e.endYear ?? null,
+})
+/** Best effort from CV text like "Jan 2020 – Present" / "2018-2021". */
+function datesFromText(text?: string) {
+  const years = (text ?? "").match(/(19|20)\d{2}/g) ?? []
+  const current = /present|current|now|today/i.test(text ?? "")
+  return {
+    startDate: years[0] ? `${years[0]}-01` : "",
+    endDate: current ? null : years[1] ? `${years[1]}-01` : null,
+    current,
+  }
+}
+function yearsFromText(text?: string) {
+  const years = (text ?? "").match(/(19|20)\d{2}/g) ?? []
+  return {
+    startYear: years[0] ? Number(years[0]) : null,
+    endYear: years[1] ? Number(years[1]) : null,
+  }
+}
+const withoutPrefix = (errors: FieldErrors, prefix: string) =>
+  Object.fromEntries(Object.entries(errors).filter(([k]) => !k.startsWith(`${prefix}.`)))
+const prefixed = (errors: FieldErrors, prefix: string) =>
+  Object.fromEntries(Object.entries(errors).map(([k, v]) => [`${prefix}.${k}`, v]))
+
 function InfoRow({ icon, text }: { icon: React.ReactNode; text: string }) {
   if (!text) return null
   return (
-    <div className="flex items-center gap-2.5 text-[12.5px] text-txt-body">
+    <div className="flex items-center gap-2.5 text-[13.5px] text-txt-body">
       <span className="text-txt-caption shrink-0">{icon}</span>
       <span className="truncate font-medium">{text}</span>
     </div>
@@ -55,7 +148,7 @@ function SectionTitle({
         <h3 className="text-[14px] font-bold text-txt-title">{title}</h3>
       </div>
       {badge !== undefined && (
-        <span className="text-[11px] font-semibold text-txt-caption">{badge}</span>
+        <span className="text-[12px] font-semibold text-txt-caption">{badge}</span>
       )}
     </div>
   )
@@ -66,13 +159,14 @@ function SectionTitle({
 ══════════════════════════════════════════════════════════════ */
 export function ProfilePage() {
   const { toast } = useToast()
-  const { documents, setCandidateActiveView, fetchInitialData } = useJobStore()
+  const { documents, setCandidateActiveView, updateProfile, profileStrength } = useJobStore()
+  const [cvImportOpen, setCvImportOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   /* ── Loading / saving flags ─────────────────────────────── */
   const [loading, setLoading] = useState(true)
-  const [savingProfile, setSavingProfile] = useState(false)
-  const [savingPrefs, setSavingPrefs] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [addingExp, setAddingExp] = useState(false)
   const [addingEdu, setAddingEdu] = useState(false)
@@ -96,11 +190,14 @@ export function ProfilePage() {
 
   /* ── Career prefs state ─────────────────────────────────── */
   const [prefs, setPrefs] = useState({
-    expectedSalary: "",
+    salary: emptySalaryRange("") as SalaryRangeValue,
     preferredType: "Full Time",
     availability: "",
     yearsOfExperience: "",
+    preferredLocations: [] as string[],
+    visibility: PROFILE_VISIBILITY.PUBLIC as string,
   })
+  const [newLocation, setNewLocation] = useState("")
 
   /* ── Lists ──────────────────────────────────────────────── */
   const [experience, setExperience] = useState<any[]>([])
@@ -111,8 +208,17 @@ export function ProfilePage() {
   /* ── Add-form states ────────────────────────────────────── */
   const [showExpForm, setShowExpForm] = useState(false)
   const [showEduForm, setShowEduForm] = useState(false)
-  const [expForm, setExpForm] = useState({ role: "", company: "", duration: "", desc: "" })
-  const [eduForm, setEduForm] = useState({ school: "", degree: "", duration: "" })
+  const [expForm, setExpForm] = useState(EMPTY_EXP)
+  const [eduForm, setEduForm] = useState(EMPTY_EDU)
+  /** Inline errors: page fields by name, add-forms as "exp.*" / "edu.*", list items as "experiences.N.*". */
+  const [errors, setErrors] = useState<FieldErrors>({})
+  const clearError = (key: string) =>
+    setErrors((e) => {
+      if (!(key in e)) return e
+      const next = { ...e }
+      delete next[key]
+      return next
+    })
   const [newSkill, setNewSkill] = useState("")
   const [newLang, setNewLang] = useState("")
 
@@ -123,7 +229,7 @@ export function ProfilePage() {
     try {
       setLoading(true)
       const data = await apiFetch("/profile")
-      setProfile({
+      const loadedProfile = {
         name: data.user?.name || "",
         email: data.user?.email || "",
         phone: data.phone || "",
@@ -137,20 +243,48 @@ export function ProfilePage() {
           data.user?.avatar ||
           `https://ui-avatars.com/api/?name=${encodeURIComponent(data.user?.name || "User")}&background=7c5cfc&color=fff`,
         joinedAt: data.user?.joinedAt || data.user?.createdAt || "",
-      })
-      setPrefs({
-        expectedSalary: data.expectedSalary || "",
+      }
+      const loadedPrefs = {
+        salary:
+          data.expectedSalaryMin != null && data.expectedSalaryMax != null
+            ? {
+                min: data.expectedSalaryMin,
+                max: data.expectedSalaryMax,
+                currency: (data.expectedSalaryCurrency || "") as Currency,
+                period: data.expectedSalaryPeriod || "YEAR",
+              }
+            : emptySalaryRange(""),
         preferredType: data.preferredType || "Full Time",
         availability: data.availability || "",
         yearsOfExperience: data.yearsOfExperience || "",
-      })
-      setExperience(data.experiences || [])
-      setEducation(data.educations || [])
-      setSkills(data.skills || [])
-      setLanguages(data.languages || [])
+        preferredLocations: (data.preferredLocations || []) as string[],
+        visibility: (data.visibility || PROFILE_VISIBILITY.PUBLIC) as string,
+      }
+      if (typeof data.profileStrength === "number") {
+        useJobStore.setState({
+          profileStrength: Math.round(data.profileStrength),
+          profileMissing: Array.isArray(data.missing) ? data.missing : [],
+        })
+      }
+      const loadedSkills: string[] = data.skills || []
+      const loadedLanguages: string[] = data.languages || []
+      setProfile(loadedProfile)
+      setPrefs(loadedPrefs)
+      setExperience((data.experiences || []).map(toExperienceRow))
+      setEducation((data.educations || []).map(toEducationRow))
+      setSkills(loadedSkills)
+      setLanguages(loadedLanguages)
+      setSavedSnapshot(
+        JSON.stringify({
+          profile: loadedProfile,
+          prefs: loadedPrefs,
+          skills: loadedSkills,
+          languages: loadedLanguages,
+        })
+      )
     } catch (err) {
       console.warn("Failed to load profile", err)
-      toast("Load Error", "Could not load profile data.", "error")
+      toast("Couldn't load profile", errorMessage(err, "Could not load profile data."), "error")
     } finally {
       setLoading(false)
     }
@@ -169,76 +303,206 @@ export function ProfilePage() {
     if (!file) return
     e.target.value = "" // allow re-selecting same file
 
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      toast("Unsupported image", "Please choose a JPG, PNG or WEBP image.", "error")
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast("Image too large", "Profile photos can be at most 10 MB.", "error")
+      return
+    }
+
     setUploadingAvatar(true)
     try {
-      // 1. Upload file
       const formData = new FormData()
       formData.append("file", file)
       const result = await apiFetch("/uploads", { method: "POST", body: formData })
-
-      // 2. Persist avatar URL to profile
-      await apiFetch("/profile", {
-        method: "PUT",
-        body: JSON.stringify({ avatar: result.url }),
-      })
-
+      await updateProfile({ avatar: result.url })
       setProfile((p) => ({ ...p, avatar: result.url }))
-      await fetchInitialData()
-      toast("Photo Updated", "Profile picture updated successfully!", "success")
-    } catch (err: any) {
-      toast("Upload Error", err?.message || "Failed to upload photo.", "error")
+      toast("Photo updated", "Profile picture updated successfully!", "success")
+    } catch (err) {
+      toast("Upload failed", errorMessage(err, "Failed to upload photo."), "error")
     } finally {
       setUploadingAvatar(false)
     }
   }
 
   /* ═══════════════════════════════════════════════════════════
-     Save basic profile (name, title, location, contacts, bio)
+     One save for everything editable on this page
   ═══════════════════════════════════════════════════════════ */
-  const handleSaveProfile = async () => {
-    try {
-      setSavingProfile(true)
-      await apiFetch("/profile", {
-        method: "PUT",
-        body: JSON.stringify({
-          name: profile.name,
-          title: profile.title,
-          location: profile.location,
-          phone: profile.phone,
-          website: profile.website,
-          github: profile.github,
-          linkedin: profile.linkedin,
-          bio: profile.bio,
-        }),
-      })
-      await fetchInitialData()
-      toast("Profile Saved", "Your profile has been updated.", "success")
-    } catch (err: any) {
-      toast("Save Error", err?.message || "Failed to save profile.", "error")
-    } finally {
-      setSavingProfile(false)
-    }
-  }
+  const editableSnapshot = JSON.stringify({ profile, prefs, skills, languages })
+  // Entries imported from a CV have no id until the profile is saved.
+  const hasPendingEntries = experience.some((e) => !e.id) || education.some((e) => !e.id)
+  const isDirty =
+    savedSnapshot !== null && (editableSnapshot !== savedSnapshot || hasPendingEntries)
 
   /* ═══════════════════════════════════════════════════════════
-     Save career preferences + skills + languages
+     CV import → fills the form (the seeker still presses Save)
   ═══════════════════════════════════════════════════════════ */
-  const handleSavePrefs = async () => {
-    try {
-      setSavingPrefs(true)
-      await apiFetch("/profile", {
-        method: "PUT",
-        body: JSON.stringify({
-          ...prefs,
-          skills,
-          languages,
-        }),
+  const applyCvSuggestions = (sug: CvSuggestions, sections: Set<CvSection>) => {
+    const mergeList = (current: string[], extra: string[]) => {
+      const seen = new Set(current.map((v) => v.toLowerCase()))
+      return [...current, ...extra.filter((v) => !seen.has(v.toLowerCase()))]
+    }
+    if (sections.has("title") && sug.title) setProfile((p) => ({ ...p, title: sug.title! }))
+    if (sections.has("bio") && sug.bio) setProfile((p) => ({ ...p, bio: sug.bio! }))
+    if (sections.has("yearsOfExperience") && sug.yearsOfExperience) {
+      const years = String(sug.yearsOfExperience).match(/\d+/)?.[0]
+      if (years) setPrefs((p) => ({ ...p, yearsOfExperience: Number(years) >= 20 ? "20+" : years }))
+    }
+    if (sections.has("skills")) setSkills((cur) => mergeList(cur, sug.skills))
+    if (sections.has("languages")) setLanguages((cur) => mergeList(cur, sug.languages))
+    if (sections.has("experiences")) {
+      setExperience((cur) => {
+        const key = (e: any) => `${e.role}|${e.company}`.toLowerCase()
+        const seen = new Set(cur.map(key))
+        return [
+          ...cur,
+          ...sug.experiences
+            .filter((e) => !seen.has(key(e)))
+            .map((e) => ({
+              ...e,
+              ...datesFromText(e.duration),
+            })),
+        ]
       })
-      toast("Preferences Saved", "Career preferences updated.", "success")
-    } catch (err: any) {
-      toast("Save Error", err?.message || "Failed to save preferences.", "error")
+    }
+    if (sections.has("educations")) {
+      setEducation((cur) => {
+        const key = (e: any) => `${e.school}|${e.degree}`.toLowerCase()
+        const seen = new Set(cur.map(key))
+        return [
+          ...cur,
+          ...sug.educations
+            .filter((e) => !seen.has(key(e)))
+            .map((e) => ({
+              ...e,
+              ...yearsFromText(e.duration),
+            })),
+        ]
+      })
+    }
+    toast(
+      "Suggestions added",
+      "Review the highlighted changes, then press Save Profile.",
+      "success"
+    )
+  }
+
+  // Warn before leaving the page (reload/close) with unsaved edits.
+  useEffect(() => {
+    if (!isDirty) return
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+    }
+    window.addEventListener("beforeunload", onBeforeUnload)
+    return () => window.removeEventListener("beforeunload", onBeforeUnload)
+  }, [isDirty])
+
+  /** Shows `found` inline, focuses the first invalid field and returns whether it is valid. */
+  const showErrors = (found: FieldErrors) => {
+    setErrors(found)
+    const first = Object.keys(found)[0]
+    if (first) {
+      document
+        .querySelector<HTMLElement>(`[data-field="${first}"], #pf-${first.replace(/\./g, "-")}`)
+        ?.focus()
+      toast("Check the highlighted fields", found[first], "error")
+    }
+    return !first
+  }
+
+  const handleSaveAll = async () => {
+    const pending = hasPendingEntries
+    const found: FieldErrors = {
+      ...validate(profileBasicsSchema, {
+        ...profile,
+        skills,
+        languages,
+        preferredLocations: prefs.preferredLocations,
+      }),
+      ...validate(salaryRangeSchema, prefs.salary, "salary"),
+    }
+    if (pending) {
+      experience.forEach((e, i) =>
+        Object.assign(found, validate(experienceSchema, toExperienceInput(e), `experiences.${i}`))
+      )
+      education.forEach((e, i) =>
+        Object.assign(found, validate(educationSchema, toEducationInput(e), `educations.${i}`))
+      )
+    }
+    if (!showErrors(found)) return
+    const salary = prefs.salary
+    try {
+      setSaving(true)
+      await updateProfile({
+        name: profile.name.trim(),
+        title: profile.title.trim(),
+        location: profile.location.trim(),
+        phone: profile.phone.trim(),
+        // Empty strings clear the stored links.
+        website: profile.website.trim(),
+        github: profile.github.trim(),
+        linkedin: profile.linkedin.trim(),
+        bio: profile.bio,
+        // All four together, or all null to clear the range.
+        ...(isSalaryRangeEmpty(salary)
+          ? {
+              expectedSalaryMin: null,
+              expectedSalaryMax: null,
+              expectedSalaryCurrency: null,
+              expectedSalaryPeriod: null,
+            }
+          : {
+              expectedSalaryMin: salary.min,
+              expectedSalaryMax: salary.max,
+              expectedSalaryCurrency: salary.currency,
+              expectedSalaryPeriod: salary.period,
+            }),
+        preferredType: prefs.preferredType,
+        availability: prefs.availability.trim(),
+        yearsOfExperience: prefs.yearsOfExperience.trim(),
+        preferredLocations: prefs.preferredLocations,
+        visibility: prefs.visibility,
+        skills,
+        languages,
+        // Imported entries are only persisted by sending the full lists (server replaces them).
+        ...(hasPendingEntries
+          ? {
+              experiences: experience.map(toExperienceInput),
+              educations: education.map((e) => {
+                const v = toEducationInput(e)
+                return { ...v, startYear: v.startYear as number }
+              }),
+            }
+          : {}),
+      })
+      if (hasPendingEntries) {
+        // Pick up the ids the server assigned.
+        try {
+          const fresh = await apiFetch("/profile")
+          setExperience((fresh?.experiences || []).map(toExperienceRow))
+          setEducation((fresh?.educations || []).map(toEducationRow))
+        } catch (e) {
+          console.warn("Failed to reload profile entries.", e)
+        }
+      }
+      setSavedSnapshot(editableSnapshot)
+      setErrors({})
+      toast("Profile saved", "Your profile has been updated.", "success")
+    } catch (err) {
+      const server = fieldErrorsOf(err)
+      if (Object.keys(server).length) {
+        // expectedSalaryMin → salary.min, so the error lands on the salary picker.
+        const mapped: FieldErrors = {}
+        for (const [k, v] of Object.entries(server)) {
+          const m = /^expectedSalary(Min|Max|Currency|Period)$/.exec(k)
+          mapped[m ? `salary.${m[1].toLowerCase()}` : k] = v
+        }
+        showErrors(mapped)
+      } else toast("Couldn't save profile", errorMessage(err, "Failed to save profile."), "error")
     } finally {
-      setSavingPrefs(false)
+      setSaving(false)
     }
   }
 
@@ -246,27 +510,24 @@ export function ProfilePage() {
      Experience CRUD
   ═══════════════════════════════════════════════════════════ */
   const handleAddExperience = async () => {
-    if (!expForm.role.trim() || !expForm.company.trim()) {
-      toast("Required", "Please fill in role and company.", "info")
-      return
-    }
+    const input = toExperienceInput(expForm)
+    const found = validate(experienceSchema, input, "exp")
+    setErrors((e) => ({ ...withoutPrefix(e, "exp"), ...found }))
+    if (Object.keys(found).length) return
     setAddingExp(true)
     try {
       const created = await apiFetch("/profile/experience", {
         method: "POST",
-        body: JSON.stringify({
-          role: expForm.role.trim(),
-          company: expForm.company.trim(),
-          duration: expForm.duration.trim() || "Present",
-          desc: expForm.desc.trim(),
-        }),
+        body: JSON.stringify(input),
       })
-      setExperience((prev) => [...prev, created])
-      setExpForm({ role: "", company: "", duration: "", desc: "" })
+      setExperience((prev) => [...prev, toExperienceRow(created)])
+      setExpForm(EMPTY_EXP)
       setShowExpForm(false)
       toast("Experience Added", `${expForm.role} at ${expForm.company} added.`, "success")
     } catch (err: any) {
-      toast("Error", err?.message || "Failed to add experience.", "error")
+      const server = fieldErrorsOf(err)
+      if (Object.keys(server).length) setErrors((e) => ({ ...e, ...prefixed(server, "exp") }))
+      else toast("Error", err?.message || "Failed to add experience.", "error")
     } finally {
       setAddingExp(false)
     }
@@ -289,26 +550,24 @@ export function ProfilePage() {
      Education CRUD
   ═══════════════════════════════════════════════════════════ */
   const handleAddEducation = async () => {
-    if (!eduForm.school.trim() || !eduForm.degree.trim()) {
-      toast("Required", "Please fill in school and degree.", "info")
-      return
-    }
+    const input = toEducationInput(eduForm)
+    const found = validate(educationSchema, input, "edu")
+    setErrors((e) => ({ ...withoutPrefix(e, "edu"), ...found }))
+    if (Object.keys(found).length) return
     setAddingEdu(true)
     try {
       const created = await apiFetch("/profile/education", {
         method: "POST",
-        body: JSON.stringify({
-          school: eduForm.school.trim(),
-          degree: eduForm.degree.trim(),
-          duration: eduForm.duration.trim() || "",
-        }),
+        body: JSON.stringify(input),
       })
-      setEducation((prev) => [...prev, created])
-      setEduForm({ school: "", degree: "", duration: "" })
+      setEducation((prev) => [...prev, toEducationRow(created)])
+      setEduForm(EMPTY_EDU)
       setShowEduForm(false)
       toast("Education Added", `${eduForm.degree} at ${eduForm.school} added.`, "success")
     } catch (err: any) {
-      toast("Error", err?.message || "Failed to add education.", "error")
+      const server = fieldErrorsOf(err)
+      if (Object.keys(server).length) setErrors((e) => ({ ...e, ...prefixed(server, "edu") }))
+      else toast("Error", err?.message || "Failed to add education.", "error")
     } finally {
       setAddingEdu(false)
     }
@@ -332,20 +591,6 @@ export function ProfilePage() {
   ═══════════════════════════════════════════════════════════ */
   const activeResume = documents.find((d) => d.type === "resume" && d.active)
 
-  const completionItems = [
-    { label: "Profile photo", done: !!profile.avatar && !profile.avatar.includes("ui-avatars") },
-    { label: "Headline & Title", done: !!profile.title },
-    { label: "Location", done: !!profile.location },
-    { label: "Bio / Summary", done: !!profile.bio },
-    { label: "Work experience", done: experience.length > 0 },
-    { label: "Education", done: education.length > 0 },
-    { label: "Skills (5+)", done: skills.length >= 5 },
-    { label: "Resume upload", done: !!activeResume },
-  ]
-  const completionPct = Math.round(
-    (completionItems.filter((i) => i.done).length / completionItems.length) * 100
-  )
-
   const joinedLabel = profile.joinedAt
     ? `Joined ${new Date(profile.joinedAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })}`
     : ""
@@ -364,7 +609,7 @@ export function ProfilePage() {
      RENDER
   ══════════════════════════════════════════════════════════ */
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300 select-none">
+    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
       {/* Hidden file input */}
       <input
         type="file"
@@ -375,25 +620,40 @@ export function ProfilePage() {
       />
 
       {/* ── Page Header ──────────────────────────────────── */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-[28px] font-extrabold tracking-tight text-txt-title">My Profile</h1>
           <p className="text-[13px] text-txt-caption font-medium mt-0.5">
             Build your professional identity and let top opportunities find you.
           </p>
         </div>
-        <Button
-          onClick={handleSaveProfile}
-          disabled={savingProfile}
-          className="gap-2 cursor-pointer font-bold"
-        >
-          {savingProfile ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          ) : (
-            <Save className="w-3.5 h-3.5" />
+        <div className="flex items-center gap-3">
+          {isDirty && (
+            <span role="status" className="text-[13px] font-semibold text-sec-orange">
+              Unsaved changes
+            </span>
           )}
-          {savingProfile ? "Saving…" : "Save Profile"}
-        </Button>
+          <Button
+            variant="secondary"
+            onClick={() => setCvImportOpen(true)}
+            className="gap-2 cursor-pointer"
+          >
+            <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+            Import from CV
+          </Button>
+          <Button
+            onClick={handleSaveAll}
+            disabled={saving || !isDirty}
+            className="gap-2 cursor-pointer font-bold"
+          >
+            {saving ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Save className="w-3.5 h-3.5" />
+            )}
+            {saving ? "Saving…" : "Save Profile"}
+          </Button>
+        </div>
       </div>
 
       {/* ── Stats Row ────────────────────────────────────── */}
@@ -404,22 +664,24 @@ export function ProfilePage() {
             <CheckCircle2 className="w-5 h-5 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider">
-              Profile Completeness
+            <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider">
+              Profile Strength
             </p>
             <p className="text-[19px] font-black text-txt-title leading-none mt-0.5">
-              {completionPct}%
+              {profileStrength}%
             </p>
             <div className="w-full h-1.5 bg-bg-border rounded-full overflow-hidden mt-1.5">
               <div
                 className="h-full rounded-full transition-all duration-700"
                 style={{
-                  width: `${completionPct}%`,
+                  width: `${profileStrength}%`,
                   background: "linear-gradient(90deg,#7c5cfc,#3b7ff5)",
                 }}
               />
             </div>
-            <p className="text-[10.5px] text-txt-caption mt-1">Keep going! Add more details.</p>
+            <p className="text-[11.5px] text-txt-caption mt-1">
+              {profileStrength >= 100 ? "Looking great!" : "Keep going! Add more details."}
+            </p>
           </div>
         </Card>
 
@@ -429,13 +691,13 @@ export function ProfilePage() {
             <span className="text-[14px] font-black text-sec-blue">&lt;/&gt;</span>
           </div>
           <div>
-            <p className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider">
+            <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider">
               Skills Listed
             </p>
             <p className="text-[22px] font-black text-txt-title leading-none mt-0.5">
               {skills.length}
             </p>
-            <p className="text-[10.5px] text-txt-caption">proficiencies</p>
+            <p className="text-[11.5px] text-txt-caption">proficiencies</p>
           </div>
         </Card>
 
@@ -445,13 +707,13 @@ export function ProfilePage() {
             <Briefcase className="w-5 h-5 text-sec-green" />
           </div>
           <div>
-            <p className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider">
+            <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider">
               Work History
             </p>
             <p className="text-[22px] font-black text-txt-title leading-none mt-0.5">
               {experience.length}
             </p>
-            <p className="text-[10.5px] text-txt-caption">recorded positions</p>
+            <p className="text-[11.5px] text-txt-caption">recorded positions</p>
           </div>
         </Card>
 
@@ -461,13 +723,13 @@ export function ProfilePage() {
             <FileText className="w-5 h-5 text-sec-orange" />
           </div>
           <div>
-            <p className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider">
+            <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider">
               Resume
             </p>
             <p className="text-[22px] font-black text-txt-title leading-none mt-0.5">
               {activeResume ? 1 : 0}
             </p>
-            <p className="text-[10.5px] text-txt-caption">
+            <p className="text-[11.5px] text-txt-caption">
               {activeResume ? "active resume" : "no resume yet"}
             </p>
           </div>
@@ -519,17 +781,33 @@ export function ProfilePage() {
               {/* Name & Title — editable */}
               <div className="text-center mb-4 space-y-1">
                 <input
+                  id="pf-name"
+                  aria-label="Full name"
+                  aria-invalid={!!errors.name || undefined}
+                  aria-describedby={errors.name ? "pf-name-error" : undefined}
                   value={profile.name}
-                  onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))}
+                  onChange={(e) => {
+                    setProfile((p) => ({ ...p, name: e.target.value }))
+                    clearError("name")
+                  }}
                   placeholder="Your Name"
                   className="w-full text-center text-[15px] font-bold text-txt-title bg-transparent border-b border-transparent hover:border-bg-border focus:border-primary/50 focus:outline-none transition-colors pb-0.5"
                 />
+                <FieldError id="pf-name-error" message={errors.name} />
                 <input
+                  id="pf-title"
+                  aria-label="Professional title"
+                  aria-invalid={!!errors.title || undefined}
+                  aria-describedby={errors.title ? "pf-title-error" : undefined}
                   value={profile.title}
-                  onChange={(e) => setProfile((p) => ({ ...p, title: e.target.value }))}
+                  onChange={(e) => {
+                    setProfile((p) => ({ ...p, title: e.target.value }))
+                    clearError("title")
+                  }}
                   placeholder="Professional title…"
-                  className="w-full text-center text-[12px] text-txt-caption bg-transparent border-b border-transparent hover:border-bg-border focus:border-primary/50 focus:outline-none transition-colors pb-0.5"
+                  className="w-full text-center text-[13px] text-txt-caption bg-transparent border-b border-transparent hover:border-bg-border focus:border-primary/50 focus:outline-none transition-colors pb-0.5"
                 />
+                <FieldError id="pf-title-error" message={errors.title} />
               </div>
 
               {/* Contact info rows — editable */}
@@ -557,15 +835,25 @@ export function ProfilePage() {
                     placeholder: "yourportfolio.com",
                   },
                 ].map(({ icon, key, placeholder, disabled }) => (
-                  <div key={key} className="flex items-center gap-2">
-                    <span className="text-txt-caption shrink-0">{icon}</span>
-                    <input
-                      value={(profile as any)[key]}
-                      onChange={(e) => setProfile((p) => ({ ...p, [key]: e.target.value }))}
-                      placeholder={placeholder}
-                      disabled={disabled}
-                      className="flex-1 text-[12px] font-medium text-txt-body bg-transparent border-b border-transparent hover:border-bg-border focus:border-primary/50 focus:outline-none transition-colors pb-0.5 disabled:opacity-60 disabled:cursor-not-allowed min-w-0"
-                    />
+                  <div key={key}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-txt-caption shrink-0">{icon}</span>
+                      <input
+                        id={`pf-${key}`}
+                        aria-label={placeholder}
+                        aria-invalid={!!errors[key] || undefined}
+                        aria-describedby={errors[key] ? `pf-${key}-error` : undefined}
+                        value={(profile as any)[key]}
+                        onChange={(e) => {
+                          setProfile((p) => ({ ...p, [key]: e.target.value }))
+                          clearError(key)
+                        }}
+                        placeholder={placeholder}
+                        disabled={disabled}
+                        className={`flex-1 text-[13px] font-medium text-txt-body bg-transparent border-b ${errors[key] ? "border-sec-red/70" : "border-transparent"} hover:border-bg-border focus:border-primary/50 focus:outline-none transition-colors pb-0.5 disabled:opacity-60 disabled:cursor-not-allowed min-w-0`}
+                      />
+                    </div>
+                    <FieldError id={`pf-${key}-error`} message={errors[key]} />
                   </div>
                 ))}
                 {joinedLabel && (
@@ -575,51 +863,19 @@ export function ProfilePage() {
             </div>
           </Card>
 
-          {/* Profile Checklist */}
-          <Card className="p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-[12.5px] font-bold text-txt-title">Profile Checklist</h3>
-              <span className="text-[11px] font-bold text-primary">{completionPct}% Complete</span>
-            </div>
-            <div className="space-y-2">
-              {completionItems.map((item) => (
-                <div key={item.label} className="flex items-center gap-2.5">
-                  <div
-                    className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 transition-colors ${
-                      item.done ? "bg-sec-green text-white" : "border-2 border-bg-border"
-                    }`}
-                  >
-                    {item.done && <CheckCircle2 className="w-3 h-3" />}
-                  </div>
-                  <span
-                    className={`text-[12px] font-medium transition-colors ${
-                      item.done
-                        ? "text-txt-body line-through decoration-sec-green/50"
-                        : "text-txt-caption"
-                    }`}
-                  >
-                    {item.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 w-full h-1.5 bg-bg-border rounded-full overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all duration-700"
-                style={{
-                  width: `${completionPct}%`,
-                  background: "linear-gradient(90deg,#7c5cfc,#3b7ff5)",
-                }}
-              />
-            </div>
-            <button
-              onClick={handleSaveProfile}
-              disabled={savingProfile}
-              className="mt-3 w-full py-2 rounded-[12px] border border-primary/30 text-primary text-[12px] font-bold hover:bg-primary/5 transition-colors cursor-pointer disabled:opacity-50"
-            >
-              {savingProfile ? "Saving…" : "Improve Profile →"}
-            </button>
-          </Card>
+          {/* Profile strength (server-computed) with next steps */}
+          <ProfileStrengthCard
+            footer={
+              <button
+                type="button"
+                onClick={handleSaveAll}
+                disabled={saving || !isDirty}
+                className="mt-4 w-full py-2 rounded-[12px] border border-primary/30 text-primary text-[13px] font-bold hover:bg-primary/5 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {saving ? "Saving…" : isDirty ? "Save changes" : "All changes saved"}
+              </button>
+            }
+          />
         </div>
 
         {/* ══════════════ CENTER: Experience, Education, Skills, Languages, Resume ══════════════ */}
@@ -646,21 +902,49 @@ export function ProfilePage() {
                     <div className="flex-1 pb-2">
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <p className="text-[13px] font-bold text-txt-heading">{exp.role}</p>
-                          <p className="text-[12px] text-txt-caption font-medium">
+                          <p className="text-[13px] font-bold text-txt-heading">
+                            {exp.role}
+                            {!exp.id && (
+                              <span className="ml-2 rounded-full bg-primary-light px-2 py-0.5 text-[11px] font-semibold text-primary">
+                                Imported · unsaved
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-[13px] text-txt-caption font-medium">
                             {exp.company}
                             {exp.duration ? ` · ${exp.duration}` : ""}
                           </p>
                           {exp.desc && (
-                            <p className="text-[12px] text-txt-body mt-1 leading-relaxed">
+                            <p className="text-[13px] text-txt-body mt-1 leading-relaxed">
                               {exp.desc}
                             </p>
                           )}
+                          {!exp.id && (
+                            <div className="mt-2">
+                              <MonthRangeInput
+                                id={`pf-experiences-${i}`}
+                                startDate={exp.startDate || ""}
+                                endDate={exp.endDate ?? null}
+                                current={!!exp.current}
+                                errors={scopeErrors(errors, `experiences.${i}`)}
+                                onChange={(v) =>
+                                  setExperience((prev) =>
+                                    prev.map((x) => (x === exp ? { ...x, ...v } : x))
+                                  )
+                                }
+                              />
+                            </div>
+                          )}
                         </div>
                         <button
-                          onClick={() => exp.id && handleDeleteExperience(exp.id)}
-                          disabled={deletingExpId === exp.id}
-                          className="p-1.5 rounded-lg hover:bg-bg-hover text-txt-caption hover:text-sec-red opacity-0 group-hover:opacity-100 transition-all cursor-pointer shrink-0"
+                          onClick={() =>
+                            exp.id
+                              ? handleDeleteExperience(exp.id)
+                              : setExperience((prev) => prev.filter((x) => x !== exp))
+                          }
+                          disabled={!!exp.id && deletingExpId === exp.id}
+                          aria-label={`Remove ${exp.role}`}
+                          className="p-1.5 rounded-lg hover:bg-bg-hover text-txt-caption hover:text-sec-red opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all cursor-pointer shrink-0"
                           title="Remove"
                         >
                           {deletingExpId === exp.id ? (
@@ -685,7 +969,7 @@ export function ProfilePage() {
                 <p className="text-[13px] font-semibold text-txt-heading mb-1">
                   Add Your Work Experience
                 </p>
-                <p className="text-[12px] text-txt-caption max-w-[280px]">
+                <p className="text-[13px] text-txt-caption max-w-[280px]">
                   Share your work history to help employers understand your background.
                 </p>
               </div>
@@ -694,44 +978,47 @@ export function ProfilePage() {
             {/* Inline add form */}
             {showExpForm ? (
               <div className="p-4 rounded-[14px] bg-bg-primary border border-bg-border/60 space-y-3 mt-2">
-                <p className="text-[12px] font-bold text-txt-heading">New Position</p>
+                <p className="text-[13px] font-bold text-txt-heading">New Position</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
+                    <label className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
                       Job Title *
                     </label>
                     <Input
+                      id="pf-exp-role"
                       placeholder="e.g. Senior Developer"
                       value={expForm.role}
                       onChange={(e) => setExpForm((f) => ({ ...f, role: e.target.value }))}
-                      className="h-8 text-[12px]"
+                      aria-invalid={!!errors["exp.role"] || undefined}
+                      className="h-8 text-[13px]"
                     />
+                    <FieldError id="pf-exp-role-error" message={errors["exp.role"]} />
                   </div>
                   <div>
-                    <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
+                    <label className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
                       Company *
                     </label>
                     <Input
+                      id="pf-exp-company"
                       placeholder="e.g. Google"
                       value={expForm.company}
                       onChange={(e) => setExpForm((f) => ({ ...f, company: e.target.value }))}
-                      className="h-8 text-[12px]"
+                      aria-invalid={!!errors["exp.company"] || undefined}
+                      className="h-8 text-[13px]"
                     />
+                    <FieldError id="pf-exp-company-error" message={errors["exp.company"]} />
                   </div>
                 </div>
+                <MonthRangeInput
+                  id="pf-exp"
+                  startDate={expForm.startDate}
+                  endDate={expForm.endDate}
+                  current={expForm.current}
+                  errors={scopeErrors(errors, "exp")}
+                  onChange={(v) => setExpForm((f) => ({ ...f, ...v }))}
+                />
                 <div>
-                  <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
-                    Duration
-                  </label>
-                  <Input
-                    placeholder="e.g. Jan 2022 – Present"
-                    value={expForm.duration}
-                    onChange={(e) => setExpForm((f) => ({ ...f, duration: e.target.value }))}
-                    className="h-8 text-[12px]"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
+                  <label className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
                     Description
                   </label>
                   <textarea
@@ -739,16 +1026,19 @@ export function ProfilePage() {
                     placeholder="Key achievements or responsibilities…"
                     value={expForm.desc}
                     onChange={(e) => setExpForm((f) => ({ ...f, desc: e.target.value }))}
-                    className="w-full p-2.5 rounded-[10px] border border-bg-border bg-bg-secondary text-[12px] text-txt-body placeholder:text-txt-caption resize-none focus:outline-none focus:border-primary/40 transition-all"
+                    maxLength={2000}
+                    className="w-full p-2.5 rounded-[10px] border border-bg-border bg-bg-secondary text-[13px] text-txt-body placeholder:text-txt-caption resize-none focus:outline-none focus:border-primary/40 transition-all"
                   />
+                  <FieldError id="pf-exp-desc-error" message={errors["exp.desc"]} />
                 </div>
                 <div className="flex gap-2 justify-end">
                   <button
                     onClick={() => {
                       setShowExpForm(false)
-                      setExpForm({ role: "", company: "", duration: "", desc: "" })
+                      setExpForm(EMPTY_EXP)
+                      setErrors((e) => withoutPrefix(e, "exp"))
                     }}
-                    className="px-3 py-1.5 rounded-[10px] text-[12px] font-semibold text-txt-caption hover:bg-bg-hover transition-colors cursor-pointer"
+                    className="px-3 py-1.5 rounded-[10px] text-[13px] font-semibold text-txt-caption hover:bg-bg-hover transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -797,15 +1087,35 @@ export function ProfilePage() {
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <p className="text-[13px] font-bold text-txt-heading">{edu.school}</p>
-                          <p className="text-[12px] text-txt-caption font-medium">
+                          <p className="text-[13px] text-txt-caption font-medium">
                             {edu.degree}
                             {edu.duration ? ` · ${edu.duration}` : ""}
                           </p>
+                          {!edu.id && (
+                            <div className="mt-2">
+                              <YearRangeInput
+                                id={`pf-educations-${i}`}
+                                startYear={edu.startYear ?? null}
+                                endYear={edu.endYear ?? null}
+                                errors={scopeErrors(errors, `educations.${i}`)}
+                                onChange={(v) =>
+                                  setEducation((prev) =>
+                                    prev.map((x) => (x === edu ? { ...x, ...v } : x))
+                                  )
+                                }
+                              />
+                            </div>
+                          )}
                         </div>
                         <button
-                          onClick={() => edu.id && handleDeleteEducation(edu.id)}
-                          disabled={deletingEduId === edu.id}
-                          className="p-1.5 rounded-lg hover:bg-bg-hover text-txt-caption hover:text-sec-red opacity-0 group-hover:opacity-100 transition-all cursor-pointer shrink-0"
+                          onClick={() =>
+                            edu.id
+                              ? handleDeleteEducation(edu.id)
+                              : setEducation((prev) => prev.filter((x) => x !== edu))
+                          }
+                          disabled={!!edu.id && deletingEduId === edu.id}
+                          aria-label={`Remove ${edu.degree}`}
+                          className="p-1.5 rounded-lg hover:bg-bg-hover text-txt-caption hover:text-sec-red opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all cursor-pointer shrink-0"
                           title="Remove"
                         >
                           {deletingEduId === edu.id ? (
@@ -830,7 +1140,7 @@ export function ProfilePage() {
                 <p className="text-[13px] font-semibold text-txt-heading mb-1">
                   Add Your Education
                 </p>
-                <p className="text-[12px] text-txt-caption max-w-[280px]">
+                <p className="text-[13px] text-txt-caption max-w-[280px]">
                   Add your degrees, certifications, and relevant coursework.
                 </p>
               </div>
@@ -839,49 +1149,52 @@ export function ProfilePage() {
             {/* Inline add form */}
             {showEduForm ? (
               <div className="p-4 rounded-[14px] bg-bg-primary border border-bg-border/60 space-y-3 mt-2">
-                <p className="text-[12px] font-bold text-txt-heading">New Education</p>
+                <p className="text-[13px] font-bold text-txt-heading">New Education</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
+                    <label className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
                       Institution *
                     </label>
                     <Input
+                      id="pf-edu-school"
                       placeholder="e.g. MIT"
                       value={eduForm.school}
                       onChange={(e) => setEduForm((f) => ({ ...f, school: e.target.value }))}
-                      className="h-8 text-[12px]"
+                      aria-invalid={!!errors["edu.school"] || undefined}
+                      className="h-8 text-[13px]"
                     />
+                    <FieldError id="pf-edu-school-error" message={errors["edu.school"]} />
                   </div>
                   <div>
-                    <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
+                    <label className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
                       Degree *
                     </label>
                     <Input
+                      id="pf-edu-degree"
                       placeholder="e.g. B.S. Computer Science"
                       value={eduForm.degree}
                       onChange={(e) => setEduForm((f) => ({ ...f, degree: e.target.value }))}
-                      className="h-8 text-[12px]"
+                      aria-invalid={!!errors["edu.degree"] || undefined}
+                      className="h-8 text-[13px]"
                     />
+                    <FieldError id="pf-edu-degree-error" message={errors["edu.degree"]} />
                   </div>
                 </div>
-                <div>
-                  <label className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider block mb-1">
-                    Duration
-                  </label>
-                  <Input
-                    placeholder="e.g. 2018 – 2022"
-                    value={eduForm.duration}
-                    onChange={(e) => setEduForm((f) => ({ ...f, duration: e.target.value }))}
-                    className="h-8 text-[12px]"
-                  />
-                </div>
+                <YearRangeInput
+                  id="pf-edu"
+                  startYear={eduForm.startYear}
+                  endYear={eduForm.endYear}
+                  errors={scopeErrors(errors, "edu")}
+                  onChange={(v) => setEduForm((f) => ({ ...f, ...v }))}
+                />
                 <div className="flex gap-2 justify-end">
                   <button
                     onClick={() => {
                       setShowEduForm(false)
-                      setEduForm({ school: "", degree: "", duration: "" })
+                      setEduForm(EMPTY_EDU)
+                      setErrors((e) => withoutPrefix(e, "edu"))
                     }}
-                    className="px-3 py-1.5 rounded-[10px] text-[12px] font-semibold text-txt-caption hover:bg-bg-hover transition-colors cursor-pointer"
+                    className="px-3 py-1.5 rounded-[10px] text-[13px] font-semibold text-txt-caption hover:bg-bg-hover transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -917,7 +1230,7 @@ export function ProfilePage() {
             {/* Core Technical Skills */}
             <Card className="p-5 flex flex-col gap-3">
               <SectionTitle
-                icon={<span className="text-[12px] font-black">&lt;/&gt;</span>}
+                icon={<span className="text-[13px] font-black">&lt;/&gt;</span>}
                 title="Core Technical Skills"
                 badge={`${skills.length} skills`}
               />
@@ -927,10 +1240,12 @@ export function ProfilePage() {
                   {skills.map((sk) => (
                     <span
                       key={sk}
-                      className="inline-flex items-center gap-1 text-[11px] font-bold text-primary bg-primary/10 border border-primary/20 px-2.5 py-0.5 rounded-full"
+                      className="inline-flex items-center gap-1 text-[12px] font-bold text-primary bg-primary/10 border border-primary/20 px-2.5 py-0.5 rounded-full"
                     >
                       {sk}
                       <button
+                        type="button"
+                        aria-label={`Remove ${sk}`}
                         onClick={() => setSkills(skills.filter((s) => s !== sk))}
                         className="text-primary hover:text-sec-red cursor-pointer ml-0.5"
                       >
@@ -944,8 +1259,8 @@ export function ProfilePage() {
                   <div className="w-8 h-8 rounded-full bg-bg-primary border border-dashed border-bg-border flex items-center justify-center mb-1.5">
                     <Plus className="w-4 h-4 text-txt-caption" />
                   </div>
-                  <p className="text-[11.5px] font-semibold text-txt-heading">Add Your Skills</p>
-                  <p className="text-[11px] text-txt-caption">
+                  <p className="text-[12.5px] font-semibold text-txt-heading">Add Your Skills</p>
+                  <p className="text-[12px] text-txt-caption">
                     Technologies and tools you work with.
                   </p>
                 </div>
@@ -962,7 +1277,7 @@ export function ProfilePage() {
                       setNewSkill("")
                     }
                   }}
-                  className="h-7 text-[11.5px] flex-1"
+                  className="h-7 text-[12.5px] flex-1"
                 />
                 <Button
                   size="sm"
@@ -994,8 +1309,10 @@ export function ProfilePage() {
                       key={lang}
                       className="flex items-center justify-between px-2.5 py-1 rounded-[8px] bg-bg-primary border border-bg-border/40"
                     >
-                      <span className="text-[12px] font-semibold text-txt-heading">{lang}</span>
+                      <span className="text-[13px] font-semibold text-txt-heading">{lang}</span>
                       <button
+                        type="button"
+                        aria-label={`Remove ${lang}`}
                         onClick={() => setLanguages(languages.filter((l) => l !== lang))}
                         className="text-txt-caption hover:text-sec-red cursor-pointer transition-colors"
                       >
@@ -1009,8 +1326,8 @@ export function ProfilePage() {
                   <div className="w-8 h-8 rounded-full bg-bg-primary border border-dashed border-bg-border flex items-center justify-center mb-1.5">
                     <Plus className="w-4 h-4 text-txt-caption" />
                   </div>
-                  <p className="text-[11.5px] font-semibold text-txt-heading">Add Languages</p>
-                  <p className="text-[11px] text-txt-caption">Languages you speak.</p>
+                  <p className="text-[12.5px] font-semibold text-txt-heading">Add Languages</p>
+                  <p className="text-[12px] text-txt-caption">Languages you speak.</p>
                 </div>
               )}
 
@@ -1029,7 +1346,7 @@ export function ProfilePage() {
                       setNewLang("")
                     }
                   }}
-                  className="h-7 text-[11.5px] flex-1"
+                  className="h-7 text-[12.5px] flex-1"
                 />
                 <Button
                   size="sm"
@@ -1059,12 +1376,12 @@ export function ProfilePage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p
-                          className="text-[11.5px] font-semibold text-txt-heading truncate"
+                          className="text-[12.5px] font-semibold text-txt-heading truncate"
                           title={activeResume.name}
                         >
                           {activeResume.name}
                         </p>
-                        <p className="text-[10.5px] text-txt-caption">
+                        <p className="text-[11.5px] text-txt-caption">
                           {activeResume.size} · Updated{" "}
                           {new Date(activeResume.createdAt).toLocaleDateString()}
                         </p>
@@ -1075,14 +1392,14 @@ export function ProfilePage() {
                         href={activeResume.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex-1 text-center py-1.5 rounded-[8px] bg-bg-secondary border border-bg-border text-[11px] font-bold text-txt-heading hover:bg-bg-hover transition-colors"
+                        className="flex-1 text-center py-1.5 rounded-[8px] bg-bg-secondary border border-bg-border text-[12px] font-bold text-txt-heading hover:bg-bg-hover transition-colors"
                       >
                         Preview
                       </a>
                       <Button
                         variant="secondary"
                         size="sm"
-                        className="flex-1 text-[11px] cursor-pointer h-7"
+                        className="flex-1 text-[12px] cursor-pointer h-7"
                         onClick={() => setCandidateActiveView("Documents")}
                       >
                         Manage
@@ -1092,7 +1409,7 @@ export function ProfilePage() {
                   <Button
                     variant="secondary"
                     size="sm"
-                    className="w-full cursor-pointer text-[11.5px] gap-1.5"
+                    className="w-full cursor-pointer text-[12.5px] gap-1.5"
                     onClick={() => setCandidateActiveView("Documents")}
                   >
                     <Plus className="w-3.5 h-3.5" /> Upload New Resume
@@ -1103,13 +1420,13 @@ export function ProfilePage() {
                   <div className="w-9 h-9 rounded-full bg-bg-primary border border-dashed border-bg-border flex items-center justify-center mb-2">
                     <FileText className="w-4 h-4 text-txt-caption" />
                   </div>
-                  <p className="text-[11.5px] font-semibold text-txt-heading mb-0.5">
+                  <p className="text-[12.5px] font-semibold text-txt-heading mb-0.5">
                     No Active Resume
                   </p>
-                  <p className="text-[11px] text-txt-caption mb-3">Upload to apply to jobs.</p>
+                  <p className="text-[12px] text-txt-caption mb-3">Upload to apply to jobs.</p>
                   <Button
                     size="sm"
-                    className="cursor-pointer text-[11px] gap-1.5 w-full"
+                    className="cursor-pointer text-[12px] gap-1.5 w-full"
                     onClick={() => setCandidateActiveView("Documents")}
                   >
                     <Plus className="w-3.5 h-3.5" /> Upload Resume
@@ -1117,23 +1434,6 @@ export function ProfilePage() {
                 </div>
               )}
             </Card>
-          </div>
-
-          {/* Save skills + languages button */}
-          <div className="flex justify-end">
-            <Button
-              onClick={handleSavePrefs}
-              disabled={savingPrefs}
-              variant="secondary"
-              className="gap-2 cursor-pointer font-semibold"
-            >
-              {savingPrefs ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Save className="w-3.5 h-3.5" />
-              )}
-              {savingPrefs ? "Saving…" : "Save Skills & Languages"}
-            </Button>
           </div>
         </div>
 
@@ -1146,49 +1446,54 @@ export function ProfilePage() {
                 <DollarSign className="w-4 h-4 text-primary" />
                 <h3 className="text-[13px] font-bold text-txt-title">Career Preferences</h3>
               </div>
-              <button
-                onClick={handleSavePrefs}
-                disabled={savingPrefs}
-                className="text-[11px] font-bold text-primary hover:text-primary-hover cursor-pointer transition-colors disabled:opacity-50 flex items-center gap-1"
-              >
-                {savingPrefs ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                {savingPrefs ? "Saving…" : "Save"}
-              </button>
             </div>
 
             <div className="space-y-3.5">
-              <div>
-                <p className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider mb-1">
-                  Expected Salary (Annual)
-                </p>
-                <div className="relative">
-                  <DollarSign className="w-3 h-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-txt-caption" />
-                  <input
-                    value={prefs.expectedSalary}
-                    onChange={(e) => setPrefs((p) => ({ ...p, expectedSalary: e.target.value }))}
-                    placeholder="e.g. $140,000 – $160,000"
-                    className="w-full pl-7 pr-3 py-1.5 rounded-[10px] border border-bg-border bg-bg-primary text-[12px] text-txt-body placeholder:text-txt-caption focus:outline-none focus:border-primary/40 transition-all font-medium"
-                  />
-                </div>
-              </div>
+              <SalaryRangeInput
+                id="pf-salary"
+                stacked
+                label="Expected salary"
+                value={prefs.salary}
+                onChange={(salary) => {
+                  setPrefs((p) => ({ ...p, salary }))
+                  setErrors((e) => withoutPrefix(e, "salary"))
+                }}
+                errors={scopeErrors(errors, "salary")}
+              />
 
               <div>
-                <p className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider mb-1">
+                <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider mb-1">
                   Years of Experience
                 </p>
                 <div className="relative">
                   <Clock className="w-3 h-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-txt-caption" />
-                  <input
+                  <select
+                    id="pf-yearsOfExperience"
+                    aria-label="Years of experience"
                     value={prefs.yearsOfExperience}
                     onChange={(e) => setPrefs((p) => ({ ...p, yearsOfExperience: e.target.value }))}
-                    placeholder="e.g. 5+ years"
-                    className="w-full pl-7 pr-3 py-1.5 rounded-[10px] border border-bg-border bg-bg-primary text-[12px] text-txt-body placeholder:text-txt-caption focus:outline-none focus:border-primary/40 transition-all font-medium"
-                  />
+                    className="w-full pl-7 pr-3 py-1.5 rounded-[10px] border border-bg-border bg-bg-primary text-[13px] text-txt-body focus:outline-none focus:border-primary/40 transition-all font-medium cursor-pointer"
+                  >
+                    <option value="">Select…</option>
+                    {YEARS_OPTIONS.map((y) => (
+                      <option key={y} value={y}>
+                        {y === "0"
+                          ? "Less than 1 year"
+                          : y === "20+"
+                            ? "20+ years"
+                            : `${y} year${y === "1" ? "" : "s"}`}
+                      </option>
+                    ))}
+                    {prefs.yearsOfExperience &&
+                      !YEARS_OPTIONS.includes(prefs.yearsOfExperience) && (
+                        <option value={prefs.yearsOfExperience}>{prefs.yearsOfExperience}</option>
+                      )}
+                  </select>
                 </div>
               </div>
 
               <div>
-                <p className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider mb-1.5">
+                <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider mb-1.5">
                   Work Arrangement
                 </p>
                 <div className="flex flex-wrap gap-1.5">
@@ -1197,7 +1502,7 @@ export function ProfilePage() {
                       key={t}
                       type="button"
                       onClick={() => setPrefs((p) => ({ ...p, preferredType: t }))}
-                      className={`px-2.5 py-1 rounded-[8px] text-[11px] font-semibold cursor-pointer border transition-all ${
+                      className={`px-2.5 py-1 rounded-[8px] text-[12px] font-semibold cursor-pointer border transition-all ${
                         prefs.preferredType === t
                           ? "bg-primary text-white border-primary"
                           : "bg-bg-primary text-txt-body border-bg-border hover:border-primary/30"
@@ -1210,15 +1515,93 @@ export function ProfilePage() {
               </div>
 
               <div>
-                <p className="text-[10.5px] font-bold text-txt-caption uppercase tracking-wider mb-1">
+                <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider mb-1">
                   Availability
                 </p>
                 <input
                   value={prefs.availability}
                   onChange={(e) => setPrefs((p) => ({ ...p, availability: e.target.value }))}
                   placeholder="e.g. Immediate / 2 weeks notice"
-                  className="w-full px-3 py-1.5 rounded-[10px] border border-bg-border bg-bg-primary text-[12px] text-txt-body placeholder:text-txt-caption focus:outline-none focus:border-primary/40 transition-all font-medium"
+                  className="w-full px-3 py-1.5 rounded-[10px] border border-bg-border bg-bg-primary text-[13px] text-txt-body placeholder:text-txt-caption focus:outline-none focus:border-primary/40 transition-all font-medium"
                 />
+              </div>
+
+              <div>
+                <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider mb-1.5">
+                  Preferred Locations
+                </p>
+                {prefs.preferredLocations.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {prefs.preferredLocations.map((loc) => (
+                      <span
+                        key={loc}
+                        className="inline-flex items-center gap-1 text-[12px] font-semibold text-txt-heading bg-bg-primary border border-bg-border px-2 py-0.5 rounded-full"
+                      >
+                        {loc}
+                        <button
+                          type="button"
+                          aria-label={`Remove ${loc}`}
+                          onClick={() =>
+                            setPrefs((p) => ({
+                              ...p,
+                              preferredLocations: p.preferredLocations.filter((l) => l !== loc),
+                            }))
+                          }
+                          className="text-txt-caption hover:text-sec-red cursor-pointer"
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <input
+                  value={newLocation}
+                  onChange={(e) => setNewLocation(e.target.value)}
+                  onKeyDown={(e) => {
+                    const v = newLocation.trim()
+                    if (e.key === "Enter" && v && !prefs.preferredLocations.includes(v)) {
+                      e.preventDefault()
+                      setPrefs((p) => ({ ...p, preferredLocations: [...p.preferredLocations, v] }))
+                      setNewLocation("")
+                    }
+                  }}
+                  aria-label="Add preferred location"
+                  placeholder="Add a city or Remote, press Enter"
+                  className="w-full px-3 py-1.5 rounded-[10px] border border-bg-border bg-bg-primary text-[13px] text-txt-body placeholder:text-txt-caption focus:outline-none focus:border-primary/40 transition-all font-medium"
+                />
+              </div>
+
+              <div>
+                <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider mb-1.5">
+                  Profile Visibility
+                </p>
+                <div role="radiogroup" aria-label="Profile visibility" className="flex gap-1.5">
+                  {[
+                    { value: PROFILE_VISIBILITY.PUBLIC, label: "Public" },
+                    { value: PROFILE_VISIBILITY.PRIVATE, label: "Private" },
+                  ].map((v) => (
+                    <button
+                      key={v.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={prefs.visibility === v.value}
+                      onClick={() => setPrefs((p) => ({ ...p, visibility: v.value }))}
+                      className={`px-2.5 py-1 rounded-[8px] text-[12px] font-semibold cursor-pointer border transition-all ${
+                        prefs.visibility === v.value
+                          ? "bg-primary text-white border-primary"
+                          : "bg-bg-primary text-txt-body border-bg-border hover:border-primary/30"
+                      }`}
+                    >
+                      {v.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11.5px] text-txt-caption mt-1">
+                  {prefs.visibility === PROFILE_VISIBILITY.PRIVATE
+                    ? "Only recruiters you apply to can see your profile."
+                    : "Recruiters can discover your profile."}
+                </p>
               </div>
             </div>
           </Card>
@@ -1227,42 +1610,64 @@ export function ProfilePage() {
           <Card className="p-5">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-[13px] font-bold text-txt-title">About Me</h3>
-              <button
-                onClick={handleSaveProfile}
-                disabled={savingProfile}
-                className="text-[11px] font-bold text-primary hover:text-primary-hover cursor-pointer transition-colors disabled:opacity-50 flex items-center gap-1"
-              >
-                {savingProfile ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                {savingProfile ? "Saving…" : "Save"}
-              </button>
             </div>
             <textarea
               rows={5}
               value={profile.bio}
-              onChange={(e) => setProfile((p) => ({ ...p, bio: e.target.value }))}
+              onChange={(e) => {
+                setProfile((p) => ({ ...p, bio: e.target.value }))
+                clearError("bio")
+              }}
+              id="pf-bio"
+              maxLength={4000}
+              aria-invalid={!!errors.bio || undefined}
               placeholder="Briefly describe your background, tech stack, and what you excel at…"
-              className="w-full p-3 rounded-[12px] border border-bg-border bg-bg-primary text-[12.5px] text-txt-body placeholder:text-txt-caption resize-none focus:outline-none focus:border-primary/40 transition-all font-medium leading-relaxed"
+              className="w-full p-3 rounded-[12px] border border-bg-border bg-bg-primary text-[13.5px] text-txt-body placeholder:text-txt-caption resize-none focus:outline-none focus:border-primary/40 transition-all font-medium leading-relaxed"
             />
+            <div className="flex justify-between">
+              <FieldError id="pf-bio-error" message={errors.bio} />
+              <span className="ml-auto text-[11px] text-txt-caption tabular-nums">
+                {profile.bio.length} / 4,000
+              </span>
+            </div>
             {/* Social links */}
             <div className="mt-3 space-y-2">
               <div className="flex items-center gap-2">
                 <Globe className="w-3.5 h-3.5 text-txt-caption shrink-0" />
                 <input
+                  id="pf-github"
+                  aria-invalid={!!errors.github || undefined}
+                  aria-describedby={errors.github ? "pf-github-error" : undefined}
                   value={profile.github}
-                  onChange={(e) => setProfile((p) => ({ ...p, github: e.target.value }))}
+                  onChange={(e) => {
+                    setProfile((p) => ({ ...p, github: e.target.value }))
+                    clearError("github")
+                  }}
                   placeholder="GitHub URL"
-                  className="flex-1 text-[12px] text-txt-body bg-transparent border-b border-transparent hover:border-bg-border focus:border-primary/50 focus:outline-none transition-colors pb-0.5 placeholder:text-txt-caption"
+                  aria-label="GitHub URL"
+                  type="url"
+                  className="flex-1 text-[13px] text-txt-body bg-transparent border-b border-transparent hover:border-bg-border focus:border-primary/50 focus:outline-none transition-colors pb-0.5 placeholder:text-txt-caption"
                 />
               </div>
               <div className="flex items-center gap-2">
                 <ExternalLink className="w-3.5 h-3.5 text-txt-caption shrink-0" />
                 <input
+                  id="pf-linkedin"
+                  aria-invalid={!!errors.linkedin || undefined}
+                  aria-describedby={errors.linkedin ? "pf-linkedin-error" : undefined}
                   value={profile.linkedin}
-                  onChange={(e) => setProfile((p) => ({ ...p, linkedin: e.target.value }))}
+                  onChange={(e) => {
+                    setProfile((p) => ({ ...p, linkedin: e.target.value }))
+                    clearError("linkedin")
+                  }}
                   placeholder="LinkedIn URL"
-                  className="flex-1 text-[12px] text-txt-body bg-transparent border-b border-transparent hover:border-bg-border focus:border-primary/50 focus:outline-none transition-colors pb-0.5 placeholder:text-txt-caption"
+                  aria-label="LinkedIn URL"
+                  type="url"
+                  className="flex-1 text-[13px] text-txt-body bg-transparent border-b border-transparent hover:border-bg-border focus:border-primary/50 focus:outline-none transition-colors pb-0.5 placeholder:text-txt-caption"
                 />
               </div>
+              <FieldError id="pf-github-error" message={errors.github} />
+              <FieldError id="pf-linkedin-error" message={errors.linkedin} />
             </div>
           </Card>
 
@@ -1287,7 +1692,7 @@ export function ProfilePage() {
                 {
                   icon: <Heart className="w-3.5 h-3.5" />,
                   label: "Saved Jobs",
-                  action: () => setCandidateActiveView("Discover"),
+                  action: () => setCandidateActiveView("Applications"),
                 },
                 {
                   icon: <FileText className="w-3.5 h-3.5" />,
@@ -1301,6 +1706,7 @@ export function ProfilePage() {
                 },
               ].map((link) => (
                 <button
+                  type="button"
                   key={link.label}
                   onClick={link.action}
                   className="w-full flex items-center justify-between px-2.5 py-2 rounded-[10px] hover:bg-bg-primary text-left transition-colors group cursor-pointer"
@@ -1309,7 +1715,7 @@ export function ProfilePage() {
                     <span className="text-txt-caption group-hover:text-primary transition-colors">
                       {link.icon}
                     </span>
-                    <span className="text-[12.5px] font-medium text-txt-body group-hover:text-txt-heading transition-colors">
+                    <span className="text-[13.5px] font-medium text-txt-body group-hover:text-txt-heading transition-colors">
                       {link.label}
                     </span>
                   </div>
@@ -1320,6 +1726,11 @@ export function ProfilePage() {
           </Card>
         </div>
       </div>
+      <CvImportDialog
+        open={cvImportOpen}
+        onOpenChange={setCvImportOpen}
+        onApply={applyCvSuggestions}
+      />
     </div>
   )
 }

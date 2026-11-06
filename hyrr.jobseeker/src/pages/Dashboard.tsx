@@ -1,13 +1,15 @@
 import {
   APPLICATION_STATUS,
   APPLICATION_STATUS_LABEL,
+  AnimatedNumber,
   Badge,
   Button,
   Card,
+  VerifiedBadge,
   useJobStore,
 } from "hyrr.shared"
 import { ArrowUpRight, Briefcase, Calendar, CheckCircle2, Star, TrendingUp } from "lucide-react"
-import { useEffect } from "react"
+import { ProfileStrengthCard } from "../components/profile/profile-strength"
 
 const colorDot: Record<string, string> = {
   purple: "bg-primary",
@@ -17,18 +19,7 @@ const colorDot: Record<string, string> = {
 }
 
 export function CandidateDashboard() {
-  const {
-    jobApplications,
-    recommendedJobs,
-    setCandidateActiveView,
-    user,
-    seekerProfile,
-    fetchInitialData,
-  } = useJobStore()
-
-  useEffect(() => {
-    fetchInitialData()
-  }, []) // eslint-disable-line
+  const { jobApplications, recommendedJobs, setCandidateActiveView, user, events } = useJobStore()
 
   const applied = jobApplications.filter((a) => a.status === APPLICATION_STATUS.APPLIED).length
   const inProcess = jobApplications.filter(
@@ -39,31 +30,6 @@ export function CandidateDashboard() {
     (a) => a.status === APPLICATION_STATUS.INTERVIEWING
   ).length
   const offers = jobApplications.filter((a) => a.status === APPLICATION_STATUS.OFFER).length
-
-  // Compute profile completion dynamically
-  const completionItems = [
-    { done: !!seekerProfile?.title },
-    { done: !!seekerProfile?.bio },
-    { done: (seekerProfile?.experiences?.length ?? 0) > 0 },
-    { done: (seekerProfile?.educations?.length ?? 0) > 0 },
-    { done: (seekerProfile?.skills?.length ?? 0) >= 5 },
-    { done: !!(seekerProfile?.github || seekerProfile?.website) },
-    { done: !!seekerProfile?.expectedSalary },
-    { done: (seekerProfile?.languages?.length ?? 0) > 0 },
-  ]
-  const profileStrength = Math.round(
-    (completionItems.filter((i) => i.done).length / completionItems.length) * 100
-  )
-
-  const profileTips = [
-    !seekerProfile?.bio && "Add a professional bio",
-    (seekerProfile?.skills?.length ?? 0) < 5 && "Add more skills (5+ recommended)",
-    !seekerProfile?.github && !seekerProfile?.website && "Add a portfolio or GitHub link",
-    (seekerProfile?.languages?.length ?? 0) === 0 && "Add language proficiencies",
-    !seekerProfile?.expectedSalary && "Set expected salary range",
-  ]
-    .filter(Boolean)
-    .slice(0, 2) as string[]
 
   const greeting = (() => {
     const h = new Date().getHours()
@@ -104,9 +70,32 @@ export function CandidateDashboard() {
     },
   ]
 
-  const upcomingInterview = jobApplications.find((a) => a.interviewDate)
+  const now = Date.now()
+  const nextInterview = events
+    .filter((e) => e.type === "interview" && new Date(e.startTime).getTime() > now)
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())[0]
+  const interviewApp = nextInterview?.applicationId
+    ? jobApplications.find((a) => a.id === nextInterview.applicationId)
+    : undefined
+  const upcomingInterview = nextInterview
+    ? {
+        title: interviewApp?.title || nextInterview.title,
+        company: interviewApp?.company || nextInterview.title,
+        when: new Date(nextInterview.startTime).toLocaleString([], {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+      }
+    : null
   const offerApps = jobApplications.filter((a) => a.status === APPLICATION_STATUS.OFFER)
-  const recentActivity = jobApplications.slice().reverse().slice(0, 4)
+  // Newest first (store order is already newest-first; sort by last update to be explicit)
+  const recentActivity = jobApplications
+    .slice()
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .slice(0, 4)
   const recommended = recommendedJobs.slice(0, 3)
   const hasRecentActivity = recentActivity.length > 0
   const hasRecommended = recommended.length > 0
@@ -126,7 +115,7 @@ export function CandidateDashboard() {
 
       {/* Greeting */}
       <div className="relative z-10">
-        <h1 className="text-[36px] font-extrabold tracking-tight">
+        <h1 className="text-[28px] sm:text-[36px] font-extrabold tracking-tight">
           <span className="premium-gradient-text text-glow">
             {greeting}, {firstName}
           </span>{" "}
@@ -142,7 +131,7 @@ export function CandidateDashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 relative z-10">
+      <div className="stagger grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 relative z-10">
         {stats.map((stat, idx) => {
           const Icon = stat.icon
           const accentClass = statsAccents[idx % statsAccents.length]
@@ -150,12 +139,12 @@ export function CandidateDashboard() {
             <Card
               key={idx}
               hoverEffect
-              className={`p-6 flex flex-col justify-between h-36 relative overflow-hidden group hover-lift ${accentClass}`}
+              className={`p-6 flex flex-col justify-between h-36 relative overflow-hidden group ${accentClass}`}
             >
               {/* Subtle gradient shimmer on hover */}
               <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none rounded-inherit" />
               <div className="flex items-start justify-between relative z-10">
-                <span className="text-[11px] font-bold tracking-wider text-txt-caption uppercase">
+                <span className="text-[12px] font-bold tracking-wider text-txt-caption uppercase">
                   {stat.title}
                 </span>
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-light to-primary-light/60 border border-primary-border/40 flex items-center justify-center text-primary shadow-[0_0_12px_rgba(108,99,255,0.08)] group-hover:shadow-[0_0_18px_rgba(108,99,255,0.2)] transition-shadow">
@@ -163,10 +152,14 @@ export function CandidateDashboard() {
                 </div>
               </div>
               <div className="mt-4 flex items-baseline gap-2 relative z-10">
-                <span className="text-[30px] font-black text-txt-title leading-none tabular-nums">
-                  {stat.value}
+                <span className="text-[30px] font-black tracking-[-0.02em] text-txt-title leading-none tabular-nums">
+                  {typeof stat.value === "number" ? (
+                    <AnimatedNumber value={stat.value} />
+                  ) : (
+                    stat.value
+                  )}
                 </span>
-                <span className="text-[11.5px] text-txt-caption font-semibold">{stat.change}</span>
+                <span className="text-[12.5px] text-txt-caption font-semibold">{stat.change}</span>
               </div>
             </Card>
           )
@@ -197,19 +190,21 @@ export function CandidateDashboard() {
           <div className="flex flex-col gap-3">
             {hasRecentActivity ? (
               recentActivity.map((app) => (
-                <div
+                <button
+                  type="button"
                   key={app.id}
-                  className="flex items-center justify-between p-3.5 rounded-[16px] bg-bg-primary/40 dark:bg-bg-primary/20 border border-bg-border/30 hover:border-primary/30 hover:bg-bg-primary/80 dark:hover:bg-bg-primary/40 hover:shadow-[0_2px_12px_rgba(108,99,255,0.06)] transition-all duration-200 cursor-pointer"
+                  onClick={() => setCandidateActiveView("Applications")}
+                  className="w-full text-left flex flex-wrap items-center justify-between gap-2 p-3.5 rounded-[16px] bg-bg-primary/40 dark:bg-bg-primary/20 border border-bg-border/30 hover:border-primary/30 hover:bg-bg-primary/80 dark:hover:bg-bg-primary/40 hover:shadow-[0_2px_12px_rgba(108,99,255,0.06)] transition-all duration-200 cursor-pointer"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
                     <div
-                      className={`w-2.5 h-2.5 rounded-full ${colorDot[app.companyColor] ?? "bg-primary"} shadow-[0_0_8px_currentColor]`}
+                      className={`w-2.5 h-2.5 shrink-0 rounded-full ${colorDot[app.companyColor] ?? "bg-primary"} shadow-[0_0_8px_currentColor]`}
                     />
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-[14px] font-semibold text-txt-heading">
                         {app.title}
                       </span>
-                      <span className="text-[12px] text-txt-caption ml-2 font-medium">
+                      <span className="text-[13px] text-txt-caption ml-2 font-medium">
                         at {app.company}
                       </span>
                     </div>
@@ -219,7 +214,8 @@ export function CandidateDashboard() {
                       variant={
                         app.status === APPLICATION_STATUS.OFFER
                           ? "success"
-                          : app.status === APPLICATION_STATUS.ARCHIVED
+                          : app.status === APPLICATION_STATUS.ARCHIVED ||
+                              app.status === APPLICATION_STATUS.WITHDRAWN
                             ? "secondary"
                             : app.status === APPLICATION_STATUS.INTERVIEWING
                               ? "primary"
@@ -234,7 +230,7 @@ export function CandidateDashboard() {
                       {app.appliedDate}
                     </span>
                   </div>
-                </div>
+                </button>
               ))
             ) : (
               <div className="flex flex-col items-center justify-center py-10 gap-3">
@@ -243,13 +239,13 @@ export function CandidateDashboard() {
                 </div>
                 <div className="text-center">
                   <p className="text-[14px] font-semibold text-txt-heading">No activity yet</p>
-                  <p className="text-[12px] text-txt-caption mt-1">
+                  <p className="text-[13px] text-txt-caption mt-1">
                     Start applying to jobs and your activity will appear here.
                   </p>
                 </div>
                 <button
                   onClick={() => setCandidateActiveView("Discover")}
-                  className="text-[12.5px] font-bold text-primary hover:text-primary-hover transition-colors cursor-pointer"
+                  className="text-[13.5px] font-bold text-primary hover:text-primary-hover transition-colors cursor-pointer"
                 >
                   Browse open positions →
                 </button>
@@ -266,25 +262,24 @@ export function CandidateDashboard() {
               <div className="absolute -right-6 -top-6 w-20 h-20 rounded-full bg-primary/5 blur-2xl pointer-events-none group-hover:bg-primary/10 transition-colors" />
               <div className="flex items-center gap-2 mb-3">
                 <Calendar className="w-4 h-4 text-primary" />
-                <span className="text-[12px] font-extrabold text-primary uppercase tracking-wider">
+                <span className="text-[13px] font-extrabold text-primary uppercase tracking-wider">
                   Upcoming Interview
                 </span>
               </div>
               <h4 className="text-[14.5px] font-bold text-txt-heading">
                 {upcomingInterview.title}
               </h4>
-              <p className="text-[12.5px] text-txt-body mt-0.5 font-medium">
+              <p className="text-[13.5px] text-txt-body mt-0.5 font-medium">
                 {upcomingInterview.company}
               </p>
               <div className="mt-3 p-2.5 rounded-[10px] bg-primary-light dark:bg-primary-light/10 border border-primary-border/30">
-                <p className="text-[12.5px] font-bold text-primary">
-                  {upcomingInterview.interviewDate}
-                </p>
+                <p className="text-[13.5px] font-bold text-primary">{upcomingInterview.when}</p>
               </div>
               <Button
                 variant="primary"
                 size="sm"
-                className="w-full mt-3 cursor-pointer text-[12px] font-bold premium-shimmer-btn text-white border-0"
+                onClick={() => setCandidateActiveView("Calendar")}
+                className="w-full mt-3 cursor-pointer text-[13px] font-bold premium-shimmer-btn text-white border-0"
               >
                 Prepare for Interview
               </Button>
@@ -296,14 +291,14 @@ export function CandidateDashboard() {
             <Card className="p-5 border-l-4 border-l-sec-green glass-panel hover-lift">
               <div className="flex items-center gap-2 mb-3">
                 <CheckCircle2 className="w-4 h-4 text-sec-green" />
-                <span className="text-[12px] font-extrabold text-sec-green uppercase tracking-wider">
+                <span className="text-[13px] font-extrabold text-sec-green uppercase tracking-wider">
                   Offer Received
                 </span>
               </div>
               {offerApps.map((app) => (
                 <div key={app.id}>
                   <h4 className="text-[14.5px] font-bold text-txt-heading">{app.title}</h4>
-                  <p className="text-[12.5px] text-txt-body font-medium">{app.company}</p>
+                  <p className="text-[13.5px] text-txt-body font-medium">{app.company}</p>
                   {app.offerAmount && (
                     <div className="mt-2 p-2.5 rounded-[10px] bg-sec-green/10 border border-sec-green/20">
                       <p className="text-[13px] font-black text-sec-green">{app.offerAmount}</p>
@@ -314,52 +309,16 @@ export function CandidateDashboard() {
               <Button
                 variant="secondary"
                 size="sm"
-                className="w-full mt-3 cursor-pointer text-[12px] font-bold"
+                onClick={() => setCandidateActiveView("Applications")}
+                className="w-full mt-3 cursor-pointer text-[13px] font-bold"
               >
                 Review Offer Details
               </Button>
             </Card>
           )}
 
-          {/* Profile strength */}
-          <Card className="p-5 glass-panel hover-lift border-bg-border/60">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-[12px] font-bold text-txt-heading uppercase tracking-wider">
-                Profile Strength
-              </h3>
-              <span className="text-[12px] font-extrabold text-primary">{profileStrength}%</span>
-            </div>
-            <div className="w-full h-2.5 bg-bg-primary dark:bg-bg-primary/20 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-700 ${
-                  profileStrength >= 80
-                    ? "bg-sec-green"
-                    : profileStrength >= 50
-                      ? "bg-primary"
-                      : "bg-sec-orange"
-                }`}
-                style={{ width: `${profileStrength}%` }}
-              />
-            </div>
-            {profileTips.length > 0 && (
-              <div className="mt-3 space-y-1.5">
-                {profileTips.map((tip) => (
-                  <div
-                    key={tip}
-                    className="flex items-center gap-2 text-[11.5px] text-txt-caption font-medium"
-                  >
-                    <div className="w-1.5 h-1.5 rounded-full bg-sec-orange shrink-0 animate-ping" />
-                    {tip}
-                  </div>
-                ))}
-              </div>
-            )}
-            {profileTips.length === 0 && (
-              <p className="text-[11.5px] text-sec-green font-bold mt-2">
-                ✓ Profile is fully complete!
-              </p>
-            )}
-          </Card>
+          {/* Profile strength (server-computed) */}
+          <ProfileStrengthCard limit={3} className="glass-panel hover-lift border-bg-border/60" />
         </div>
       </div>
 
@@ -385,10 +344,11 @@ export function CandidateDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {hasRecommended ? (
             recommended.map((job) => (
-              <div
+              <button
+                type="button"
                 key={job.id}
                 onClick={() => setCandidateActiveView("Discover")}
-                className="p-5 rounded-card border border-bg-border/50 bg-bg-secondary hover:border-primary/40 hover:shadow-xl transition-all cursor-pointer group hover:-translate-y-1 duration-200"
+                className="text-left p-5 rounded-card border border-bg-border/50 bg-bg-secondary hover:border-primary/40 hover:shadow-xl transition-all cursor-pointer group hover:-translate-y-1 duration-200"
               >
                 <div className="flex items-start justify-between gap-2 mb-3">
                   <div
@@ -396,36 +356,39 @@ export function CandidateDashboard() {
                   >
                     {job.company[0]}
                   </div>
-                  <Badge variant="primary" className="text-[10px] font-bold">
+                  <Badge variant="primary" className="text-[11px] font-bold">
                     Featured
                   </Badge>
                 </div>
                 <h4 className="text-[14px] font-bold text-txt-heading group-hover:text-primary transition-colors">
                   {job.title}
                 </h4>
-                <p className="text-[12px] text-txt-body mt-0.5 font-semibold">{job.company}</p>
+                <p className="text-[13px] text-txt-body mt-0.5 font-semibold flex items-center gap-1">
+                  {job.company}
+                  {job.companyVerified && <VerifiedBadge focusable={false} />}
+                </p>
                 <div className="flex items-center justify-between mt-4 pt-3 border-t border-bg-border/30">
-                  <span className="text-[11.5px] text-txt-caption font-semibold">
+                  <span className="text-[12.5px] text-txt-caption font-semibold">
                     {job.location}
                   </span>
-                  <span className="text-[12px] font-bold text-primary">{job.salary}</span>
+                  <span className="text-[13px] font-bold text-primary">{job.salary}</span>
                 </div>
-              </div>
+              </button>
             ))
           ) : (
-            <div className="col-span-3 flex flex-col items-center justify-center py-10 gap-3">
+            <div className="md:col-span-3 flex flex-col items-center justify-center py-10 gap-3">
               <div className="w-12 h-12 rounded-2xl bg-primary-light flex items-center justify-center">
                 <Star className="w-6 h-6 text-primary" />
               </div>
               <div className="text-center">
                 <p className="text-[14px] font-semibold text-txt-heading">No featured jobs yet</p>
-                <p className="text-[12px] text-txt-caption mt-1">
+                <p className="text-[13px] text-txt-caption mt-1">
                   Browse all open positions to find opportunities that match your profile.
                 </p>
               </div>
               <button
                 onClick={() => setCandidateActiveView("Discover")}
-                className="text-[12.5px] font-bold text-primary hover:text-primary-hover transition-colors cursor-pointer"
+                className="text-[13.5px] font-bold text-primary hover:text-primary-hover transition-colors cursor-pointer"
               >
                 Browse all jobs →
               </button>
@@ -454,7 +417,7 @@ export function CandidateDashboard() {
                 <div className="w-8 h-8 rounded-[10px] bg-primary-light dark:bg-primary-light/10 flex items-center justify-center shrink-0">
                   <Icon className="w-4 h-4 text-primary" />
                 </div>
-                <span className="text-[12.5px] font-bold text-txt-heading group-hover:text-primary transition-colors">
+                <span className="text-[13.5px] font-bold text-txt-heading group-hover:text-primary transition-colors">
                   {action.label}
                 </span>
               </button>

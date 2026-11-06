@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Dark mode follows the `dark` class on <html> (set by the store theme), not the OS setting. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-primary: #6c63ff;
   --color-primary-hover: #5b52f5;
@@ -25,10 +28,62 @@
   --color-txt-caption: #98a2b3;
   --color-txt-disabled: #a0a6b5;
 
-  --shadow-card: 0 10px 40px rgba(15, 23, 42, 0.06);
-  --shadow-card-hover: 0 20px 60px rgba(15, 23, 42, 0.12);
-  --shadow-floating: 0 30px 80px rgba(15, 23, 42, 0.16);
-  --shadow-button: 0 8px 30px rgba(108, 99, 255, 0.18);
+  /* Layered, soft shadows: hairline + contact + ambient (Apple-style depth, never muddy). */
+  --shadow-card:
+    0 0 0 1px rgba(15, 23, 42, 0.03), 0 1px 2px rgba(15, 23, 42, 0.04),
+    0 8px 24px -6px rgba(15, 23, 42, 0.06);
+  --shadow-card-hover:
+    0 0 0 1px rgba(108, 99, 255, 0.1), 0 2px 4px rgba(15, 23, 42, 0.04),
+    0 18px 40px -12px rgba(15, 23, 42, 0.14);
+  --shadow-floating:
+    0 0 0 1px rgba(15, 23, 42, 0.05), 0 4px 8px rgba(15, 23, 42, 0.04),
+    0 32px 64px -16px rgba(15, 23, 42, 0.22);
+  --shadow-button:
+    0 1px 0 rgba(255, 255, 255, 0.22) inset, 0 1px 2px rgba(76, 64, 220, 0.28),
+    0 6px 18px -6px rgba(108, 99, 255, 0.55);
+
+  /* Motion: quick, smooth, no bounce. */
+  --ease-apple: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
+
+  --animate-fade-in: fade-in 0.22s var(--ease-apple) both;
+  --animate-fade-out: fade-out 0.18s var(--ease-apple) both;
+  --animate-rise: rise 0.5s var(--ease-out-expo) both;
+  --animate-page-in: page-in 0.45s var(--ease-out-expo) both;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes fade-out {
+    to {
+      opacity: 0;
+    }
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.985);
+    }
+  }
+  @keyframes page-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+      filter: blur(4px);
+    }
+  }
+  @keyframes shimmer {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
 
   --radius-window: 32px;
   --radius-card: 24px;
@@ -89,8 +144,12 @@
   --color-sec-red: #ff6b6b;
   --color-sec-gray: #9ba2ae;
 
-  --shadow-card: 0 10px 40px rgba(0, 0, 0, 0.25);
-  --shadow-card-hover: 0 20px 60px rgba(0, 0, 0, 0.35);
+  --shadow-card:
+    0 0 0 1px rgba(255, 255, 255, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 8px 24px -6px rgba(0, 0, 0, 0.45);
+  --shadow-card-hover:
+    0 0 0 1px rgba(168, 157, 255, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 18px 40px -12px rgba(0, 0, 0, 0.6);
 
   /* ── Badge color tokens (dark mode) ── */
   --badge-primary-bg: #1d1a3f;
@@ -191,44 +250,6 @@
   display: none;
 }
 
-/* ─── Card Interactive Lift ─── */
-.hover-lift {
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    border-color 0.2s ease;
-}
-
-.hover-lift:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
-  border-color: var(--color-primary-border) !important;
-}
-
-.dark .hover-lift:hover {
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-  border-color: var(--color-primary-border) !important;
-}
-
-/* ─── Accent Cards ─── */
-.accent-card-primary,
-.accent-card-blue,
-.accent-card-green,
-.accent-card-orange {
-  position: relative;
-  overflow: hidden;
-}
-
-.premium-shimmer-btn {
-  background-color: var(--color-primary);
-  color: #ffffff;
-  transition: all 0.2s ease;
-}
-
-.premium-shimmer-btn:hover {
-  background-color: var(--color-primary-hover);
-}
-
 /* ── Rich Text Content Styling ── */
 .rich-text-content,
 .rich-text-rendered-content {
@@ -304,4 +325,241 @@
   font-family: monospace;
   font-size: 12px;
   color: var(--color-primary);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Motion & premium surfaces (used by hyrr.shared components; see hyrr-ui skill)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+  }
+  /* One easing for every interactive element; durations stay short. */
+  button,
+  a,
+  input,
+  select,
+  textarea,
+  [role="button"] {
+    transition-timing-function: var(--ease-apple);
+  }
+  :focus-visible {
+    outline: none;
+  }
+}
+
+/* App canvas: a faint colour wash instead of flat grey (fixed, so it never scrolls). */
+.app-canvas {
+  background-color: var(--color-bg-primary);
+  background-image:
+    radial-gradient(1100px 520px at 100% -8%, rgba(108, 99, 255, 0.07), transparent 62%),
+    radial-gradient(900px 480px at -12% 108%, rgba(79, 142, 247, 0.055), transparent 60%);
+  background-attachment: fixed;
+}
+.dark .app-canvas {
+  background-image:
+    radial-gradient(1100px 520px at 100% -8%, rgba(108, 99, 255, 0.12), transparent 62%),
+    radial-gradient(900px 480px at -12% 108%, rgba(79, 142, 247, 0.07), transparent 60%);
+}
+
+/* Lift on hover (cards, list rows). */
+.hover-lift {
+  transition:
+    transform 0.35s var(--ease-out-expo),
+    box-shadow 0.35s var(--ease-out-expo),
+    border-color 0.25s var(--ease-apple);
+  will-change: transform;
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--color-primary-border);
+}
+.dark .hover-lift:hover {
+  border-color: #2d2a5e;
+}
+
+/* Press feedback for anything clickable that isn't a <Button>. */
+.press {
+  transition: transform 0.18s var(--ease-apple);
+}
+.press:active {
+  transform: scale(0.97);
+}
+
+/* Cursor-following glow (pointer position set by installPointerEffects()). */
+.spotlight {
+  position: relative;
+  isolation: isolate;
+}
+.spotlight::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.4s var(--ease-apple);
+  background: radial-gradient(
+    420px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(108, 99, 255, 0.075),
+    transparent 45%
+  );
+}
+.spotlight:hover::before {
+  opacity: 1;
+}
+.dark .spotlight::before {
+  background: radial-gradient(
+    420px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(168, 157, 255, 0.1),
+    transparent 45%
+  );
+}
+
+/* Light sweep across primary buttons on hover. */
+.btn-shine {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.btn-shine::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    110deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.28) 48%,
+    transparent 66%
+  );
+  transform: translateX(-120%);
+  transition: transform 0.7s var(--ease-out-expo);
+}
+.btn-shine:hover::after {
+  transform: translateX(120%);
+}
+
+/* Frosted surfaces (headers, popovers). */
+.glass {
+  background: color-mix(in srgb, var(--color-bg-secondary) 72%, transparent);
+  backdrop-filter: saturate(180%) blur(18px);
+  -webkit-backdrop-filter: saturate(180%) blur(18px);
+}
+
+/* Loading placeholders: a soft travelling highlight instead of a blink. */
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-border) 0%,
+    color-mix(in srgb, var(--color-bg-border) 45%, var(--color-bg-secondary)) 40%,
+    var(--color-bg-border) 80%
+  );
+  background-size: 200% 100%;
+  animation: var(--animate-shimmer);
+}
+
+/* Lists that rise in one after another: add `stagger` to the parent. */
+.stagger > * {
+  animation: var(--animate-rise);
+}
+.stagger > *:nth-child(2) {
+  animation-delay: 40ms;
+}
+.stagger > *:nth-child(3) {
+  animation-delay: 80ms;
+}
+.stagger > *:nth-child(4) {
+  animation-delay: 120ms;
+}
+.stagger > *:nth-child(5) {
+  animation-delay: 160ms;
+}
+.stagger > *:nth-child(6) {
+  animation-delay: 200ms;
+}
+.stagger > *:nth-child(7) {
+  animation-delay: 240ms;
+}
+.stagger > *:nth-child(n + 8) {
+  animation-delay: 280ms;
+}
+
+/* Gradient hairline border (premium highlight on featured items). */
+.ring-gradient {
+  position: relative;
+}
+.ring-gradient::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    135deg,
+    rgba(108, 99, 255, 0.55),
+    rgba(79, 142, 247, 0.25) 40%,
+    transparent 70%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+/* Respect the OS "reduce motion" setting everywhere. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Legacy class (seeker dashboard CTA): primary fill + shine. */
+.premium-shimmer-btn {
+  background-color: var(--color-primary);
+  color: #ffffff;
+  box-shadow: var(--shadow-button);
+  transition:
+    background-color 0.2s var(--ease-apple),
+    transform 0.18s var(--ease-apple);
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.premium-shimmer-btn:hover {
+  background-color: var(--color-primary-hover);
+}
+.premium-shimmer-btn:active {
+  transform: scale(0.97);
+}
+
+/* Lenis smooth scrolling (see useSmoothScroll). */
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+.lenis.lenis-stopped {
+  overflow: clip;
+}
+/* Nested scroll areas: contained, with native momentum on touch. */
+.overflow-y-auto,
+.overflow-auto {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }

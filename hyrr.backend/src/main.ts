@@ -1,41 +1,118 @@
-import * as dotenv from "dotenv"
-import * as path from "path"
-
-// Load .env BEFORE any NestJS/Prisma module initializes.
-// When run via `npm run start:dev --workspace=hyrr.backend` from the
-// monorepo root, CWD is the repo root — not hyrr.backend/ — so we
-// resolve the path relative to this file's directory.
-dotenv.config({ path: path.resolve(__dirname, "../.env") })
+// Must stay the first import: loads .env and initialises Sentry (when SENTRY_DSN is set) before
+// any NestJS/Prisma module is loaded. The .env path is resolved relative to this file because
+// `npm run start:dev --workspace=hyrr.backend` runs with the monorepo root as CWD.
+import "./instrument"
 
 import { ValidationPipe } from "@nestjs/common"
 import { NestFactory } from "@nestjs/core"
+import { NestExpressApplication } from "@nestjs/platform-express"
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger"
+import helmet from "helmet"
+import Redis from "ioredis"
 import { AppModule } from "./app.module"
+import { jwtSecret } from "./auth/jwt.config"
 import cookieParser = require("cookie-parser")
 
+import { getAllowedOrigins } from "./core/config/origins"
+import { validationException } from "./core/validation/validation-errors"
 import { AllExceptionsFilter } from "./core/filters/all-exceptions.filter"
+import {
+  createRateLimiter,
+  RateLimitStore,
+  RedisRateLimitStore,
+  STRICT_AUTH_PATH,
+} from "./core/http/rate-limit"
+import { isHealthPath, requestIdMiddleware } from "./core/http/request-id"
 import { LoggingInterceptor } from "./core/interceptors/logging.interceptor"
+import { RedisIoAdapter } from "./core/realtime/redis-io.adapter"
+import { isRedisConfigured, redisOptions } from "./core/redis/redis-options"
+
+const STRICT_WINDOW_MS = 60_000
+const BILLING_WEBHOOK_PATH = /^\/api\/billing\/webhooks\//
+
+/**
+ * Shared rate-limit counters when Redis is configured. The client never queues commands while
+ * disconnected: the store sees `status !== "ready"` and fails open to in-memory limits.
+ */
+function redisRateLimitStore(): RateLimitStore | undefined {
+  if (!isRedisConfigured()) return undefined
+  const client = new Redis(
+    redisOptions({
+      enableOfflineQueue: false,
+      maxRetriesPerRequest: 1,
+      retryStrategy: (times) => Math.min(times * 500, 5_000),
+    })
+  )
+  client.on("error", () => {
+    /* logged (throttled) by the store when a request falls back */
+  })
+  return new RedisRateLimitStore(client)
+}
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule)
+  // Fail fast on an unsafe JWT secret in production (throws), warn in development.
+  jwtSecret()
 
-  // Lightweight process-local abuse protection. Use a shared Redis store when the API is scaled horizontally.
-  const requests = new Map<string, { count: number; resetAt: number }>()
-  app.use((req: any, res: any, next: any) => {
-    if (req.method === "OPTIONS") return next()
-    const key = `${req.ip}:${req.path}`
-    const now = Date.now()
-    const bucket = requests.get(key)
-    const current = !bucket || bucket.resetAt <= now ? { count: 0, resetAt: now + 60_000 } : bucket
-    current.count += 1
-    requests.set(key, current)
-    if (current.count > Number(process.env.RATE_LIMIT_PER_MINUTE || 120)) {
-      return res
-        .status(429)
-        .json({ success: false, message: "Too many requests. Please try again shortly." })
-    }
-    next()
+  // rawBody: payment webhooks (Stripe/Chapa) verify signatures over the exact request bytes;
+  // Nest keeps them on `req.rawBody` next to the parsed JSON body.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true })
+  app.enableShutdownHooks()
+  // Safety net: a client stuck reconnecting to an unreachable Redis must never block shutdown.
+  for (const signal of ["SIGTERM", "SIGINT"] as const)
+    process.once(signal, () => setTimeout(() => process.exit(0), 8_000).unref())
+
+  // Only trust X-Forwarded-For when explicitly running behind a reverse proxy.
+  if (process.env.TRUST_PROXY === "true" || process.env.TRUST_PROXY === "1") {
+    app.set("trust proxy", 1)
+  }
+
+  app.use(requestIdMiddleware)
+
+  // Security headers. The API serves JSON + uploads consumed cross-origin by the SPAs, so
+  // resources may be embedded cross-origin; Swagger UI (dev) gets a relaxed CSP.
+  const apiHelmet = helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } })
+  const docsHelmet = helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
   })
+  app.use((req: any, res: any, next: any) =>
+    (/^\/api\/docs(\/|-json|$)/.test(req.path) ? docsHelmet : apiHelmet)(req, res, next)
+  )
+
+  const strictLimit = Number(process.env.RATE_LIMIT_STRICT_PER_MINUTE || 10)
+  app.use(
+    createRateLimiter({
+      // Health probes and provider webhooks (signature-verified; providers retry on 429).
+      store: redisRateLimitStore(),
+      skip: (req) => isHealthPath(req.path) || BILLING_WEBHOOK_PATH.test(req.path),
+      windowMs: 60_000,
+      defaultLimit: Number(process.env.RATE_LIMIT_PER_MINUTE || 120),
+      rules: [
+        {
+          name: "auth",
+          limit: strictLimit,
+          windowMs: STRICT_WINDOW_MS,
+          matches: (req) => req.method === "POST" && STRICT_AUTH_PATH.test(req.path),
+        },
+        {
+          name: "apply",
+          limit: strictLimit,
+          windowMs: STRICT_WINDOW_MS,
+          matches: (req) =>
+            req.method === "POST" && /^\/api\/applications\/jobs\/[^/]+\/apply\/?$/.test(req.path),
+        },
+        {
+          name: "ai",
+          limit: Number(process.env.RATE_LIMIT_AI_PER_MINUTE || strictLimit),
+          windowMs: STRICT_WINDOW_MS,
+          // AI chat/settings plus on-demand candidate analysis (each call costs LLM tokens)
+          matches: (req) =>
+            /^\/api\/(ai\/|profile\/import-cv\/?$)/.test(req.path) ||
+            (req.method === "POST" && /^\/api\/applications\/[^/]+\/analyze\/?$/.test(req.path)),
+        },
+      ],
+    })
+  )
 
   // Global Centralized Error Filter & Logging Interceptor
   app.useGlobalFilters(new AllExceptionsFilter())
@@ -47,6 +124,8 @@ async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      // 400 VALIDATION_FAILED + per-field `fields` map for inline form errors.
+      exceptionFactory: validationException,
     })
   )
 
@@ -55,30 +134,38 @@ async function bootstrap() {
 
   // Enable CORS with support for credentials
   app.enableCors({
-    origin: (
-      process.env.CORS_ORIGINS ||
-      "http://localhost:5173,http://localhost:5174,http://localhost:5175"
-    ).split(","),
+    origin: getAllowedOrigins(),
     methods: "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
     credentials: true,
   })
 
+  // Socket.io: fan out room emits across instances through Redis when configured.
+  if (isRedisConfigured()) {
+    const ioAdapter = new RedisIoAdapter(app)
+    await ioAdapter.connectToRedis()
+    app.useWebSocketAdapter(ioAdapter)
+  }
+
   // Global API route prefix
   app.setGlobalPrefix("api")
 
-  // Swagger Documentation Setup
-  const config = new DocumentBuilder()
-    .setTitle("Hyrr API")
-    .setDescription("Unified API Documentation for Hyrr Recruiter, Seeker, and Admin dashboards")
-    .setVersion("1.0")
-    .addBearerAuth()
-    .build()
-  const document = SwaggerModule.createDocument(app, config)
-  SwaggerModule.setup("api/docs", app, document)
-
   const port = process.env.PORT || 3000
+  const swaggerEnabled =
+    process.env.NODE_ENV !== "production" || process.env.ENABLE_SWAGGER === "true"
+  if (swaggerEnabled) {
+    const config = new DocumentBuilder()
+      .setTitle("Hyrr API")
+      .setDescription("Unified API Documentation for Hyrr Recruiter, Seeker, and Admin dashboards")
+      .setVersion("1.0")
+      .addBearerAuth()
+      .build()
+    const document = SwaggerModule.createDocument(app, config)
+    SwaggerModule.setup("api/docs", app, document)
+  }
+
   await app.listen(port)
   console.log(`Application is running on: http://localhost:${port}/api`)
-  console.log(`Swagger docs are available on: http://localhost:${port}/api/docs`)
+  if (swaggerEnabled)
+    console.log(`Swagger docs are available on: http://localhost:${port}/api/docs`)
 }
 bootstrap()
