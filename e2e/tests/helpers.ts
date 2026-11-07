@@ -79,3 +79,7 @@ export async function login(page: Page, baseUrl: string, email: string) {
 export async function disconnect() {
   await prisma.$disconnect()
 }
+
+export async function setUserStatus(email: string, status: "ACTIVE" | "SUSPENDED") {
+  await prisma.user.update({ where: { email }, data: { status } })
+}

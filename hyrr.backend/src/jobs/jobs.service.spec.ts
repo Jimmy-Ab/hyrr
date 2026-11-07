@@ -779,4 +779,31 @@ describe("JobsService", () => {
       expect(prismaMock.job.findMany.mock.calls[0][0]).toMatchObject({ skip: 7, take: 100 })
     })
   })
+
+  describe("moderation removal", () => {
+    const removed = {
+      id: "job-9",
+      status: "CLOSED",
+      companyId: "co-1",
+      title: "Removed",
+      description: "D",
+      requirements: [],
+      benefits: [],
+      removedAt: new Date(),
+      removedReason: "Scam posting",
+    }
+    it("a recruiter can't reopen, edit or feature a job removed by Hyrr", async () => {
+      access.jobForManagement.mockResolvedValue(removed)
+      const recruiter = { userId: "rec-1", role: "RECRUITER" }
+      await expect(
+        service.updateJob("job-9", { status: "ACTIVE" } as any, recruiter as any)
+      ).rejects.toMatchObject({ status: 403, errorCode: "JOB_REMOVED_BY_MODERATION" })
+      await expect(
+        service.updateJob("job-9", { title: "New title" } as any, recruiter as any)
+      ).rejects.toMatchObject({ errorCode: "JOB_REMOVED_BY_MODERATION" })
+      await expect(service.featureJob("job-9", 7, recruiter as any)).rejects.toMatchObject({
+        errorCode: "JOB_REMOVED_BY_MODERATION",
+      })
+    })
+  })
 })

@@ -40,6 +40,7 @@ import {
   toScreeningQuestions,
   type DraftQuestion,
 } from "../jobs/screening-questions-editor"
+import { useCompanySuspended } from "./company-status-banner"
 
 interface Category {
   id: string
@@ -198,6 +199,7 @@ const STEPS = [
 
 export function AddJobDialog() {
   const { isAddJobOpen, setAddJobOpen, addJob, saveJobQuestions } = useJobStore()
+  const companySuspended = useCompanySuspended()
   const { toast } = useToast()
 
   const [step, setStep] = useState(0)
@@ -424,6 +426,26 @@ export function AddJobDialog() {
   }
 
   const busy = loading || savingDraft
+
+  if (companySuspended)
+    return (
+      <Dialog open={isAddJobOpen} onOpenChange={(open) => !open && setAddJobOpen(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Posting is paused</DialogTitle>
+            <DialogDescription>
+              Your company is suspended by Hyrr, so new jobs can't be posted. Check your
+              notifications for the reason, or contact support to restore access.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setAddJobOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )
 
   return (
     <Dialog open={isAddJobOpen} onOpenChange={(open) => !open && !busy && handleClose()}>

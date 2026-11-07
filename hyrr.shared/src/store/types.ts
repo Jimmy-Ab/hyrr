@@ -45,6 +45,9 @@ export interface Job {
   featuredUntil?: string | null
   /** First publish time (null = never published, so publishing will cost credits) */
   publishedAt?: string | null
+  /** Set when Hyrr moderation removed the job; it can't be edited or reopened. */
+  removedAt?: string | null
+  removedReason?: string | null
   /** Credits charged when the job was first published */
   momentumCost?: number
 }
@@ -84,6 +87,17 @@ export interface AuthUser {
   /** false until the user confirms their e-mail address */
   emailVerified: boolean
   twoFactorEnabled: boolean
+  /** Recruiters: their company's moderation state (from /auth/me; updated live). */
+  company?: AccountCompany | null
+  /** Where to direct users whose account or company is suspended. */
+  supportEmail?: string
+}
+
+export interface AccountCompany {
+  id: string
+  name: string
+  status: "VERIFIED" | "PENDING" | "SUSPENDED"
+  verified: boolean
 }
 
 export interface Candidate {
@@ -785,6 +799,12 @@ export interface JobState {
   /** Downloads a JSON export of the user's data. */
   exportMyData: () => Promise<void>
   logout: () => Promise<void>
+  /** Why the user was signed out (e.g. suspension), shown on the sign-in page. */
+  signedOutReason: string | null
+  signOutWithReason: (reason: string) => Promise<void>
+  clearSignedOutReason: () => void
+  /** Reloads company status + support e-mail from /auth/me. */
+  loadAccount: () => Promise<void>
   /** Swaps the access token (login, restore, silent refresh). Never loads workspace data. */
   setAccessToken: (token: string | null) => void
   initializeSocket: () => void

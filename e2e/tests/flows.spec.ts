@@ -9,6 +9,7 @@ import {
   RECRUITER_URL,
   SEEKER_URL,
   seekerBalance,
+  setUserStatus,
   uid,
   verifyEmail,
 } from "./helpers"
@@ -313,4 +314,15 @@ test("seeker dashboard stat cards use four different colours", async ({ page }) 
     els.slice(0, 4).map((el) => getComputedStyle(el.querySelector("svg")!).color)
   )
   expect(new Set(colours).size).toBe(4)
+})
+
+test("a suspended seeker gets a clear message at sign-in", async ({ page }) => {
+  const s = await createUser("SEEKER", "Selam")
+  await setUserStatus(s.email, "SUSPENDED")
+  await page.goto(SEEKER_URL)
+  await page.locator("#auth-email").fill(s.email)
+  await page.locator("#auth-password").fill(PASSWORD)
+  await page.locator("#auth-submit").click()
+  await expect(page.getByRole("alert").filter({ hasText: /suspended/i })).toBeVisible()
+  await expect(page.getByRole("alert").filter({ hasText: /contact/i })).toBeVisible()
 })

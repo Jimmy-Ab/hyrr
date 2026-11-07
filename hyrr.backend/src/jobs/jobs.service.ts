@@ -74,6 +74,20 @@ function salaryData(dto: {
   }
 }
 
+/** Moderation removal is final for the poster: no edits, reopening or featuring (admins may). */
+function assertNotRemoved(
+  job: { removedAt?: Date | null; removedReason?: string | null },
+  actor: Actor
+) {
+  if (job.removedAt && actor.role !== "ADMIN")
+    throw new AppException(
+      `This job was removed by Hyrr moderation${job.removedReason ? `: ${job.removedReason}` : ""}. It can't be edited or reopened.`,
+      HttpStatus.FORBIDDEN,
+      "JOB_REMOVED_BY_MODERATION",
+      { reason: job.removedReason ?? null }
+    )
+}
+
 @Injectable()
 export class JobsService {
   private readonly logger = new Logger(JobsService.name)
@@ -261,6 +275,7 @@ export class JobsService {
   // ─── Recruiter: update / close a job ─────────────────────────────
   async updateJob(jobId: string, dto: UpdateJobDto, actor: Actor) {
     const current = await this.access.jobForManagement(actor, jobId)
+    assertNotRemoved(current, actor)
     if (dto.status !== undefined && actor.role !== "ADMIN") {
       if (current.status === JobStatus.FLAGGED && dto.status !== JobStatus.FLAGGED)
         throw new AppException(
@@ -383,6 +398,7 @@ export class JobsService {
    */
   async featureJob(jobId: string, days: number | undefined, actor: Actor) {
     const current = await this.access.jobForManagement(actor, jobId)
+    assertNotRemoved(current, actor)
     if (current.status !== JobStatus.ACTIVE)
       throw new AppException(
         "Only active jobs can be featured",

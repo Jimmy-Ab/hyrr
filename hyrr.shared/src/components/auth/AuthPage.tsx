@@ -164,7 +164,8 @@ export function AuthPage({ forcedRole, initialMode = "login" }: AuthPageProps) {
   const isSeeker = forcedRole === "SEEKER"
   // Admins get the plain centred card (no marketing hero).
   const shellRole = isAdmin ? undefined : forcedRole
-  const error = localError || authError
+  const signedOutReason = useJobStore((s) => s.signedOutReason)
+  const error = localError || authError || signedOutReason
 
   if (mfaPending) {
     return (

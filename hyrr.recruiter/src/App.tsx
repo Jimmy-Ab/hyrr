@@ -19,6 +19,7 @@ import * as React from "react"
 import { AddCandidateDialog } from "./components/layout/add-candidate-dialog"
 import { AddJobDialog } from "./components/layout/add-job-dialog"
 import { CandidateDetailDialog } from "./components/layout/candidate-detail-dialog"
+import { CompanyStatusBanner } from "./components/layout/company-status-banner"
 import { Header } from "./components/layout/header"
 import { Sidebar } from "./components/layout/sidebar"
 import { pathToView, viewToPath } from "./lib/recruiter"
@@ -218,6 +219,7 @@ function AppContent() {
     <div className="flex flex-col h-dvh w-full overflow-hidden bg-bg-primary text-txt-body">
       {/* Top Header */}
       <Header onMenuClick={() => setSidebarOpen(true)} />
+      <CompanyStatusBanner />
       <EmailVerificationBanner />
 
       {/* Main Container */}

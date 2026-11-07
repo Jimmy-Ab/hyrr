@@ -138,7 +138,14 @@ export class AdminModerationService {
   private async load(jobId: string) {
     const job = await this.prisma.job.findUnique({
       where: { id: jobId },
-      select: { id: true, title: true, status: true, companyId: true, recruiterId: true },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        companyId: true,
+        recruiterId: true,
+        removedAt: true,
+      },
     })
     if (!job) throw new NotFoundAppException("Job not found", "JOB_NOT_FOUND")
     return job
@@ -147,13 +154,19 @@ export class AdminModerationService {
   /** FLAGGED → ACTIVE, pending reports dismissed, reindexed, poster notified. */
   async restore(jobId: string, note: string | undefined, ctx: AdminCtx) {
     const job = await this.load(jobId)
+    const reporterIds = await this.pendingReporterIds(jobId)
+    const wasRemoved = !!job.removedAt
     const result = await this.prisma.$transaction(async (tx) => {
+      // FLAGGED (under review) or removed by moderation → live again; the removal mark is cleared.
       const restored =
-        job.status === JobStatus.FLAGGED
+        job.status === JobStatus.FLAGGED || wasRemoved
           ? (
               await tx.job.updateMany({
-                where: { id: jobId, status: JobStatus.FLAGGED },
-                data: { status: JobStatus.ACTIVE },
+                where: {
+                  id: jobId,
+                  OR: [{ status: JobStatus.FLAGGED }, { removedAt: { not: null } }],
+                },
+                data: { status: JobStatus.ACTIVE, removedAt: null, removedReason: null },
               })
             ).count === 1
           : false
@@ -188,6 +201,11 @@ export class AdminModerationService {
         `Your job "${job.title}" was reviewed and is visible to job seekers again`,
         jobId
       )
+    await this.notifyMany(
+      reporterIds,
+      `Thanks for your report. We reviewed "${job.title}" and it stays up.`,
+      jobId
+    )
     return {
       job: { id: jobId, status: result.restored ? JobStatus.ACTIVE : job.status },
       dismissedReports: result.dismissed,
@@ -197,13 +215,31 @@ export class AdminModerationService {
   /** CLOSED, pending reports resolved, unreviewed applications refunded, poster notified. */
   async remove(jobId: string, reason: string, ctx: AdminCtx) {
     const job = await this.load(jobId)
+    const reporterIds = await this.pendingReporterIds(jobId)
     const result = await this.prisma.$transaction(async (tx) => {
-      await tx.job.update({ where: { id: jobId }, data: { status: JobStatus.CLOSED } })
+      // removedAt blocks the recruiter from reopening it (jobs.service).
+      await tx.job.update({
+        where: { id: jobId },
+        data: { status: JobStatus.CLOSED, removedAt: new Date(), removedReason: reason },
+      })
       const resolved = await tx.jobReport.updateMany({
         where: { jobId, status: "PENDING" },
         data: { status: "RESOLVED" },
       })
+      const applied = await tx.application.findMany({
+        where: { jobId, status: "APPLIED", userId: { not: null } },
+        select: { id: true },
+      })
       const refunded = await this.wallet.refundUnreviewedApplications(jobId, tx)
+      const refundRows = applied.length
+        ? await tx.creditTransaction.findMany({
+            where: { type: "REFUND", referenceId: { in: applied.map((a) => a.id) } },
+            select: { userId: true },
+          })
+        : []
+      const refundedUserIds = [
+        ...new Set(refundRows.map((r) => r.userId).filter((u): u is string => !!u)),
+      ]
       await this.audit.record(
         {
           actorId: ctx.actorId,
@@ -223,7 +259,7 @@ export class AdminModerationService {
         },
         tx
       )
-      return { resolved: resolved.count, refunded }
+      return { resolved: resolved.count, refunded, refundedUserIds }
     })
     await this.afterJobChange(jobId)
     await this.notify(
@@ -231,6 +267,12 @@ export class AdminModerationService {
       `Your job "${job.title}" was removed by Hyrr moderation. Reason: ${reason}`,
       jobId
     )
+    await this.notifyMany(
+      result.refundedUserIds,
+      `"${job.title}" was removed by Hyrr, so your application credit was refunded.`,
+      jobId
+    )
+    await this.notifyMany(reporterIds, `Thanks for your report. We removed "${job.title}".`, jobId)
     return {
       job: { id: jobId, status: JobStatus.CLOSED },
       resolvedReports: result.resolved,
@@ -241,6 +283,7 @@ export class AdminModerationService {
   /** Pending reports → DISMISSED; the job itself is unchanged. */
   async dismiss(jobId: string, note: string | undefined, ctx: AdminCtx) {
     const job = await this.load(jobId)
+    const reporterIds = await this.pendingReporterIds(jobId)
     const dismissed = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.jobReport.updateMany({
         where: { jobId, status: "PENDING" },
@@ -261,6 +304,11 @@ export class AdminModerationService {
       )
       return updated.count
     })
+    await this.notifyMany(
+      reporterIds,
+      `Thanks for your report. We reviewed "${job.title}" and it stays up.`,
+      jobId
+    )
     return { job: { id: jobId, status: job.status }, dismissedReports: dismissed }
   }
 
@@ -273,6 +321,19 @@ export class AdminModerationService {
     } catch (err: any) {
       this.logger.warn(`Post-moderation refresh failed for ${jobId}: ${err?.message}`)
     }
+  }
+
+  /** Users with a still-open report on the job (they hear the outcome). */
+  private async pendingReporterIds(jobId: string): Promise<string[]> {
+    const rows = await this.prisma.jobReport.findMany({
+      where: { jobId, status: "PENDING" },
+      select: { reporterId: true },
+    })
+    return [...new Set(rows.map((r) => r.reporterId))]
+  }
+
+  private async notifyMany(userIds: string[], title: string, jobId: string) {
+    for (const id of userIds) await this.notify(id, title, jobId)
   }
 
   private async notify(userId: string, title: string, jobId: string) {

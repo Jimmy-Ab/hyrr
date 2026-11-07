@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable, Logger } from "@nestjs/common"
+import { HttpStatus, Injectable, Logger, Optional } from "@nestjs/common"
 import { AuthTokenType, Prisma, UserRole, UserStatus } from "@prisma/client"
 import { RESET_PASSWORD_TTL_MS } from "../auth/account-email.service"
 import { newRawToken, sha256 } from "../auth/one-time-token"
@@ -6,6 +6,7 @@ import { EmailService } from "../core/delivery/email.service"
 import * as templates from "../core/delivery/templates"
 import { AppException, NotFoundAppException } from "../core/exceptions/app-exception"
 import { computeProfileStrength } from "../matching/scoring"
+import { MessagesGateway } from "../messages/messages.gateway"
 import { PrismaService } from "../prisma/prisma.service"
 import type { AdminCtx } from "./admin-moderation.service"
 import { AuditService } from "./audit.service"
@@ -45,7 +46,8 @@ export class AdminUsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
-    private readonly email: EmailService
+    private readonly email: EmailService,
+    @Optional() private readonly gateway?: MessagesGateway
   ) {}
 
   async list(filters: UserFilters, cursor?: string, limit?: number) {
@@ -146,6 +148,7 @@ export class AdminUsersService {
         tx
       )
     })
+    this.gateway?.disconnectUser(id)
     return { id, status: UserStatus.SUSPENDED }
   }
 

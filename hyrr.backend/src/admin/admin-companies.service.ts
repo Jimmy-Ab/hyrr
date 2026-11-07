@@ -1,8 +1,11 @@
 import { Injectable, Logger, Optional } from "@nestjs/common"
-import { CompanyStatus, JobStatus, Prisma } from "@prisma/client"
+import { CompanyStatus, JobStatus, NotificationType, Prisma } from "@prisma/client"
 import { WalletService } from "../billing/wallet.service"
 import { CacheService } from "../cache/cache.service"
+import { supportEmail } from "../core/config/support"
 import { NotFoundAppException } from "../core/exceptions/app-exception"
+import { MessagesGateway } from "../messages/messages.gateway"
+import { NotificationsService } from "../notifications/notifications.service"
 import { PrismaService } from "../prisma/prisma.service"
 import { SearchService } from "../search/search.service"
 import type { AdminCtx } from "./admin-moderation.service"
@@ -36,8 +39,50 @@ export class AdminCompaniesService {
     private readonly wallet: WalletService,
     private readonly audit: AuditService,
     private readonly cache: CacheService,
-    @Optional() private readonly search?: SearchService
+    @Optional() private readonly search?: SearchService,
+    @Optional() private readonly notifications?: NotificationsService,
+    @Optional() private readonly gateway?: MessagesGateway
   ) {}
+
+  /** Members of a company (member rows + legacy companyId links); `ownersOnly` → OWNERs. */
+  private async memberIds(companyId: string, ownersOnly = false): Promise<string[]> {
+    const [members, legacy] = await Promise.all([
+      this.prisma.companyMember.findMany({
+        where: { companyId, ...(ownersOnly ? { role: "OWNER" } : {}) },
+        select: { userId: true },
+      }),
+      ownersOnly
+        ? Promise.resolve([] as { id: string }[])
+        : this.prisma.user.findMany({ where: { companyId }, select: { id: true } }),
+    ])
+    const ids = [...members.map((m) => m.userId), ...legacy.map((u) => u.id)]
+    if (ownersOnly && ids.length === 0) {
+      // Legacy companies without member rows: their recruiters act as owners.
+      const users = await this.prisma.user.findMany({ where: { companyId }, select: { id: true } })
+      ids.push(...users.map((u) => u.id))
+    }
+    return [...new Set(ids)]
+  }
+
+  /** In-app + e-mail notice to the company's people, plus an optional live socket event. */
+  private async inform(
+    companyId: string,
+    title: string,
+    opts: { ownersOnly?: boolean; event?: string; data?: Record<string, any> } = {}
+  ) {
+    try {
+      const ids = await this.memberIds(companyId, opts.ownersOnly)
+      for (const id of ids)
+        await this.notifications?.createNotification(id, title, NotificationType.SYSTEM)
+      if (opts.event) {
+        const everyone = opts.ownersOnly ? await this.memberIds(companyId) : ids
+        this.gateway?.emitToUsers(everyone, opts.event, opts.data ?? {})
+      }
+    } catch (err: any) {
+      // Notices never fail the admin action.
+      console.warn(`Company notice failed for ${companyId}: ${err?.message}`)
+    }
+  }
 
   private async toItems(rows: CompanyRow[]) {
     const ids = rows.map((r) => r.id)
@@ -171,6 +216,15 @@ export class AdminCompaniesService {
       )
     })
     await this.refreshPublicJobs(id)
+    await this.inform(
+      id,
+      "Your company is now verified on Hyrr. The verified badge shows on your jobs.",
+      {
+        ownersOnly: true,
+        event: "company_verified",
+        data: { verified: true },
+      }
+    )
     return { id, verified: true, status }
   }
 
@@ -202,6 +256,11 @@ export class AdminCompaniesService {
       )
     })
     await this.refreshPublicJobs(id)
+    await this.inform(id, `The verified badge was removed from your company. Reason: ${reason}`, {
+      ownersOnly: true,
+      event: "company_verified",
+      data: { verified: false },
+    })
     return { id, verified: false, status }
   }
 
@@ -228,6 +287,11 @@ export class AdminCompaniesService {
       )
     })
     await this.refreshPublicJobs(id)
+    await this.inform(
+      id,
+      `Your company was suspended by Hyrr. Reason: ${reason}. Contact ${supportEmail()} to restore access.`,
+      { event: "company_status", data: { status: CompanyStatus.SUSPENDED, reason } }
+    )
     return { id, status: CompanyStatus.SUSPENDED }
   }
 
@@ -251,6 +315,10 @@ export class AdminCompaniesService {
       )
     })
     await this.refreshPublicJobs(id)
+    await this.inform(id, "Your company was reactivated. You can post and manage jobs again.", {
+      event: "company_status",
+      data: { status },
+    })
     return { id, status }
   }
 
@@ -286,6 +354,11 @@ export class AdminCompaniesService {
       )
       return result.balanceAfter
     })
+    await this.inform(
+      id,
+      `${amount > 0 ? `+${amount}` : amount} Momentum credits ${amount > 0 ? "added" : "removed"} by Hyrr: ${reason}`,
+      { ownersOnly: true, event: "wallet_updated", data: { balance } }
+    )
     return { balance }
   }
 

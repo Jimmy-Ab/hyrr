@@ -296,6 +296,9 @@ model Job {
   benefits      String[]
   featured      Boolean     @default(false) // currently featured (kept in sync with featuredUntil)
   featuredUntil DateTime?
+  /// Set when an admin removes the job (moderation); the recruiter can't reopen it.
+  removedAt     DateTime?
+  removedReason String?
   publishedAt   DateTime? // first time the job went live (publishing is charged once)
   remote        Boolean     @default(false)
   momentumCost  Int         @default(0) // Momentum credits charged when it was published

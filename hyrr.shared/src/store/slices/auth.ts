@@ -48,6 +48,10 @@ export type AuthSlice = Pick<
   | "regenerateRecoveryCodes"
   | "exportMyData"
   | "logout"
+  | "signedOutReason"
+  | "signOutWithReason"
+  | "clearSignedOutReason"
+  | "loadAccount"
   | "deleteAccount"
   | "setAccessToken"
   | "initializeSocket"
@@ -133,9 +137,39 @@ export const createAuthSlice: StateCreator<JobState, [], [], AuthSlice> = (set, 
   authError: null,
   socket: null,
   mfaPending: null,
+  signedOutReason: null,
+
+  signOutWithReason: async (reason) => {
+    await get().logout()
+    set({ signedOutReason: reason })
+  },
+  clearSignedOutReason: () => set({ signedOutReason: null }),
+
+  loadAccount: async () => {
+    const me = await apiFetch("/auth/me")
+    if (!me) return
+    set((state) =>
+      state.user
+        ? {
+            user: {
+              ...state.user,
+              company: me.company
+                ? {
+                    id: me.company.id,
+                    name: me.company.name,
+                    status: me.company.status,
+                    verified: !!me.company.verified,
+                  }
+                : null,
+              supportEmail: me.supportEmail || state.user.supportEmail,
+            },
+          }
+        : {}
+    )
+  },
 
   loginUser: async (email, password, captchaToken) => {
-    set({ authLoading: true, authError: null, mfaPending: null })
+    set({ authLoading: true, authError: null, mfaPending: null, signedOutReason: null })
     try {
       const data = await apiFetch("/auth/login", {
         method: "POST",

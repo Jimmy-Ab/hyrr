@@ -140,6 +140,8 @@ export function mapJob(j: any): Job {
     featured: !!j.featured,
     featuredUntil: j.featuredUntil ?? null,
     publishedAt: j.publishedAt ?? null,
+    removedAt: j.removedAt ?? null,
+    removedReason: j.removedReason ?? null,
     momentumCost: typeof j.momentumCost === "number" ? j.momentumCost : undefined,
   }
 }

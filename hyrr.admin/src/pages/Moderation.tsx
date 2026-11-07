@@ -200,7 +200,7 @@ function ModerationSheet({ jobId, onClose }: { jobId: string | null; onClose: ()
     remove: {
       title: "Remove this job?",
       description:
-        "The job is closed, its reports resolved, and seekers' unreviewed applications are refunded. The poster gets your reason by e-mail.",
+        "The job is closed and the recruiter can't reopen or edit it. Reports are resolved, seekers' unreviewed applications are refunded, and the poster, refunded seekers and reporters are notified (the poster gets your reason).",
       confirm: "Remove job",
       success: "Job removed",
       mode: "reason",

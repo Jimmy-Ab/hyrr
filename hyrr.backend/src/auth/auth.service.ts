@@ -11,6 +11,7 @@ import { CompanyMemberRole, Prisma, User, UserRole, UserStatus } from "@prisma/c
 import * as bcrypt from "bcrypt"
 import { PricingService } from "../billing/pricing.service"
 import { WalletService } from "../billing/wallet.service"
+import { supportEmail, suspendedMessage } from "../core/config/support"
 import { AppException } from "../core/exceptions/app-exception"
 import { CaptchaService } from "../core/security/captcha.service"
 import { PrismaService } from "../prisma/prisma.service"
@@ -277,6 +278,10 @@ export class AuthService {
   }
 
   private assertActive(user: { status: UserStatus }) {
+    if (user.status === UserStatus.SUSPENDED)
+      throw new AppException(suspendedMessage(), HttpStatus.FORBIDDEN, "ACCOUNT_SUSPENDED", {
+        supportEmail: supportEmail(),
+      })
     if (user.status !== UserStatus.ACTIVE) {
       throw new AppException(
         "This account is not active. Please contact support.",
@@ -289,6 +294,7 @@ export class AuthService {
   /** `tokenVersion` is the refresh token's `tv`; a mismatch means the session was revoked. */
   async refreshTokens(userId: string, tokenVersion?: number) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } })
+    if (user?.status === UserStatus.SUSPENDED) this.assertActive(user) // 403 ACCOUNT_SUSPENDED
     if (!user || user.status !== UserStatus.ACTIVE) throw new UnauthorizedException("Access denied")
     if (!tokenVersionMatches({ tv: tokenVersion }, user.tokenVersion ?? 0)) {
       throw new UnauthorizedException("Session has been revoked")
@@ -393,12 +399,14 @@ export class AuthService {
         emailVerifiedAt: true,
         twoFactorEnabled: true,
         passwordHash: true,
+        company: { select: { id: true, name: true, status: true, verified: true } },
       },
     })
     if (!user) return null
     const { emailVerifiedAt, passwordHash, ...rest } = user
     return {
       ...rest,
+      supportEmail: supportEmail(),
       emailVerified: !!emailVerifiedAt,
       // Lets the UI know whether password confirmation applies (OAuth-only accounts have none).
       hasPassword: !!passwordHash,

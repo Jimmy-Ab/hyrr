@@ -234,6 +234,38 @@ export function initializeSocket(set: StoreSet, get: StoreGet) {
     )
   })
 
+  // ── Admin actions that affect this account (see hyrr.admin) ──
+  socket.on("account_suspended", () => {
+    const email = get().user?.supportEmail
+    void get().signOutWithReason(
+      `Your account has been suspended.${email ? ` If you think this is a mistake, contact ${email}.` : ""}`
+    )
+  })
+  socket.on("company_status", (data: any) => {
+    set((state) =>
+      state.user?.company && data?.status
+        ? { user: { ...state.user, company: { ...state.user.company, status: data.status } } }
+        : {}
+    )
+  })
+  socket.on("company_verified", (data: any) => {
+    set((state) => ({
+      ...(state.user?.company
+        ? {
+            user: { ...state.user, company: { ...state.user.company, verified: !!data?.verified } },
+          }
+        : {}),
+      ...(state.companyProfile
+        ? { companyProfile: { ...state.companyProfile, verified: !!data?.verified } }
+        : {}),
+    }))
+  })
+  socket.on("wallet_updated", () => {
+    get()
+      .fetchWallet()
+      .catch(() => undefined)
+  })
+
   socket.on("notification", (data: any) => {
     const item = mapNotification(data || {})
     set((state) =>

@@ -54,6 +54,10 @@ describe("AdminModerationService", () => {
       m.search as any
     )
     m.prisma.job.findUnique.mockResolvedValue(job)
+    // New in the moderation flow: reporters + refunded seekers are looked up to be notified.
+    m.prisma.jobReport.findMany.mockResolvedValue([])
+    m.prisma.application.findMany.mockResolvedValue([])
+    m.prisma.creditTransaction.findMany.mockResolvedValue([])
     m.prisma.job.updateMany.mockResolvedValue({ count: 1 })
     m.prisma.jobReport.updateMany.mockResolvedValue({ count: 3 })
   })
@@ -61,8 +65,8 @@ describe("AdminModerationService", () => {
   it("restore: FLAGGED → ACTIVE, pending reports dismissed, reindexed, poster notified, audited", async () => {
     const res = await service.restore("job-1", "False alarm", ctx)
     expect(m.prisma.job.updateMany).toHaveBeenCalledWith({
-      where: { id: "job-1", status: "FLAGGED" },
-      data: { status: "ACTIVE" },
+      where: { id: "job-1", OR: [{ status: "FLAGGED" }, { removedAt: { not: null } }] },
+      data: { status: "ACTIVE", removedAt: null, removedReason: null },
     })
     expect(m.prisma.jobReport.updateMany).toHaveBeenCalledWith({
       where: { jobId: "job-1", status: "PENDING" },
@@ -90,7 +94,7 @@ describe("AdminModerationService", () => {
     const res = await service.remove("job-1", "Scam posting", ctx)
     expect(m.prisma.job.update).toHaveBeenCalledWith({
       where: { id: "job-1" },
-      data: { status: "CLOSED" },
+      data: { status: "CLOSED", removedAt: expect.any(Date), removedReason: expect.any(String) },
     })
     expect(m.prisma.jobReport.updateMany).toHaveBeenCalledWith({
       where: { jobId: "job-1", status: "PENDING" },
@@ -464,5 +468,37 @@ describe("admin DTOs", () => {
   it("plan seatLimit accepts null (unlimited)", async () => {
     expect(await errors(PlanUpdateDto, { seatLimit: null })).toEqual([])
     expect(await errors(PlanUpdateDto, { seatLimit: 0 })).toEqual(["seatLimit"])
+  })
+})
+
+describe("AdminModerationService notifications", () => {
+  it("remove notifies the poster, refunded seekers and reporters once each", async () => {
+    const m = setup()
+    const service = new AdminModerationService(
+      m.prisma,
+      m.wallet as any,
+      m.audit as any,
+      m.cache as any,
+      m.notifications as any,
+      m.search as any
+    )
+    m.prisma.job.findUnique.mockResolvedValue({
+      id: "job-1",
+      title: "Dev",
+      status: "ACTIVE",
+      companyId: "co-1",
+      recruiterId: "rec-1",
+      removedAt: null,
+    })
+    m.prisma.jobReport.findMany.mockResolvedValue([
+      { reporterId: "rep-1" },
+      { reporterId: "rep-1" },
+    ])
+    m.prisma.jobReport.updateMany.mockResolvedValue({ count: 2 })
+    m.prisma.application.findMany.mockResolvedValue([{ id: "a1" }, { id: "a2" }])
+    m.prisma.creditTransaction.findMany.mockResolvedValue([{ userId: "s1" }, { userId: "s2" }])
+    await service.remove("job-1", "Scam posting", { actorId: "adm", ip: "1.1.1.1" } as any)
+    const to = m.notifications.createNotification.mock.calls.map((c: any[]) => c[0])
+    expect(to.sort()).toEqual(["rec-1", "rep-1", "s1", "s2"])
   })
 })

@@ -204,12 +204,20 @@ describe("AuthService", () => {
 
     await expect(
       service.login({ email: "bad@example.com", password: "password123" })
-    ).rejects.toMatchObject({ errorCode: "ACCOUNT_INACTIVE", status: 403 })
+    ).rejects.toMatchObject({ errorCode: "ACCOUNT_SUSPENDED", status: 403 })
     expect(prismaMock.user.update).not.toHaveBeenCalled()
   })
 
-  it("refuses to refresh tokens for a non-active user", async () => {
+  it("refuses to refresh tokens for a suspended user with a clear 403 ACCOUNT_SUSPENDED", async () => {
     prismaMock.user.findUnique.mockResolvedValue({ id: "u", status: "SUSPENDED" })
+    await expect(service.refreshTokens("u")).rejects.toMatchObject({
+      status: 403,
+      errorCode: "ACCOUNT_SUSPENDED",
+    })
+  })
+
+  it("refuses to refresh tokens for a pending (inactive) user", async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ id: "u", status: "PENDING" })
     await expect(service.refreshTokens("u")).rejects.toThrow(UnauthorizedException)
   })
 

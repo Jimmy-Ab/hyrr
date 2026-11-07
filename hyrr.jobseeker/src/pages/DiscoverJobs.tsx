@@ -449,7 +449,7 @@ export function DiscoverJobs() {
       await reportJob(reportJobTarget.id, reportReason, reportDetails)
       const id = reportJobTarget.id
       setReportedIds((prev) => new Set(prev).add(id))
-      toast("Report sent", "Thanks — our team will review this job.", "success")
+      toast("Report sent", "Thanks. Our team will review it and let you know the outcome.", "success")
       setReportJobTarget(null)
     } catch (err) {
       toast("Couldn't send report", errorMessage(err, "Please try again."), "error")

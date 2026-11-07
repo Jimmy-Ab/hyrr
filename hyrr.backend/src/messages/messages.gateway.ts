@@ -206,6 +206,22 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
     ;(excludeSocketId ? target.except(excludeSocketId) : target).emit("new_message", message)
   }
 
+  /** Pushes an event to every open socket of these users (e.g. company status changes). */
+  emitToUsers(userIds: string[], event: string, data: Record<string, any>) {
+    if (!this.server || !userIds.length) return
+    this.server.to([...new Set(userIds)].map((id) => `user_${id}`)).emit(event, data)
+  }
+
+  /** Closes every open socket of a user (suspension): live updates stop immediately. */
+  disconnectUser(userId: string) {
+    try {
+      this.server?.to(`user_${userId}`).emit("account_suspended", {})
+      this.server?.in(`user_${userId}`).disconnectSockets(true)
+    } catch {
+      // sockets are optional
+    }
+  }
+
   /** Emits once per socket to the union of the given rooms. */
   emitToRooms(rooms: string[], event: string, data: Record<string, any>) {
     if (!this.server || !rooms.length) return

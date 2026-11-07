@@ -117,6 +117,18 @@ export async function apiFetch(path: string, options: RequestOptions = {}): Prom
         credentials: "include",
       })
       if (!refreshResponse.ok) {
+        const body = await refreshResponse.json().catch(() => null)
+        if (refreshResponse.status === 403 && body?.errorCode === "ACCOUNT_SUSPENDED") {
+          const suspended = new ApiError({
+            status: 403,
+            errorCode: "ACCOUNT_SUSPENDED",
+            message: body.message || "Your account has been suspended.",
+            details: body.details,
+          })
+          processQueue(suspended, null)
+          await useJobStore.getState().signOutWithReason(suspended.message)
+          throw suspended
+        }
         throw new ApiError({
           status: 401,
           errorCode: "SESSION_EXPIRED",

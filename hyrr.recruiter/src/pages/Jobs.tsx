@@ -323,41 +323,61 @@ export function Jobs() {
                 </p>
               )}
 
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => setEditingJob(selectedJob)}
-                  className="gap-1.5"
+              {selectedJob.removedAt && (
+                <div
+                  role="note"
+                  className="tone-rose rounded-xl border border-[var(--tone-ring)] bg-[var(--tone-bg)] p-3 text-[13px] text-txt-heading"
                 >
-                  <Pencil className="w-3.5 h-3.5" />
-                  Edit
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={statusBusy || isFlaggedJob(selectedJob)}
-                  title={isFlaggedJob(selectedJob) ? FLAGGED_JOB_TOOLTIP : undefined}
-                  onClick={() =>
-                    // Publishing a draft spends credits: confirm the cost first.
-                    selectedJob.status === "Draft"
-                      ? setPublishingJob(selectedJob)
-                      : handleToggleStatus(selectedJob)
-                  }
-                  className="gap-1.5"
-                >
-                  {statusBusy ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Power className="w-3.5 h-3.5" />
+                  <p className="font-semibold text-[var(--tone-fg)]">Removed by Hyrr moderation</p>
+                  {selectedJob.removedReason && (
+                    <p className="mt-0.5">Reason: {selectedJob.removedReason}</p>
                   )}
-                  {selectedJob.status === "Active"
-                    ? "Close job"
-                    : selectedJob.status === "Draft"
-                      ? "Publish job"
-                      : "Reopen job"}
-                </Button>
-                {selectedJob.status === "Active" && (
+                  <p className="mt-1 text-txt-caption">
+                    This job can't be edited or reopened. You can still review its existing
+                    applicants.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                {!selectedJob.removedAt && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setEditingJob(selectedJob)}
+                    className="gap-1.5"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    Edit
+                  </Button>
+                )}
+                {!selectedJob.removedAt && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={statusBusy || isFlaggedJob(selectedJob)}
+                    title={isFlaggedJob(selectedJob) ? FLAGGED_JOB_TOOLTIP : undefined}
+                    onClick={() =>
+                      // Publishing a draft spends credits: confirm the cost first.
+                      selectedJob.status === "Draft"
+                        ? setPublishingJob(selectedJob)
+                        : handleToggleStatus(selectedJob)
+                    }
+                    className="gap-1.5"
+                  >
+                    {statusBusy ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Power className="w-3.5 h-3.5" />
+                    )}
+                    {selectedJob.status === "Active"
+                      ? "Close job"
+                      : selectedJob.status === "Draft"
+                        ? "Publish job"
+                        : "Reopen job"}
+                  </Button>
+                )}
+                {selectedJob.status === "Active" && !selectedJob.removedAt && (
                   <Button
                     size="sm"
                     variant="secondary"
