@@ -1,4 +1,6 @@
 import {
+  APP_HEADER_CLASS,
+  BrandMark,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -14,17 +16,7 @@ import { useEffect, useState } from "react"
 import { queryClient } from "../../lib/api"
 import { Avatar } from "../ui/common"
 
-export function HyrrIcon({ size = 32 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 36 36" fill="none" aria-hidden="true">
-      <rect width="36" height="36" rx="10" fill="#6C63FF" />
-      <rect x="8" y="9" width="4" height="18" rx="2" fill="white" />
-      <rect x="24" y="9" width="4" height="18" rx="2" fill="white" />
-      <rect x="8" y="15.5" width="20" height="4" rx="2" fill="white" />
-      <circle cx="28.5" cy="8.5" r="3" fill="#FFB547" />
-    </svg>
-  )
-}
+export { HyrrIcon } from "hyrr.shared"
 
 function usePrefersDark() {
   const [prefersDark, setPrefersDark] = useState(
@@ -64,7 +56,7 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const name = user?.name || user?.email || "Admin"
 
   return (
-    <header className="glass relative z-30 flex h-[64px] shrink-0 select-none items-center justify-between gap-3 border-b border-bg-border/70 px-4 md:px-6">
+    <header className={`${APP_HEADER_CLASS} justify-between`}>
       <div className="flex shrink-0 items-center gap-2 md:gap-3">
         {onMenuClick && (
           <button
@@ -76,11 +68,7 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
             <Menu className="h-5 w-5" />
           </button>
         )}
-        <HyrrIcon size={30} />
-        <span className="text-[15px] font-bold text-txt-title">HYRR</span>
-        <span className="tone-violet rounded-full bg-[var(--tone-bg)] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--tone-fg)] ring-1 ring-[var(--tone-ring)]">
-          Admin
-        </span>
+        <BrandMark app="Admin" tone="violet" />
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">

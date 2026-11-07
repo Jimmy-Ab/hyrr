@@ -1,28 +1,7 @@
 import { z } from "zod"
 
 /** Mirrors the backend DTO: a reason of 3..500 characters for destructive / monetary actions. */
-export const reasonSchema = z.object({
-  reason: z
-    .string()
-    .trim()
-    .min(3, "Give a reason of at least 3 characters")
-    .max(500, "Keep the reason under 500 characters"),
-})
-
-export const noteSchema = z.object({
-  note: z.string().trim().max(500, "Keep the note under 500 characters").optional(),
-})
-
-export const creditAdjustmentSchema = z.object({
-  amount: z
-    .number({ error: "Enter a whole number of credits" })
-    .int("Enter a whole number of credits")
-    .min(-100000, "At most 100,000 credits at a time")
-    .max(100000, "At most 100,000 credits at a time")
-    .refine((n) => n !== 0, "Amount can't be zero"),
-  reason: reasonSchema.shape.reason,
-})
-
+export { creditAdjustmentSchema, noteSchema, reasonSchema } from "hyrr.shared"
 const cost = (label: string) =>
   z
     .number({ error: `${label} must be a number` })

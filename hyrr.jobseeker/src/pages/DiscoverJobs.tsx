@@ -20,6 +20,7 @@ import {
   Input,
   JOB_REPORT_REASONS,
   JOB_TYPES,
+  PageHeader,
   RichTextRenderer,
   VerifiedBadge,
   errorMessage,
@@ -43,6 +44,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock,
+  Compass,
   DollarSign,
   Flag,
   Globe,
@@ -449,7 +451,11 @@ export function DiscoverJobs() {
       await reportJob(reportJobTarget.id, reportReason, reportDetails)
       const id = reportJobTarget.id
       setReportedIds((prev) => new Set(prev).add(id))
-      toast("Report sent", "Thanks. Our team will review it and let you know the outcome.", "success")
+      toast(
+        "Report sent",
+        "Thanks. Our team will review it and let you know the outcome.",
+        "success"
+      )
       setReportJobTarget(null)
     } catch (err) {
       toast("Couldn't send report", errorMessage(err, "Please try again."), "error")
@@ -480,14 +486,13 @@ export function DiscoverJobs() {
       <div className="ambient-glow-1" />
       <div className="ambient-glow-2" />
 
-      <div className="relative z-10">
-        <h1 className="text-[28px] sm:text-[36px] font-extrabold tracking-tight">
-          <span className="premium-gradient-text text-glow">Discover Jobs</span>
-        </h1>
-        <p className="text-body text-txt-body mt-1 font-semibold opacity-90">
-          Find your next opportunity from {publicJobs.length} open roles across top companies.
-        </p>
-      </div>
+      <PageHeader
+        icon={Compass}
+        tone="blue"
+        title="Discover Jobs"
+        subtitle={`Find your next opportunity from ${publicJobs.length} open roles.`}
+        className="relative z-10"
+      />
 
       {/* For you / All jobs + saved searches */}
       <div className="relative z-10 flex flex-wrap items-center justify-between gap-3">

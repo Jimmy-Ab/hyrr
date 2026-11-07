@@ -134,7 +134,7 @@ export function CandidateDetailDialog() {
       open={!!selectedCandidateId}
       onOpenChange={(open) => !open && setSelectedCandidateId(null)}
     >
-      <DialogContent className="max-w-2xl overflow-hidden p-0 rounded-[20px] bg-bg-secondary border border-bg-border/60 shadow-floating flex flex-col max-h-[90vh]">
+      <DialogContent variant="sheet" className="flex flex-col p-0">
         {/* Banner with profile summary */}
         <div className="relative p-4 sm:p-6 pr-12 bg-gradient-to-r from-primary-light/50 via-primary-light/20 to-transparent flex flex-col sm:flex-row gap-4 sm:gap-5 border-b border-bg-border/40 shrink-0">
           <img

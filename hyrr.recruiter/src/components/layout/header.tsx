@@ -1,4 +1,6 @@
 import {
+  APP_HEADER_CLASS,
+  BrandMark,
   Button,
   Dialog,
   DialogContent,
@@ -44,26 +46,6 @@ import {
 } from "../../lib/recruiter"
 import { useJobStore } from "../../store/useJobStore"
 import { ConfirmDialog } from "./confirm-dialog"
-
-/** HYRR custom brand icon — geometric "H" monogram with accent mark */
-function HyrrIcon({ size = 36 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 36 36"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <rect width="36" height="36" rx="10" fill="#7C5CFC" />
-      <rect x="8" y="9" width="4" height="18" rx="2" fill="white" />
-      <rect x="24" y="9" width="4" height="18" rx="2" fill="white" />
-      <rect x="8" y="15.5" width="20" height="4" rx="2" fill="white" />
-      <circle cx="28.5" cy="8.5" r="3" fill="#FFB547" />
-    </svg>
-  )
-}
 
 type InviteRole = "RECRUITER" | "HIRING_MANAGER" | "VIEWER"
 
@@ -346,7 +328,7 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
     run(() => setTheme(isDark ? "light" : "dark"), null, "Could not save theme")
 
   return (
-    <header className="glass relative z-30 h-[68px] border-b border-bg-border/70 flex items-center justify-between gap-3 px-4 md:px-6 select-none shrink-0">
+    <header className={`${APP_HEADER_CLASS} justify-between`}>
       {/* ─── Left: Menu + Logo ─── */}
       <div className="flex items-center gap-2 md:gap-3 shrink-0">
         <button
@@ -357,8 +339,7 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
         >
           <Menu className="w-5 h-5" />
         </button>
-        <HyrrIcon size={32} />
-        <span className="hidden sm:inline font-bold text-txt-title text-[15px]">HYRR</span>
+        <BrandMark app="Recruiter" tone="blue" />
       </div>
 
       {/* ─── Centre: Search ─── */}

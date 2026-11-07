@@ -1,12 +1,21 @@
 import {
   Card,
   notificationConversationId,
+  PageHeader,
   stageTone,
   StatCard,
   toneClass,
   type Tone,
 } from "hyrr.shared"
-import { ArrowUpRight, Briefcase, Calendar, CheckSquare, TrendingUp, Users } from "lucide-react"
+import {
+  ArrowUpRight,
+  Briefcase,
+  Calendar,
+  CheckSquare,
+  LayoutDashboard,
+  TrendingUp,
+  Users,
+} from "lucide-react"
 import { JobFilter, useApplicantCounts } from "../components/jobs/job-filter"
 import { isRecruiterView } from "../lib/recruiter"
 import { useJobStore } from "../store/useJobStore"
@@ -121,18 +130,13 @@ export function Dashboard() {
       <div className="ambient-glow-2" />
 
       {/* Header */}
-      <div className="relative z-10">
-        <h1 className="text-[28px] md:text-[36px] font-extrabold tracking-tight">
-          <span className="premium-gradient-text text-glow">
-            {greeting}, {firstName}
-          </span>{" "}
-          👋
-        </h1>
-        <p className="text-body text-txt-body mt-1 font-semibold opacity-90">
-          {activeJobs} active opening{activeJobs !== 1 ? "s" : ""} · {totalCandidates} candidates in
-          pipeline
-        </p>
-      </div>
+      <PageHeader
+        icon={LayoutDashboard}
+        tone="violet"
+        title={`${greeting}, ${firstName} 👋`}
+        subtitle={`${activeJobs} active opening${activeJobs !== 1 ? "s" : ""} · ${totalCandidates} candidates in pipeline`}
+        className="relative z-10"
+      />
 
       <JobFilter id="dashboard" counts={counts} total={total} className="relative z-10" />
 

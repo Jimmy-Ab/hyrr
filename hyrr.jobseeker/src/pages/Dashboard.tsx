@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   Card,
+  PageHeader,
   StatCard,
   VerifiedBadge,
   stageTone,
@@ -15,6 +16,7 @@ import {
   Calendar,
   CalendarCheck,
   CheckCircle2,
+  Home,
   Star,
   TrendingUp,
   Trophy,
@@ -118,13 +120,8 @@ export function CandidateDashboard() {
 
       {/* Greeting */}
       <div className="relative z-10">
-        <h1 className="text-[28px] sm:text-[36px] font-extrabold tracking-tight">
-          <span className="premium-gradient-text text-glow">
-            {greeting}, {firstName}
-          </span>{" "}
-          👋
-        </h1>
-        <p className="text-body text-txt-body mt-1 font-semibold opacity-90">
+        <PageHeader icon={Home} tone="violet" title={`${greeting}, ${firstName} 👋`} />
+        <p className="text-body text-txt-body mt-1 font-medium sm:pl-[62px]">
           You have {inProcess} active application{inProcess !== 1 ? "s" : ""} in progress
           {offers > 0
             ? ` and ${offers} offer${offers !== 1 ? "s" : ""} waiting for your decision`

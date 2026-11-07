@@ -1,4 +1,6 @@
 import {
+  APP_HEADER_CLASS,
+  BrandMark,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -80,7 +82,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   }, [])
 
   return (
-    <div className="glass relative z-30 h-12 border-b border-bg-border/70 flex items-center gap-2 px-3 sm:px-5 select-none shrink-0 animate-in fade-in duration-200">
+    <header className={APP_HEADER_CLASS}>
       <button
         type="button"
         onClick={onMenuClick}
@@ -90,6 +92,7 @@ export function Header({ onMenuClick }: HeaderProps) {
       >
         <Menu className="h-4 w-4" />
       </button>
+      <BrandMark app="Careers" tone="violet" className="mr-2" />
       {/* Center: Search */}
       <div
         className={`relative min-w-0 flex-1 lg:mx-auto lg:flex-none lg:w-full max-w-[330px] transition-all ${searchFocused ? "lg:max-w-md" : ""}`}
@@ -247,6 +250,6 @@ export function Header({ onMenuClick }: HeaderProps) {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-    </div>
+    </header>
   )
 }

@@ -278,7 +278,7 @@ function EventDetailsDialog({
 }) {
   return (
     <Dialog open={!!event} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent variant="sheet" className="max-w-md overflow-y-auto">
         {event && (
           <>
             <DialogHeader>

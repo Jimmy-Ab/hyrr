@@ -326,3 +326,31 @@ test("a suspended seeker gets a clear message at sign-in", async ({ page }) => {
   await expect(page.getByRole("alert").filter({ hasText: /suspended/i })).toBeVisible()
   await expect(page.getByRole("alert").filter({ hasText: /contact/i })).toBeVisible()
 })
+
+test("seeker and recruiter apps share the same shell", async ({ browser }) => {
+  const sizes: { header: number; sidebar: number; badge: string }[] = []
+  for (const [url, role] of [
+    [SEEKER_URL, "SEEKER"],
+    [RECRUITER_URL, "RECRUITER"],
+  ] as const) {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1400, height: 900 } })
+    ).newPage()
+    const u = await createUser(role, role === "SEEKER" ? "Tigist" : "Yonas")
+    await login(page, url, u.email)
+    const header = page.locator("header.glass").first()
+    await expect(header).toBeVisible()
+    const box = await header.boundingBox()
+    const nav = await page.locator("aside").first().boundingBox()
+    sizes.push({
+      header: Math.round(box!.height),
+      sidebar: Math.round(nav!.width),
+      badge: (await header.textContent()) ?? "",
+    })
+  }
+  expect(sizes[0].header).toBe(64)
+  expect(sizes[1].header).toBe(64)
+  expect(sizes[0].sidebar).toBe(sizes[1].sidebar)
+  expect(sizes[0].badge).toContain("HYRR")
+  expect(sizes[1].badge).toContain("HYRR")
+})

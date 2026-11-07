@@ -23,21 +23,45 @@ const DialogOverlay = React.forwardRef<
 ))
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
+/**
+ * `variant="sheet"`: the same dialog as a full-height panel sliding in from the right — used for
+ * detail views (candidate, application, job) so all three apps open details the same way.
+ */
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { variant?: "center" | "sheet" }
+>(({ className, children, variant = "center", ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div
+      className={cn(
+        "fixed inset-0 z-50 flex",
+        variant === "sheet" ? "items-stretch justify-end" : "items-center justify-center p-4"
+      )}
+    >
       <DialogPrimitive.Content asChild ref={ref} {...props}>
         <motion.div
-          initial={{ opacity: 0, scale: 0.965, y: 10, filter: "blur(6px)" }}
-          animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
-          exit={{ opacity: 0, scale: 0.98, y: 6, filter: "blur(4px)" }}
+          initial={
+            variant === "sheet"
+              ? { opacity: 0, x: 48 }
+              : { opacity: 0, scale: 0.965, y: 10, filter: "blur(6px)" }
+          }
+          animate={
+            variant === "sheet"
+              ? { opacity: 1, x: 0 }
+              : { opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }
+          }
+          exit={
+            variant === "sheet"
+              ? { opacity: 0, x: 32 }
+              : { opacity: 0, scale: 0.98, y: 6, filter: "blur(4px)" }
+          }
           transition={{ duration: 0.34, ease: [0.16, 1, 0.3, 1] }}
           className={cn(
-            "relative w-full max-w-lg overflow-hidden border border-bg-border bg-bg-secondary p-6 rounded-card shadow-floating focus:outline-none z-50",
+            "relative w-full overflow-hidden border border-bg-border bg-bg-secondary shadow-floating focus:outline-none z-50",
+            variant === "sheet"
+              ? "h-full max-w-[640px] rounded-l-[24px] border-y-0 border-r-0 p-6"
+              : "max-w-lg p-6 rounded-card",
             className
           )}
         >

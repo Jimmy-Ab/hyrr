@@ -6,11 +6,21 @@ import {
   errorMessage,
   FieldError,
   Input,
+  PageHeader,
   useJobStore,
   useToast,
   type UserTheme,
 } from "hyrr.shared"
-import { Bell, Globe, Loader2, Lock, Palette, Shield, User } from "lucide-react"
+import {
+  Bell,
+  Globe,
+  Loader2,
+  Lock,
+  Palette,
+  Settings as SettingsIcon,
+  Shield,
+  User,
+} from "lucide-react"
 import { useEffect, useState } from "react"
 
 type Tab = "General" | "Account" | "Security" | "Notifications" | "Appearance" | "Privacy"
@@ -441,14 +451,12 @@ export function SettingsPage() {
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300 relative">
-      <div>
-        <h1 className="text-[28px] sm:text-[36px] font-extrabold tracking-tight">
-          <span className="premium-gradient-text text-glow">Settings</span>
-        </h1>
-        <p className="text-body text-txt-body mt-1 font-medium">
-          Manage your account, security, and preferences.
-        </p>
-      </div>
+      <PageHeader
+        icon={SettingsIcon}
+        tone="slate"
+        title="Settings"
+        subtitle="Manage your account, security and preferences."
+      />
 
       <div className="flex flex-col lg:flex-row gap-4 lg:gap-6">
         {/* Tab list */}

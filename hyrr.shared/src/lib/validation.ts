@@ -336,3 +336,27 @@ export const monthOf = (value: string | null | undefined) => {
 }
 export const toMonth = (year: number | null, month: number | null) =>
   year && month ? `${year}-${String(month).padStart(2, "0")}` : ""
+
+// ─── Reason / note / credit adjustment (admin actions, confirm dialogs) ───
+
+export const reasonSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(3, "Give a reason of at least 3 characters")
+    .max(500, "Keep the reason under 500 characters"),
+})
+
+export const noteSchema = z.object({
+  note: z.string().trim().max(500, "Keep the note under 500 characters").optional(),
+})
+
+export const creditAdjustmentSchema = z.object({
+  amount: z
+    .number({ error: "Enter a whole number of credits" })
+    .int("Enter a whole number of credits")
+    .min(-100000, "At most 100,000 credits at a time")
+    .max(100000, "At most 100,000 credits at a time")
+    .refine((n) => n !== 0, "Amount can't be zero"),
+  reason: reasonSchema.shape.reason,
+})

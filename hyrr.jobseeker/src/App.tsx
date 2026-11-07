@@ -239,11 +239,11 @@ function AppContent() {
   }
 
   return (
-    <div className="flex h-dvh w-full overflow-hidden bg-bg-primary text-txt-body">
-      <Sidebar open={navOpen} onClose={() => setNavOpen(false)} />
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <EmailVerificationBanner />
-        <Header onMenuClick={() => setNavOpen(true)} />
+    <div className="flex h-dvh w-full flex-col overflow-hidden bg-bg-primary text-txt-body">
+      <EmailVerificationBanner />
+      <Header onMenuClick={() => setNavOpen(true)} />
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <Sidebar open={navOpen} onClose={() => setNavOpen(false)} />
         <main
           ref={setMainEl}
           className="app-canvas flex-1 overflow-y-auto overflow-x-hidden p-4 lg:p-5"

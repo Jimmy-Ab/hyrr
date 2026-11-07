@@ -1,2 +1,2 @@
-/** Categorical chart slots, fixed order (validated palette in index.css). */
-export const CHART = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)"]
+// Moved to hyrr.shared (lib/chart.ts); re-exported so admin imports stay stable.
+export { CHART } from "hyrr.shared"

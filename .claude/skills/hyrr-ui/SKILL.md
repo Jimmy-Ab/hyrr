@@ -76,3 +76,10 @@ Follow the `hyrr-validation` skill: zod rules from `hyrr.shared` (same as the ba
 - Components (`components/ui/tone.tsx`): `StatCard` (every metric tile; four tiles = four different tones), `IconTile`, `TonePill` (statuses), `FilterChips` (filters with counts + sliding highlight), `PageHeader` (every page title). `EmptyState` takes a `tone`.
 - Recruiter pages that list job-related data show `JobFilter` (`hyrr.recruiter/src/components/jobs/job-filter.tsx`): bound to the store's `selectedJobId`, synced to `?job=`, shared across Board, List, Dashboard, Calendar, Messages and Analytics.
 - Call hooks (e.g. `useApplicantCounts`) before any early return; `npm run lint:hooks` enforces it.
+
+## Shell and patterns (all three apps look the same)
+- Header: `APP_HEADER_CLASS` (64 px frosted bar, full width above the sidebar) with `<BrandMark app="Recruiter|Careers|Admin" />`; sidebar 260 px with the sliding `ActiveIndicator`.
+- Details open as a side panel: `<DialogContent variant="sheet">` (or `SideSheet` with `SheetSection`/`KeyValues` for read-heavy panels). Centered dialogs are for short forms and confirmations.
+- Lists/tables/metrics/charts from hyrr.shared: `DataTable`, `RowButton`, `SearchBox`, `Avatar`, `StatusDot`, `Delta`, `Sparkline`, `LoadingRows`, `ErrorBlock`, `LoadMore`, `ChartCard`/`TrendChart`/`BarsChart`/`RankedBars` (+ `downloadCsv`), formatting helpers in `lib/format`.
+- Destructive or monetary actions: `ConfirmDialog`/`ActionConfirm`; when a reason is required, `ReasonDialog` (zod `reasonSchema`).
+- Page titles: `PageHeader` only (no gradient-text titles).
