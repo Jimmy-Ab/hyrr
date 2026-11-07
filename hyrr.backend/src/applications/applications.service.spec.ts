@@ -33,6 +33,9 @@ describe("ApplicationsService", () => {
 
   beforeEach(async () => {
     prismaMock = mockDeep<PrismaClient>()
+    // Apply looks the job up with findFirst + PUBLIC_JOB_WHERE; tests stub findUnique.
+    prismaMock.job.findFirst.mockImplementation(((args: any) =>
+      prismaMock.job.findUnique(args)) as any)
     // Interactive transactions run against the same mock; batch transactions resolve the array.
     prismaMock.$transaction.mockImplementation((arg: any) =>
       typeof arg === "function" ? arg(prismaMock) : Promise.all(arg)
@@ -105,11 +108,16 @@ describe("ApplicationsService", () => {
       expect(ai.scoreApplication).toHaveBeenCalledWith("app-123")
     })
 
-    it("returns 404 JOB_NOT_FOUND for a non-ACTIVE job", async () => {
-      prismaMock.job.findUnique.mockResolvedValue({ ...activeJob, status: "CLOSED" })
+    it("returns 404 JOB_NOT_FOUND for a job that isn't public (not ACTIVE or company suspended)", async () => {
+      // The query filters by PUBLIC_JOB_WHERE, so a closed job or suspended company yields null.
+      prismaMock.job.findUnique.mockResolvedValue(null)
       await expect(service.applyToJob("job-1", applyDto, null)).rejects.toMatchObject({
         status: 404,
         errorCode: "JOB_NOT_FOUND",
+      })
+      expect(prismaMock.job.findFirst.mock.calls[0][0]?.where).toMatchObject({
+        status: "ACTIVE",
+        company: { status: { not: "SUSPENDED" } },
       })
       expect(prismaMock.application.create).not.toHaveBeenCalled()
     })

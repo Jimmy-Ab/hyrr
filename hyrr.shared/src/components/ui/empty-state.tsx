@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react"
 import * as React from "react"
+import { toneClass, type Tone } from "../../lib/tones"
 import { cn } from "../../lib/utils"
 
 interface EmptyStateProps {
@@ -8,9 +9,18 @@ interface EmptyStateProps {
   description: string
   action?: React.ReactNode
   className?: string
+  /** Icon colour family (default violet). */
+  tone?: Tone
 }
 
-export function EmptyState({ icon: Icon, title, description, action, className }: EmptyStateProps) {
+export function EmptyState({
+  icon: Icon,
+  title,
+  description,
+  action,
+  className,
+  tone = "violet",
+}: EmptyStateProps) {
   return (
     <div
       className={cn(
@@ -18,8 +28,13 @@ export function EmptyState({ icon: Icon, title, description, action, className }
         className
       )}
     >
-      <div className="rounded-full bg-primary-light p-4 mb-4 border border-primary-border shrink-0">
-        <Icon className="w-8 h-8 text-primary stroke-[1.8]" />
+      <div
+        className={cn(
+          toneClass(tone),
+          "relative mb-4 shrink-0 rounded-[18px] bg-[var(--tone-bg)] p-4 ring-1 ring-[var(--tone-ring)] shadow-[0_10px_30px_-10px_var(--tone-glow)] animate-rise"
+        )}
+      >
+        <Icon className="h-8 w-8 stroke-[1.8] text-[var(--tone-fg)]" />
       </div>
       <h3 className="text-card-title font-semibold text-txt-heading mb-1">{title}</h3>
       <p className="text-body text-txt-body max-w-xs mb-5 leading-relaxed">{description}</p>

@@ -69,7 +69,7 @@ services:
       # profile, e.g. `QUEUE_WORKER=false docker compose --profile worker up --scale worker=2`.
       # With Redis, rate limits and socket.io events are shared across all instances.
       QUEUE_WORKER: ${QUEUE_WORKER:-true}
-      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:3000}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:${BACKEND_PORT:-3000}}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:5174,http://localhost:5175}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5174}
       UPLOAD_DIR: /app/uploads
@@ -84,7 +84,8 @@ services:
       # ./hyrr.backend/.env (env_file above), see hyrr.backend/.env.example. They are deliberately
       # NOT repeated here: an `environment:` entry, even an empty one, overrides the env_file value.
     ports:
-      - "3000:3000"
+      # Host port is configurable (BACKEND_PORT) in case 3000 is taken on your machine.
+      - "${BACKEND_PORT:-3000}:3000"
     volumes:
       - uploads_data:/app/uploads
     depends_on:
@@ -153,13 +154,29 @@ services:
       context: .
       dockerfile: hyrr.recruiter/Dockerfile
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000/api}
-        VITE_SOCKET_URL: ${VITE_SOCKET_URL:-http://localhost:3000}
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:${BACKEND_PORT:-3000}/api}
+        VITE_SOCKET_URL: ${VITE_SOCKET_URL:-http://localhost:${BACKEND_PORT:-3000}}
         VITE_TURNSTILE_SITE_KEY: ${VITE_TURNSTILE_SITE_KEY:-}
         VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
     container_name: hyrr_recruiter
     ports:
       - "5173:5173"
+    depends_on:
+      - backend
+
+  # ─── Admin SPA (sign-in needs an admin account: npm run admin:create) ─────────
+  admin:
+    build:
+      context: .
+      dockerfile: hyrr.admin/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:${BACKEND_PORT:-3000}/api}
+        VITE_SOCKET_URL: ${VITE_SOCKET_URL:-http://localhost:${BACKEND_PORT:-3000}}
+        VITE_TURNSTILE_SITE_KEY: ${VITE_TURNSTILE_SITE_KEY:-}
+        VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
+    container_name: hyrr_admin
+    ports:
+      - "5175:5175"
     depends_on:
       - backend
 
@@ -169,8 +186,8 @@ services:
       context: .
       dockerfile: hyrr.jobseeker/Dockerfile
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000/api}
-        VITE_SOCKET_URL: ${VITE_SOCKET_URL:-http://localhost:3000}
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:${BACKEND_PORT:-3000}/api}
+        VITE_SOCKET_URL: ${VITE_SOCKET_URL:-http://localhost:${BACKEND_PORT:-3000}}
         VITE_TURNSTILE_SITE_KEY: ${VITE_TURNSTILE_SITE_KEY:-}
         VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}
     container_name: hyrr_jobseeker

@@ -1,25 +1,52 @@
-import { AnimatedNumber, Card, notificationConversationId } from "hyrr.shared"
-import { ArrowUpRight, Briefcase, Calendar, CheckSquare, TrendingUp, Users } from "lucide-react"
+import {
+  Card,
+  notificationConversationId,
+  PageHeader,
+  stageTone,
+  StatCard,
+  toneClass,
+  type Tone,
+} from "hyrr.shared"
+import {
+  ArrowUpRight,
+  Briefcase,
+  Calendar,
+  CheckSquare,
+  LayoutDashboard,
+  TrendingUp,
+  Users,
+} from "lucide-react"
+import { JobFilter, useApplicantCounts } from "../components/jobs/job-filter"
 import { isRecruiterView } from "../lib/recruiter"
 import { useJobStore } from "../store/useJobStore"
 
-const statsAccents = [
-  "accent-card-primary",
-  "accent-card-blue",
-  "accent-card-orange",
-  "accent-card-green",
-]
-
 export function Dashboard() {
-  const { candidates, jobs, notifications, setActiveView, openConversation, events, user } =
-    useJobStore()
+  const {
+    candidates: allCandidates,
+    jobs,
+    notifications,
+    setActiveView,
+    openConversation,
+    events,
+    user,
+    selectedJobId,
+  } = useJobStore()
+  const { counts, total } = useApplicantCounts()
 
+  // The job filter scopes the numbers below to one posting.
+  const candidates = selectedJobId
+    ? allCandidates.filter((c) => c.jobId === selectedJobId)
+    : allCandidates
+  const scopedIds = new Set(candidates.map((c) => c.id))
   const totalCandidates = candidates.length
   const activeJobs = jobs.filter((j) => j.status === "Active").length
   const offersSent = candidates.filter((c) => c.status === "Offer").length
   const now = Date.now()
   const interviewsCount = events.filter(
-    (e) => e.type === "interview" && new Date(e.startTime).getTime() >= now
+    (e) =>
+      e.type === "interview" &&
+      new Date(e.startTime).getTime() >= now &&
+      (!selectedJobId || (!!e.applicationId && scopedIds.has(e.applicationId)))
   ).length
 
   const greeting = (() => {
@@ -30,48 +57,68 @@ export function Dashboard() {
   })()
   const firstName = user?.name?.split(" ")[0] || "there"
 
-  const stats = [
-    { title: "Total Candidates", value: totalCandidates, icon: Users, caption: "in pipeline" },
+  const stats: {
+    title: string
+    value: number
+    icon: typeof Users
+    caption: string
+    tone: Tone
+    go: () => void
+  }[] = [
+    {
+      title: "Total Candidates",
+      value: totalCandidates,
+      icon: Users,
+      caption: "in pipeline",
+      tone: "blue",
+      go: () => setActiveView("Candidates"),
+    },
     {
       title: "Active Openings",
       value: activeJobs,
       icon: Briefcase,
       caption: `of ${jobs.length} jobs`,
+      tone: "teal",
+      go: () => setActiveView("Jobs"),
     },
-    { title: "Interviews Booked", value: interviewsCount, icon: Calendar, caption: "upcoming" },
-    { title: "Offers Sent", value: offersSent, icon: CheckSquare, caption: "at offer stage" },
+    {
+      title: "Interviews Booked",
+      value: interviewsCount,
+      icon: Calendar,
+      caption: "upcoming",
+      tone: "violet",
+      go: () => setActiveView("Calendar"),
+    },
+    {
+      title: "Offers Sent",
+      value: offersSent,
+      icon: CheckSquare,
+      caption: "at offer stage",
+      tone: "emerald",
+      go: () => setActiveView("Applications"),
+    },
   ]
 
   const pipeline = [
     {
       label: "Applied",
       count: candidates.filter((c) => c.status === "Applied").length,
-      color: "bg-sec-blue",
-      glow: "rgba(59,127,245,0.3)",
     },
     {
       label: "In Process",
       count: candidates.filter((c) => c.status === "In Process").length,
-      color: "bg-sec-orange",
-      glow: "rgba(196,127,0,0.3)",
     },
     {
       label: "Interviewing",
       count: candidates.filter((c) => c.status === "Interviewing").length,
-      color: "bg-primary",
-      glow: "rgba(108,99,255,0.3)",
     },
     {
       label: "Offered",
       count: candidates.filter((c) => c.status === "Offer").length,
-      color: "bg-sec-green",
-      glow: "rgba(27,158,60,0.3)",
     },
     {
       label: "Archived",
       count: candidates.filter((c) => c.status === "Archived" || c.status === "Withdrawn").length,
-      color: "bg-sec-gray",
-      glow: "rgba(107,116,133,0.3)",
     },
   ]
   const maxCount = totalCandidates || 1
@@ -83,50 +130,29 @@ export function Dashboard() {
       <div className="ambient-glow-2" />
 
       {/* Header */}
-      <div className="relative z-10">
-        <h1 className="text-[28px] md:text-[36px] font-extrabold tracking-tight">
-          <span className="premium-gradient-text text-glow">
-            {greeting}, {firstName}
-          </span>{" "}
-          👋
-        </h1>
-        <p className="text-body text-txt-body mt-1 font-semibold opacity-90">
-          {activeJobs} active opening{activeJobs !== 1 ? "s" : ""} · {totalCandidates} candidates in
-          pipeline
-        </p>
-      </div>
+      <PageHeader
+        icon={LayoutDashboard}
+        tone="violet"
+        title={`${greeting}, ${firstName} 👋`}
+        subtitle={`${activeJobs} active opening${activeJobs !== 1 ? "s" : ""} · ${totalCandidates} candidates in pipeline`}
+        className="relative z-10"
+      />
+
+      <JobFilter id="dashboard" counts={counts} total={total} className="relative z-10" />
 
       {/* Stats Grid */}
       <div className="stagger grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 relative z-10">
-        {stats.map((stat, idx) => {
-          const Icon = stat.icon
-          return (
-            <Card
-              key={idx}
-              hoverEffect
-              className={`group p-6 flex flex-col justify-between h-36 relative overflow-hidden ${statsAccents[idx]}`}
-            >
-              <div className="flex items-start justify-between relative z-10">
-                <span className="text-[11px] font-bold tracking-wider text-txt-caption uppercase">
-                  {stat.title}
-                </span>
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-light to-primary-light/60 border border-primary-border/40 flex items-center justify-center text-primary shadow-[0_0_12px_rgba(108,99,255,0.08)] group-hover:shadow-[0_0_18px_rgba(108,99,255,0.2)] transition-shadow">
-                  <Icon className="w-5 h-5" />
-                </div>
-              </div>
-              <div className="mt-4 flex items-baseline gap-2 relative z-10">
-                <span className="text-[30px] font-black tracking-[-0.02em] text-txt-title leading-none tabular-nums">
-                  {typeof stat.value === "number" ? (
-                    <AnimatedNumber value={stat.value} />
-                  ) : (
-                    stat.value
-                  )}
-                </span>
-                <span className="text-[11.5px] text-txt-caption font-semibold">{stat.caption}</span>
-              </div>
-            </Card>
-          )
-        })}
+        {stats.map((stat) => (
+          <StatCard
+            key={stat.title}
+            title={stat.title}
+            value={stat.value}
+            caption={stat.caption}
+            icon={stat.icon}
+            tone={stat.tone}
+            onClick={stat.go}
+          />
+        ))}
       </div>
 
       {/* Main Grid */}
@@ -222,13 +248,12 @@ export function Dashboard() {
                       {col.count} <span className="text-txt-caption font-medium">({pct}%)</span>
                     </span>
                   </div>
-                  <div className="w-full h-2.5 rounded-full bg-bg-primary overflow-hidden">
+                  <div
+                    className={`w-full h-2.5 rounded-full bg-bg-primary overflow-hidden ${toneClass(stageTone(col.label === "Offered" ? "Offer" : col.label))}`}
+                  >
                     <div
-                      className={`h-full rounded-full transition-all duration-700 ${col.color}`}
-                      style={{
-                        width: `${pct}%`,
-                        boxShadow: pct > 0 ? `0 0 8px ${col.glow}` : "none",
-                      }}
+                      className="h-full rounded-full bg-[var(--tone-fg)] shadow-[0_0_10px_var(--tone-glow)] transition-[width] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
+                      style={{ width: `${pct}%` }}
                     />
                   </div>
                 </div>

@@ -45,6 +45,9 @@ export interface Job {
   featuredUntil?: string | null
   /** First publish time (null = never published, so publishing will cost credits) */
   publishedAt?: string | null
+  /** Set when Hyrr moderation removed the job; it can't be edited or reopened. */
+  removedAt?: string | null
+  removedReason?: string | null
   /** Credits charged when the job was first published */
   momentumCost?: number
 }
@@ -84,6 +87,17 @@ export interface AuthUser {
   /** false until the user confirms their e-mail address */
   emailVerified: boolean
   twoFactorEnabled: boolean
+  /** Recruiters: their company's moderation state (from /auth/me; updated live). */
+  company?: AccountCompany | null
+  /** Where to direct users whose account or company is suspended. */
+  supportEmail?: string
+}
+
+export interface AccountCompany {
+  id: string
+  name: string
+  status: "VERIFIED" | "PENDING" | "SUSPENDED"
+  verified: boolean
 }
 
 export interface Candidate {
@@ -141,6 +155,57 @@ export interface TeamMember {
   email: string
   avatar?: string
   role: "OWNER" | "RECRUITER" | "HIRING_MANAGER" | "VIEWER"
+}
+
+export type AssignableTeamRole = "RECRUITER" | "HIRING_MANAGER" | "VIEWER"
+
+/** Open invite (owner view). */
+export interface TeamInvite {
+  id: string
+  email: string
+  role: TeamMember["role"]
+  createdAt: string
+  expiresAt: string
+  expired: boolean
+  invitedBy: string | null
+}
+
+/** Someone on the company's verified domain asking to join (owner view). */
+export interface TeamJoinRequest {
+  id: string
+  createdAt: string
+  user: { id: string; name: string; email: string; avatar?: string }
+}
+
+/** Public preview of an invite link (never the full e-mail). */
+export interface InvitePreview {
+  company: { name: string; logo: string }
+  role: TeamMember["role"]
+  roleLabel: string
+  invitedBy: string | null
+  emailHint: string
+  expiresAt: string
+}
+
+export interface CompanyMatch {
+  id: string
+  name: string
+  logo: string
+}
+
+/** The signed-in recruiter's own pending request to join a company. */
+export interface MyJoinRequest {
+  id: string
+  createdAt: string
+  company: CompanyMatch
+}
+
+/** Recruiter sign-up: create a company, accept an invite, or ask to join a verified company. */
+export interface RegisterExtras {
+  companyName?: string
+  companyWebsite?: string
+  inviteToken?: string
+  joinCompanyId?: string
 }
 
 export interface JobUpdatePatch {
@@ -466,6 +531,11 @@ export interface CalendarEvent {
   meetingUrl?: string
   location?: string
   notes?: string
+  /** Linked application's company and job (seeker calendar). */
+  companyName?: string
+  jobTitle?: string
+  /** Recruiter who scheduled it, when it wasn't created by the viewer (seeker calendar). */
+  organizerName?: string
 }
 
 export interface Document {
@@ -767,7 +837,8 @@ export interface JobState {
     email: string,
     password: string,
     role: "SEEKER" | "RECRUITER",
-    captchaToken?: string
+    captchaToken?: string,
+    extras?: RegisterExtras
   ) => Promise<boolean>
   /** Reloads emailVerified / twoFactorEnabled (and name/avatar) from /auth/me. */
   refreshAuthUser: () => Promise<void>
@@ -785,6 +856,12 @@ export interface JobState {
   /** Downloads a JSON export of the user's data. */
   exportMyData: () => Promise<void>
   logout: () => Promise<void>
+  /** Why the user was signed out (e.g. suspension), shown on the sign-in page. */
+  signedOutReason: string | null
+  signOutWithReason: (reason: string) => Promise<void>
+  clearSignedOutReason: () => void
+  /** Reloads company status + support e-mail from /auth/me. */
+  loadAccount: () => Promise<void>
   /** Swaps the access token (login, restore, silent refresh). Never loads workspace data. */
   setAccessToken: (token: string | null) => void
   initializeSocket: () => void
@@ -835,8 +912,32 @@ export interface JobState {
 
   // ── Team ─────────────────────────────────────────────────────────────────
   fetchTeam: () => Promise<void>
-  addTeamMember: (email: string, role: "RECRUITER" | "HIRING_MANAGER" | "VIEWER") => Promise<void>
   removeTeamMember: (memberId: string) => Promise<void>
+  /** Owner: open invites and pending join requests. */
+  teamInvites: TeamInvite[]
+  joinRequests: TeamJoinRequest[]
+  fetchTeamInvites: () => Promise<void>
+  fetchJoinRequests: () => Promise<void>
+  /** Owner: e-mails an accept link (402 SEAT_LIMIT_REACHED when the plan is full). */
+  inviteTeamMember: (email: string, role: AssignableTeamRole) => Promise<void>
+  resendInvite: (inviteId: string) => Promise<void>
+  revokeInvite: (inviteId: string) => Promise<void>
+  approveJoinRequest: (requestId: string, role: AssignableTeamRole) => Promise<void>
+  declineJoinRequest: (requestId: string) => Promise<void>
+  transferOwnership: (memberId: string) => Promise<void>
+  /** Member leaves the company (owners transfer first); they then set up or join a company. */
+  leaveTeam: () => Promise<void>
+  /** Recruiters without a company (OAuth sign-up, left a team). Reloads the workspace. */
+  setupCompany: (data: { name: string; website?: string }) => Promise<void>
+  previewInvite: (token: string) => Promise<InvitePreview>
+  acceptInvite: (token: string) => Promise<void>
+  declineInvite: (token: string) => Promise<void>
+  /** A verified company on the e-mail's domain, or null. */
+  findCompanyByEmail: (email: string) => Promise<CompanyMatch | null>
+  myJoinRequest: MyJoinRequest | null
+  fetchMyJoinRequest: () => Promise<void>
+  requestToJoin: (companyId: string) => Promise<void>
+  cancelJoinRequest: () => Promise<void>
 
   // ── Seeker workspace ─────────────────────────────────────────────────────
   candidateActiveView: SeekerView

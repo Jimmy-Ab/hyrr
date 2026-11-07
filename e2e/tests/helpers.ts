@@ -1,5 +1,6 @@
 import { expect, type Page } from "@playwright/test"
 import { PrismaClient } from "@prisma/client"
+import { createHash } from "node:crypto"
 import { API_PORT, RECRUITER_PORT, SEEKER_PORT } from "../playwright.config"
 
 export const API = `http://localhost:${API_PORT}/api`
@@ -38,7 +39,13 @@ export async function api<T = any>(method: string, path: string, body?: unknown,
 /** Registers through the API and marks the e-mail verified (no inbox in tests). */
 export async function createUser(role: "RECRUITER" | "SEEKER", name: string) {
   const email = `${name.toLowerCase()}${uid()}@e2e.test`
-  const res = await api("POST", "/auth/register", { name, email, password: PASSWORD, role })
+  const res = await api("POST", "/auth/register", {
+    name,
+    email,
+    password: PASSWORD,
+    role,
+    ...(role === "RECRUITER" ? { companyName: `${name} Studio` } : {}),
+  })
   await prisma.user.update({ where: { email }, data: { emailVerifiedAt: new Date() } })
   if (role === "RECRUITER") {
     // Enough credits for any number of publishes in one run.
@@ -78,4 +85,34 @@ export async function login(page: Page, baseUrl: string, email: string) {
 
 export async function disconnect() {
   await prisma.$disconnect()
+}
+
+export async function setUserStatus(email: string, status: "ACTIVE" | "SUSPENDED") {
+  await prisma.user.update({ where: { email }, data: { status } })
+}
+
+/** Invite links are e-mailed (hash stored); tests swap in a known raw token instead. */
+export async function setInviteToken(email: string, raw: string) {
+  const invite = await prisma.companyInvite.findFirstOrThrow({
+    where: { email: email.toLowerCase(), acceptedAt: null, revokedAt: null },
+    orderBy: { createdAt: "desc" },
+  })
+  await prisma.companyInvite.update({
+    where: { id: invite.id },
+    data: { tokenHash: createHash("sha256").update(raw).digest("hex") },
+  })
+}
+
+export async function userWithCompany(email: string) {
+  return prisma.user.findUniqueOrThrow({
+    where: { email },
+    include: { company: true, companyMemberships: true },
+  })
+}
+
+/** Simulates a recruiter without a company (OAuth sign-up or someone who left a team). */
+export async function detachFromCompany(email: string) {
+  const user = await prisma.user.findUniqueOrThrow({ where: { email } })
+  await prisma.companyMember.deleteMany({ where: { userId: user.id } })
+  await prisma.user.update({ where: { id: user.id }, data: { companyId: null } })
 }

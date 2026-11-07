@@ -563,3 +563,129 @@
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Tones: muted-vibrant colour families. Use via `tone-<name>` + var(--tone-*).
+   Map meaning → tone in lib/tones.ts (never hard-code colours in pages).
+   ═══════════════════════════════════════════════════════════════════════════ */
+.tone-violet {
+  --tone-fg: #7c5cfc;
+  --tone-bg: #f3f0ff;
+  --tone-ring: #ddd4fe;
+  --tone-glow: rgba(124, 92, 252, 0.28);
+}
+.tone-blue {
+  --tone-fg: #3b7bf0;
+  --tone-bg: #eef4ff;
+  --tone-ring: #cfe0fd;
+  --tone-glow: rgba(59, 123, 240, 0.26);
+}
+.tone-sky {
+  --tone-fg: #0e9fd8;
+  --tone-bg: #ecf8fe;
+  --tone-ring: #c7ebfb;
+  --tone-glow: rgba(14, 159, 216, 0.24);
+}
+.tone-teal {
+  --tone-fg: #0f9f8f;
+  --tone-bg: #eaf8f6;
+  --tone-ring: #c3ece6;
+  --tone-glow: rgba(15, 159, 143, 0.24);
+}
+.tone-emerald {
+  --tone-fg: #1f9d5c;
+  --tone-bg: #ebf8f1;
+  --tone-ring: #c7ecd8;
+  --tone-glow: rgba(31, 157, 92, 0.24);
+}
+.tone-amber {
+  --tone-fg: #d98a0b;
+  --tone-bg: #fff6e6;
+  --tone-ring: #fbe2b5;
+  --tone-glow: rgba(217, 138, 11, 0.24);
+}
+.tone-rose {
+  --tone-fg: #e04f6e;
+  --tone-bg: #fff0f3;
+  --tone-ring: #fbd3dc;
+  --tone-glow: rgba(224, 79, 110, 0.24);
+}
+.tone-slate {
+  --tone-fg: #6b7488;
+  --tone-bg: #f2f4f7;
+  --tone-ring: #e1e5ec;
+  --tone-glow: rgba(107, 116, 136, 0.18);
+}
+
+.dark .tone-violet {
+  --tone-fg: #a594ff;
+  --tone-bg: rgba(124, 92, 252, 0.14);
+  --tone-ring: rgba(124, 92, 252, 0.32);
+}
+.dark .tone-blue {
+  --tone-fg: #6fa2ff;
+  --tone-bg: rgba(59, 123, 240, 0.14);
+  --tone-ring: rgba(59, 123, 240, 0.32);
+}
+.dark .tone-sky {
+  --tone-fg: #4fc3f0;
+  --tone-bg: rgba(14, 159, 216, 0.14);
+  --tone-ring: rgba(14, 159, 216, 0.3);
+}
+.dark .tone-teal {
+  --tone-fg: #3fd0bd;
+  --tone-bg: rgba(15, 159, 143, 0.15);
+  --tone-ring: rgba(15, 159, 143, 0.32);
+}
+.dark .tone-emerald {
+  --tone-fg: #4fd08c;
+  --tone-bg: rgba(31, 157, 92, 0.15);
+  --tone-ring: rgba(31, 157, 92, 0.32);
+}
+.dark .tone-amber {
+  --tone-fg: #f5b445;
+  --tone-bg: rgba(217, 138, 11, 0.15);
+  --tone-ring: rgba(217, 138, 11, 0.32);
+}
+.dark .tone-rose {
+  --tone-fg: #ff7e98;
+  --tone-bg: rgba(224, 79, 110, 0.15);
+  --tone-ring: rgba(224, 79, 110, 0.32);
+}
+.dark .tone-slate {
+  --tone-fg: #a3abbb;
+  --tone-bg: rgba(148, 160, 180, 0.12);
+  --tone-ring: rgba(148, 160, 180, 0.24);
+}
+
+/* Stat card: tone wash in the corner + coloured top hairline. */
+.tone-card {
+  position: relative;
+  overflow: hidden;
+}
+.tone-card::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--tone-fg), transparent 80%);
+  opacity: 0.7;
+}
+.tone-wash {
+  position: absolute;
+  right: -40px;
+  top: -40px;
+  width: 160px;
+  height: 160px;
+  border-radius: 999px;
+  background: radial-gradient(circle, var(--tone-glow), transparent 70%);
+  opacity: 0.55;
+  pointer-events: none;
+  transition:
+    opacity 0.4s var(--ease-apple),
+    transform 0.6s var(--ease-out-expo);
+}
+.group:hover .tone-wash {
+  opacity: 0.9;
+  transform: scale(1.15);
+}

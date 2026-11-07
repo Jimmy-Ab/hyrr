@@ -89,6 +89,14 @@ describe("JobsService", () => {
     expect(prismaMock.job.findMany).toHaveBeenCalled()
   })
 
+  it("public search hides jobs of suspended companies", async () => {
+    prismaMock.job.count.mockResolvedValue(0)
+    prismaMock.job.findMany.mockResolvedValue([])
+    await service.searchPublicJobsPage("", undefined, undefined, undefined, {})
+    const where = prismaMock.job.count.mock.calls[0][0].where.AND[0]
+    expect(where).toMatchObject({ status: "ACTIVE", company: { status: { not: "SUSPENDED" } } })
+  })
+
   it("searches with case-insensitive contains instead of a raw tsquery", async () => {
     prismaMock.job.count.mockResolvedValueOnce(0).mockResolvedValueOnce(1)
     prismaMock.job.findMany.mockResolvedValueOnce([{ id: "job-2", requirements: null }])
@@ -110,6 +118,7 @@ describe("JobsService", () => {
     expect(prismaMock.job.findFirst.mock.calls[0][0].where).toEqual({
       id: "job-x",
       status: "ACTIVE",
+      company: { status: { not: "SUSPENDED" } },
     })
   })
 
@@ -167,6 +176,20 @@ describe("JobsService", () => {
         companyId: "co-1",
         emailVerifiedAt,
       })
+
+    it("members of a suspended company can't post (403 COMPANY_SUSPENDED)", async () => {
+      asUser(new Date())
+      access.companyScope.mockResolvedValue({
+        companyIds: ["co-1"],
+        manageCompanyIds: [],
+        suspendedCompanyIds: ["co-1"],
+      })
+      await expect(service.createJob("rec-1", dto)).rejects.toMatchObject({
+        status: 403,
+        errorCode: "COMPANY_SUSPENDED",
+      })
+      expect(prismaMock.job.create).not.toHaveBeenCalled()
+    })
 
     it("publishing requires a verified e-mail (403 EMAIL_NOT_VERIFIED)", async () => {
       asUser(null)
@@ -722,6 +745,7 @@ describe("JobsService", () => {
       expect(prismaMock.job.findMany.mock.calls[0][0].where).toEqual({
         id: { in: ["b", "gone", "a"] },
         status: "ACTIVE",
+        company: { status: { not: "SUSPENDED" } },
       })
       expect(cache.set).toHaveBeenCalledWith(
         "jobs:public:react:FULL_TIME:eng:true:10:20",
@@ -753,6 +777,33 @@ describe("JobsService", () => {
       // offset 10 >= 3 featured: only the regular query runs, skipping 7 of them
       expect(prismaMock.job.findMany).toHaveBeenCalledTimes(1)
       expect(prismaMock.job.findMany.mock.calls[0][0]).toMatchObject({ skip: 7, take: 100 })
+    })
+  })
+
+  describe("moderation removal", () => {
+    const removed = {
+      id: "job-9",
+      status: "CLOSED",
+      companyId: "co-1",
+      title: "Removed",
+      description: "D",
+      requirements: [],
+      benefits: [],
+      removedAt: new Date(),
+      removedReason: "Scam posting",
+    }
+    it("a recruiter can't reopen, edit or feature a job removed by Hyrr", async () => {
+      access.jobForManagement.mockResolvedValue(removed)
+      const recruiter = { userId: "rec-1", role: "RECRUITER" }
+      await expect(
+        service.updateJob("job-9", { status: "ACTIVE" } as any, recruiter as any)
+      ).rejects.toMatchObject({ status: 403, errorCode: "JOB_REMOVED_BY_MODERATION" })
+      await expect(
+        service.updateJob("job-9", { title: "New title" } as any, recruiter as any)
+      ).rejects.toMatchObject({ errorCode: "JOB_REMOVED_BY_MODERATION" })
+      await expect(service.featureJob("job-9", 7, recruiter as any)).rejects.toMatchObject({
+        errorCode: "JOB_REMOVED_BY_MODERATION",
+      })
     })
   })
 })

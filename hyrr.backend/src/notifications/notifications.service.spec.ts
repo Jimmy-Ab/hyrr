@@ -37,6 +37,44 @@ describe("NotificationsService", () => {
     )
   })
 
+  it("a specific e-mail template replaces the generic copy (and respects the e-mail setting)", async () => {
+    const { interviewScheduled } = await import("../core/delivery/templates")
+    const email = interviewScheduled({
+      name: "Sam",
+      jobTitle: "Backend Engineer",
+      startTime: "2026-11-20T10:00:00Z",
+      meetingUrl: "https://meet.example.com/abc",
+    })
+    await service.createNotification(
+      "u1",
+      "Interview",
+      "INTERVIEW" as any,
+      "CALENDAR" as any,
+      null,
+      {
+        email,
+      }
+    )
+    expect(emailDelivery.send).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "sam@x.io", subject: "Interview scheduled: Backend Engineer" })
+    )
+    expect(emailDelivery.send.mock.calls[0][0].html).toContain("https://meet.example.com/abc")
+
+    emailDelivery.send.mockClear()
+    prisma.userSetting.findUnique.mockResolvedValue({ emailNotifications: false })
+    await service.createNotification(
+      "u1",
+      "Interview",
+      "INTERVIEW" as any,
+      "CALENDAR" as any,
+      null,
+      {
+        email,
+      }
+    )
+    expect(emailDelivery.send).not.toHaveBeenCalled()
+  })
+
   it("regular notifications are still stored and pushed", async () => {
     await service.createNotification("u1", "Status updated", "APPLICATION" as any)
     expect(prisma.notification.create).toHaveBeenCalled()

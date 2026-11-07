@@ -7,12 +7,16 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  PageHeader,
+  eventTone,
   toIsoFromLocal,
+  toneClass,
   useToast,
   type CalendarEvent,
   type Candidate,
 } from "hyrr.shared"
 import {
+  CalendarDays,
   Calendar as CalendarIcon,
   ChevronLeft,
   ChevronRight,
@@ -25,16 +29,14 @@ import {
   User,
 } from "lucide-react"
 import { useEffect, useState } from "react"
+import { JobFilter } from "../components/jobs/job-filter"
 import { ConfirmDialog } from "../components/layout/confirm-dialog"
 import { errorMessage } from "../lib/recruiter"
 import { useJobStore } from "../store/useJobStore"
 
-const typeStyle = (type: string) => {
-  if (type === "interview") return "bg-primary-light border-primary-border/30 text-primary"
-  if (type === "deadline") return "bg-sec-orange/10 border-sec-orange/20 text-sec-orange"
-  if (type === "offer") return "bg-sec-green/10 border-sec-green/20 text-sec-green"
-  return "bg-bg-primary border-bg-border text-txt-body"
-}
+/** Event chip colours come from the shared tone map (interview violet, deadline rose, …). */
+const typeStyle = (type: string) =>
+  `${toneClass(eventTone(type))} bg-[var(--tone-bg)] border-[var(--tone-ring)] text-[var(--tone-fg)]`
 
 const TYPE_LABEL: Record<string, string> = {
   interview: "Interview",
@@ -276,7 +278,7 @@ function EventDetailsDialog({
 }) {
   return (
     <Dialog open={!!event} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent variant="sheet" className="max-w-md overflow-y-auto">
         {event && (
           <>
             <DialogHeader>
@@ -356,7 +358,24 @@ function EventDetailsDialog({
 
 export function CalendarPage() {
   const { toast } = useToast()
-  const { events, eventsLoading, fetchEvents, deleteEvent, candidates } = useJobStore()
+  const {
+    events: allEvents,
+    eventsLoading,
+    fetchEvents,
+    deleteEvent,
+    candidates,
+    selectedJobId,
+  } = useJobStore()
+  // Job filter: keep events linked to that job's applications.
+  const jobOf = new Map(candidates.map((c) => [c.id, c.jobId]))
+  const events = selectedJobId
+    ? allEvents.filter((e) => !!e.applicationId && jobOf.get(e.applicationId) === selectedJobId)
+    : allEvents
+  const eventCounts: Record<string, number> = {}
+  for (const e of allEvents) {
+    const jobId = e.applicationId ? jobOf.get(e.applicationId) : undefined
+    if (jobId) eventCounts[jobId] = (eventCounts[jobId] ?? 0) + 1
+  }
   const [currentDate, setCurrentDate] = useState(new Date())
   const [addOpen, setAddOpen] = useState(false)
   const [selectedDateStr, setSelectedDateStr] = useState("")
@@ -432,19 +451,18 @@ export function CalendarPage() {
   return (
     <div className="flex flex-col gap-6 md:gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative min-w-0">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
-        <div>
-          <h1 className="text-[28px] md:text-[36px] font-extrabold tracking-tight">
-            <span className="premium-gradient-text text-glow">Interview Calendar</span>
-          </h1>
-          <p className="text-body text-txt-body mt-1 font-medium">
-            Schedule and track interview panel discussions.
-          </p>
-        </div>
-        <Button onClick={() => openAdd()} className="cursor-pointer font-semibold shrink-0">
-          Book Interview Slot
-        </Button>
-      </div>
+      <PageHeader
+        icon={CalendarDays}
+        tone="violet"
+        title="Interview Calendar"
+        subtitle="Schedule and track interviews, deadlines and offers."
+        actions={
+          <Button onClick={() => openAdd()} className="cursor-pointer font-semibold shrink-0">
+            Book Interview Slot
+          </Button>
+        }
+      />
+      <JobFilter id="calendar" counts={eventCounts} total={allEvents.length} />
 
       {/* Calendar Controls */}
       <div className="flex justify-between items-center gap-3 bg-bg-secondary p-4 rounded-card border border-bg-border/60 shrink-0">
@@ -586,15 +604,16 @@ export function CalendarPage() {
             <h3 className="text-[14px] font-bold text-txt-heading mb-3">Legend</h3>
             <div className="space-y-2.5">
               {[
-                { color: "bg-primary", label: "Interview" },
-                { color: "bg-sec-orange", label: "Deadline" },
-                { color: "bg-sec-green", label: "Offer / Onboarding" },
+                { type: "interview", label: "Interview" },
+                { type: "deadline", label: "Deadline" },
+                { type: "offer", label: "Offer / Onboarding" },
+                { type: "other", label: "Other" },
               ].map((l) => (
                 <div
                   key={l.label}
-                  className="flex items-center gap-2 text-[12.5px] text-txt-body font-medium"
+                  className={`flex items-center gap-2 text-[12.5px] text-txt-body font-medium ${toneClass(eventTone(l.type))}`}
                 >
-                  <div className={`w-2.5 h-2.5 rounded-full ${l.color}`} />
+                  <div className="w-2.5 h-2.5 rounded-full bg-[var(--tone-fg)] shadow-[0_0_8px_var(--tone-glow)]" />
                   {l.label}
                 </div>
               ))}

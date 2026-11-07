@@ -1,251 +1,382 @@
-import { Badge, Button, Card, Input, useToast } from "hyrr.shared"
-import { Download, Eye, RotateCcw, Search, UserCheck, UserX } from "lucide-react"
-import { useState } from "react"
-import { useAdminStore, type AdminUser } from "../store/useAdminStore"
+import {
+  Button,
+  EmptyState,
+  FilterChips,
+  PageHeader,
+  Skeleton,
+  TonePill,
+  useJobStore,
+} from "hyrr.shared"
+import {
+  BadgeCheck,
+  Ban,
+  Building2,
+  KeyRound,
+  MailCheck,
+  RotateCcw,
+  ShieldCheck,
+  ShieldOff,
+  Users as UsersIcon,
+} from "lucide-react"
+import * as React from "react"
+import { ActionConfirm } from "../components/ui/action-confirm"
+import { AuditList } from "../components/ui/audit-list"
+import {
+  Avatar,
+  DataTable,
+  ErrorBlock,
+  LoadMore,
+  LoadingRows,
+  RowButton,
+  SearchBox,
+  td,
+} from "../components/ui/common"
+import { ReasonDialog } from "../components/ui/reason-dialog"
+import { KeyValues, SheetSection, SideSheet } from "../components/ui/side-sheet"
+import { api, useAdminAction, useAdminQuery, useCursorList } from "../lib/api"
+import { ago, date, humanize, num, pct } from "../lib/format"
+import { useNav } from "../lib/nav"
+import { roleTone, userStatusTone } from "../lib/tones"
+import type { AdminUser, AdminUserDetail, UserRole, UserStatus } from "../lib/types"
 
-const statusBadge = (status: AdminUser["status"]) => {
-  if (status === "active") return <Badge variant="success">Active</Badge>
-  if (status === "suspended") return <Badge variant="destructive">Suspended</Badge>
-  return <Badge variant="secondary">Pending</Badge>
-}
+type RoleFilter = "ALL" | UserRole
+type StatusFilter = "ALL" | UserStatus
 
-export function UsersPage() {
-  const { users, updateUserStatus } = useAdminStore()
-  const { toast } = useToast()
-  const [search, setSearch] = useState("")
-  const [statusFilter, setStatusFilter] = useState<AdminUser["status"] | "all">("all")
-  const [selected, setSelected] = useState<AdminUser | null>(null)
-
-  const filtered = users.filter((u) => {
-    const matchSearch =
-      u.name.toLowerCase().includes(search.toLowerCase()) ||
-      u.email.toLowerCase().includes(search.toLowerCase())
-    const matchStatus = statusFilter === "all" || u.status === statusFilter
-    return matchSearch && matchStatus
+export function Users() {
+  const focus = useNav((s) => s.focus)
+  const clearFocus = useNav((s) => s.clearFocus)
+  const [q, setQ] = React.useState("")
+  const [role, setRole] = React.useState<RoleFilter>("ALL")
+  const [status, setStatus] = React.useState<StatusFilter>("ALL")
+  const [openId, setOpenId] = React.useState<string | null>(null)
+  const list = useCursorList<AdminUser>("/users", {
+    q,
+    role: role === "ALL" ? undefined : role,
+    status: status === "ALL" ? undefined : status,
   })
 
+  React.useEffect(() => {
+    if (focus?.view === "users") {
+      setOpenId(focus.id)
+      clearFocus()
+    }
+  }, [focus, clearFocus])
+
+  const filtered = !!q || role !== "ALL" || status !== "ALL"
+
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div className="flex items-start justify-between">
+    <div className="flex flex-col gap-6 pb-10">
+      <PageHeader
+        title="Users"
+        icon={UsersIcon}
+        tone="violet"
+        subtitle="Seekers, recruiters and admins"
+        actions={
+          <SearchBox
+            value={q}
+            onChange={setQ}
+            placeholder="Search name or e-mail"
+            label="Search users"
+          />
+        }
+      />
+      <div className="flex flex-wrap items-center gap-3">
+        <FilterChips
+          id="users-role"
+          label="Role"
+          value={role}
+          onChange={setRole}
+          options={[
+            { value: "ALL", label: "All roles", tone: "slate" },
+            { value: "SEEKER", label: "Seekers", tone: "teal" },
+            { value: "RECRUITER", label: "Recruiters", tone: "blue" },
+            { value: "ADMIN", label: "Admins", tone: "violet" },
+          ]}
+        />
+        <FilterChips
+          id="users-status"
+          label="Status"
+          value={status}
+          onChange={setStatus}
+          options={[
+            { value: "ALL", label: "Any status", tone: "slate" },
+            { value: "ACTIVE", label: "Active", tone: "emerald" },
+            { value: "PENDING", label: "Pending", tone: "amber" },
+            { value: "SUSPENDED", label: "Suspended", tone: "rose" },
+          ]}
+        />
+      </div>
+
+      {list.error && !list.data ? (
+        <ErrorBlock error={list.error} onRetry={() => void list.refetch()} />
+      ) : list.isLoading ? (
+        <LoadingRows />
+      ) : list.items.length === 0 ? (
+        <EmptyState
+          icon={UsersIcon}
+          title={filtered ? "No matching users" : "No users yet"}
+          description={filtered ? "Try another name, role or status." : "Sign-ups appear here."}
+          action={
+            filtered ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setQ("")
+                  setRole("ALL")
+                  setStatus("ALL")
+                }}
+              >
+                Clear filters
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : (
         <div>
-          <h1 className="text-[36px] font-bold text-txt-title tracking-tight">Users</h1>
-          <p className="text-body text-txt-body mt-1 font-medium">
-            Manage all registered job seeker accounts on the platform.
-          </p>
-        </div>
-        <Button
-          onClick={() => toast("Export", "User data export queued.", "success")}
-          variant="secondary"
-          className="gap-2 cursor-pointer text-[12.5px]"
-        >
-          <Download className="w-4 h-4" /> Export CSV
-        </Button>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { label: "Total Users", value: users.length, color: "text-primary" },
-          {
-            label: "Active",
-            value: users.filter((u) => u.status === "active").length,
-            color: "text-sec-green",
-          },
-          {
-            label: "Suspended",
-            value: users.filter((u) => u.status === "suspended").length,
-            color: "text-sec-red",
-          },
-        ].map((s) => (
-          <Card key={s.label} className="p-4 text-center">
-            <p className={`text-[28px] font-extrabold ${s.color}`}>{s.value}</p>
-            <p className="text-[11px] text-txt-caption font-semibold uppercase tracking-wider mt-0.5">
-              {s.label}
-            </p>
-          </Card>
-        ))}
-      </div>
-
-      {/* Filters */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-txt-caption" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search name or email…"
-            className="pl-9 h-9 text-[13px]"
+          <DataTable
+            head={["User", "Role", "Status", "Company", "Security", "Joined", "Last active"]}
+          >
+            {list.items.map((u) => (
+              <RowButton key={u.id} label={`Open ${u.name}`} onOpen={() => setOpenId(u.id)}>
+                <td className={td}>
+                  <span className="flex items-center gap-3">
+                    <Avatar name={u.name} src={u.avatar} />
+                    <span className="min-w-0">
+                      <span className="block truncate font-semibold text-txt-heading">
+                        {u.name}
+                      </span>
+                      <span className="block truncate text-[12px] text-txt-caption">{u.email}</span>
+                    </span>
+                  </span>
+                </td>
+                <td className={td}>
+                  <TonePill tone={roleTone(u.role)}>{humanize(u.role)}</TonePill>
+                </td>
+                <td className={td}>
+                  <TonePill tone={userStatusTone(u.status)}>{humanize(u.status)}</TonePill>
+                </td>
+                <td className={`${td} text-txt-body`}>{u.company?.name ?? "—"}</td>
+                <td className={td}>
+                  <span className="flex items-center gap-2 text-txt-caption">
+                    <span title={u.emailVerified ? "E-mail verified" : "E-mail not verified"}>
+                      <MailCheck
+                        className={`h-4 w-4 ${u.emailVerified ? "tone-emerald text-[var(--tone-fg)]" : ""}`}
+                        aria-label={u.emailVerified ? "E-mail verified" : "E-mail not verified"}
+                      />
+                    </span>
+                    <span title={u.twoFactorEnabled ? "Two-factor on" : "Two-factor off"}>
+                      {u.twoFactorEnabled ? (
+                        <ShieldCheck
+                          className="tone-emerald h-4 w-4 text-[var(--tone-fg)]"
+                          aria-label="Two-factor on"
+                        />
+                      ) : (
+                        <ShieldOff className="h-4 w-4" aria-label="Two-factor off" />
+                      )}
+                    </span>
+                  </span>
+                </td>
+                <td className={`${td} whitespace-nowrap text-txt-body`}>{date(u.joinedAt)}</td>
+                <td className={`${td} whitespace-nowrap text-txt-caption`}>
+                  {ago(u.lastActiveAt)}
+                </td>
+              </RowButton>
+            ))}
+          </DataTable>
+          <LoadMore
+            shown={list.items.length}
+            hasMore={!!list.hasNextPage}
+            loading={list.isFetchingNextPage}
+            onClick={() => void list.fetchNextPage()}
           />
         </div>
-        <div className="flex gap-1 bg-bg-secondary border border-bg-border p-1 rounded-[12px]">
-          {(["all", "active", "suspended", "pending"] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1 rounded-[9px] text-[12px] font-semibold cursor-pointer capitalize transition-all ${statusFilter === s ? "bg-primary text-white" : "text-txt-body hover:bg-bg-hover"}`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      </div>
+      )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Table */}
-        <Card className="xl:col-span-2 overflow-hidden">
-          <div className="divide-y divide-bg-border/30">
-            {filtered.map((user) => (
-              <div
-                key={user.id}
-                onClick={() => setSelected(selected?.id === user.id ? null : user)}
-                className={`flex items-center gap-4 p-4 cursor-pointer transition-colors hover:bg-bg-hover/50 ${selected?.id === user.id ? "bg-primary-light/30" : ""}`}
-              >
-                <img
-                  src={user.avatar}
-                  className="w-10 h-10 rounded-full object-cover shrink-0 border border-bg-border"
-                  alt={user.name}
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13.5px] font-semibold text-txt-heading truncate">
-                    {user.name}
-                  </p>
-                  <p className="text-[12px] text-txt-caption">{user.email}</p>
-                </div>
-                <div className="text-center shrink-0 hidden md:block">
-                  <p className="text-[12.5px] font-bold text-txt-heading">{user.applications}</p>
-                  <p className="text-[10px] text-txt-caption">apps</p>
-                </div>
-                <div className="text-center shrink-0 hidden md:block">
-                  <p className="text-[12.5px] font-bold text-sec-orange">{user.momentum}</p>
-                  <p className="text-[10px] text-txt-caption">momentum</p>
-                </div>
-                {statusBadge(user.status)}
-                <div className="flex gap-1 shrink-0">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setSelected(user)
-                    }}
-                    className="p-1.5 hover:bg-bg-hover rounded-[8px] text-txt-caption hover:text-primary cursor-pointer transition-colors"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      const ns = user.status === "active" ? "suspended" : "active"
-                      updateUserStatus(user.id, ns)
-                      toast(
-                        ns === "suspended" ? "Suspended" : "Activated",
-                        `${user.name} ${ns}.`,
-                        ns === "suspended" ? "warning" : "success"
-                      )
-                    }}
-                    className="p-1.5 hover:bg-bg-hover rounded-[8px] text-txt-caption hover:text-sec-red cursor-pointer transition-colors"
-                  >
-                    {user.status === "active" ? (
-                      <UserX className="w-3.5 h-3.5" />
-                    ) : (
-                      <UserCheck className="w-3.5 h-3.5" />
-                    )}
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      toast("Password reset", `Reset email sent to ${user.email}`, "info")
-                    }}
-                    className="p-1.5 hover:bg-bg-hover rounded-[8px] text-txt-caption hover:text-sec-orange cursor-pointer transition-colors"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
-            {filtered.length === 0 && (
-              <div className="py-12 flex flex-col items-center gap-2 text-txt-caption">
-                <Search className="w-8 h-8 opacity-30" />
-                <p className="text-[13px]">No users match your search</p>
-              </div>
+      <UserSheet userId={openId} onClose={() => setOpenId(null)} />
+    </div>
+  )
+}
+
+type Pending = "suspend" | "reactivate" | "verify" | "reset" | null
+
+function UserSheet({ userId, onClose }: { userId: string | null; onClose: () => void }) {
+  const me = useJobStore((s) => s.user?.id)
+  const go = useNav((s) => s.go)
+  const { data, error, isLoading, refetch } = useAdminQuery<AdminUserDetail>(
+    `/users/${userId}`,
+    undefined,
+    { enabled: !!userId }
+  )
+  const [pending, setPending] = React.useState<Pending>(null)
+  const act = useAdminAction(({ path, body }: { path: string; body?: object }) =>
+    api.post(`/users/${userId}/${path}`, body)
+  )
+  const u = data && data.id === userId ? data : undefined
+  const isSelf = !!u && u.id === me
+
+  return (
+    <SideSheet
+      open={!!userId}
+      onOpenChange={(o) => !o && onClose()}
+      title={u?.name ?? "User"}
+      subtitle={u?.email}
+      header={
+        u && (
+          <>
+            <TonePill tone={roleTone(u.role)}>{humanize(u.role)}</TonePill>
+            <TonePill tone={userStatusTone(u.status)}>{humanize(u.status)}</TonePill>
+            {u.twoFactorEnabled && <TonePill tone="emerald">2FA on</TonePill>}
+          </>
+        )
+      }
+      footer={
+        u && (
+          <>
+            {!u.emailVerified && (
+              <Button size="sm" variant="secondary" onClick={() => setPending("verify")}>
+                <BadgeCheck className="h-3.5 w-3.5" /> Mark e-mail verified
+              </Button>
             )}
-          </div>
-        </Card>
+            <Button size="sm" variant="secondary" onClick={() => setPending("reset")}>
+              <KeyRound className="h-3.5 w-3.5" /> Send password reset
+            </Button>
+            {u.status === "SUSPENDED" ? (
+              <Button size="sm" onClick={() => setPending("reactivate")}>
+                <RotateCcw className="h-3.5 w-3.5" /> Reactivate
+              </Button>
+            ) : (
+              !isSelf && (
+                <Button size="sm" variant="danger" onClick={() => setPending("suspend")}>
+                  <Ban className="h-3.5 w-3.5" /> Suspend
+                </Button>
+              )
+            )}
+          </>
+        )
+      }
+    >
+      {error && !u ? (
+        <ErrorBlock error={error} onRetry={() => void refetch()} />
+      ) : isLoading || !u ? (
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-28" />
+          <Skeleton className="h-28" />
+        </div>
+      ) : (
+        <>
+          <SheetSection title="Account">
+            <KeyValues
+              rows={[
+                ["Joined", date(u.joinedAt)],
+                ["Last active", ago(u.lastActiveAt)],
+                ["E-mail", u.emailVerified ? "Verified" : "Not verified"],
+                ["Two-factor", u.twoFactorEnabled ? "On" : "Off"],
+                [
+                  "Company",
+                  u.company ? (
+                    <button
+                      key="company"
+                      type="button"
+                      onClick={() => {
+                        onClose()
+                        go("companies", { focusId: u.company!.id })
+                      }}
+                      className="inline-flex cursor-pointer items-center gap-1.5 font-semibold text-primary hover:underline"
+                    >
+                      <Building2 className="h-3.5 w-3.5" /> {u.company.name}
+                    </button>
+                  ) : (
+                    "—"
+                  ),
+                ],
+              ]}
+            />
+          </SheetSection>
 
-        {/* User Detail Panel */}
-        {selected ? (
-          <Card className="p-6 space-y-5">
-            <div className="text-center space-y-2">
-              <img
-                src={selected.avatar}
-                className="w-16 h-16 rounded-full object-cover mx-auto border-4 border-bg-secondary shadow-card"
-                alt={selected.name}
+          {u.seeker && (
+            <SheetSection title="Seeker profile">
+              <KeyValues
+                rows={[
+                  ["Headline", u.seeker.title || "—"],
+                  ["Location", u.seeker.location || "—"],
+                  ["Applications", num(u.seeker.applications)],
+                  [
+                    "Profile strength",
+                    pct(
+                      u.seeker.profileStrength > 1
+                        ? u.seeker.profileStrength / 100
+                        : u.seeker.profileStrength
+                    ),
+                  ],
+                  ["Wallet", u.wallet ? `${num(u.wallet.balance)} credits` : "—"],
+                ]}
               />
-              <h2 className="text-[16px] font-bold text-txt-heading">{selected.name}</h2>
-              <p className="text-[12px] text-txt-caption">{selected.email}</p>
-              {statusBadge(selected.status)}
-            </div>
-            <div className="space-y-2">
+            </SheetSection>
+          )}
+
+          <SheetSection title="Recent activity">
+            <div className="grid grid-cols-3 gap-2">
               {[
-                { label: "Joined", value: selected.joined },
-                { label: "Last Login", value: selected.lastLogin },
-                { label: "Profile Complete", value: `${selected.profileComplete}%` },
-                { label: "Applications", value: selected.applications },
-                { label: "Momentum Balance", value: `${selected.momentum} credits` },
-              ].map((row) => (
+                ["Applications", u.recent.applications],
+                ["Jobs posted", u.recent.jobsPosted],
+                ["Messages (30 d)", u.recent.messages30d],
+              ].map(([label, value]) => (
                 <div
-                  key={row.label}
-                  className="flex items-center justify-between py-1.5 border-b border-bg-border/30 last:border-0"
+                  key={label}
+                  className="rounded-2xl border border-bg-border/70 bg-bg-primary/50 p-3 text-center"
                 >
-                  <span className="text-[12px] text-txt-caption font-medium">{row.label}</span>
-                  <span className="text-[12.5px] font-semibold text-txt-heading">{row.value}</span>
+                  <p className="text-[18px] font-bold tabular-nums text-txt-title">
+                    {num(value as number)}
+                  </p>
+                  <p className="text-[11.5px] text-txt-caption">{label}</p>
                 </div>
               ))}
             </div>
-            <div className="flex flex-col gap-2">
-              <Button
-                size="sm"
-                variant={selected.status === "active" ? "secondary" : "primary"}
-                onClick={() => {
-                  const ns = selected.status === "active" ? "suspended" : "active"
-                  updateUserStatus(selected.id, ns)
-                  toast(
-                    ns === "suspended" ? "Suspended" : "Activated",
-                    `${selected.name} updated.`,
-                    "success"
-                  )
-                }}
-                className="w-full cursor-pointer text-[12px]"
-              >
-                {selected.status === "active" ? "Suspend User" : "Activate User"}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => toast("Reset", `Email sent to ${selected.email}`, "info")}
-                className="w-full cursor-pointer text-[12px]"
-              >
-                Reset Password
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => toast("Deleted", `${selected.name} removed.`, "warning")}
-                className="w-full cursor-pointer text-[12px] text-sec-red hover:text-sec-red"
-              >
-                Delete Account
-              </Button>
-            </div>
-          </Card>
-        ) : (
-          <Card className="p-6 flex flex-col items-center justify-center gap-3 min-h-[240px] border-dashed">
-            <Eye className="w-8 h-8 text-txt-disabled" />
-            <p className="text-[13px] text-txt-caption text-center">
-              Select a user to view
-              <br />
-              their full profile
-            </p>
-          </Card>
-        )}
-      </div>
-    </div>
+          </SheetSection>
+
+          <SheetSection title="Admin history">
+            <AuditList rows={u.audit} />
+          </SheetSection>
+        </>
+      )}
+
+      <ReasonDialog
+        open={pending === "suspend"}
+        onOpenChange={(o) => !o && setPending(null)}
+        title={`Suspend ${u?.name ?? "user"}?`}
+        description="They are signed out everywhere and can't sign in until reactivated."
+        confirmLabel="Suspend user"
+        successTitle="User suspended"
+        onConfirm={(body) => act.run({ path: "suspend", body })}
+      />
+      <ActionConfirm
+        open={pending === "reactivate"}
+        onOpenChange={(o) => !o && setPending(null)}
+        title={`Reactivate ${u?.name ?? "user"}?`}
+        description="They can sign in again straight away."
+        confirmLabel="Reactivate"
+        successTitle="User reactivated"
+        run={() => act.run({ path: "reactivate" })}
+      />
+      <ActionConfirm
+        open={pending === "verify"}
+        onOpenChange={(o) => !o && setPending(null)}
+        title="Mark e-mail as verified?"
+        description={`Only do this if you have confirmed ${u?.email ?? "the address"} belongs to them.`}
+        confirmLabel="Mark verified"
+        successTitle="E-mail marked verified"
+        run={() => act.run({ path: "verify-email" })}
+      />
+      <ActionConfirm
+        open={pending === "reset"}
+        onOpenChange={(o) => !o && setPending(null)}
+        title="Send a password reset?"
+        description={`A reset link is e-mailed to ${u?.email ?? "the user"}. Their current password keeps working until they use it.`}
+        confirmLabel="Send reset link"
+        successTitle="Password reset sent"
+        run={() => act.run({ path: "reset-password" })}
+      />
+    </SideSheet>
   )
 }

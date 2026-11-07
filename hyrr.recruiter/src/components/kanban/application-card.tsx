@@ -58,17 +58,14 @@ export function ApplicationCard({ candidate, isOverlay = false, jobTitle }: Appl
   const [confirmDelete, setConfirmDelete] = useState(false)
   const withdrawn = isWithdrawn(candidate)
 
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: candidate.id,
     disabled: isOverlay || withdrawn,
   })
 
-  const style = transform
-    ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-        opacity: isDragging ? 0.3 : 1,
-      }
-    : undefined
+  // The board's DragOverlay follows the pointer; the original stays put as a faded placeholder
+  // (moving it too would show two cards).
+  const style = isDragging ? { opacity: 0.35 } : undefined
 
   const tagDetails = getTagDetails(candidate)
 

@@ -1,14 +1,26 @@
 import {
   APPLICATION_STATUS,
   APPLICATION_STATUS_LABEL,
-  AnimatedNumber,
   Badge,
   Button,
   Card,
+  PageHeader,
+  StatCard,
   VerifiedBadge,
+  stageTone,
   useJobStore,
 } from "hyrr.shared"
-import { ArrowUpRight, Briefcase, Calendar, CheckCircle2, Star, TrendingUp } from "lucide-react"
+import {
+  ArrowUpRight,
+  Briefcase,
+  Calendar,
+  CalendarCheck,
+  CheckCircle2,
+  Home,
+  Star,
+  TrendingUp,
+  Trophy,
+} from "lucide-react"
 import { ProfileStrengthCard } from "../components/profile/profile-strength"
 
 const colorDot: Record<string, string> = {
@@ -57,14 +69,14 @@ export function CandidateDashboard() {
     {
       title: "Interviewing",
       value: interviewing,
-      icon: CheckCircle2,
+      icon: CalendarCheck,
       change: interviewing > 0 ? "🎯 Keep it up!" : "No interviews yet",
       trend: interviewing > 0 ? "up" : "neutral",
     },
     {
       title: "Offers",
       value: offers,
-      icon: CheckCircle2,
+      icon: Trophy,
       change: offers > 0 ? "🎉 Congrats!" : "Keep pushing!",
       trend: offers > 0 ? "up" : "neutral",
     },
@@ -100,13 +112,6 @@ export function CandidateDashboard() {
   const hasRecentActivity = recentActivity.length > 0
   const hasRecommended = recommended.length > 0
 
-  const statsAccents = [
-    "accent-card-blue",
-    "accent-card-primary",
-    "accent-card-orange",
-    "accent-card-green",
-  ]
-
   return (
     <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative">
       {/* Background ambient glows */}
@@ -115,13 +120,8 @@ export function CandidateDashboard() {
 
       {/* Greeting */}
       <div className="relative z-10">
-        <h1 className="text-[28px] sm:text-[36px] font-extrabold tracking-tight">
-          <span className="premium-gradient-text text-glow">
-            {greeting}, {firstName}
-          </span>{" "}
-          👋
-        </h1>
-        <p className="text-body text-txt-body mt-1 font-semibold opacity-90">
+        <PageHeader icon={Home} tone="violet" title={`${greeting}, ${firstName} 👋`} />
+        <p className="text-body text-txt-body mt-1 font-medium sm:pl-[62px]">
           You have {inProcess} active application{inProcess !== 1 ? "s" : ""} in progress
           {offers > 0
             ? ` and ${offers} offer${offers !== 1 ? "s" : ""} waiting for your decision`
@@ -132,38 +132,17 @@ export function CandidateDashboard() {
 
       {/* Stats Grid */}
       <div className="stagger grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 relative z-10">
-        {stats.map((stat, idx) => {
-          const Icon = stat.icon
-          const accentClass = statsAccents[idx % statsAccents.length]
-          return (
-            <Card
-              key={idx}
-              hoverEffect
-              className={`p-6 flex flex-col justify-between h-36 relative overflow-hidden group ${accentClass}`}
-            >
-              {/* Subtle gradient shimmer on hover */}
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none rounded-inherit" />
-              <div className="flex items-start justify-between relative z-10">
-                <span className="text-[12px] font-bold tracking-wider text-txt-caption uppercase">
-                  {stat.title}
-                </span>
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-light to-primary-light/60 border border-primary-border/40 flex items-center justify-center text-primary shadow-[0_0_12px_rgba(108,99,255,0.08)] group-hover:shadow-[0_0_18px_rgba(108,99,255,0.2)] transition-shadow">
-                  <Icon className="w-5 h-5" />
-                </div>
-              </div>
-              <div className="mt-4 flex items-baseline gap-2 relative z-10">
-                <span className="text-[30px] font-black tracking-[-0.02em] text-txt-title leading-none tabular-nums">
-                  {typeof stat.value === "number" ? (
-                    <AnimatedNumber value={stat.value} />
-                  ) : (
-                    stat.value
-                  )}
-                </span>
-                <span className="text-[12.5px] text-txt-caption font-semibold">{stat.change}</span>
-              </div>
-            </Card>
-          )
-        })}
+        {stats.map((stat) => (
+          <StatCard
+            key={stat.title}
+            title={stat.title}
+            value={stat.value}
+            caption={stat.change}
+            icon={stat.icon}
+            tone={stageTone(stat.title)}
+            onClick={() => setCandidateActiveView("Applications")}
+          />
+        ))}
       </div>
 
       {/* Main 2-col grid */}

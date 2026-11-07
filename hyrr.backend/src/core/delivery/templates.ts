@@ -136,8 +136,17 @@ function renderText(heading: string, blocks: Block[]): string {
   return lines.join("\n")
 }
 
-function build(subject: string, heading: string, blocks: Block[], preheader = subject): EmailContent {
-  return { subject, html: renderHtml(preheader, heading, blocks), text: renderText(heading, blocks) }
+function build(
+  subject: string,
+  heading: string,
+  blocks: Block[],
+  preheader = subject
+): EmailContent {
+  return {
+    subject,
+    html: renderHtml(preheader, heading, blocks),
+    text: renderText(heading, blocks),
+  }
 }
 
 const greeting = (name?: string | null) => (name?.trim() ? `Hi ${name.trim()},` : "Hi,")
@@ -145,26 +154,66 @@ const greeting = (name?: string | null) => (name?.trim() ? `Hi ${name.trim()},` 
 export function verifyEmail(input: { name?: string | null; url: string }): EmailContent {
   return build("Confirm your e-mail address", "Confirm your e-mail address", [
     { kind: "p", text: greeting(input.name) },
-    { kind: "p", text: `Please confirm your e-mail address to finish setting up your ${BRAND} account.` },
+    {
+      kind: "p",
+      text: `Please confirm your e-mail address to finish setting up your ${BRAND} account.`,
+    },
     { kind: "button", label: "Confirm e-mail", url: input.url },
     { kind: "muted", text: "If you didn't create an account, you can ignore this e-mail." },
   ])
 }
 
+export function teamInvite(input: {
+  inviterName?: string | null
+  companyName: string
+  role: string
+  url: string
+}): EmailContent {
+  const who = input.inviterName?.trim() || "A teammate"
+  return build(
+    `Join ${input.companyName} on ${BRAND}`,
+    `You're invited to join ${input.companyName}`,
+    [
+      { kind: "p", text: "Hi," },
+      {
+        kind: "p",
+        text: `${who} invited you to join ${input.companyName} on ${BRAND} as ${input.role}. You'll share the company's jobs, candidates and calendar.`,
+      },
+      { kind: "button", label: "Accept invite", url: input.url },
+      {
+        kind: "muted",
+        text: "The link expires in 7 days. If you weren't expecting this, you can ignore this e-mail.",
+      },
+    ]
+  )
+}
+
 export function resetPassword(input: { name?: string | null; url: string }): EmailContent {
   return build("Reset your password", "Reset your password", [
     { kind: "p", text: greeting(input.name) },
-    { kind: "p", text: "We received a request to reset your password. The link expires soon and can be used once." },
+    {
+      kind: "p",
+      text: "We received a request to reset your password. The link expires soon and can be used once.",
+    },
     { kind: "button", label: "Choose a new password", url: input.url },
-    { kind: "muted", text: "If you didn't request this, ignore this e-mail — your password stays unchanged." },
+    {
+      kind: "muted",
+      text: "If you didn't request this, ignore this e-mail — your password stays unchanged.",
+    },
   ])
 }
 
 export function passwordChanged(input: { name?: string | null }): EmailContent {
   return build("Your password was changed", "Your password was changed", [
     { kind: "p", text: greeting(input.name) },
-    { kind: "p", text: `The password for your ${BRAND} account was just changed and other sessions were signed out.` },
-    { kind: "muted", text: "If this wasn't you, reset your password immediately and contact support." },
+    {
+      kind: "p",
+      text: `The password for your ${BRAND} account was just changed and other sessions were signed out.`,
+    },
+    {
+      kind: "muted",
+      text: "If this wasn't you, reset your password immediately and contact support.",
+    },
   ])
 }
 
@@ -208,7 +257,8 @@ export function interviewScheduled(input: {
     { kind: "p", text: `An interview for ${input.jobTitle} was scheduled for ${when}.` },
   ]
   if (input.location) blocks.push({ kind: "p", text: `Location: ${input.location}` })
-  if (input.meetingUrl) blocks.push({ kind: "button", label: "Join meeting", url: input.meetingUrl })
+  if (input.meetingUrl)
+    blocks.push({ kind: "button", label: "Join meeting", url: input.meetingUrl })
   return build(`Interview scheduled: ${input.jobTitle}`, "Interview scheduled", blocks)
 }
 
@@ -226,7 +276,11 @@ export function newMessage(input: {
     { kind: "quote", text: excerpt },
   ]
   if (input.url) blocks.push({ kind: "button", label: "Reply", url: input.url })
-  return build(`New message from ${input.fromName} about ${input.jobTitle}`, "You have a new message", blocks)
+  return build(
+    `New message from ${input.fromName} about ${input.jobTitle}`,
+    "You have a new message",
+    blocks
+  )
 }
 
 export function jobAlertDigest(input: {
@@ -238,19 +292,29 @@ export function jobAlertDigest(input: {
     count === 1
       ? `New job match: ${input.jobs[0].title} at ${input.jobs[0].company}`
       : `${count} new jobs match your alerts`
-  return build(subject, count === 1 ? "A new job matches your alert" : "New jobs match your alerts", [
-    { kind: "p", text: greeting(input.name) },
-    { kind: "p", text: count === 1 ? "This job matches one of your job alerts:" : "These jobs match your job alerts:" },
-    {
-      kind: "list",
-      items: input.jobs.map((job) => ({
-        title: job.title,
-        meta: [job.company, job.location].filter(Boolean).join(" · "),
-        url: job.url ?? undefined,
-      })),
-    },
-    { kind: "muted", text: "Manage your job alerts in your Hyrr settings." },
-  ])
+  return build(
+    subject,
+    count === 1 ? "A new job matches your alert" : "New jobs match your alerts",
+    [
+      { kind: "p", text: greeting(input.name) },
+      {
+        kind: "p",
+        text:
+          count === 1
+            ? "This job matches one of your job alerts:"
+            : "These jobs match your job alerts:",
+      },
+      {
+        kind: "list",
+        items: input.jobs.map((job) => ({
+          title: job.title,
+          meta: [job.company, job.location].filter(Boolean).join(" · "),
+          url: job.url ?? undefined,
+        })),
+      },
+      { kind: "muted", text: "Manage your job alerts in your Hyrr settings." },
+    ]
+  )
 }
 
 /** Stub for the upcoming billing phase. */

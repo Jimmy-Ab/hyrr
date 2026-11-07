@@ -15,20 +15,6 @@ import {
 } from "lucide-react"
 import { type ElementType, useEffect } from "react"
 
-function HyrrMark() {
-  return (
-    <div className="flex items-center gap-2 px-2">
-      <span className="grid h-6 w-6 place-items-center rounded-md bg-primary text-sm font-black text-white">
-        H
-      </span>
-      <span className="leading-none">
-        <b className="block text-[15px] text-txt-title">HYRR</b>
-        <small className="block text-[9px] font-bold tracking-wide text-primary">CAREERS</small>
-      </span>
-    </div>
-  )
-}
-
 interface SidebarProps {
   /** Off-canvas drawer state below the `lg` breakpoint */
   open: boolean
@@ -103,11 +89,10 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         aria-label="Main navigation"
         className={`fixed inset-y-0 left-0 z-50 w-[260px] max-w-[85vw] transform transition-transform duration-200 lg:static lg:z-auto lg:w-[260px] lg:max-w-none lg:translate-x-0 ${
           open ? "translate-x-0 shadow-floating" : "-translate-x-full"
-        } shrink-0 bg-bg-sidebar border-r border-bg-border flex flex-col h-dvh p-3 justify-between select-none overflow-y-auto`}
+        } shrink-0 bg-bg-sidebar border-r border-bg-border flex flex-col h-dvh lg:h-full p-3 justify-between select-none overflow-y-auto`}
       >
         <div className="flex flex-col gap-5">
-          <div className="flex items-center justify-between">
-            <HyrrMark />
+          <div className="flex items-center justify-end lg:hidden">
             <button
               type="button"
               onClick={onClose}

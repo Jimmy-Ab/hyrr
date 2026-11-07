@@ -10,6 +10,7 @@ import { PricingService } from "../billing/pricing.service"
 import { WalletService } from "../billing/wallet.service"
 import { CaptchaService } from "../core/security/captcha.service"
 import { PrismaService } from "../prisma/prisma.service"
+import { TeamService } from "../team/team.service"
 import { AccountEmailService } from "./account-email.service"
 import { AuthService } from "./auth.service"
 import { RegisterDto } from "./dtos/register.dto"
@@ -23,7 +24,9 @@ const walletMock = () => ({
   ensureOwnerWallet: jest.fn().mockResolvedValue({ balance: 0 }),
   credit: jest.fn().mockResolvedValue({ balanceAfter: 20, transactionId: "t1" }),
 })
-const pricingMock = () => ({ getConfig: jest.fn().mockResolvedValue({ signupBonus: 20, seekerSignupBonus: 10 }) })
+const pricingMock = () => ({
+  getConfig: jest.fn().mockResolvedValue({ signupBonus: 20, seekerSignupBonus: 10 }),
+})
 
 /** Minimal stand-in for CacheService (in-memory, no TTL handling needed for these tests). */
 function memoryCache() {
@@ -75,8 +78,22 @@ describe("AuthService", () => {
         { provide: AccountEmailService, useValue: accountEmail },
         { provide: WalletService, useValue: wallet },
         { provide: PricingService, useValue: pricingMock() },
+        {
+          provide: TeamService,
+          useFactory: () =>
+            new TeamService(
+              prismaMock,
+              wallet as any,
+              pricingMock() as any,
+              { send: jest.fn() } as any
+            ),
+        },
       ],
     }).compile()
+    // register() re-reads the user at the end of its transaction.
+    prismaMock.user.findUniqueOrThrow.mockImplementation(
+      () => prismaMock.user.create.mock.results.at(-1)?.value
+    )
 
     service = module.get<AuthService>(AuthService)
   })
@@ -123,6 +140,12 @@ describe("AuthService", () => {
       email: "r@x.io",
       password: "password123",
       role: "RECRUITER",
+      companyName: "Rae Studio",
+      companyWebsite: "https://rae.studio",
+    })
+
+    expect(prismaMock.company.create).toHaveBeenCalledWith({
+      data: { name: "Rae Studio", logo: "R", country: "", website: "https://rae.studio" },
     })
 
     expect(prismaMock.companyMember.create).toHaveBeenCalledWith({
@@ -204,12 +227,20 @@ describe("AuthService", () => {
 
     await expect(
       service.login({ email: "bad@example.com", password: "password123" })
-    ).rejects.toMatchObject({ errorCode: "ACCOUNT_INACTIVE", status: 403 })
+    ).rejects.toMatchObject({ errorCode: "ACCOUNT_SUSPENDED", status: 403 })
     expect(prismaMock.user.update).not.toHaveBeenCalled()
   })
 
-  it("refuses to refresh tokens for a non-active user", async () => {
+  it("refuses to refresh tokens for a suspended user with a clear 403 ACCOUNT_SUSPENDED", async () => {
     prismaMock.user.findUnique.mockResolvedValue({ id: "u", status: "SUSPENDED" })
+    await expect(service.refreshTokens("u")).rejects.toMatchObject({
+      status: 403,
+      errorCode: "ACCOUNT_SUSPENDED",
+    })
+  })
+
+  it("refuses to refresh tokens for a pending (inactive) user", async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ id: "u", status: "PENDING" })
     await expect(service.refreshTokens("u")).rejects.toThrow(UnauthorizedException)
   })
 
@@ -263,17 +294,21 @@ describe("AuthService", () => {
       expect(prismaMock.company.create).not.toHaveBeenCalled()
     })
 
-    it("creates company + OWNER membership for a new RECRUITER OAuth signup", async () => {
+    it("a new RECRUITER OAuth signup starts without a company (set-up screen)", async () => {
       prismaMock.user.findFirst.mockResolvedValue(null)
       prismaMock.user.findUnique.mockResolvedValue(null)
-      prismaMock.user.create.mockResolvedValue({ id: "n1", email: "n@b.c", role: "RECRUITER" })
-      prismaMock.company.create.mockResolvedValue({ id: "co-9" })
+      prismaMock.user.create.mockResolvedValue({
+        id: "n1",
+        email: "n@b.c",
+        role: "RECRUITER",
+        status: "ACTIVE",
+      })
       prismaMock.user.update.mockResolvedValue({
         id: "n1",
         email: "n@b.c",
         role: "RECRUITER",
         status: "ACTIVE",
-        companyId: "co-9",
+        companyId: null,
       })
       const result = await service.upsertOAuthUser(
         {
@@ -287,13 +322,9 @@ describe("AuthService", () => {
         "RECRUITER"
       )
       expect(result).toMatchObject({ role: "RECRUITER" })
-      expect(prismaMock.companyMember.create).toHaveBeenCalledWith({
-        data: { companyId: "co-9", userId: "n1", role: "OWNER" },
-      })
-      expect(wallet.credit).toHaveBeenCalledWith(
-        expect.objectContaining({ companyId: "co-9", amount: 20, type: "SIGNUP_BONUS" }),
-        prismaMock
-      )
+      expect(prismaMock.company.create).not.toHaveBeenCalled()
+      expect(prismaMock.companyMember.create).not.toHaveBeenCalled()
+      expect(wallet.credit).not.toHaveBeenCalled()
     })
   })
 
@@ -336,8 +367,30 @@ describe("RegisterDto", () => {
   })
 
   it.each(["SEEKER", "RECRUITER"])("accepts role %p", async (role) => {
-    const errors = await validate(plainToInstance(RegisterDto, { ...base, role }))
+    const errors = await validate(
+      plainToInstance(RegisterDto, { ...base, role, companyName: "Eve Labs" })
+    )
     expect(errors).toHaveLength(0)
+  })
+
+  it("recruiters name their company unless they join one", async () => {
+    const recruiter = { ...base, role: "RECRUITER" }
+    const fields = async (extra: object) =>
+      (await validate(plainToInstance(RegisterDto, { ...recruiter, ...extra }))).map(
+        (e) => e.property
+      )
+    expect(await fields({})).toEqual(["companyName"])
+    expect(await fields({ companyName: "   " })).toEqual(["companyName"])
+    expect(await fields({ inviteToken: "tok" })).toEqual([])
+    expect(await fields({ joinCompanyId: "6f1c2a1e-1b2c-4d3e-8f9a-0b1c2d3e4f5a" })).toEqual([])
+    expect(await fields({ companyName: "Acme", companyWebsite: "not a site" })).toEqual([
+      "companyWebsite",
+    ])
+    expect(await fields({ companyName: "Acme", companyWebsite: "acme.com" })).toEqual([])
+    // Seekers never need a company.
+    expect((await validate(plainToInstance(RegisterDto, { ...base, role: "SEEKER" }))).length).toBe(
+      0
+    )
   })
 })
 
@@ -388,7 +441,11 @@ describe("AuthService account security", () => {
       twoFactor as any,
       accountEmail,
       walletMock() as any,
-      pricingMock() as any
+      pricingMock() as any,
+      {} as any
+    )
+    prisma.user.findUniqueOrThrow.mockImplementation(
+      () => prisma.user.create.mock.results.at(-1)?.value
     )
   })
 

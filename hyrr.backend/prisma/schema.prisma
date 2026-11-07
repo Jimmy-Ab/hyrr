@@ -112,6 +112,8 @@ model User {
   status       UserStatus  @default(ACTIVE)
   joinedAt     DateTime    @default(now())
   lastLogin    DateTime    @default(now())
+  /// Last authenticated activity (login or API use, updated at most hourly); powers active-user analytics.
+  lastActiveAt DateTime?
 
   // Account security
   emailVerifiedAt        DateTime?
@@ -142,10 +144,15 @@ model User {
   receivedMessages Message[] @relation("ReceivedMessages")
   calendarEvents CalendarEvent[]
   companyMemberships CompanyMember[]
+  invitesSent        CompanyInvite[]      @relation("InviteSender")
+  joinRequests       CompanyJoinRequest[] @relation("JoinRequester")
+  joinDecisions      CompanyJoinRequest[] @relation("JoinDecider")
   conversationStates ConversationState[]
   authTokens         AuthToken[]
   jobAlerts     JobAlert[]
   savedSearches  SavedSearch[]
+  @@index([joinedAt])
+  @@index([lastActiveAt])
 }
 
 model Company {
@@ -168,11 +175,14 @@ model Company {
   // Relations
   members     User[]
   teamMembers CompanyMember[]
+  invites      CompanyInvite[]
+  joinRequests CompanyJoinRequest[]
   jobs        Job[]
   wallet       CreditWallet?
   transactions CreditTransaction[]
   payments     Payment[]
   subscription Subscription?
+  @@index([joinedAt])
 }
 
 // ==========================================
@@ -291,6 +301,9 @@ model Job {
   benefits      String[]
   featured      Boolean     @default(false) // currently featured (kept in sync with featuredUntil)
   featuredUntil DateTime?
+  /// Set when an admin removes the job (moderation); the recruiter can't reopen it.
+  removedAt     DateTime?
+  removedReason String?
   publishedAt   DateTime? // first time the job went live (publishing is charged once)
   remote        Boolean     @default(false)
   momentumCost  Int         @default(0) // Momentum credits charged when it was published
@@ -299,6 +312,7 @@ model Job {
   // Relations
   applications  Application[]
   screeningQuestions ScreeningQuestion[]
+  @@index([publishedAt])
 }
 
 // ==========================================
@@ -349,6 +363,7 @@ model Application {
   answers            ScreeningAnswer[]
   stageEvents        ApplicationStageEvent[]
   conversationStates ConversationState[]
+  @@index([appliedAt])
 }
 
 // ==========================================
@@ -371,6 +386,7 @@ model Message {
 
   @@unique([senderId, clientId])
   @@index([applicationId, createdAt])
+  @@index([createdAt])
 }
 
 // Per-user conversation state: read position and "delete for me".
@@ -475,6 +491,7 @@ model Payment {
 
   @@index([companyId, createdAt])
   @@index([userId, createdAt])
+  @@index([paidAt])
 }
 
 model AuditLog {
@@ -484,9 +501,13 @@ model AuditLog {
   action    String
   target    String
   details   String   @db.Text
+  /// Structured context (reason, before/after values).
+  meta      Json?
   ip        String
   severity  String
   createdAt DateTime @default(now())
+  @@index([createdAt])
+  @@index([userId, createdAt])
 }
 
 // ==========================================
@@ -501,6 +522,47 @@ model CompanyMember {
   role      CompanyMemberRole @default(RECRUITER)
   createdAt DateTime          @default(now())
   @@unique([companyId, userId])
+}
+
+/// Owner invites a colleague by e-mail; accepted through a one-time link (stored as a sha256 hash).
+model CompanyInvite {
+  id          String            @id @default(uuid())
+  companyId   String
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  email       String
+  role        CompanyMemberRole @default(RECRUITER)
+  tokenHash   String            @unique
+  invitedById String?
+  invitedBy   User?             @relation("InviteSender", fields: [invitedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime          @default(now())
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  declinedAt  DateTime?
+  revokedAt   DateTime?
+  @@index([companyId, email])
+}
+
+enum JoinRequestStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  CANCELED
+}
+
+/// A recruiter whose e-mail domain matches a verified company asks to join it.
+model CompanyJoinRequest {
+  id          String            @id @default(uuid())
+  companyId   String
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User              @relation("JoinRequester", fields: [userId], references: [id], onDelete: Cascade)
+  status      JoinRequestStatus @default(PENDING)
+  createdAt   DateTime          @default(now())
+  decidedById String?
+  decidedBy   User?             @relation("JoinDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt   DateTime?
+  @@index([companyId, status])
+  @@index([userId, status])
 }
 
 model ScreeningQuestion {
@@ -562,6 +624,7 @@ model ApplicationStageEvent {
   toStatus      ApplicationStatus
   actorId       String?
   createdAt     DateTime          @default(now())
+  @@index([toStatus, createdAt])
 }
 
 
@@ -709,6 +772,7 @@ model CreditTransaction {
   @@index([companyId, createdAt])
   @@index([userId, createdAt])
   @@index([type, referenceId])
+  @@index([createdAt])
 }
 
 enum CreditAudience {

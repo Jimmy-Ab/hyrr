@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   ForbiddenException,
   HttpStatus,
   Injectable,
@@ -9,7 +8,6 @@ import {
   Optional,
 } from "@nestjs/common"
 import { CompanyMemberRole, JobStatus, NotificationType, Prisma, UserRole } from "@prisma/client"
-import { assertSeatAvailable } from "../billing/seats"
 import { CacheService } from "../cache/cache.service"
 import { AccessService, Actor } from "../core/access/access.service"
 import { requireCompanyWriter, resolveCompanyMembership } from "../core/access/company-membership"
@@ -84,63 +82,6 @@ export class TalentService {
           }
         : null,
     }
-  }
-
-  /** C13: OWNER adds an existing recruiter (who has no company yet) by e-mail. Never grants OWNER. */
-  async addTeamMember(actor: Actor, data: { email: string; role: string }) {
-    const companyId = await this.requireOwner(actor)
-    const role = data.role as CompanyMemberRole
-    if (role === CompanyMemberRole.OWNER || !Object.values(CompanyMemberRole).includes(role))
-      throw new BadRequestException("Role must be RECRUITER, HIRING_MANAGER or VIEWER")
-
-    const target = await this.prisma.user.findFirst({
-      where: { email: { equals: data.email.trim(), mode: "insensitive" } },
-    })
-    if (!target || target.role !== UserRole.RECRUITER)
-      throw new NotFoundException("No recruiter account exists with this e-mail")
-    if (target.id === actor.userId) throw new ConflictException("You are already on this team")
-
-    // Every recruiter gets a personal company at sign-up. They may join a team only while that
-    // company is still "empty": they are its only member and it has no jobs. That placeholder
-    // company is removed when they join. Anyone in a real company must leave it first.
-    const memberships = await this.prisma.companyMember.findMany({ where: { userId: target.id } })
-    const previousCompanyIds = Array.from(
-      new Set([
-        ...memberships.map((m) => m.companyId),
-        ...(target.companyId ? [target.companyId] : []),
-      ])
-    )
-    if (previousCompanyIds.includes(companyId))
-      throw new ConflictException("This recruiter is already on your team")
-    for (const previousId of previousCompanyIds) {
-      const [otherMembers, jobs] = await Promise.all([
-        this.prisma.companyMember.count({
-          where: { companyId: previousId, userId: { not: target.id } },
-        }),
-        this.prisma.job.count({ where: { companyId: previousId } }),
-      ])
-      if (otherMembers > 0 || jobs > 0)
-        throw new ConflictException("This recruiter already belongs to a company")
-    }
-    // Plan seat limit (Starter 3, Pro 10, Enterprise unlimited) → 402 SEAT_LIMIT_REACHED.
-    await assertSeatAvailable(this.prisma, companyId)
-
-    const member = await this.prisma.$transaction(async (tx) => {
-      for (const previousId of previousCompanyIds) {
-        await tx.companyMember.deleteMany({ where: { companyId: previousId } })
-        await tx.candidateLabel.deleteMany({ where: { companyId: previousId } })
-        await tx.subscription.deleteMany({ where: { companyId: previousId } })
-        await tx.user.updateMany({ where: { companyId: previousId }, data: { companyId: null } })
-        await tx.company.deleteMany({ where: { id: previousId } })
-      }
-      const created = await tx.companyMember.create({
-        data: { companyId, userId: target.id, role },
-        include: { user: { select: { id: true, name: true, email: true, avatar: true } } },
-      })
-      await tx.user.update({ where: { id: target.id }, data: { companyId } })
-      return created
-    })
-    return this.presentMember(member)
   }
 
   /** C13: OWNER removes a (non-owner) member; owners cannot remove themselves. */

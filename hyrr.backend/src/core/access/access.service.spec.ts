@@ -1,3 +1,4 @@
+import { ForbiddenException } from "@nestjs/common"
 import { PrismaClient } from "@prisma/client"
 import { mockDeep } from "jest-mock-extended"
 import { AccessService } from "./access.service"
@@ -22,7 +23,9 @@ describe("AccessService", () => {
     prismaMock.application.findUnique.mockResolvedValue({ id: "a", status: "APPLIED", job })
     const viewer = { userId: "v", role: "RECRUITER" }
     await expect(access.applicationFor(viewer, "a", "view")).resolves.toBeTruthy()
-    await expect(access.applicationFor(viewer, "a", "manage")).rejects.toMatchObject({ status: 403 })
+    await expect(access.applicationFor(viewer, "a", "manage")).rejects.toMatchObject({
+      status: 403,
+    })
   })
 
   it("company RECRUITER (not the poster) can manage", async () => {
@@ -68,5 +71,52 @@ describe("AccessService", () => {
     await expect(
       access.calendarEventFor({ userId: "colleague", role: "RECRUITER" }, "e1")
     ).resolves.toBeTruthy()
+  })
+
+  describe("suspended companies", () => {
+    const suspendedMember = (role: string) =>
+      prismaMock.companyMember.findMany.mockResolvedValue([
+        { companyId: "co-1", role, company: { status: "SUSPENDED" } },
+      ])
+
+    it("keep read access but lose manage rights", async () => {
+      suspendedMember("OWNER")
+      const scope = await access.companyScope("o")
+      expect(scope).toEqual({
+        companyIds: ["co-1"],
+        manageCompanyIds: [],
+        suspendedCompanyIds: ["co-1"],
+      })
+      prismaMock.application.findUnique.mockResolvedValue({ id: "a", status: "APPLIED", job })
+      const owner = { userId: "o", role: "RECRUITER" }
+      await expect(access.applicationFor(owner, "a", "view")).resolves.toBeTruthy()
+      await expect(access.applicationFor(owner, "a", "manage")).rejects.toMatchObject({
+        status: 403,
+        errorCode: "COMPANY_SUSPENDED",
+      })
+    })
+
+    it("job management is 403 COMPANY_SUSPENDED (also through the legacy companyId link)", async () => {
+      prismaMock.companyMember.findMany.mockResolvedValue([])
+      prismaMock.user.findUnique.mockResolvedValue({
+        companyId: "co-1",
+        company: { status: "SUSPENDED" },
+      })
+      prismaMock.job.findUnique.mockResolvedValue(job)
+      await expect(
+        access.jobForManagement({ userId: "legacy", role: "RECRUITER" }, "job-1")
+      ).rejects.toMatchObject({ status: 403, errorCode: "COMPANY_SUSPENDED" })
+      await expect(
+        access.jobForView({ userId: "legacy", role: "RECRUITER" }, "job-1")
+      ).resolves.toBeTruthy()
+    })
+
+    it("an outsider still gets plain FORBIDDEN", async () => {
+      prismaMock.companyMember.findMany.mockResolvedValue([])
+      prismaMock.job.findUnique.mockResolvedValue(job)
+      await expect(
+        access.jobForManagement({ userId: "stranger", role: "RECRUITER" }, "job-1")
+      ).rejects.toBeInstanceOf(ForbiddenException)
+    })
   })
 })

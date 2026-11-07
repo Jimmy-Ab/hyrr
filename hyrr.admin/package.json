@@ -9,12 +9,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "hyrr.shared": "*",
     "@tailwindcss/vite": "^4.3.2",
+    "@tanstack/react-query": "^5.106.1",
+    "hyrr.shared": "*",
+    "lucide-react": "^1.22.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "tailwindcss": "^4.3.2",
-    "lucide-react": "^1.22.0"
+    "recharts": "^3.10.1",
+    "tailwindcss": "^4.3.2"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",

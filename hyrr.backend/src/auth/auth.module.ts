@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common"
 import { JwtModule } from "@nestjs/jwt"
 import { PassportModule } from "@nestjs/passport"
+import { TeamModule } from "../team/team.module"
 import { AccountEmailService } from "./account-email.service"
 import { AccountExportService } from "./account-export.service"
 import { AuthController } from "./auth.controller"
@@ -16,6 +17,7 @@ import { TwoFactorService } from "./two-factor.service"
 @Module({
   imports: [
     PassportModule,
+    TeamModule,
     JwtModule.register({
       secret: jwtSecret(),
       signOptions: { expiresIn: "15m" },

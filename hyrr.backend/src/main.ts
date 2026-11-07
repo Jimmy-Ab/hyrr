@@ -14,7 +14,6 @@ import { jwtSecret } from "./auth/jwt.config"
 import cookieParser = require("cookie-parser")
 
 import { getAllowedOrigins } from "./core/config/origins"
-import { validationException } from "./core/validation/validation-errors"
 import { AllExceptionsFilter } from "./core/filters/all-exceptions.filter"
 import {
   createRateLimiter,
@@ -26,9 +25,12 @@ import { isHealthPath, requestIdMiddleware } from "./core/http/request-id"
 import { LoggingInterceptor } from "./core/interceptors/logging.interceptor"
 import { RedisIoAdapter } from "./core/realtime/redis-io.adapter"
 import { isRedisConfigured, redisOptions } from "./core/redis/redis-options"
+import { validationException } from "./core/validation/validation-errors"
 
 const STRICT_WINDOW_MS = 60_000
 const BILLING_WEBHOOK_PATH = /^\/api\/billing\/webhooks\//
+/** Admin console: its own per-IP bucket (RATE_LIMIT_ADMIN_PER_MINUTE, default 300/min). */
+const ADMIN_PATH = /^\/api\/admin(\/|$)/
 
 /**
  * Shared rate-limit counters when Redis is configured. The client never queues commands while
@@ -80,11 +82,23 @@ async function bootstrap() {
   )
 
   const strictLimit = Number(process.env.RATE_LIMIT_STRICT_PER_MINUTE || 10)
+  const rateLimitStore = redisRateLimitStore()
+  // Admin routes are counted only by the admin limiter below.
+  app.use(
+    createRateLimiter({
+      store: rateLimitStore,
+      skip: (req) => !ADMIN_PATH.test(req.path),
+      windowMs: 60_000,
+      defaultLimit: Number(process.env.RATE_LIMIT_ADMIN_PER_MINUTE || 300),
+      rules: [],
+    })
+  )
   app.use(
     createRateLimiter({
       // Health probes and provider webhooks (signature-verified; providers retry on 429).
-      store: redisRateLimitStore(),
-      skip: (req) => isHealthPath(req.path) || BILLING_WEBHOOK_PATH.test(req.path),
+      store: rateLimitStore,
+      skip: (req) =>
+        isHealthPath(req.path) || BILLING_WEBHOOK_PATH.test(req.path) || ADMIN_PATH.test(req.path),
       windowMs: 60_000,
       defaultLimit: Number(process.env.RATE_LIMIT_PER_MINUTE || 120),
       rules: [

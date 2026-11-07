@@ -1,19 +1,11 @@
 import { CompanyMemberRole } from "@prisma/client"
-import { IsEmail, IsIn, IsOptional, IsString, MaxLength } from "class-validator"
+import { IsIn, IsOptional, IsString, MaxLength } from "class-validator"
 
 export const ASSIGNABLE_TEAM_ROLES = [
   CompanyMemberRole.RECRUITER,
   CompanyMemberRole.HIRING_MANAGER,
   CompanyMemberRole.VIEWER,
 ] as const
-
-export class AddTeamMemberDto {
-  @IsEmail()
-  @MaxLength(254)
-  email: string
-  @IsIn(ASSIGNABLE_TEAM_ROLES as unknown as string[])
-  role: "RECRUITER" | "HIRING_MANAGER" | "VIEWER"
-}
 
 export const JOB_REPORT_REASONS = [
   "SCAM",

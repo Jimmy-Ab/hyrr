@@ -1,289 +1,383 @@
-import { Badge, Button, Card, Input, useToast } from "hyrr.shared"
-import { useState } from "react"
+import { useQuery } from "@tanstack/react-query"
+import {
+  Button,
+  Card,
+  FormField,
+  IconTile,
+  PageHeader,
+  Skeleton,
+  TonePill,
+  apiFetch,
+  describedBy,
+  errorMessage,
+  fieldCls,
+  fieldErrorsOf,
+  inputStateCls,
+  useToast,
+  validate,
+  type FieldErrors,
+  type Tone,
+} from "hyrr.shared"
+import {
+  Bot,
+  CreditCard,
+  Database,
+  HardDrive,
+  Layers,
+  Mail,
+  Search,
+  Settings2,
+  ShieldCheck,
+  Sparkles,
+  TriangleAlert,
+  type LucideIcon,
+} from "lucide-react"
+import * as React from "react"
+import { ErrorBlock } from "../components/ui/common"
+import { useAdminAction, useAdminQuery } from "../lib/api"
+import { humanize } from "../lib/format"
+import { aiSettingsSchema } from "../lib/schemas"
+import type { AiSettings, SystemStatus } from "../lib/types"
 
-type SettingSection =
-  "General" | "Branding" | "Email" | "Auth" | "FeatureFlags" | "Payments" | "Security"
+/** AI settings via the audited admin proxy of /ai/settings (same payload). */
+const AI_PATH = "/admin/ai"
 
-export function PlatformSettingsPage() {
+export function Settings() {
+  return (
+    <div className="flex flex-col gap-6 pb-10">
+      <PageHeader
+        title="AI & settings"
+        icon={Settings2}
+        tone="teal"
+        subtitle="Model choice and what's configured on the server"
+      />
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <AiCard />
+        <SystemCard />
+      </div>
+    </div>
+  )
+}
+
+const PROVIDER_LABEL: Record<string, string> = {
+  openai: "OpenAI",
+  claude: "Anthropic",
+  anthropic: "Anthropic",
+  gemini: "Google",
+  google: "Google",
+}
+
+function AiCard() {
   const { toast } = useToast()
-  const [activeSec, setActiveSec] = useState<SettingSection>("General")
+  const q = useQuery<AiSettings>({ queryKey: ["admin", AI_PATH], queryFn: () => apiFetch(AI_PATH) })
+  const save = useAdminAction((body: object) =>
+    apiFetch(AI_PATH, { method: "PUT", body: JSON.stringify(body) })
+  )
+  const [model, setModel] = React.useState("")
+  const [temperature, setTemperature] = React.useState("0.2")
+  const [prompt, setPrompt] = React.useState("")
+  const [errors, setErrors] = React.useState<FieldErrors>({})
+  const data = q.data
 
-  const [maintenanceMode, setMaintenanceMode] = useState(false)
-  const [allowRegistration, setAllowRegistration] = useState(true)
-  const [mfaRequired, setMfaRequired] = useState(false)
+  React.useEffect(() => {
+    if (!data) return
+    setModel(data.activeModel ?? "")
+    setTemperature(String(data.temperature ?? 0.2))
+    setPrompt(data.systemPrompt ?? "")
+    setErrors({})
+  }, [data])
 
-  const [brandColor, setBrandColor] = useState("#6C63FF")
-  const [platformName, setPlatformName] = useState("HYRR")
+  const clear = (k: string) =>
+    errors[k] &&
+    setErrors((prev) => {
+      const next = { ...prev }
+      delete next[k]
+      return next
+    })
 
-  const renderSection = () => {
-    switch (activeSec) {
-      case "General":
-        return (
-          <div className="space-y-6">
-            <div className="space-y-2">
-              <label className="text-[12.5px] font-bold text-txt-heading block">
-                Platform Name
-              </label>
-              <Input
-                value={platformName}
-                onChange={(e) => setPlatformName(e.target.value)}
-                className="max-w-sm h-9 text-[13px]"
-              />
-            </div>
+  const dirty =
+    !!data &&
+    (model !== data.activeModel ||
+      Number(temperature) !== data.temperature ||
+      prompt !== data.systemPrompt)
 
-            <div className="space-y-2">
-              <label className="text-[12.5px] font-bold text-txt-heading block">
-                Maintenance Mode
-              </label>
-              <div className="flex items-center justify-between p-3 rounded-[12px] bg-bg-secondary border border-bg-border/60 max-w-sm">
-                <span className="text-[12.5px] text-txt-body">Activate maintenance shield</span>
-                <button
-                  onClick={() => {
-                    setMaintenanceMode(!maintenanceMode)
-                    toast(
-                      "Maintenance",
-                      `Maintenance mode is now ${!maintenanceMode ? "active" : "disabled"}.`,
-                      "warning"
-                    )
-                  }}
-                  className={`relative w-12 h-6 rounded-full transition-colors cursor-pointer ${maintenanceMode ? "bg-sec-orange" : "bg-bg-border"}`}
-                >
-                  <div
-                    className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${maintenanceMode ? "translate-x-6" : "translate-x-0.5"}`}
-                  />
-                </button>
-              </div>
-              <p className="text-[11px] text-txt-caption">
-                Restricts applicant and recruiter access to platform. Returns HTTP 503.
-              </p>
-            </div>
-
-            <Button onClick={() => toast("Saved", "General configurations stored.", "success")}>
-              Save General Settings
-            </Button>
-          </div>
-        )
-
-      case "Branding":
-        return (
-          <div className="space-y-5">
-            <div className="space-y-2">
-              <label className="text-[12.5px] font-bold text-txt-heading block">
-                Brand Primary Hex
-              </label>
-              <div className="flex gap-2 items-center">
-                <Input
-                  value={brandColor}
-                  onChange={(e) => setBrandColor(e.target.value)}
-                  className="w-32 h-9 text-[13px]"
-                />
-                <div
-                  className="w-8 h-8 rounded-lg border border-bg-border"
-                  style={{ backgroundColor: brandColor }}
-                />
-              </div>
-            </div>
-            <Button onClick={() => toast("Saved", "Theme parameters stored.", "success")}>
-              Save Branding
-            </Button>
-          </div>
-        )
-
-      case "Email":
-        return (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-[12.5px] font-bold text-txt-heading block">SMTP Host</label>
-              <Input defaultValue="smtp.sendgrid.net" className="max-w-sm h-9 text-[13px]" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[12.5px] font-bold text-txt-heading block">Sender Name</label>
-              <Input defaultValue="HYRR Alerts" className="max-w-sm h-9 text-[13px]" />
-            </div>
-            <Button onClick={() => toast("Saved", "Email configuration updated.", "success")}>
-              Save SMTP
-            </Button>
-          </div>
-        )
-
-      case "Auth":
-        return (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 rounded-[12px] bg-bg-secondary border border-bg-border/60 max-w-md">
-              <div>
-                <p className="text-[13px] font-semibold text-txt-heading">New Registrations</p>
-                <p className="text-[11px] text-txt-caption mt-0.5">
-                  Allows new candidate and company signs ups.
-                </p>
-              </div>
-              <button
-                onClick={() => setAllowRegistration(!allowRegistration)}
-                className={`relative w-12 h-6 rounded-full transition-colors cursor-pointer ${allowRegistration ? "bg-primary" : "bg-bg-border"}`}
-              >
-                <div
-                  className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${allowRegistration ? "translate-x-6" : "translate-x-0.5"}`}
-                />
-              </button>
-            </div>
-          </div>
-        )
-
-      case "FeatureFlags":
-        return (
-          <div className="space-y-3">
-            {[
-              {
-                key: "ai_review",
-                title: "AI Cover Letter Analysis",
-                desc: "Let recruiters check candidate portfolios using AI.",
-                enabled: true,
-              },
-              {
-                key: "telebirr_direct",
-                title: "Telebirr integration",
-                desc: "Allows direct payment via Telebirr USSD gateway.",
-                enabled: false,
-              },
-            ].map((f) => (
-              <div
-                key={f.key}
-                className="flex items-center justify-between p-3 rounded-[12px] bg-bg-secondary border border-bg-border/60"
-              >
-                <div>
-                  <p className="text-[13px] font-semibold text-txt-heading">{f.title}</p>
-                  <p className="text-[11.5px] text-txt-caption mt-0.5">{f.desc}</p>
-                </div>
-                <Badge variant={f.enabled ? "success" : "secondary"}>
-                  {f.enabled ? "Enabled" : "Disabled"}
-                </Badge>
-              </div>
-            ))}
-          </div>
-        )
-
-      case "Payments":
-        return (
-          <div className="space-y-3">
-            {[
-              { provider: "Stripe Connect", status: "Connected", action: "Configure" },
-              { provider: "PayPal API", status: "Connected", action: "Configure" },
-              { provider: "Chapa Payment Gateway", status: "Disconnected", action: "Connect" },
-              { provider: "Telebirr API Portal", status: "Disconnected", action: "Connect" },
-            ].map((gateway) => (
-              <div
-                key={gateway.provider}
-                className="flex items-center justify-between p-3 rounded-[12px] border border-bg-border/60"
-              >
-                <div>
-                  <span className="text-[13px] font-bold text-txt-heading">{gateway.provider}</span>
-                  <span className="text-[11px] text-txt-caption block mt-0.5">
-                    Integrate direct checkouts.
-                  </span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Badge variant={gateway.status === "Connected" ? "success" : "secondary"}>
-                    {gateway.status}
-                  </Badge>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() =>
-                      toast("Gateway Config", `${gateway.provider} details wizard.`, "info")
-                    }
-                    className="text-[11.5px] cursor-pointer"
-                  >
-                    {gateway.action}
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )
-
-      case "Security":
-        return (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 rounded-[12px] bg-bg-secondary border border-bg-border/60 max-w-md">
-              <div>
-                <p className="text-[13px] font-semibold text-txt-heading">Enforce MFA globally</p>
-                <p className="text-[11px] text-txt-caption mt-0.5">
-                  Requires multi-factor setup on all recruiter accounts.
-                </p>
-              </div>
-              <button
-                onClick={() => setMfaRequired(!mfaRequired)}
-                className={`relative w-12 h-6 rounded-full transition-colors cursor-pointer ${mfaRequired ? "bg-primary" : "bg-bg-border"}`}
-              >
-                <div
-                  className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${mfaRequired ? "translate-x-6" : "translate-x-0.5"}`}
-                />
-              </button>
-            </div>
-
-            <div className="pt-3 border-t border-bg-border/30 max-w-md">
-              <h3 className="text-[13px] font-bold text-txt-heading mb-2">DB Backup</h3>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  onClick={() => toast("Backup started", "Postgres dump initiated.", "success")}
-                  className="cursor-pointer text-[12px]"
-                >
-                  Backup Database Now
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() =>
-                    toast("Restore", "Access to restore requires 2FA authentication.", "warning")
-                  }
-                  className="cursor-pointer text-[12px]"
-                >
-                  Restore Backup
-                </Button>
-              </div>
-            </div>
-          </div>
-        )
+  const onSave = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const body = {
+      activeModel: model,
+      temperature: temperature.trim() === "" ? Number.NaN : Number(temperature),
+      systemPrompt: prompt,
+    }
+    const found = validate(aiSettingsSchema, body)
+    setErrors(found)
+    if (Object.keys(found).length) {
+      document.getElementById(`ai-${Object.keys(found)[0]}`)?.focus()
+      return
+    }
+    try {
+      await save.run({ ...body, systemPrompt: prompt.trim() })
+      toast("AI settings saved", undefined, "success")
+    } catch (err: any) {
+      const fields = fieldErrorsOf(err)
+      if (Object.keys(fields).length) setErrors(fields)
+      else toast("Couldn't save AI settings", errorMessage(err), "error")
     }
   }
 
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div>
-        <h1 className="text-[36px] font-bold text-txt-title tracking-tight">Platform Settings</h1>
-        <p className="text-body text-txt-body mt-1 font-medium">
-          Configure global features, system integration keys, branding, and billing providers.
-        </p>
+    <Card className="p-6">
+      <div className="mb-5 flex items-start gap-3">
+        <IconTile icon={Sparkles} tone="violet" />
+        <div>
+          <h2 className="text-[16px] font-semibold text-txt-heading">AI model</h2>
+          <p className="text-[12.5px] text-txt-caption">
+            Used for candidate scoring, matching and the assistant. Changing it clears cached
+            recommendations.
+          </p>
+        </div>
       </div>
-
-      <div className="flex gap-6">
-        <div className="w-[200px] shrink-0 flex flex-col gap-1">
-          {[
-            { id: "General", label: "General" },
-            { id: "Branding", label: "Branding" },
-            { id: "Email", label: "SMTP Email" },
-            { id: "Auth", label: "Authentication" },
-            { id: "FeatureFlags", label: "Feature Flags" },
-            { id: "Payments", label: "Payment Gates" },
-            { id: "Security", label: "System Security" },
-          ].map((s) => (
-            <button
-              key={s.id}
-              onClick={() => setActiveSec(s.id as SettingSection)}
-              className={`px-3 py-2 text-left rounded-[10px] text-[13px] font-semibold transition-all cursor-pointer ${activeSec === s.id ? "bg-primary-light text-primary" : "text-txt-body hover:bg-bg-hover"}`}
+      {q.error && !data ? (
+        <ErrorBlock error={q.error} onRetry={() => void q.refetch()} />
+      ) : !data ? (
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-11" />
+          <Skeleton className="h-11" />
+          <Skeleton className="h-40" />
+        </div>
+      ) : (
+        <form onSubmit={onSave} noValidate className="flex flex-col gap-4">
+          {data.configuredProviders.length === 0 || !data.resolvedModel ? (
+            <div className="tone-amber flex items-start gap-2.5 rounded-xl bg-[var(--tone-bg)] p-3.5 text-[13px] text-txt-heading ring-1 ring-[var(--tone-ring)]">
+              <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-[var(--tone-fg)]" />
+              No AI provider key is configured on the server, so AI features are off. Add an OpenAI,
+              Anthropic or Google key to the backend environment.
+            </div>
+          ) : (
+            <p className="text-[12.5px] text-txt-body">
+              Running on <b className="text-txt-heading">{data.resolvedModel ?? "—"}</b>
+              {data.provider && ` (${PROVIDER_LABEL[data.provider] ?? humanize(data.provider)})`}
+            </p>
+          )}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_160px]">
+            <FormField id="ai-activeModel" label="Model" error={errors.activeModel}>
+              <select
+                id="ai-activeModel"
+                value={model}
+                disabled={data.availableModels.length === 0}
+                onChange={(e) => {
+                  setModel(e.target.value)
+                  clear("activeModel")
+                }}
+                className={`${fieldCls} ${inputStateCls(errors.activeModel)} cursor-pointer`}
+                {...describedBy("ai-activeModel", errors.activeModel)}
+              >
+                {!data.availableModels.includes(model) && (
+                  <option value={model}>{model || "—"}</option>
+                )}
+                {data.availableModels.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            <FormField
+              id="ai-temperature"
+              label="Temperature"
+              hint="0 – 1"
+              error={errors.temperature}
             >
-              {s.label}
-            </button>
+              <input
+                id="ai-temperature"
+                type="number"
+                min={0}
+                max={1}
+                step={0.05}
+                value={temperature}
+                onChange={(e) => {
+                  setTemperature(e.target.value)
+                  clear("temperature")
+                }}
+                className={`${fieldCls} ${inputStateCls(errors.temperature)} tabular-nums`}
+                {...describedBy("ai-temperature", errors.temperature)}
+              />
+            </FormField>
+          </div>
+          <FormField id="ai-systemPrompt" label="System prompt" error={errors.systemPrompt}>
+            <textarea
+              id="ai-systemPrompt"
+              value={prompt}
+              maxLength={8000}
+              rows={9}
+              onChange={(e) => {
+                setPrompt(e.target.value)
+                clear("systemPrompt")
+              }}
+              className={`w-full resize-y rounded-input border bg-bg-secondary px-3.5 py-2.5 text-[13px] leading-relaxed text-txt-heading focus:outline-none focus:ring-2 transition-all duration-200 ${inputStateCls(errors.systemPrompt)}`}
+              {...describedBy("ai-systemPrompt", errors.systemPrompt)}
+            />
+          </FormField>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[11.5px] tabular-nums text-txt-caption">
+              {prompt.length}/8000
+            </span>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={!dirty || save.busy}
+                onClick={() => {
+                  setModel(data.activeModel)
+                  setTemperature(String(data.temperature))
+                  setPrompt(data.systemPrompt)
+                  setErrors({})
+                }}
+              >
+                Discard
+              </Button>
+              <Button type="submit" size="sm" disabled={!dirty || save.busy}>
+                {save.busy ? "Saving…" : "Save AI settings"}
+              </Button>
+            </div>
+          </div>
+        </form>
+      )}
+    </Card>
+  )
+}
+
+function Row({
+  icon,
+  tone,
+  label,
+  value,
+  ok,
+}: {
+  icon: LucideIcon
+  tone: Tone
+  label: string
+  value: string
+  ok: boolean | null
+}) {
+  return (
+    <li className="group flex items-center gap-3 py-2.5">
+      <IconTile icon={icon} tone={tone} size="sm" />
+      <span className="flex-1 text-[13px] font-medium text-txt-heading">{label}</span>
+      <TonePill tone={ok === null ? "sky" : ok ? "emerald" : "slate"}>{value}</TonePill>
+    </li>
+  )
+}
+
+function SystemCard() {
+  const { data, error, refetch } = useAdminQuery<SystemStatus>("/system")
+  return (
+    <Card className="p-6">
+      <div className="mb-3 flex items-start gap-3">
+        <IconTile icon={ShieldCheck} tone="emerald" />
+        <div>
+          <h2 className="text-[16px] font-semibold text-txt-heading">Server configuration</h2>
+          <p className="text-[12.5px] text-txt-caption">
+            Read-only. Shows whether a key is set, never its value.
+          </p>
+        </div>
+      </div>
+      {error && !data ? (
+        <ErrorBlock error={error} onRetry={() => void refetch()} />
+      ) : !data ? (
+        <div className="flex flex-col gap-2">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} className="h-10" />
           ))}
         </div>
-
-        <Card className="flex-1 p-6">
-          <h2 className="text-[16px] font-bold text-txt-heading border-b border-bg-border/40 pb-2 mb-4">
-            {activeSec} Rules
-          </h2>
-          {renderSection()}
-        </Card>
-      </div>
-    </div>
+      ) : (
+        <ul className="divide-y divide-bg-border/60">
+          <Row
+            icon={Bot}
+            tone="violet"
+            label="OpenAI key"
+            value={data.ai.providers.openai ? "Set" : "Not set"}
+            ok={data.ai.providers.openai}
+          />
+          <Row
+            icon={Bot}
+            tone="violet"
+            label="Anthropic key"
+            value={data.ai.providers.anthropic ? "Set" : "Not set"}
+            ok={data.ai.providers.anthropic}
+          />
+          <Row
+            icon={Bot}
+            tone="violet"
+            label="Google key"
+            value={data.ai.providers.google ? "Set" : "Not set"}
+            ok={data.ai.providers.google}
+          />
+          <Row
+            icon={Sparkles}
+            tone="violet"
+            label="Embeddings"
+            value={data.ai.embeddings ? "On" : "Off"}
+            ok={data.ai.embeddings}
+          />
+          <Row
+            icon={Mail}
+            tone="blue"
+            label="E-mail (SMTP)"
+            value={data.email ? "Configured" : "Off"}
+            ok={data.email}
+          />
+          <Row
+            icon={CreditCard}
+            tone="emerald"
+            label="Stripe"
+            value={data.payments.stripe ? "Configured" : "Off"}
+            ok={data.payments.stripe}
+          />
+          <Row
+            icon={CreditCard}
+            tone="emerald"
+            label="Chapa"
+            value={data.payments.chapa ? "Configured" : "Off"}
+            ok={data.payments.chapa}
+          />
+          <Row
+            icon={HardDrive}
+            tone="amber"
+            label="File storage"
+            value={data.storage === "s3" ? "S3" : "Local disk"}
+            ok={null}
+          />
+          <Row
+            icon={Search}
+            tone="sky"
+            label="Search"
+            value={data.search === "meili" ? "Meilisearch" : "Postgres"}
+            ok={null}
+          />
+          <Row
+            icon={Layers}
+            tone="teal"
+            label="Queues"
+            value={data.queues === "bullmq" ? "BullMQ (Redis)" : "In-process"}
+            ok={null}
+          />
+          <Row
+            icon={ShieldCheck}
+            tone="rose"
+            label="Captcha"
+            value={data.captcha ? "On" : "Off"}
+            ok={data.captcha}
+          />
+          <Row
+            icon={Database}
+            tone="slate"
+            label="Error reporting (Sentry)"
+            value={data.sentry ? "On" : "Off"}
+            ok={data.sentry}
+          />
+        </ul>
+      )}
+    </Card>
   )
 }

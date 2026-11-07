@@ -7,6 +7,7 @@ import {
   Prisma,
 } from "@prisma/client"
 import { AccessService, Actor } from "../core/access/access.service"
+import { interviewScheduled } from "../core/delivery/templates"
 import { AppException } from "../core/exceptions/app-exception"
 import { PUBLIC_COMPANY_SELECT } from "../jobs/public-company"
 import { NotificationsService } from "../notifications/notifications.service"
@@ -65,7 +66,11 @@ export class CalendarService {
       }
       return this.prisma.calendarEvent.findMany({
         where,
-        include: { application: { select: SEEKER_EVENT_APPLICATION } },
+        include: {
+          application: { select: SEEKER_EVENT_APPLICATION },
+          // Who scheduled it (the recruiter's name only), shown on the seeker's calendar.
+          user: { select: { name: true, role: true } },
+        },
         orderBy: { startTime: "asc" },
       })
     }
@@ -133,8 +138,9 @@ export class CalendarService {
           : { application: { include: RECRUITER_EVENT_APPLICATION } },
     })
 
-    // Notify the seeker if this event is linked to their application
-    const seekerUserId = (event as any).application?.user?.id
+    // Notify the seeker if this event is linked to their application (in-app + interview e-mail)
+    const linked = (event as any).application
+    const seekerUserId = linked?.user?.id
     if (seekerUserId && seekerUserId !== actor.userId) {
       const dateStr = new Date(event.startTime).toLocaleDateString("en-US", {
         weekday: "short",
@@ -145,7 +151,17 @@ export class CalendarService {
         seekerUserId,
         `📅 Interview scheduled: "${event.title}" on ${dateStr}`,
         NotificationType.INTERVIEW,
-        NotificationAction.CALENDAR
+        NotificationAction.CALENDAR,
+        null,
+        {
+          email: interviewScheduled({
+            name: linked.user?.name,
+            jobTitle: linked.job?.title || event.title,
+            startTime: event.startTime,
+            meetingUrl: event.meetingUrl,
+            location: event.location,
+          }),
+        }
       )
     }
 

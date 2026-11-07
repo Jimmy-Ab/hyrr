@@ -1,11 +1,12 @@
 import { Injectable, Logger, OnModuleInit, Optional } from "@nestjs/common"
-import { EmploymentType, JobStatus } from "@prisma/client"
+import { EmploymentType } from "@prisma/client"
+import { PUBLIC_JOB_WHERE } from "../jobs/public-job"
 import { PrismaService } from "../prisma/prisma.service"
 import { QueueService } from "../queue/queue.service"
 import {
   JOB_DOCUMENT_SELECT,
-  JOBS_INDEX_SETTINGS,
   JobDocumentSource,
+  JOBS_INDEX_SETTINGS,
   toJobDocument,
 } from "./job-document"
 import { MeiliClient, meiliQuote } from "./meili.client"
@@ -115,7 +116,9 @@ export class SearchService implements OnModuleInit {
           { jobId },
           { jobId: `search-${jobId}`, delayMs: INDEX_DELAY_MS, attempts: 3 }
         )
-        .catch((err: any) => this.logger.warn(`Could not enqueue index of ${jobId}: ${err?.message}`))
+        .catch((err: any) =>
+          this.logger.warn(`Could not enqueue index of ${jobId}: ${err?.message}`)
+        )
       return
     }
     setTimeout(() => {
@@ -133,11 +136,12 @@ export class SearchService implements OnModuleInit {
   /** Queue processor. Throws on Meili errors so the queue retries. */
   async syncJob(jobId: string): Promise<"indexed" | "removed" | "skipped"> {
     if (!this.client) return "skipped"
-    const job = await this.prisma.job.findUnique({
-      where: { id: jobId },
+    // Only publicly visible jobs live in the index (ACTIVE and company not suspended).
+    const job = await this.prisma.job.findFirst({
+      where: { id: jobId, ...PUBLIC_JOB_WHERE },
       select: JOB_DOCUMENT_SELECT,
     })
-    if (job && job.status === JobStatus.ACTIVE) {
+    if (job) {
       await this.client.addDocuments(this.indexUid, [toJobDocument(job)])
       return "indexed"
     }
@@ -194,7 +198,7 @@ export class SearchService implements OnModuleInit {
     let lastTask: number | undefined
     for (;;) {
       const batch: JobDocumentSource[] = await this.prisma.job.findMany({
-        where: { status: JobStatus.ACTIVE },
+        where: PUBLIC_JOB_WHERE,
         select: JOB_DOCUMENT_SELECT,
         orderBy: { id: "asc" },
         take: REINDEX_BATCH,

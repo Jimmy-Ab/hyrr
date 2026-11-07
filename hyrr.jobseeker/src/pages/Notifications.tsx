@@ -2,14 +2,20 @@ import {
   Button,
   Card,
   ConfirmDialog,
+  EmptyState,
   errorMessage,
+  FilterChips,
+  IconTile,
   NOTIFICATION_TYPE_LABEL,
   notificationConversationId,
+  notificationTone,
+  PageHeader,
   SEEKER_VIEW,
   useJobStore,
   useToast,
   type NotificationItem,
   type NotificationType,
+  type Tone,
 } from "hyrr.shared"
 import { Bell, Briefcase, Calendar, Check, MessageSquare, Search, Star, Trash2 } from "lucide-react"
 import { useState } from "react"
@@ -23,16 +29,14 @@ const notifIcons: Record<NotificationType, typeof Bell> = {
   SYSTEM: Bell,
 }
 
-const notifColors: Record<NotificationType, string> = {
-  APPLICATION: "bg-primary-light text-primary",
-  INTERVIEW: "bg-sec-orange/10 text-sec-orange",
-  MESSAGE: "bg-sec-blue/10 text-sec-blue",
-  OFFER: "bg-sec-green/10 text-sec-green",
-  JOB_ALERT: "bg-primary-light text-primary",
-  SYSTEM: "bg-bg-primary text-txt-caption",
-}
-
 type Filter = "All" | "Unread" | "Applications" | "Interviews" | "Messages"
+const FILTER_TONE: Record<Filter, Tone> = {
+  All: "violet",
+  Unread: "rose",
+  Applications: "blue",
+  Interviews: "violet",
+  Messages: "teal",
+}
 
 const filterTypes: Partial<Record<Filter, NotificationType[]>> = {
   Applications: ["APPLICATION", "OFFER", "JOB_ALERT"],
@@ -92,71 +96,69 @@ export function NotificationsPage() {
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300 relative">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-[28px] sm:text-[36px] font-extrabold tracking-tight">
-            <span className="premium-gradient-text text-glow">Notifications</span>
-          </h1>
-          <p className="text-body text-txt-body mt-1 font-medium">
-            {unreadCount > 0
-              ? `${unreadCount} unread notification${unreadCount !== 1 ? "s" : ""}`
-              : "All caught up!"}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleMarkAll}
-            disabled={unreadCount === 0}
-            className="gap-1.5 cursor-pointer text-[13px]"
-          >
-            <Check className="w-3.5 h-3.5" /> Mark all read
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setConfirmClear(true)}
-            disabled={notifications.length === 0}
-            className="gap-1.5 cursor-pointer text-[13px] text-sec-red hover:text-sec-red"
-          >
-            <Trash2 className="w-3.5 h-3.5" /> Clear all
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        icon={Bell}
+        tone="amber"
+        title="Notifications"
+        subtitle={
+          unreadCount > 0
+            ? `${unreadCount} unread notification${unreadCount !== 1 ? "s" : ""}`
+            : "All caught up!"
+        }
+        actions={
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleMarkAll}
+              disabled={unreadCount === 0}
+              className="gap-1.5 cursor-pointer text-[13px]"
+            >
+              <Check className="w-3.5 h-3.5" /> Mark all read
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setConfirmClear(true)}
+              disabled={notifications.length === 0}
+              className="gap-1.5 cursor-pointer text-[13px] text-sec-red hover:text-sec-red"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Clear all
+            </Button>
+          </div>
+        }
+      />
 
       {/* Filter tabs */}
-      <div
-        role="tablist"
-        aria-label="Filter notifications"
-        className="flex max-w-full gap-1 overflow-x-auto custom-scrollbar-none bg-bg-secondary p-1 border border-bg-border rounded-[14px] w-fit"
-      >
-        {filters.map((f) => (
-          <button
-            key={f}
-            type="button"
-            role="tab"
-            aria-selected={filter === f}
-            onClick={() => setFilter(f)}
-            className={`shrink-0 px-4 py-1.5 rounded-[11px] text-[13.5px] font-semibold cursor-pointer transition-all ${
-              filter === f
-                ? "bg-primary text-white"
-                : "text-txt-body hover:bg-bg-hover hover:text-txt-heading"
-            }`}
-          >
-            {f}
-          </button>
-        ))}
-      </div>
+      <FilterChips
+        id="notifications"
+        label="Filter notifications"
+        value={filter}
+        onChange={setFilter}
+        className="w-fit"
+        options={filters.map((f) => ({
+          value: f,
+          label: f,
+          count:
+            f === "All"
+              ? notifications.length
+              : f === "Unread"
+                ? unreadCount
+                : notifications.filter((n) => filterTypes[f]?.includes(n.type)).length,
+          tone: FILTER_TONE[f],
+        }))}
+      />
 
       {/* Notifications list */}
       <Card className="divide-y divide-bg-border/30">
         {filtered.length === 0 ? (
-          <div className="py-16 flex flex-col items-center gap-3 text-center">
-            <Bell className="w-10 h-10 text-txt-disabled" />
-            <p className="text-[14px] font-semibold text-txt-heading">No notifications</p>
-            <p className="text-caption text-txt-caption">Nothing here for the selected filter.</p>
-          </div>
+          <EmptyState
+            icon={Bell}
+            tone="amber"
+            title="No notifications"
+            description="Nothing here for the selected filter."
+            className="border-0 bg-transparent"
+          />
         ) : (
           filtered.map((n) => {
             const Icon = notifIcons[n.type] ?? Bell
@@ -165,13 +167,14 @@ export function NotificationsPage() {
                 type="button"
                 key={n.id}
                 onClick={() => openNotification(n)}
-                className={`w-full text-left flex items-start gap-4 p-4 transition-colors hover:bg-bg-hover/50 cursor-pointer ${n.read ? "opacity-70" : ""}`}
+                className={`group w-full text-left flex items-start gap-4 p-4 transition-colors hover:bg-bg-hover/50 cursor-pointer ${n.read ? "opacity-70" : ""}`}
               >
-                <div
-                  className={`w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0 mt-0.5 ${notifColors[n.type] ?? notifColors.SYSTEM}`}
-                >
-                  <Icon className="w-4 h-4" aria-hidden="true" />
-                </div>
+                <IconTile
+                  icon={Icon}
+                  tone={notificationTone(n.type)}
+                  size="sm"
+                  className="mt-0.5"
+                />
                 <div className="flex-1 min-w-0">
                   <p
                     className={`text-[13px] leading-snug break-words ${n.read ? "text-txt-body" : "text-txt-heading font-medium"}`}

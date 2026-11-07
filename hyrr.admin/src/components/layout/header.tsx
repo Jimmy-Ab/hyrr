@@ -1,158 +1,130 @@
 import {
+  APP_HEADER_CLASS,
+  BrandMark,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  errorMessage,
+  useJobStore,
   useToast,
 } from "hyrr.shared"
-import { Bell, ChevronsLeft, HelpCircle, Moon, Search, Sun } from "lucide-react"
+import { LogOut, Menu, Moon, ShieldCheck, Sun } from "lucide-react"
 import { useEffect, useState } from "react"
-import { useAdminStore } from "../../store/useAdminStore"
+import { queryClient } from "../../lib/api"
+import { Avatar } from "../ui/common"
 
-function HyrrIcon({ size = 32 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 36 36"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <rect width="36" height="36" rx="10" fill="#6C63FF" />
-      <rect x="8" y="9" width="4" height="18" rx="2" fill="white" />
-      <rect x="24" y="9" width="4" height="18" rx="2" fill="white" />
-      <rect x="8" y="15.5" width="20" height="4" rx="2" fill="white" />
-      <circle cx="28.5" cy="8.5" r="3" fill="#FFB547" />
-    </svg>
+export { HyrrIcon } from "hyrr.shared"
+
+function usePrefersDark() {
+  const [prefersDark, setPrefersDark] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches
   )
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)")
+    const onChange = (e: MediaQueryListEvent) => setPrefersDark(e.matches)
+    mq.addEventListener("change", onChange)
+    return () => mq.removeEventListener("change", onChange)
+  }, [])
+  return prefersDark
 }
 
-export function AdminHeader() {
-  const { theme, toggleTheme, notifications, markAllRead } = useAdminStore()
+export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
+  const user = useJobStore((s) => s.user)
+  const theme = useJobStore((s) => s.theme)
+  const setTheme = useJobStore((s) => s.setTheme)
+  const logout = useJobStore((s) => s.logout)
   const { toast } = useToast()
-  const [searchFocused, setSearchFocused] = useState(false)
-  const [search, setSearch] = useState("")
+  const prefersDark = usePrefersDark()
+  const isDark = theme === "dark" || (theme === "system" && prefersDark)
 
-  const unreadCount = 8 // fixed mock to match screenshot exactly
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault()
-        document.getElementById("admin-search")?.focus()
-      }
+  const toggleTheme = async () => {
+    try {
+      await setTheme(isDark ? "light" : "dark")
+    } catch (err: any) {
+      toast("Could not save theme", errorMessage(err), "error")
     }
-    window.addEventListener("keydown", handler)
-    return () => window.removeEventListener("keydown", handler)
-  }, [])
+  }
+
+  const signOut = async () => {
+    queryClient.clear()
+    await logout()
+  }
+
+  const name = user?.name || user?.email || "Admin"
 
   return (
-    <div className="h-[68px] border-b border-bg-border bg-bg-secondary flex items-center justify-between px-6 select-none shrink-0 animate-in fade-in duration-200">
-      {/* Left: Brand logo & Collapse */}
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2.5">
-          <HyrrIcon size={32} />
-          <span className="font-extrabold text-[18px] text-txt-title tracking-tight font-sans">
-            HYRR
-          </span>
-        </div>
-        <button className="p-1 rounded-lg text-txt-caption hover:text-txt-heading hover:bg-bg-hover cursor-pointer transition-colors outline-none">
-          <ChevronsLeft className="w-4 h-4" />
+    <header className={`${APP_HEADER_CLASS} justify-between`}>
+      <div className="flex shrink-0 items-center gap-2 md:gap-3">
+        {onMenuClick && (
+          <button
+            type="button"
+            onClick={onMenuClick}
+            aria-label="Open navigation"
+            className="cursor-pointer rounded-full p-1.5 text-txt-caption hover:bg-bg-hover hover:text-txt-heading lg:hidden"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        )}
+        <BrandMark app="Admin" tone="violet" />
+      </div>
+
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
+        <button
+          type="button"
+          id="theme-toggle"
+          onClick={toggleTheme}
+          className="cursor-pointer rounded-full p-1.5 text-txt-caption transition-colors hover:bg-bg-hover hover:text-txt-heading"
+          aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+        >
+          {isDark ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
         </button>
-      </div>
 
-      {/* Center: Search anything input */}
-      <div
-        className={`relative transition-all duration-200 ${searchFocused ? "w-[540px]" : "w-[440px]"}`}
-      >
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-txt-caption pointer-events-none" />
-        <input
-          id="admin-search"
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onFocus={() => setSearchFocused(true)}
-          onBlur={() => setSearchFocused(false)}
-          placeholder="Search anything..."
-          className="w-full h-[40px] pl-10 pr-12 rounded-input border border-transparent bg-bg-primary text-[13px] text-txt-heading placeholder:text-txt-caption focus:outline-none focus:bg-bg-secondary focus:border-primary/30 focus:ring-2 focus:ring-primary/10 transition-all"
-        />
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-0.5 px-1.5 py-0.5 rounded-[5px] bg-bg-secondary border border-bg-border/60 text-txt-caption text-[10px] font-bold">
-          <span className="text-[10px] font-medium opacity-70">⌘</span>K
-        </div>
-      </div>
-
-      {/* Right side options */}
-      <div className="flex items-center gap-2">
-        {/* Notifications */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="relative w-9 h-9 rounded-full flex items-center justify-center text-txt-caption hover:text-txt-heading hover:bg-bg-hover transition-all cursor-pointer">
-              <Bell className="w-4.5 h-4.5" />
-              {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 min-w-[16px] h-[16px] rounded-full bg-primary text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-bg-secondary px-0.5">
-                  {unreadCount}
-                </span>
-              )}
+            <button
+              type="button"
+              aria-label="Account menu"
+              className="flex cursor-pointer items-center gap-2 rounded-full py-1 pl-1 pr-2 transition-colors hover:bg-bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            >
+              <Avatar name={name} src={user?.avatar} size={30} />
+              <span className="hidden max-w-[160px] truncate text-[13px] font-semibold text-txt-heading sm:inline">
+                {name}
+              </span>
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-80" align="end">
-            <DropdownMenuLabel className="flex items-center justify-between">
-              <span>Notifications</span>
-              <button
-                onClick={() => {
-                  markAllRead()
-                  toast("Done", "All marked read", "success")
-                }}
-                className="text-[10px] text-primary font-semibold cursor-pointer hover:underline"
-              >
-                Mark all read
-              </button>
+          <DropdownMenuContent className="w-60" align="end">
+            <DropdownMenuLabel>
+              <span className="block truncate text-[13px] text-txt-heading">{name}</span>
+              <span className="block truncate text-[12px] font-normal text-txt-caption">
+                {user?.email}
+              </span>
             </DropdownMenuLabel>
+            {user?.twoFactorEnabled && (
+              <div className="flex items-center gap-1.5 px-2 pb-1.5 text-[12px] text-txt-body">
+                <ShieldCheck className="tone-emerald h-3.5 w-3.5 text-[var(--tone-fg)]" />
+                Two-factor on
+              </div>
+            )}
             <DropdownMenuSeparator />
-            {notifications.slice(0, 5).map((n) => (
-              <DropdownMenuItem key={n.id} className="flex items-start gap-2 p-3">
-                <div
-                  className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${n.read ? "bg-bg-border" : "bg-sec-red"}`}
-                />
-                <div>
-                  <p className="text-[12.5px] text-txt-heading font-medium leading-snug">
-                    {n.title}
-                  </p>
-                  <p className="text-[11px] text-txt-caption mt-0.5">{n.time}</p>
-                </div>
-              </DropdownMenuItem>
-            ))}
+            <DropdownMenuItem onSelect={toggleTheme}>
+              {isDark ? (
+                <Sun className="mr-1.5 h-3.5 w-3.5" />
+              ) : (
+                <Moon className="mr-1.5 h-3.5 w-3.5" />
+              )}
+              {isDark ? "Light mode" : "Dark mode"}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={signOut}>
+              <LogOut className="mr-1.5 h-3.5 w-3.5" />
+              Sign out
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-
-        {/* Help */}
-        <button
-          onClick={() => toast("Help", "Documentation opening...", "info")}
-          className="w-9 h-9 rounded-full flex items-center justify-center text-txt-caption hover:text-txt-heading hover:bg-bg-hover transition-all cursor-pointer"
-        >
-          <HelpCircle className="w-4.5 h-4.5" />
-        </button>
-
-        {/* Dark/Light mode theme */}
-        <button
-          onClick={toggleTheme}
-          className="w-9 h-9 rounded-full flex items-center justify-center text-txt-caption hover:text-txt-heading hover:bg-bg-hover transition-all cursor-pointer"
-        >
-          {theme === "dark" ? <Sun className="w-4.5 h-4.5" /> : <Moon className="w-4.5 h-4.5" />}
-        </button>
-
-        {/* Divider */}
-        <div className="w-px h-5 bg-bg-border/60 mx-1" />
-
-        {/* User profile avatar */}
-        <img
-          src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80"
-          alt="Admin Profile"
-          className="w-8 h-8 rounded-full object-cover border border-bg-border/60 cursor-pointer"
-        />
       </div>
-    </div>
+    </header>
   )
 }

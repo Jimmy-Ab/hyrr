@@ -15,9 +15,13 @@ import type {
   JobAlertItem,
   JobApplication,
   JobState,
+  MyJoinRequest,
   NotificationItem,
   PublicJob,
+  RegisterExtras,
   SavedSearchItem,
+  TeamInvite,
+  TeamJoinRequest,
   TeamMember,
   TypingState,
 } from "../types"
@@ -48,16 +52,29 @@ export type AuthSlice = Pick<
   | "regenerateRecoveryCodes"
   | "exportMyData"
   | "logout"
+  | "signedOutReason"
+  | "signOutWithReason"
+  | "clearSignedOutReason"
+  | "loadAccount"
   | "deleteAccount"
   | "setAccessToken"
   | "initializeSocket"
 >
+
+/** Only the recruiter sign-up fields that are set (unknown/empty fields would be a 400). */
+const cleanExtras = (extras?: RegisterExtras) =>
+  Object.fromEntries(
+    Object.entries(extras ?? {}).filter(([, v]) => typeof v === "string" && v.trim() !== "")
+  )
 
 const emptyWorkspace = {
   jobs: [] as Job[],
   candidates: [] as Candidate[],
   selectedJobId: "",
   team: [] as TeamMember[],
+  teamInvites: [] as TeamInvite[],
+  joinRequests: [] as TeamJoinRequest[],
+  myJoinRequest: null as MyJoinRequest | null,
   notifications: [] as NotificationItem[],
   jobApplications: [] as JobApplication[],
   publicJobs: [] as PublicJob[],
@@ -133,9 +150,39 @@ export const createAuthSlice: StateCreator<JobState, [], [], AuthSlice> = (set, 
   authError: null,
   socket: null,
   mfaPending: null,
+  signedOutReason: null,
+
+  signOutWithReason: async (reason) => {
+    await get().logout()
+    set({ signedOutReason: reason })
+  },
+  clearSignedOutReason: () => set({ signedOutReason: null }),
+
+  loadAccount: async () => {
+    const me = await apiFetch("/auth/me")
+    if (!me) return
+    set((state) =>
+      state.user
+        ? {
+            user: {
+              ...state.user,
+              company: me.company
+                ? {
+                    id: me.company.id,
+                    name: me.company.name,
+                    status: me.company.status,
+                    verified: !!me.company.verified,
+                  }
+                : null,
+              supportEmail: me.supportEmail || state.user.supportEmail,
+            },
+          }
+        : {}
+    )
+  },
 
   loginUser: async (email, password, captchaToken) => {
-    set({ authLoading: true, authError: null, mfaPending: null })
+    set({ authLoading: true, authError: null, mfaPending: null, signedOutReason: null })
     try {
       const data = await apiFetch("/auth/login", {
         method: "POST",
@@ -193,7 +240,7 @@ export const createAuthSlice: StateCreator<JobState, [], [], AuthSlice> = (set, 
 
   cancelTwoFactorLogin: () => set({ mfaPending: null, authError: null }),
 
-  registerUser: async (name, email, password, role, captchaToken) => {
+  registerUser: async (name, email, password, role, captchaToken, extras) => {
     set({ authLoading: true, authError: null })
     try {
       const data = await apiFetch("/auth/register", {
@@ -204,6 +251,7 @@ export const createAuthSlice: StateCreator<JobState, [], [], AuthSlice> = (set, 
           password,
           role,
           ...(captchaToken ? { captchaToken } : {}),
+          ...(role === "RECRUITER" ? cleanExtras(extras) : {}),
         }),
         skipAuth: true,
       })

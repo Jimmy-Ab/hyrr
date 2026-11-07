@@ -140,6 +140,8 @@ export function mapJob(j: any): Job {
     featured: !!j.featured,
     featuredUntil: j.featuredUntil ?? null,
     publishedAt: j.publishedAt ?? null,
+    removedAt: j.removedAt ?? null,
+    removedReason: j.removedReason ?? null,
     momentumCost: typeof j.momentumCost === "number" ? j.momentumCost : undefined,
   }
 }
@@ -417,6 +419,10 @@ export function mapEvent(e: any): CalendarEvent {
     meetingUrl: e.meetingUrl ?? undefined,
     location: e.location ?? undefined,
     notes: e.notes ?? undefined,
+    companyName: e.application?.job?.company?.name ?? undefined,
+    jobTitle: e.application?.job?.title ?? undefined,
+    organizerName:
+      e.user?.role === "RECRUITER" || e.user?.role === "ADMIN" ? e.user.name : undefined,
   }
 }
 

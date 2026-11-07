@@ -1,7 +1,11 @@
 import { Injectable, Optional } from "@nestjs/common"
 import { NotificationAction, NotificationType, UserSetting } from "@prisma/client"
 import { EmailService } from "../core/delivery/email.service"
-import { appUrl, notification as notificationEmail } from "../core/delivery/templates"
+import {
+  appUrl,
+  type EmailContent,
+  notification as notificationEmail,
+} from "../core/delivery/templates"
 import { MessagesGateway } from "../messages/messages.gateway"
 import { PrismaService } from "../prisma/prisma.service"
 
@@ -53,11 +57,17 @@ export class NotificationsService {
     actionView?: NotificationAction,
     /** Entity the notification points at (e.g. the applicationId of a message thread). */
     targetId?: string | null,
-    /** inApp: false → only the e-mail copy (used for chat messages, which have their own badge). */
-    options: { inApp?: boolean } = {}
+    /**
+     * inApp: false → only the e-mail copy (used for chat messages, which have their own badge).
+     * email: a specific template to send instead of the generic notification e-mail.
+     */
+    options: { inApp?: boolean; email?: EmailContent } = {}
   ) {
     const [user, setting] = await Promise.all([
-      this.prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true, role: true } }),
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true, name: true, role: true },
+      }),
       this.prisma.userSetting.findUnique({ where: { userId } }),
     ])
     if (!user) return null
@@ -68,7 +78,7 @@ export class NotificationsService {
 
     if (options.inApp === false) {
       if (user.email && setting?.emailNotifications !== false) {
-        this.sendEmailCopy(user, title)
+        this.sendEmailCopy(user, title, options.email)
       }
       return null
     }
@@ -92,14 +102,20 @@ export class NotificationsService {
     }
 
     if (user.email && setting?.emailNotifications !== false) {
-      this.sendEmailCopy(user, title)
+      this.sendEmailCopy(user, title, options.email)
     }
 
     return notification
   }
 
-  private sendEmailCopy(user: { email: string; name?: string | null; role?: string | null }, title: string) {
-    const content = notificationEmail({ name: user.name, title, url: appUrl(user.role, "/notifications") })
+  private sendEmailCopy(
+    user: { email: string; name?: string | null; role?: string | null },
+    title: string,
+    specific?: EmailContent
+  ) {
+    const content =
+      specific ??
+      notificationEmail({ name: user.name, title, url: appUrl(user.role, "/notifications") })
     this.email.send({ to: user.email, ...content }).catch(() => undefined)
   }
 

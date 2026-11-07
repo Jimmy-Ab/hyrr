@@ -1,6 +1,7 @@
 import { Button } from "hyrr.shared"
-import { BarChart3, Kanban, List, Plus } from "lucide-react"
+import { Plus } from "lucide-react"
 import { JobStatusBadge } from "../components/jobs/job-status-badge"
+import { JobFilter, PipelineViewSwitch, useApplicantCounts } from "../components/jobs/job-filter"
 import { KanbanBoard } from "../components/kanban/kanban-board"
 import { LabelFilterSelect } from "../components/labels/labels"
 import { useJobStore } from "../store/useJobStore"
@@ -10,11 +11,10 @@ export function Applications() {
     jobs,
     candidates,
     selectedJobId,
-    selectJob,
-    setActiveView,
     setAddCandidateOpen,
     setAddJobOpen,
   } = useJobStore()
+  const { counts, total } = useApplicantCounts()
 
   // No (or an unknown) selection means "All jobs": the board shows every candidate.
   const currentJob = jobs.find((j) => j.id === selectedJobId) || null
@@ -58,53 +58,8 @@ export function Applications() {
 
         {/* Job filter + View Switchers */}
         <div className="flex items-center gap-2 flex-wrap">
-          <label htmlFor="board-job-filter" className="sr-only">
-            Show candidates for
-          </label>
-          <select
-            id="board-job-filter"
-            value={currentJob?.id ?? ""}
-            onChange={(e) => selectJob(e.target.value)}
-            className="h-10 max-w-[240px] truncate rounded-xl border border-bg-border bg-bg-secondary px-3 text-[13px] font-medium text-txt-heading cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
-          >
-            <option value="">All jobs</option>
-            {jobs.map((job) => (
-              <option key={job.id} value={job.id}>
-                {job.title}
-              </option>
-            ))}
-          </select>
           <LabelFilterSelect id="board-label-filter" />
-          <div
-            role="group"
-            aria-label="Pipeline view"
-            className="flex gap-1 bg-bg-secondary p-1 border border-bg-border rounded-xl shrink-0"
-          >
-            <button
-              type="button"
-              aria-current="page"
-              className="h-8 rounded-lg gap-1.5 font-semibold text-xs cursor-default px-3 flex items-center bg-primary-light text-primary border border-primary-border/40"
-            >
-              <Kanban className="w-3.5 h-3.5 text-primary" />
-              Board
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveView("Candidates")}
-              className="h-8 rounded-lg gap-1.5 font-medium text-xs cursor-pointer px-3 flex items-center text-txt-body hover:text-txt-heading hover:bg-bg-hover transition-colors"
-            >
-              <List className="w-3.5 h-3.5" />
-              List
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveView("Analytics")}
-              className="h-8 rounded-lg gap-1.5 font-medium text-xs cursor-pointer px-3 flex items-center text-txt-body hover:text-txt-heading hover:bg-bg-hover transition-colors"
-            >
-              <BarChart3 className="w-3.5 h-3.5" />
-              Analytics
-            </button>
-          </div>
+          <PipelineViewSwitch current="Applications" />
 
           <Button
             size="sm"
@@ -117,6 +72,8 @@ export function Applications() {
           </Button>
         </div>
       </div>
+
+      <JobFilter id="board" counts={counts} total={total} />
 
       {/* Kanban Board Container (scrolls horizontally inside itself) */}
       <div className="flex-1 min-w-0">

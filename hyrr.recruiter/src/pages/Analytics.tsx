@@ -2,7 +2,9 @@ import {
   Button,
   Card,
   EmptyState,
+  PageHeader,
   Skeleton,
+  StatCard,
   Table,
   TableBody,
   TableCell,
@@ -11,7 +13,7 @@ import {
   TableRow,
   type FunnelAnalytics,
 } from "hyrr.shared"
-import { AlertTriangle, BarChart3, RefreshCw } from "lucide-react"
+import { AlertTriangle, BarChart3, Hourglass, RefreshCw, Timer, Trophy, Users } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import {
   Area,
@@ -22,6 +24,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
+import { JobFilter, PipelineViewSwitch, useApplicantCounts } from "../components/jobs/job-filter"
 import { APPLICATION_SOURCE_LABEL, errorMessage } from "../lib/recruiter"
 import { useJobStore } from "../store/useJobStore"
 
@@ -53,16 +56,6 @@ const axisStroke = "var(--color-txt-caption)"
 const pct = (v: number) => `${Math.round(v * 100)}%`
 const days = (v: number | null | undefined) =>
   v == null ? "—" : `${v < 10 ? Math.round(v * 10) / 10 : Math.round(v)} d`
-
-function StatTile({ label, value, hint }: { label: string; value: string; hint: string }) {
-  return (
-    <Card className="p-5">
-      <p className="text-[12px] font-bold text-txt-caption uppercase tracking-wider">{label}</p>
-      <p className="text-[28px] font-extrabold text-txt-title mt-3 tabular-nums">{value}</p>
-      <p className="text-[12px] text-txt-body mt-1 font-medium">{hint}</p>
-    </Card>
-  )
-}
 
 function SectionTitle({ title, hint }: { title: string; hint: string }) {
   return (
@@ -135,8 +128,10 @@ function LoadingState() {
 }
 
 export function Analytics() {
-  const { jobs, funnelAnalytics, fetchFunnelAnalytics, setAddJobOpen } = useJobStore()
-  const [jobId, setJobId] = useState("")
+  const { jobs, funnelAnalytics, fetchFunnelAnalytics, setAddJobOpen, selectedJobId, selectJob } =
+    useJobStore()
+  const jobId = selectedJobId
+  const { counts, total } = useApplicantCounts()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -171,36 +166,14 @@ export function Analytics() {
 
   return (
     <div className="flex flex-col gap-6 md:gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative min-w-0">
-      <div className="ambient-glow-1" />
-      <div className="ambient-glow-2" />
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <h1 className="text-[28px] md:text-[36px] font-extrabold tracking-tight">
-            <span className="premium-gradient-text text-glow">Analytics Dashboard</span>
-          </h1>
-          <p className="text-body text-txt-body mt-1 font-medium">
-            Funnel conversion, time to hire and where your applicants come from.
-          </p>
-        </div>
-        <div>
-          <label htmlFor="analytics-job-filter" className="sr-only">
-            Job
-          </label>
-          <select
-            id="analytics-job-filter"
-            value={jobId}
-            onChange={(e) => setJobId(e.target.value)}
-            className="h-10 max-w-[260px] truncate rounded-xl border border-bg-border bg-bg-secondary px-3 text-[13px] font-medium text-txt-heading cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
-          >
-            <option value="">All jobs</option>
-            {jobs.map((job) => (
-              <option key={job.id} value={job.id}>
-                {job.title}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+      <PageHeader
+        icon={BarChart3}
+        tone="sky"
+        title="Analytics"
+        subtitle="Funnel conversion, time to hire and where your applicants come from."
+        actions={<PipelineViewSwitch current="Analytics" />}
+      />
+      <JobFilter id="analytics" counts={counts} total={total} />
 
       {loading && !data ? (
         <LoadingState />
@@ -232,22 +205,34 @@ export function Analytics() {
           className={`flex flex-col gap-6 transition-opacity ${loading ? "opacity-60" : ""}`}
           aria-busy={loading}
         >
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatTile label="Applicants" value={String(applicants)} hint="Reached Applied" />
-            <StatTile
-              label="Offers"
-              value={String(offers)}
-              hint={`${applicants > 0 ? pct(offers / applicants) : "0%"} of applicants`}
+          <div className="stagger grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard
+              title="Applicants"
+              value={applicants}
+              caption="reached Applied"
+              icon={Users}
+              tone="blue"
             />
-            <StatTile
-              label="Median time to hire"
+            <StatCard
+              title="Offers"
+              value={offers}
+              caption={`${applicants > 0 ? pct(offers / applicants) : "0%"} of applicants`}
+              icon={Trophy}
+              tone="emerald"
+            />
+            <StatCard
+              title="Median time to hire"
               value={days(data.timeToHireDays?.median)}
-              hint="Applied → Offer"
+              caption="Applied → Offer"
+              icon={Timer}
+              tone="amber"
             />
-            <StatTile
-              label="Average time to hire"
+            <StatCard
+              title="Average time to hire"
               value={days(data.timeToHireDays?.average)}
-              hint="Applied → Offer"
+              caption="Applied → Offer"
+              icon={Hourglass}
+              tone="violet"
             />
           </div>
 
@@ -381,7 +366,7 @@ export function Analytics() {
                       <TableCell className="pl-6 py-3">
                         <button
                           type="button"
-                          onClick={() => setJobId(row.jobId)}
+                          onClick={() => selectJob(row.jobId)}
                           className="font-semibold text-txt-heading hover:text-primary hover:underline cursor-pointer text-left"
                         >
                           {row.title}

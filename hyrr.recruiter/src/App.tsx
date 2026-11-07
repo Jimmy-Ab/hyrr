@@ -10,6 +10,7 @@ import {
   Skeleton,
   ToastProvider,
   apiFetch,
+  captureInviteToken,
   isPublicRoute,
   resolvePublicRoute,
   useSmoothScroll,
@@ -19,8 +20,11 @@ import * as React from "react"
 import { AddCandidateDialog } from "./components/layout/add-candidate-dialog"
 import { AddJobDialog } from "./components/layout/add-job-dialog"
 import { CandidateDetailDialog } from "./components/layout/candidate-detail-dialog"
+import { CompanyStatusBanner } from "./components/layout/company-status-banner"
 import { Header } from "./components/layout/header"
 import { Sidebar } from "./components/layout/sidebar"
+import { CompanySetupScreen } from "./components/team/company-setup"
+import { InviteAcceptDialog } from "./components/team/invite-accept-dialog"
 import { pathToView, viewToPath } from "./lib/recruiter"
 import { Analytics } from "./pages/Analytics"
 import { Applications } from "./pages/Applications"
@@ -34,6 +38,9 @@ import { Settings } from "./pages/Settings"
 import { useJobStore } from "./store/useJobStore"
 
 const AUTH_CALLBACK_PATH = "/auth/callback"
+
+// Team invite links (/invite?token=…) are kept for after sign-in, then the URL is cleaned.
+captureInviteToken()
 
 // Initial view comes from the URL so reloads and deep links land on the right page.
 const initialView = pathToView(window.location.pathname)
@@ -168,6 +175,16 @@ function AppContent() {
     return <RoleMismatch requiredRole="RECRUITER" currentRole={user?.role || ""} />
   }
 
+  // No company yet (OAuth sign-up, left a team, waiting on a join request).
+  if (user.company === null) {
+    return (
+      <>
+        <CompanySetupScreen />
+        <InviteAcceptDialog />
+      </>
+    )
+  }
+
   const renderView = () => {
     if (isInitialLoading) return <ContentSkeleton />
     if (initialLoadError) {
@@ -218,6 +235,7 @@ function AppContent() {
     <div className="flex flex-col h-dvh w-full overflow-hidden bg-bg-primary text-txt-body">
       {/* Top Header */}
       <Header onMenuClick={() => setSidebarOpen(true)} />
+      <CompanyStatusBanner />
       <EmailVerificationBanner />
 
       {/* Main Container */}
@@ -240,6 +258,7 @@ function AppContent() {
       <AddCandidateDialog />
       <AddJobDialog />
       <CandidateDetailDialog />
+      <InviteAcceptDialog />
       <AiChatWidget role="RECRUITER" />
     </div>
   )

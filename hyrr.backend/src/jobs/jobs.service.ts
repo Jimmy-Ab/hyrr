@@ -4,7 +4,7 @@ import { assertEmailVerified, requireVerifiedEmail } from "../auth/email-verific
 import { PricingService, PublishCostInput } from "../billing/pricing.service"
 import { WalletService } from "../billing/wallet.service"
 import { CacheService } from "../cache/cache.service"
-import { AccessService, Actor } from "../core/access/access.service"
+import { AccessService, Actor, companySuspended } from "../core/access/access.service"
 import { EmailService } from "../core/delivery/email.service"
 import { AppException, NotFoundAppException } from "../core/exceptions/app-exception"
 import { formatSalaryRange } from "../core/validation/structured"
@@ -19,6 +19,7 @@ import { UpdateJobDto } from "./dtos/update-job.dto"
 import { computeFunnelAnalytics } from "./funnel-analytics"
 import { evaluateJobContent, JobContent } from "./job-content-policy"
 import { PUBLIC_COMPANY_SELECT } from "./public-company"
+import { PUBLIC_JOB_WHERE } from "./public-job"
 
 const JOB_COLORS = ["purple", "blue", "green", "orange"] as const
 const PUBLIC_JOBS_CACHE_KEY = "jobs:public"
@@ -36,6 +37,9 @@ const RECRUITER_JOB_STATUSES: JobStatus[] = [JobStatus.ACTIVE, JobStatus.CLOSED,
 const ANALYTICS_MAX_APPLICATIONS = 20_000
 const ANALYTICS_MAX_EVENTS = 100_000
 const ANALYTICS_MAX_JOBS = 500
+
+/** Public listings and detail: live jobs of companies that are not suspended by an admin. */
+export { PUBLIC_JOB_WHERE } from "./public-job"
 
 /** Applications counted on recruiter job cards: SAVED bookmarks are not applicants. */
 /** Feature durations a recruiter may buy (days). */
@@ -68,6 +72,20 @@ function salaryData(dto: {
     salaryCurrency: dto.salaryCurrency,
     salaryPeriod: dto.salaryPeriod ?? "YEAR",
   }
+}
+
+/** Moderation removal is final for the poster: no edits, reopening or featuring (admins may). */
+function assertNotRemoved(
+  job: { removedAt?: Date | null; removedReason?: string | null },
+  actor: Actor
+) {
+  if (job.removedAt && actor.role !== "ADMIN")
+    throw new AppException(
+      `This job was removed by Hyrr moderation${job.removedReason ? `: ${job.removedReason}` : ""}. It can't be edited or reopened.`,
+      HttpStatus.FORBIDDEN,
+      "JOB_REMOVED_BY_MODERATION",
+      { reason: job.removedReason ?? null }
+    )
 }
 
 @Injectable()
@@ -143,6 +161,7 @@ export class JobsService {
     let companyId = user?.companyId ?? null
     if (companyId) {
       const scope = await this.access.companyScope(recruiterId)
+      if (scope.suspendedCompanyIds?.includes(companyId)) throw companySuspended()
       if (!scope.manageCompanyIds.includes(companyId)) {
         throw new AppException(
           "Your company role does not allow posting jobs",
@@ -256,6 +275,7 @@ export class JobsService {
   // ─── Recruiter: update / close a job ─────────────────────────────
   async updateJob(jobId: string, dto: UpdateJobDto, actor: Actor) {
     const current = await this.access.jobForManagement(actor, jobId)
+    assertNotRemoved(current, actor)
     if (dto.status !== undefined && actor.role !== "ADMIN") {
       if (current.status === JobStatus.FLAGGED && dto.status !== JobStatus.FLAGGED)
         throw new AppException(
@@ -378,6 +398,7 @@ export class JobsService {
    */
   async featureJob(jobId: string, days: number | undefined, actor: Actor) {
     const current = await this.access.jobForManagement(actor, jobId)
+    assertNotRemoved(current, actor)
     if (current.status !== JobStatus.ACTIVE)
       throw new AppException(
         "Only active jobs can be featured",
@@ -512,7 +533,7 @@ export class JobsService {
       if (hits) {
         const rows = hits.ids.length
           ? await this.prisma.job.findMany({
-              where: { id: { in: hits.ids }, status: JobStatus.ACTIVE },
+              where: { id: { in: hits.ids }, ...PUBLIC_JOB_WHERE },
               include,
             })
           : []
@@ -540,7 +561,7 @@ export class JobsService {
     limit: number,
     offset: number
   ): Promise<PublicJobsPage> {
-    const where: Prisma.JobWhereInput = { status: JobStatus.ACTIVE }
+    const where: Prisma.JobWhereInput = { ...PUBLIC_JOB_WHERE }
     if (type) where.type = type
     if (remote) where.remote = true
     if (categorySlug) where.category = { slug: categorySlug }
@@ -598,7 +619,7 @@ export class JobsService {
   // ─── Public: get single job detail ───────────────────────────────
   async getJobById(id: string) {
     const job = await this.prisma.job.findFirst({
-      where: { id, status: JobStatus.ACTIVE },
+      where: { id, ...PUBLIC_JOB_WHERE },
       include: {
         company: { select: PUBLIC_COMPANY_SELECT },
         category: true,

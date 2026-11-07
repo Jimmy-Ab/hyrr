@@ -1,8 +1,9 @@
 import { ForbiddenException } from "@nestjs/common"
-import { CompanyMemberRole, PrismaClient } from "@prisma/client"
+import { CompanyMemberRole, CompanyStatus, PrismaClient } from "@prisma/client"
+import { AppException } from "../exceptions/app-exception"
 
 type MembershipActor = { userId: string; role: string; companyId?: string | null }
-type MembershipDb = Pick<PrismaClient, "companyMember">
+type MembershipDb = Pick<PrismaClient, "companyMember"> & Partial<Pick<PrismaClient, "company">>
 
 export const COMPANY_WRITE_ROLES: CompanyMemberRole[] = [
   CompanyMemberRole.OWNER,
@@ -33,5 +34,16 @@ export async function requireCompanyWriter(prisma: MembershipDb, actor: Membersh
   const membership = await resolveCompanyMembership(prisma, actor)
   if (!COMPANY_WRITE_ROLES.includes(membership.role))
     throw new ForbiddenException("Your team role does not allow changes")
+  // A company suspended by an admin keeps read access but can't change anything.
+  const company = await prisma.company?.findUnique({
+    where: { id: membership.companyId },
+    select: { status: true },
+  })
+  if (company?.status === CompanyStatus.SUSPENDED)
+    throw new AppException(
+      "Your company is suspended. Contact support to restore access.",
+      403,
+      "COMPANY_SUSPENDED"
+    )
   return membership
 }

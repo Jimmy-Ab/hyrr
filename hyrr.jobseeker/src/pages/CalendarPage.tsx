@@ -3,28 +3,133 @@ import {
   Button,
   Card,
   ConfirmDialog,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
   errorMessage,
+  eventTone,
+  PageHeader,
   toIsoFromLocal,
+  toneClass,
   useJobStore,
   useToast,
 } from "hyrr.shared"
 import {
+  Briefcase,
+  Building2,
+  CalendarDays,
   Calendar as CalendarIcon,
   ChevronLeft,
   ChevronRight,
   Clock,
   Loader2,
+  MapPin,
   Plus,
+  UserRound,
+  Video,
   X,
 } from "lucide-react"
 import { useState } from "react"
 
-const typeStyle = (type: string) => {
-  if (type === "interview") return "bg-primary-light border-primary-border/30 text-primary"
-  if (type === "deadline") return "bg-sec-orange/10 border-sec-orange/20 text-sec-orange"
-  if (type === "offer") return "bg-sec-green/10 border-sec-green/20 text-sec-green"
-  return "bg-bg-primary border-bg-border text-txt-body"
+const formatTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+
+/** Who the event is with: company (and recruiter) for interviews, else nothing. */
+const withWhom = (e: CalendarEvent) => [e.companyName, e.organizerName].filter(Boolean).join(" · ")
+
+/** Details of one event (side panel), like the recruiter calendar. */
+function EventDetails({
+  event,
+  onClose,
+  onDelete,
+}: {
+  event: CalendarEvent | null
+  onClose: () => void
+  onDelete: (e: CalendarEvent) => void
+}) {
+  const e = event
+  const when = e
+    ? `${new Date(e.startTime).toLocaleDateString([], {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+      })}, ${formatTime(e.startTime)}${e.endTime ? ` – ${formatTime(e.endTime)}` : ""}`
+    : ""
+  const row = "flex items-start gap-3 text-[13.5px] text-txt-body"
+  return (
+    <Dialog open={!!e} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent variant="sheet" className="max-w-md overflow-y-auto">
+        {e && (
+          <>
+            <DialogHeader>
+              <span
+                className={`mb-2 inline-flex w-fit rounded-full border px-2.5 py-0.5 text-[11.5px] font-semibold capitalize ${typeStyle(e.type)}`}
+              >
+                {e.type}
+              </span>
+              <DialogTitle className="break-words">{e.title}</DialogTitle>
+              <DialogDescription>{when}</DialogDescription>
+            </DialogHeader>
+            <div className="mt-5 flex flex-col gap-3">
+              {e.companyName && (
+                <p className={row}>
+                  <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-txt-caption" />
+                  {e.companyName}
+                </p>
+              )}
+              {e.jobTitle && (
+                <p className={row}>
+                  <Briefcase className="mt-0.5 h-4 w-4 shrink-0 text-txt-caption" />
+                  {e.jobTitle}
+                </p>
+              )}
+              {e.organizerName && (
+                <p className={row}>
+                  <UserRound className="mt-0.5 h-4 w-4 shrink-0 text-txt-caption" />
+                  With {e.organizerName}
+                </p>
+              )}
+              {e.location && (
+                <p className={`${row} break-words`}>
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-txt-caption" />
+                  {e.location}
+                </p>
+              )}
+              {e.meetingUrl && /^https?:\/\//i.test(e.meetingUrl) && (
+                <a
+                  href={e.meetingUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex w-fit items-center gap-2 rounded-full bg-primary px-4 py-2 text-[13px] font-semibold text-white hover:bg-primary/90"
+                >
+                  <Video className="h-4 w-4" /> Join meeting
+                </a>
+              )}
+              {e.notes && (
+                <p className="whitespace-pre-line rounded-xl bg-bg-hover/60 p-3 text-[13px] text-txt-body">
+                  {e.notes}
+                </p>
+              )}
+            </div>
+            {!e.organizerName && (
+              <div className="mt-6">
+                <Button variant="ghost" className="text-sec-red" onClick={() => onDelete(e)}>
+                  <X className="mr-1.5 h-4 w-4" /> Delete event
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
 }
+
+/** Event colours come from the shared tone map (interview violet, deadline rose, …). */
+const typeStyle = (type: string) =>
+  `${toneClass(eventTone(type))} bg-[var(--tone-bg)] border-[var(--tone-ring)] text-[var(--tone-fg)]`
 
 function AddEventModal({
   onClose,
@@ -174,6 +279,8 @@ export function CandidateCalendar() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<CalendarEvent | null>(null)
+  const [detailsId, setDetailsId] = useState<string | null>(null)
+  const details = events.find((e) => e.id === detailsId) ?? null
 
   const handleDelete = async () => {
     if (!pendingDelete) return
@@ -238,6 +345,14 @@ export function CandidateCalendar() {
           }}
         />
       )}
+      <EventDetails
+        event={details}
+        onClose={() => setDetailsId(null)}
+        onDelete={(e) => {
+          setDetailsId(null)
+          setPendingDelete(e)
+        }}
+      />
       <ConfirmDialog
         open={!!pendingDelete}
         onOpenChange={(open) => !open && setPendingDelete(null)}
@@ -247,22 +362,17 @@ export function CandidateCalendar() {
         onConfirm={handleDelete}
       />
 
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-[28px] sm:text-[36px] font-extrabold tracking-tight">
-            <span className="premium-gradient-text text-glow">Calendar</span>
-          </h1>
-          <p className="text-body text-txt-body mt-1 font-medium">
-            Interviews, deadlines, and important dates for your job search.
-          </p>
-        </div>
-        <Button
-          onClick={() => setAddModalOpen(true)}
-          className="cursor-pointer font-semibold shadow-button"
-        >
-          <Plus className="w-4 h-4 mr-2" /> Add Event
-        </Button>
-      </div>
+      <PageHeader
+        icon={CalendarDays}
+        tone="violet"
+        title="Calendar"
+        subtitle="Interviews, deadlines and important dates for your job search."
+        actions={
+          <Button onClick={() => setAddModalOpen(true)} className="cursor-pointer font-semibold">
+            <Plus className="w-4 h-4 mr-2" /> Add Event
+          </Button>
+        }
+      />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Calendar grid */}
@@ -310,46 +420,80 @@ export function CandidateCalendar() {
             ))}
           </div>
 
-          <div className="grid grid-cols-7 gap-1">
+          <div className="grid grid-cols-7 gap-1 sm:gap-2">
             {calendarDays.map((day, idx) => {
               if (day === null) return <div key={`empty-${idx}`} />
               const dayEvts = eventsByDay[day] || []
               const isToday = isCurrentMonth && day === today.getDate()
-              const hasEvent = dayEvts.length > 0
+              const dateLabel = new Date(year, month, day).toLocaleDateString([], {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+              })
 
               return (
-                <button
-                  type="button"
+                <div
                   key={day}
-                  disabled={!hasEvent}
-                  aria-label={`${day}${hasEvent ? `: ${dayEvts.map((e) => e.title).join(", ")}` : ""}`}
-                  onClick={() =>
-                    hasEvent && toast("Events", dayEvts.map((e) => e.title).join(" | "), "info")
-                  }
-                  className={`relative aspect-square flex flex-col items-center justify-start pt-2 rounded-[10px] transition-all group disabled:cursor-default ${hasEvent ? "cursor-pointer" : ""} ${
+                  aria-current={isToday ? "date" : undefined}
+                  className={`p-1 sm:p-2 rounded-[12px] border flex flex-col min-h-[56px] sm:min-h-[96px] min-w-0 ${
                     isToday
-                      ? "bg-primary text-white shadow-button"
-                      : hasEvent
-                        ? "hover:bg-primary-light/50 hover:border-primary/20 border border-transparent"
-                        : "hover:bg-bg-hover/60 border border-transparent"
+                      ? "border-primary bg-primary-light/35"
+                      : dayEvts.length
+                        ? "border-bg-border/40 bg-bg-primary/20"
+                        : "border-bg-border/10 bg-bg-secondary"
                   }`}
                 >
                   <span
-                    className={`text-[13px] font-semibold ${isToday ? "text-white" : hasEvent ? "text-txt-heading" : "text-txt-body"}`}
+                    className={`text-[12px] sm:text-[13px] font-bold px-1 ${isToday ? "text-primary" : "text-txt-heading"}`}
                   >
                     {day}
                   </span>
-                  {hasEvent && (
-                    <div className="absolute bottom-1.5 flex gap-0.5">
-                      {dayEvts.slice(0, 2).map((e, i) => (
-                        <div
-                          key={i}
-                          className={`w-1.5 h-1.5 rounded-full ${e.type === "interview" ? (isToday ? "bg-white" : "bg-primary") : e.type === "deadline" ? "bg-sec-orange" : "bg-sec-green"}`}
+
+                  {/* Mobile: dots open the first event */}
+                  {dayEvts.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setDetailsId(dayEvts[0].id)}
+                      aria-label={`${dateLabel}: ${dayEvts.map((e) => e.title).join(", ")}`}
+                      className="flex sm:hidden gap-0.5 mt-1 flex-wrap cursor-pointer"
+                    >
+                      {dayEvts.slice(0, 3).map((evt) => (
+                        <span
+                          key={evt.id}
+                          className={`w-1.5 h-1.5 rounded-full ${toneClass(eventTone(evt.type))} bg-[var(--tone-fg)]`}
                         />
                       ))}
-                    </div>
+                    </button>
                   )}
-                </button>
+
+                  {/* sm+: event chips with time, title and company / recruiter */}
+                  <div className="hidden sm:flex flex-1 flex-col gap-1 mt-2 min-h-0 justify-end">
+                    {dayEvts.slice(0, 2).map((evt) => (
+                      <button
+                        key={evt.id}
+                        type="button"
+                        onClick={() => setDetailsId(evt.id)}
+                        aria-label={`${evt.title}, ${dateLabel} ${formatTime(evt.startTime)}${withWhom(evt) ? `, ${withWhom(evt)}` : ""}`}
+                        className={`text-left border text-[10px] p-1.5 rounded-[8px] font-bold flex flex-col gap-0.5 leading-tight cursor-pointer hover:shadow-card-hover min-w-0 ${typeStyle(evt.type)}`}
+                      >
+                        <span className="truncate">{formatTime(evt.startTime)}</span>
+                        <span className="truncate font-extrabold">{evt.title}</span>
+                        {withWhom(evt) && (
+                          <span className="truncate font-semibold opacity-80">{withWhom(evt)}</span>
+                        )}
+                      </button>
+                    ))}
+                    {dayEvts.length > 2 && (
+                      <button
+                        type="button"
+                        onClick={() => setDetailsId(dayEvts[2].id)}
+                        className="text-[10px] font-semibold text-txt-caption hover:text-primary text-left cursor-pointer"
+                      >
+                        +{dayEvts.length - 2} more
+                      </button>
+                    )}
+                  </div>
+                </div>
               )
             })}
           </div>
@@ -386,7 +530,18 @@ export function CandidateCalendar() {
                       key={e.id}
                       className={`p-3 rounded-[12px] border ${typeStyle(type)} group relative`}
                     >
-                      <p className="text-[13px] font-semibold pr-6 break-words">{label}</p>
+                      <button
+                        type="button"
+                        onClick={() => setDetailsId(e.id)}
+                        className="text-left text-[13px] font-semibold pr-6 break-words cursor-pointer hover:underline"
+                      >
+                        {label}
+                      </button>
+                      {withWhom(e) && (
+                        <p className="mt-0.5 text-[12.5px] font-medium opacity-90 break-words">
+                          {withWhom(e)}
+                        </p>
+                      )}
                       <div className="flex items-center gap-1.5 mt-1.5 text-[12.5px] opacity-75">
                         <Clock className="w-3.5 h-3.5" />
                         <span>{timeStr}</span>
@@ -404,14 +559,16 @@ export function CandidateCalendar() {
                           Join meeting
                         </a>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => setPendingDelete(e)}
-                        aria-label={`Delete ${label}`}
-                        className="absolute top-2 right-2 p-0.5 rounded opacity-100 lg:opacity-0 lg:group-hover:opacity-100 focus:opacity-100 transition-opacity cursor-pointer hover:text-sec-red"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
+                      {!e.organizerName && (
+                        <button
+                          type="button"
+                          onClick={() => setPendingDelete(e)}
+                          aria-label={`Delete ${label}`}
+                          className="absolute top-2 right-2 p-0.5 rounded opacity-100 lg:opacity-0 lg:group-hover:opacity-100 focus:opacity-100 transition-opacity cursor-pointer hover:text-sec-red"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
                     </div>
                   )
                 })
@@ -423,12 +580,16 @@ export function CandidateCalendar() {
             <h3 className="text-[14px] font-bold text-txt-heading mb-3">Legend</h3>
             <div className="space-y-2">
               {[
-                { color: "bg-primary", label: "Interview" },
-                { color: "bg-sec-orange", label: "Deadline" },
-                { color: "bg-sec-green", label: "Offer / Onboarding" },
+                { type: "interview", label: "Interview" },
+                { type: "deadline", label: "Deadline" },
+                { type: "offer", label: "Offer / Onboarding" },
+                { type: "other", label: "Other" },
               ].map((l) => (
-                <div key={l.label} className="flex items-center gap-2 text-[13.5px] text-txt-body">
-                  <div className={`w-2.5 h-2.5 rounded-full ${l.color}`} />
+                <div
+                  key={l.label}
+                  className={`flex items-center gap-2 text-[13.5px] text-txt-body ${toneClass(eventTone(l.type))}`}
+                >
+                  <div className="w-2.5 h-2.5 rounded-full bg-[var(--tone-fg)] shadow-[0_0_8px_var(--tone-glow)]" />
                   {l.label}
                 </div>
               ))}

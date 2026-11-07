@@ -1,5 +1,6 @@
 import {
   Badge,
+  TonePill,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -66,10 +67,24 @@ export function JobStatusBadge({
   className,
   interactive = true,
 }: {
-  job: Pick<Job, "status">
+  job: Pick<Job, "status"> & Partial<Pick<Job, "removedAt" | "removedReason">>
   className?: string
   interactive?: boolean
 }) {
+  if (job.removedAt)
+    return (
+      <TonePill
+        tone="rose"
+        className={className}
+        // The reason is also shown in the job panel; here it is the hover text.
+      >
+        <span
+          title={job.removedReason ? `Removed by Hyrr: ${job.removedReason}` : "Removed by Hyrr"}
+        >
+          Removed by Hyrr
+        </span>
+      </TonePill>
+    )
   if (isFlaggedJob(job)) return <UnderReviewBadge className={className} interactive={interactive} />
   return (
     <Badge variant={statusVariant(job.status)} className={className}>

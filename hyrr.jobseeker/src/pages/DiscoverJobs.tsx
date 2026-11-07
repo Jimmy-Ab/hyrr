@@ -20,6 +20,7 @@ import {
   Input,
   JOB_REPORT_REASONS,
   JOB_TYPES,
+  PageHeader,
   RichTextRenderer,
   VerifiedBadge,
   errorMessage,
@@ -43,6 +44,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock,
+  Compass,
   DollarSign,
   Flag,
   Globe,
@@ -449,7 +451,11 @@ export function DiscoverJobs() {
       await reportJob(reportJobTarget.id, reportReason, reportDetails)
       const id = reportJobTarget.id
       setReportedIds((prev) => new Set(prev).add(id))
-      toast("Report sent", "Thanks — our team will review this job.", "success")
+      toast(
+        "Report sent",
+        "Thanks. Our team will review it and let you know the outcome.",
+        "success"
+      )
       setReportJobTarget(null)
     } catch (err) {
       toast("Couldn't send report", errorMessage(err, "Please try again."), "error")
@@ -480,14 +486,13 @@ export function DiscoverJobs() {
       <div className="ambient-glow-1" />
       <div className="ambient-glow-2" />
 
-      <div className="relative z-10">
-        <h1 className="text-[28px] sm:text-[36px] font-extrabold tracking-tight">
-          <span className="premium-gradient-text text-glow">Discover Jobs</span>
-        </h1>
-        <p className="text-body text-txt-body mt-1 font-semibold opacity-90">
-          Find your next opportunity from {publicJobs.length} open roles across top companies.
-        </p>
-      </div>
+      <PageHeader
+        icon={Compass}
+        tone="blue"
+        title="Discover Jobs"
+        subtitle={`Find your next opportunity from ${publicJobs.length} open roles.`}
+        className="relative z-10"
+      />
 
       {/* For you / All jobs + saved searches */}
       <div className="relative z-10 flex flex-wrap items-center justify-between gap-3">
@@ -638,11 +643,22 @@ export function DiscoverJobs() {
       {/* Split Pane */}
       <div className="flex flex-col lg:flex-row gap-5 flex-1 min-w-0">
         {/* Job List */}
-        <div className="w-full lg:w-[360px] shrink-0 flex flex-col gap-3">
+        {/* Narrow list beside the detail pane; full width (centred empty/error states) when the
+            list has nothing to show and no detail pane is rendered. */}
+        <div
+          className={`w-full flex flex-col gap-3 ${
+            selectedJob || listLoading || filtered.length > 0
+              ? "lg:w-[360px] shrink-0"
+              : "lg:flex-1 lg:items-center"
+          }`}
+        >
           {listLoading ? (
             Array.from({ length: 5 }).map((_, i) => <JobSkeleton key={i} />)
           ) : matchError && !useFallback ? (
-            <Card role="alert" className="p-8 flex flex-col items-center gap-3 text-center">
+            <Card
+              role="alert"
+              className="w-full max-w-[640px] p-8 flex flex-col items-center gap-3 text-center"
+            >
               <AlertTriangle className="w-8 h-8 text-sec-orange" aria-hidden="true" />
               <p className="text-[14px] font-semibold text-txt-heading">{matchError}</p>
               <div className="flex flex-wrap justify-center gap-2">
@@ -655,7 +671,7 @@ export function DiscoverJobs() {
               </div>
             </Card>
           ) : filtered.length === 0 && hasFilters ? (
-            <Card className="p-10 flex flex-col items-center gap-3 text-center">
+            <Card className="w-full max-w-[640px] p-10 flex flex-col items-center gap-3 text-center">
               <Briefcase className="w-10 h-10 text-txt-disabled" />
               <p className="text-[14px] font-semibold text-txt-heading">No roles found</p>
               <p className="text-caption text-txt-caption">Try adjusting your search or filters.</p>
@@ -665,6 +681,7 @@ export function DiscoverJobs() {
             </Card>
           ) : filtered.length === 0 && matchTab === "for-you" ? (
             <EmptyState
+              className="w-full max-w-[640px]"
               icon={Sparkles}
               title={thinProfile ? "Tell us what you do" : "No matches right now"}
               description={
@@ -689,6 +706,7 @@ export function DiscoverJobs() {
             />
           ) : filtered.length === 0 ? (
             <EmptyState
+              className="w-full max-w-[640px]"
               icon={Briefcase}
               title="No open roles yet"
               description="Create a job alert and we'll tell you when something is posted."

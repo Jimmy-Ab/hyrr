@@ -26,7 +26,7 @@
     "db:migrate": "npm run prisma:migrate --workspace=hyrr.backend",
     "typecheck": "tsc -b",
     "e2e": "npm run build --workspace=hyrr.backend && playwright test -c e2e",
-    "lint:hooks": "oxlint -A all -D react/rules-of-hooks hyrr.recruiter/src hyrr.jobseeker/src hyrr.shared/src"
+    "lint:hooks": "oxlint -A all -D react/rules-of-hooks hyrr.recruiter/src hyrr.jobseeker/src hyrr.shared/src hyrr.admin/src"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
