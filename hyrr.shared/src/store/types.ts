@@ -531,6 +531,11 @@ export interface CalendarEvent {
   meetingUrl?: string
   location?: string
   notes?: string
+  /** Linked application's company and job (seeker calendar). */
+  companyName?: string
+  jobTitle?: string
+  /** Recruiter who scheduled it, when it wasn't created by the viewer (seeker calendar). */
+  organizerName?: string
 }
 
 export interface Document {

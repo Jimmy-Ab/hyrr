@@ -525,3 +525,63 @@ test("discover's empty 'for you' state is centred", async ({ page }) => {
   const mainCenter = main.x + main.width / 2
   expect(Math.abs(cardCenter - mainCenter)).toBeLessThan(40)
 })
+
+test("seeker calendar shows the interview with company and recruiter on the date", async ({
+  page,
+}) => {
+  const rec = await createUser("RECRUITER", "Ruth")
+  const seeker = await createUser("SEEKER", "Abel")
+  const job = await api(
+    "POST",
+    "/jobs",
+    {
+      title: `E2E Calendar Job ${uid()}`,
+      location: "Berlin",
+      type: "FULL_TIME",
+      description: "<p>Interview scheduling shows up on the seeker calendar.</p>",
+      requirements: ["SQL"],
+      skills: ["SQL"],
+      categoryId: await firstCategoryId(),
+    },
+    rec.token
+  )
+  const app = await api(
+    "POST",
+    `/applications/jobs/${job.id}/apply`,
+    { name: "Abel", email: seeker.email, title: "Analyst", location: "Berlin" },
+    seeker.token
+  )
+  const start = new Date()
+  start.setHours(15, 0, 0, 0)
+  await api(
+    "POST",
+    "/calendar",
+    {
+      applicationId: app.id,
+      title: "Technical interview",
+      startTime: start.toISOString(),
+      type: "INTERVIEW",
+      location: "Video call",
+    },
+    rec.token
+  )
+
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await login(page, SEEKER_URL, seeker.email)
+  await page.goto(`${SEEKER_URL}/calendar`)
+  // The chip on the date names the company and the recruiter, not just a dot.
+  const chip = page
+    .locator("button")
+    .filter({ hasText: "Technical interview" })
+    .filter({ hasText: "Ruth Studio" })
+    .first()
+  await expect(chip).toBeVisible({ timeout: 20_000 })
+  await expect(chip).toContainText("Ruth")
+  await chip.click()
+  const sheet = page.getByRole("dialog")
+  await expect(sheet.getByText("Technical interview")).toBeVisible()
+  await expect(sheet.getByText("With Ruth")).toBeVisible()
+  await expect(sheet.getByText(job.title)).toBeVisible()
+  // A recruiter's interview can't be deleted by the seeker.
+  await expect(sheet.getByRole("button", { name: /delete event/i })).toHaveCount(0)
+})

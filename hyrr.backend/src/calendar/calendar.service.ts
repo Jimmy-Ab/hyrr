@@ -66,7 +66,11 @@ export class CalendarService {
       }
       return this.prisma.calendarEvent.findMany({
         where,
-        include: { application: { select: SEEKER_EVENT_APPLICATION } },
+        include: {
+          application: { select: SEEKER_EVENT_APPLICATION },
+          // Who scheduled it (the recruiter's name only), shown on the seeker's calendar.
+          user: { select: { name: true, role: true } },
+        },
         orderBy: { startTime: "asc" },
       })
     }
