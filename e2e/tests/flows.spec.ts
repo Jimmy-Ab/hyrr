@@ -509,3 +509,19 @@ test("dragging a kanban card follows the pointer and drops in the column under i
   const list: any[] = Array.isArray(cands) ? cands : cands.items
   expect(list.find((c) => c.jobId === job.id)?.status).toBe("IN_PROCESS")
 })
+
+test("discover's empty 'for you' state is centred", async ({ page }) => {
+  const seeker = await createUser("SEEKER", "Ema")
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await login(page, SEEKER_URL, seeker.email)
+  await page.goto(`${SEEKER_URL}/discover`)
+  const empty = page
+    .getByRole("heading", { name: /no matches right now|tell us what you do/i })
+    .locator("xpath=..")
+  await expect(empty).toBeVisible({ timeout: 20_000 })
+  const card = (await empty.boundingBox())!
+  const main = (await page.locator("main").boundingBox())!
+  const cardCenter = card.x + card.width / 2
+  const mainCenter = main.x + main.width / 2
+  expect(Math.abs(cardCenter - mainCenter)).toBeLessThan(40)
+})
