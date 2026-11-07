@@ -11,6 +11,7 @@ import {
 } from "@dnd-kit/core"
 import { useToast } from "hyrr.shared"
 import { useState } from "react"
+import { createPortal } from "react-dom"
 import { columnForStatus, errorMessage, isWithdrawn, PIPELINE_STATUSES } from "../../lib/recruiter"
 import { useJobStore, type Candidate } from "../../store/useJobStore"
 import { matchesLabel } from "../labels/labels"
@@ -93,21 +94,26 @@ export function KanbanBoard({ jobId }: { jobId?: string }) {
         ))}
       </div>
 
-      <DragOverlay
-        dropAnimation={{
-          sideEffects: defaultDropAnimationSideEffects({
-            styles: { active: { opacity: "0.4" } },
-          }),
-        }}
-      >
-        {activeCandidate ? (
-          <ApplicationCard
-            candidate={activeCandidate}
-            isOverlay
-            jobTitle={jobTitles?.[activeCandidate.jobId]}
-          />
-        ) : null}
-      </DragOverlay>
+      {/* Portalled to <body>: inside the page's animated (transformed) container a fixed overlay
+          is offset from the pointer, and dnd-kit picks the drop column from the overlay's rect. */}
+      {createPortal(
+        <DragOverlay
+          dropAnimation={{
+            sideEffects: defaultDropAnimationSideEffects({
+              styles: { active: { opacity: "0.4" } },
+            }),
+          }}
+        >
+          {activeCandidate ? (
+            <ApplicationCard
+              candidate={activeCandidate}
+              isOverlay
+              jobTitle={jobTitles?.[activeCandidate.jobId]}
+            />
+          ) : null}
+        </DragOverlay>,
+        document.body
+      )}
     </DndContext>
   )
 }

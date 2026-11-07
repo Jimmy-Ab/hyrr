@@ -447,3 +447,65 @@ test("a recruiter without a company sets one up first", async ({ page }) => {
   })
   expect((await userWithCompany(rec.email)).company?.name).toBe(company)
 })
+
+test("dragging a kanban card follows the pointer and drops in the column under it", async ({
+  page,
+}) => {
+  const rec = await createUser("RECRUITER", "Kai")
+  const seeker = await createUser("SEEKER", "Dora")
+  const job = await api(
+    "POST",
+    "/jobs",
+    {
+      title: `E2E Drag Job ${uid()}`,
+      location: "Berlin",
+      type: "FULL_TIME",
+      description: "<p>Moving candidates across the pipeline board by drag and drop.</p>",
+      requirements: ["Go"],
+      skills: ["Go"],
+      categoryId: await firstCategoryId(),
+    },
+    rec.token
+  )
+  await api(
+    "POST",
+    `/applications/jobs/${job.id}/apply`,
+    { name: "Dora", email: seeker.email, title: "Dev", location: "Berlin" },
+    seeker.token
+  )
+
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await login(page, RECRUITER_URL, rec.email)
+  await page.goto(`${RECRUITER_URL}/applications`)
+  const card = page.locator('[aria-roledescription="draggable"]').filter({ hasText: "Dora" })
+  await expect(card).toBeVisible({ timeout: 20_000 })
+  const target = page.getByRole("heading", { name: "In Process", level: 2 })
+
+  const from = (await card.boundingBox())!
+  const to = (await target.boundingBox())!
+  // The name is a button (opens the candidate); grab the card body.
+  const start = { x: from.x + from.width / 2, y: from.y + from.height * 0.55 }
+  const end = { x: to.x + to.width / 2, y: to.y + 160 }
+  await page.mouse.move(start.x, start.y)
+  await page.mouse.down()
+  await page.mouse.move(start.x + 20, start.y, { steps: 4 })
+  await page.mouse.move(end.x, end.y, { steps: 15 })
+
+  // Only one solid card while dragging, and it is under the pointer.
+  const copies = page.getByText("Dora", { exact: true })
+  await expect(copies).toHaveCount(2) // faded placeholder + the card under the pointer
+  const dragged = (await copies.last().boundingBox())!
+  const placeholder = (await copies.first().boundingBox())!
+  // The overlay card keeps the grab offset: its name sits where it was relative to the pointer.
+  const expectedX = placeholder.x + (end.x - start.x)
+  const expectedY = placeholder.y + (end.y - start.y)
+  expect(Math.abs(dragged.x - expectedX)).toBeLessThan(24)
+  expect(Math.abs(dragged.y - expectedY)).toBeLessThan(24)
+  expect(Math.abs(placeholder.x - (from.x + 0)) < from.width).toBe(true) // placeholder stays put
+
+  await page.mouse.up()
+  await expect(page.getByText("Status updated").first()).toBeVisible({ timeout: 10_000 })
+  const cands = await api<any>("GET", "/applications/candidates", undefined, rec.token)
+  const list: any[] = Array.isArray(cands) ? cands : cands.items
+  expect(list.find((c) => c.jobId === job.id)?.status).toBe("IN_PROCESS")
+})
