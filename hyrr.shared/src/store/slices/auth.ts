@@ -15,9 +15,13 @@ import type {
   JobAlertItem,
   JobApplication,
   JobState,
+  MyJoinRequest,
   NotificationItem,
   PublicJob,
+  RegisterExtras,
   SavedSearchItem,
+  TeamInvite,
+  TeamJoinRequest,
   TeamMember,
   TypingState,
 } from "../types"
@@ -57,11 +61,20 @@ export type AuthSlice = Pick<
   | "initializeSocket"
 >
 
+/** Only the recruiter sign-up fields that are set (unknown/empty fields would be a 400). */
+const cleanExtras = (extras?: RegisterExtras) =>
+  Object.fromEntries(
+    Object.entries(extras ?? {}).filter(([, v]) => typeof v === "string" && v.trim() !== "")
+  )
+
 const emptyWorkspace = {
   jobs: [] as Job[],
   candidates: [] as Candidate[],
   selectedJobId: "",
   team: [] as TeamMember[],
+  teamInvites: [] as TeamInvite[],
+  joinRequests: [] as TeamJoinRequest[],
+  myJoinRequest: null as MyJoinRequest | null,
   notifications: [] as NotificationItem[],
   jobApplications: [] as JobApplication[],
   publicJobs: [] as PublicJob[],
@@ -227,7 +240,7 @@ export const createAuthSlice: StateCreator<JobState, [], [], AuthSlice> = (set, 
 
   cancelTwoFactorLogin: () => set({ mfaPending: null, authError: null }),
 
-  registerUser: async (name, email, password, role, captchaToken) => {
+  registerUser: async (name, email, password, role, captchaToken, extras) => {
     set({ authLoading: true, authError: null })
     try {
       const data = await apiFetch("/auth/register", {
@@ -238,6 +251,7 @@ export const createAuthSlice: StateCreator<JobState, [], [], AuthSlice> = (set, 
           password,
           role,
           ...(captchaToken ? { captchaToken } : {}),
+          ...(role === "RECRUITER" ? cleanExtras(extras) : {}),
         }),
         skipAuth: true,
       })

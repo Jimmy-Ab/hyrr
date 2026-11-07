@@ -27,6 +27,7 @@ Roles: `SEEKER`, `RECRUITER`, `ADMIN`; company roles `OWNER | RECRUITER | HIRING
 - **Seeker payloads never contain `ai*` fields or recruiter notes** (`SEEKER_APPLICATION_FIELDS` in applications.service).
 - **Messaging**: per-user state lives in `ConversationState` (`lastReadAt`, `clearedAt`); the legacy `deletedBy*` columns are unused. Sends are idempotent on `(senderId, clientId)`.
 - **Momentum credits**: `WalletService` (`src/billing/wallet.service.ts`) is the only way to change a balance. A wallet belongs to a company (recruiters) or a user (seekers): pass `{ companyId }` or `{ userId }`. Debit inside the action's transaction so a 402 `INSUFFICIENT_CREDITS` writes nothing.
+- **Companies and teams**: `TeamService` (`src/team`) owns company setup, invites (hashed one-time links, 7 days; open invites count as seats), domain join requests, ownership transfer and leaving. Recruiters can have **no company** (`/auth/me` `company: null`): the recruiter app then shows "Set up your company". Never add members directly.
 - **Background work**: enqueue with `QueueService.add` (`src/queue`), never fire-and-forget; it runs on BullMQ with Redis and in-process without.
 - **AI**: provider picked by `resolveActiveModel()` (`src/ai/ai.models.ts`) from configured keys; placeholder keys (`sk-...`) count as unset. Never write `aiScore = 0` on failure.
 - **UI**: use design tokens (`text-txt-*`, `bg-bg-*`, `border-bg-border`, `primary`), shared components from `hyrr.shared`, no hard-coded `bg-white`/hex colours (dark mode). See the `hyrr-ui` skill.

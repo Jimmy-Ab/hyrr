@@ -1,7 +1,24 @@
-import { ArrowLeft, ArrowRight, Eye, EyeOff, KeyRound, Lock, Mail, User } from "lucide-react"
+import {
+  ArrowLeft,
+  ArrowRight,
+  Building2,
+  Eye,
+  EyeOff,
+  Globe,
+  KeyRound,
+  Lock,
+  Mail,
+  User,
+  Users,
+} from "lucide-react"
 import * as React from "react"
+import { errorMessage } from "../../lib/api"
 import { CAPTCHA_ENABLED, getOAuthUrl } from "../../lib/config"
+import { clearInviteToken, pendingInviteToken } from "../../lib/invite-token"
+import { companySetupSchema, validate, type FieldErrors } from "../../lib/validation"
+import type { CompanyMatch, InvitePreview } from "../../store/types"
 import { useJobStore } from "../../store/useJobStore"
+import { FieldError } from "../forms/structured-fields"
 import { Button } from "../ui/button"
 import { Input } from "../ui/input"
 import { AuthShell, GithubIcon, GoogleIcon, LinkedInIcon } from "./auth-shell"
@@ -112,9 +129,46 @@ export function AuthPage({ forcedRole, initialMode = "login" }: AuthPageProps) {
   const mfaPending = useJobStore((s) => s.mfaPending)
 
   const isAdmin = forcedRole === "ADMIN"
+  const isRecruiter = forcedRole === "RECRUITER"
+  // Team invite link (recruiter app): sign up or sign in to join that company.
+  const [inviteToken] = React.useState(() => (isRecruiter ? pendingInviteToken() : null))
+  const [invite, setInvite] = React.useState<InvitePreview | null>(null)
+  const [inviteError, setInviteError] = React.useState<string | null>(null)
+  const previewInvite = useJobStore((s) => s.previewInvite)
+  const findCompanyByEmail = useJobStore((s) => s.findCompanyByEmail)
   const [mode, setMode] = React.useState<"login" | "register" | "forgot">(
-    isAdmin && initialMode === "register" ? "login" : initialMode
+    isAdmin && initialMode === "register" ? "login" : inviteToken ? "register" : initialMode
   )
+  // Recruiter sign-up: the company to create, or a verified company on the same domain to join.
+  const [companyName, setCompanyName] = React.useState("")
+  const [companyWebsite, setCompanyWebsite] = React.useState("")
+  const [companyErrors, setCompanyErrors] = React.useState<FieldErrors>({})
+  const [match, setMatch] = React.useState<CompanyMatch | null>(null)
+  const [joinMatch, setJoinMatch] = React.useState(true)
+
+  React.useEffect(() => {
+    if (!inviteToken) return
+    let alive = true
+    previewInvite(inviteToken)
+      .then((preview) => alive && setInvite(preview))
+      .catch((err) => {
+        if (!alive) return
+        clearInviteToken()
+        setInviteError(errorMessage(err, "This invite link is no longer valid."))
+      })
+    return () => {
+      alive = false
+    }
+  }, [inviteToken, previewInvite])
+
+  const checkDomain = async () => {
+    if (!isRecruiter || mode !== "register" || invite || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      return
+    const found = await findCompanyByEmail(email.trim())
+    setMatch(found)
+    setJoinMatch(true)
+  }
+  const joining = !!invite || (!!match && joinMatch)
   const [email, setEmail] = React.useState("")
   const [password, setPassword] = React.useState("")
   const [name, setName] = React.useState("")
@@ -150,7 +204,28 @@ export function AuthPage({ forcedRole, initialMode = "login" }: AuthPageProps) {
       const result = await loginUser(email, password, token)
       if (result === "CAPTCHA_REQUIRED") setNeedLoginCaptcha(true)
     } else if (forcedRole !== "ADMIN") {
-      await registerUser(name, email, password, forcedRole, token)
+      if (isRecruiter && !joining) {
+        const errors = validate(companySetupSchema, { name: companyName, website: companyWebsite })
+        setCompanyErrors(errors)
+        if (Object.keys(errors).length) return
+      }
+      // The app switches to the workspace as soon as the session exists, so the invite must be
+      // consumed by this request, not by the accept dialog (this page keeps its own copy).
+      if (invite) clearInviteToken()
+      await registerUser(
+        name,
+        email,
+        password,
+        forcedRole,
+        token,
+        isRecruiter
+          ? invite && inviteToken
+            ? { inviteToken }
+            : match && joinMatch
+              ? { joinCompanyId: match.id }
+              : { companyName: companyName.trim(), companyWebsite: companyWebsite.trim() }
+          : undefined
+      )
     }
     // Turnstile tokens are single-use.
     if (token) resetCaptcha()
@@ -165,7 +240,7 @@ export function AuthPage({ forcedRole, initialMode = "login" }: AuthPageProps) {
   // Admins get the plain centred card (no marketing hero).
   const shellRole = isAdmin ? undefined : forcedRole
   const signedOutReason = useJobStore((s) => s.signedOutReason)
-  const error = localError || authError || signedOutReason
+  const error = localError || authError || signedOutReason || inviteError
 
   if (mfaPending) {
     return (
@@ -198,6 +273,17 @@ export function AuthPage({ forcedRole, initialMode = "login" }: AuthPageProps) {
               : `Start your journey as a ${isSeeker ? "job seeker" : "recruiter"}.`}
         </p>
       </div>
+
+      {invite && (
+        <div className="auth-invite" role="status">
+          <Users className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>
+            {invite.invitedBy ? `${invite.invitedBy} invited you` : "You're invited"} to join{" "}
+            <strong>{invite.company.name}</strong> as {invite.roleLabel}. Use{" "}
+            <strong>{invite.emailHint}</strong> to {mode === "login" ? "sign in" : "sign up"}.
+          </span>
+        </div>
+      )}
 
       {/* Error */}
       {error && (
@@ -279,12 +365,87 @@ export function AuthPage({ forcedRole, initialMode = "login" }: AuthPageProps) {
               autoComplete="email"
               placeholder="emily@example.com"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value)
+                if (match) setMatch(null)
+              }}
+              onBlur={() => void checkDomain()}
               required
               className="auth-input"
             />
           </div>
         </div>
+
+        {mode === "register" && isRecruiter && !invite && match && (
+          <fieldset className="auth-choice">
+            <legend className="auth-label">{match.name} is already on Hyrr</legend>
+            <label className="auth-choice-option">
+              <input type="radio" checked={joinMatch} onChange={() => setJoinMatch(true)} />
+              <span>Ask to join {match.name} (an owner approves you)</span>
+            </label>
+            <label className="auth-choice-option">
+              <input type="radio" checked={!joinMatch} onChange={() => setJoinMatch(false)} />
+              <span>Create a new company</span>
+            </label>
+          </fieldset>
+        )}
+
+        {mode === "register" && isRecruiter && !joining && (
+          <>
+            <div className="auth-field">
+              <label className="auth-label" htmlFor="auth-company">
+                Company name
+              </label>
+              <div className="auth-input-wrap">
+                <Building2 className="auth-input-icon" />
+                <Input
+                  id="auth-company"
+                  placeholder="Acme Inc."
+                  autoComplete="organization"
+                  value={companyName}
+                  onChange={(e) => {
+                    setCompanyName(e.target.value)
+                    setCompanyErrors((c) => ({ ...c, name: "" }))
+                  }}
+                  aria-invalid={!!companyErrors.name || undefined}
+                  aria-describedby={companyErrors.name ? "auth-company-error" : undefined}
+                  className="auth-input"
+                />
+              </div>
+              <FieldError id="auth-company-error" message={companyErrors.name || undefined} />
+            </div>
+            <div className="auth-field">
+              <label className="auth-label" htmlFor="auth-website">
+                Company website <span className="auth-optional">(optional)</span>
+              </label>
+              <div className="auth-input-wrap">
+                <Globe className="auth-input-icon" />
+                <Input
+                  id="auth-website"
+                  placeholder="https://acme.com"
+                  autoComplete="url"
+                  inputMode="url"
+                  value={companyWebsite}
+                  onChange={(e) => {
+                    setCompanyWebsite(e.target.value)
+                    setCompanyErrors((c) => ({ ...c, website: "" }))
+                  }}
+                  aria-invalid={!!companyErrors.website || undefined}
+                  aria-describedby={
+                    companyErrors.website ? "auth-website-error" : "auth-website-hint"
+                  }
+                  className="auth-input"
+                />
+              </div>
+              <FieldError id="auth-website-error" message={companyErrors.website || undefined} />
+              {!companyErrors.website && (
+                <p id="auth-website-hint" className="auth-hint">
+                  Your company gets a verified badge when your work e-mail matches this website.
+                </p>
+              )}
+            </div>
+          </>
+        )}
 
         <div className="auth-field">
           <div className="auth-label-row">

@@ -1,30 +1,20 @@
 import {
   APP_HEADER_CLASS,
   BrandMark,
-  Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  FieldError,
-  Input,
   notificationConversationId,
   useToast,
   VerifiedBadge,
-  type TeamMember,
 } from "hyrr.shared"
 import {
   Bell,
   Briefcase,
   Command,
-  Loader2,
   LogOut,
   Menu,
   Moon,
@@ -32,12 +22,11 @@ import {
   Search,
   Settings,
   Sun,
-  Trash2,
   User,
   Users,
   Zap,
 } from "lucide-react"
-import { useEffect, useState, type FormEvent } from "react"
+import { useEffect, useState } from "react"
 import {
   avatarFallback,
   errorMessage,
@@ -45,16 +34,7 @@ import {
   useCompanyVerified,
 } from "../../lib/recruiter"
 import { useJobStore } from "../../store/useJobStore"
-import { ConfirmDialog } from "./confirm-dialog"
-
-type InviteRole = "RECRUITER" | "HIRING_MANAGER" | "VIEWER"
-
-const ROLE_LABEL: Record<TeamMember["role"], string> = {
-  OWNER: "Owner",
-  RECRUITER: "Recruiter",
-  HIRING_MANAGER: "Hiring Manager",
-  VIEWER: "Viewer",
-}
+import { TeamDialog } from "../team/team-dialog"
 
 function usePrefersDark() {
   const [prefersDark, setPrefersDark] = useState(
@@ -67,213 +47,6 @@ function usePrefersDark() {
     return () => mq.removeEventListener("change", onChange)
   }, [])
   return prefersDark
-}
-
-function TeamDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
-  const { team, fetchTeam, addTeamMember, removeTeamMember, user, workspaceName } = useJobStore()
-  const companyVerified = useCompanyVerified()
-  const { toast } = useToast()
-  const [loading, setLoading] = useState(false)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [email, setEmail] = useState("")
-  const [role, setRole] = useState<InviteRole>("RECRUITER")
-  const [inviting, setInviting] = useState(false)
-  const [pendingRemove, setPendingRemove] = useState<TeamMember | null>(null)
-
-  const load = async () => {
-    setLoading(true)
-    setLoadError(null)
-    try {
-      await fetchTeam()
-    } catch (err) {
-      setLoadError(errorMessage(err, "Could not load your team."))
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (open) load()
-  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const isOwner = team.some((m) => m.userId === user?.id && m.role === "OWNER")
-
-  const [inviteError, setInviteError] = useState<string | null>(null)
-  const handleInvite = async (e: FormEvent) => {
-    e.preventDefault()
-    const trimmed = email.trim()
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      setInviteError("Enter a valid email address, e.g. name@company.com")
-      return
-    }
-    setInviteError(null)
-    setInviting(true)
-    try {
-      await addTeamMember(trimmed, role)
-      toast("Member added", `${trimmed} joined your team as ${ROLE_LABEL[role]}.`, "success")
-      setEmail("")
-    } catch (err) {
-      toast("Could not add member", errorMessage(err), "error")
-    } finally {
-      setInviting(false)
-    }
-  }
-
-  const handleRemove = async () => {
-    if (!pendingRemove) return
-    try {
-      await removeTeamMember(pendingRemove.id)
-      toast(
-        "Member removed",
-        `${pendingRemove.name || pendingRemove.email} was removed.`,
-        "success"
-      )
-    } catch (err) {
-      toast("Could not remove member", errorMessage(err), "error")
-      throw err
-    }
-  }
-
-  return (
-    <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Team</DialogTitle>
-            <DialogDescription>
-              People with access to{" "}
-              {workspaceName ? (
-                <span className="inline-flex items-center gap-1 font-semibold text-txt-heading">
-                  {workspaceName}
-                  {companyVerified && <VerifiedBadge />}
-                </span>
-              ) : (
-                "your company workspace"
-              )}
-              .
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="mt-4 max-h-72 overflow-y-auto flex flex-col gap-1">
-            {loading && team.length === 0 ? (
-              <div className="flex justify-center py-6">
-                <Loader2 className="w-5 h-5 animate-spin text-primary" />
-              </div>
-            ) : loadError ? (
-              <div role="alert" className="flex flex-col items-center gap-2 py-6 text-center">
-                <p className="text-[13px] text-sec-red">{loadError}</p>
-                <Button size="sm" variant="secondary" onClick={load}>
-                  Retry
-                </Button>
-              </div>
-            ) : team.length === 0 ? (
-              <p className="py-6 text-center text-[13px] text-txt-caption">No team members yet.</p>
-            ) : (
-              team.map((member) => (
-                <div
-                  key={member.id}
-                  className="flex items-center gap-3 px-2 py-2 rounded-[12px] hover:bg-bg-hover"
-                >
-                  <img
-                    src={member.avatar || avatarFallback(member.name || member.email)}
-                    alt=""
-                    className="w-8 h-8 rounded-full object-cover shrink-0"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-semibold text-txt-heading truncate">
-                      {member.name || member.email}
-                      {member.userId === user?.id && (
-                        <span className="text-txt-caption font-normal"> (you)</span>
-                      )}
-                    </p>
-                    <p className="text-[11.5px] text-txt-caption truncate">
-                      {member.email} · {ROLE_LABEL[member.role]}
-                    </p>
-                  </div>
-                  {isOwner && member.userId !== user?.id && (
-                    <button
-                      type="button"
-                      onClick={() => setPendingRemove(member)}
-                      aria-label={`Remove ${member.name || member.email}`}
-                      className="p-1.5 rounded-full text-txt-caption hover:text-sec-red hover:bg-sec-red/10 cursor-pointer"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-
-          {isOwner && (
-            <form
-              onSubmit={handleInvite}
-              className="mt-4 pt-4 border-t border-bg-border/40 flex flex-col gap-3"
-            >
-              <p className="text-[12px] font-semibold text-txt-heading uppercase tracking-wider">
-                Add a member
-              </p>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <div className="flex-1">
-                  <label htmlFor="team-invite-email" className="sr-only">
-                    Email
-                  </label>
-                  <Input
-                    id="team-invite-email"
-                    type="email"
-                    required
-                    placeholder="colleague@company.com"
-                    value={email}
-                    onChange={(e) => {
-                      setEmail(e.target.value)
-                      setInviteError(null)
-                    }}
-                    aria-invalid={!!inviteError || undefined}
-                    aria-describedby={inviteError ? "team-invite-email-error" : undefined}
-                  />
-                  <FieldError id="team-invite-email-error" message={inviteError ?? undefined} />
-                </div>
-                <label htmlFor="team-invite-role" className="sr-only">
-                  Role
-                </label>
-                <select
-                  id="team-invite-role"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value as InviteRole)}
-                  className="h-11 px-3 rounded-input border border-bg-border bg-bg-secondary text-[13px] text-txt-heading cursor-pointer"
-                >
-                  <option value="RECRUITER">Recruiter</option>
-                  <option value="HIRING_MANAGER">Hiring Manager</option>
-                  <option value="VIEWER">Viewer</option>
-                </select>
-                <Button type="submit" disabled={inviting} className="gap-1.5">
-                  {inviting ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Plus className="w-4 h-4" />
-                  )}
-                  Add
-                </Button>
-              </div>
-              <p className="text-[11.5px] text-txt-caption">
-                The person must already have a HYRR recruiter account that isn't part of another
-                company.
-              </p>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      <ConfirmDialog
-        open={!!pendingRemove}
-        onOpenChange={(o) => !o && setPendingRemove(null)}
-        title="Remove team member?"
-        description={`${pendingRemove?.name || pendingRemove?.email || "This member"} will lose access to your company's jobs and candidates.`}
-        confirmLabel="Remove"
-        onConfirm={handleRemove}
-      />
-    </>
-  )
 }
 
 export function Header({ onMenuClick }: { onMenuClick: () => void }) {
@@ -298,6 +71,14 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const companyVerified = useCompanyVerified()
   const { toast } = useToast()
   const [teamOpen, setTeamOpen] = useState(false)
+  const team = useJobStore((s) => s.team)
+  const joinRequests = useJobStore((s) => s.joinRequests)
+  const fetchJoinRequests = useJobStore((s) => s.fetchJoinRequests)
+  const isOwner = team.some((m) => m.userId === user?.id && m.role === "OWNER")
+  // Owners see a dot on Team when colleagues ask to join.
+  useEffect(() => {
+    if (isOwner) void fetchJoinRequests().catch(() => undefined)
+  }, [isOwner, fetchJoinRequests])
   const prefersDark = usePrefersDark()
 
   const unreadCount = notifications.filter((n) => !n.read).length
@@ -408,9 +189,15 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
           onClick={() => setTeamOpen(true)}
           aria-label="Team"
           title="Team"
-          className="text-txt-caption hover:text-txt-heading p-1.5 rounded-full hover:bg-bg-hover transition-colors cursor-pointer"
+          className="relative text-txt-caption hover:text-txt-heading p-1.5 rounded-full hover:bg-bg-hover transition-colors cursor-pointer"
         >
           <Users className="w-[18px] h-[18px]" />
+          {joinRequests.length > 0 && (
+            <span
+              className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-sec-orange ring-2 ring-bg-secondary"
+              aria-label={`${joinRequests.length} pending join request${joinRequests.length === 1 ? "" : "s"}`}
+            />
+          )}
         </button>
 
         {/* Theme Toggle */}

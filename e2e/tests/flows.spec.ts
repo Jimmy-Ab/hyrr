@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test"
 import {
   api,
   createUser,
+  detachFromCompany,
   disconnect,
   firstCategoryId,
   login,
@@ -9,8 +10,10 @@ import {
   RECRUITER_URL,
   SEEKER_URL,
   seekerBalance,
+  setInviteToken,
   setUserStatus,
   uid,
+  userWithCompany,
   verifyEmail,
 } from "./helpers"
 
@@ -353,4 +356,94 @@ test("seeker and recruiter apps share the same shell", async ({ browser }) => {
   expect(sizes[0].sidebar).toBe(sizes[1].sidebar)
   expect(sizes[0].badge).toContain("HYRR")
   expect(sizes[1].badge).toContain("HYRR")
+})
+
+test("recruiter signs up with their company name and website", async ({ page }) => {
+  const email = `founder${uid()}@e2e.test`
+  const company = `Orbit Labs ${uid()}`
+  await page.goto(RECRUITER_URL)
+  await page
+    .getByRole("button", { name: /sign up|create (an )?account/i })
+    .first()
+    .click()
+  await page.locator("#auth-name").fill("Fiona Founder")
+  await page.locator("#auth-email").fill(email)
+  await page.locator("#auth-password").fill(PASSWORD)
+  // The company name is required for a new company.
+  await page.locator("#auth-submit").click()
+  await expect(page.getByText("Enter your company name")).toBeVisible()
+  await page.locator("#auth-company").fill(company)
+  await page.locator("#auth-website").fill("orbit-labs.io")
+  await page.locator("#auth-submit").click()
+  await expect(page.getByRole("button", { name: "Create new job" })).toBeVisible({
+    timeout: 20_000,
+  })
+  const user = await userWithCompany(email)
+  expect(user.company?.name).toBe(company)
+  expect(user.company?.website).toBe("https://orbit-labs.io")
+  expect(user.company?.country).toBe("")
+  expect(user.companyMemberships[0]?.role).toBe("OWNER")
+})
+
+test("an invited colleague signs up through the link and sees the company's jobs", async ({
+  page,
+}) => {
+  const owner = await createUser("RECRUITER", "Olga")
+  const title = `E2E Team Job ${uid()}`
+  await api(
+    "POST",
+    "/jobs",
+    {
+      title,
+      location: "Berlin",
+      type: "FULL_TIME",
+      description: "<p>Work with the team on our hiring platform and services.</p>",
+      requirements: ["TypeScript"],
+      skills: ["TypeScript"],
+      categoryId: await firstCategoryId(),
+    },
+    owner.token
+  )
+  const inviteeEmail = `tom${uid()}@e2e.test`
+  await api("POST", "/talent/team/invites", { email: inviteeEmail, role: "RECRUITER" }, owner.token)
+  const token = `e2e-${uid()}`
+  await setInviteToken(inviteeEmail, token)
+
+  await page.goto(`${RECRUITER_URL}/invite?token=${token}`)
+  await expect(page.getByText(/invited you to join/i)).toBeVisible({ timeout: 20_000 })
+  // Joining: no company fields.
+  await expect(page.locator("#auth-company")).toHaveCount(0)
+  await page.locator("#auth-name").fill("Tom Teammate")
+  await page.locator("#auth-email").fill(inviteeEmail)
+  await page.locator("#auth-password").fill(PASSWORD)
+  await page.locator("#auth-submit").click()
+  await expect(page.getByRole("button", { name: "Create new job" })).toBeVisible({
+    timeout: 20_000,
+  })
+
+  const ownerUser = await userWithCompany(owner.email)
+  const invitee = await userWithCompany(inviteeEmail)
+  expect(invitee.companyId).toBe(ownerUser.companyId)
+  expect(invitee.companyMemberships.map((m) => m.role)).toEqual(["RECRUITER"])
+  // The link proves the inbox.
+  expect(invitee.emailVerifiedAt).not.toBeNull()
+
+  await page.goto(`${RECRUITER_URL}/jobs`)
+  await expect(page.getByText(title).first()).toBeVisible({ timeout: 20_000 })
+})
+
+test("a recruiter without a company sets one up first", async ({ page }) => {
+  const rec = await createUser("RECRUITER", "Nia")
+  await detachFromCompany(rec.email)
+  await login(page, RECRUITER_URL, rec.email)
+  await expect(page.getByRole("heading", { name: "Set up your company" })).toBeVisible({
+    timeout: 20_000,
+  })
+  const company = `Nia Works ${uid()}`
+  await page.locator("#setup-company").fill(company)
+  await page.getByRole("button", { name: "Create company" }).click()
+  await expect(page.getByRole("button", { name: "Create new job" })).toBeVisible({
+    timeout: 20_000,
+  })
+  expect((await userWithCompany(rec.email)).company?.name).toBe(company)
 })

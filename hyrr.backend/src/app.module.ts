@@ -22,6 +22,7 @@ import { SearchModule } from "./search/search.module"
 import { SeekerToolsModule } from "./seeker-tools/seeker-tools.module"
 import { SettingsModule } from "./settings/settings.module"
 import { TalentModule } from "./talent/talent.module"
+import { TeamModule } from "./team/team.module"
 
 import { CoreModule } from "./core/core.module"
 import { SecurityModule } from "./core/security/security.module"
@@ -63,6 +64,7 @@ import { UploadsModule } from "./uploads/uploads.module"
     SeekerToolsModule,
     SettingsModule,
     TalentModule,
+    TeamModule,
     AdminModule,
   ],
 })

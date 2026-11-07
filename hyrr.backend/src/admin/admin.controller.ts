@@ -40,6 +40,7 @@ import {
   PlanUpdateDto,
   PricingDto,
   ReasonDto,
+  TransferOwnerDto,
   UsersQueryDto,
 } from "./dtos/admin.dto"
 
@@ -184,6 +185,12 @@ export class AdminController {
   @HttpCode(HttpStatus.OK)
   adjustCredits(@Param("id", uuid) id: string, @Body() dto: CreditAdjustmentDto, @Req() req: any) {
     return this.companies.adjustCredits(id, dto.amount, dto.reason, ctxOf(req))
+  }
+
+  @Post("companies/:id/owner")
+  @HttpCode(HttpStatus.OK)
+  transferOwner(@Param("id", uuid) id: string, @Body() dto: TransferOwnerDto, @Req() req: any) {
+    return this.companies.transferOwnership(id, dto.userId, dto.reason, ctxOf(req))
   }
 
   // ─── Money ───────────────────────────────────────────────────────

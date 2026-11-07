@@ -236,6 +236,19 @@ export type AdminCompanyDetail = Omit<AdminCompany, "members" | "jobs"> & {
     currentPeriodEnd?: string
   } | null
   audit: AuditRow[]
+  invites: {
+    id: string
+    email: string
+    role: string
+    createdAt: string
+    expiresAt: string
+    expired: boolean
+  }[]
+  joinRequests: {
+    id: string
+    createdAt: string
+    user: { id: string; name: string; email: string }
+  }[]
 }
 
 export type MomentumConfig = {

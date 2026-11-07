@@ -447,6 +447,41 @@ export function AuthShell({
 
         /* ── Form fields ─────────────────────────────────────────────────── */
         .auth-form { display: flex; flex-direction: column; gap: 14px; }
+        .auth-invite {
+          display: flex;
+          gap: 10px;
+          align-items: flex-start;
+          padding: 12px 14px;
+          border-radius: 12px;
+          background: rgba(124,92,252,0.14);
+          border: 1px solid rgba(124,92,252,0.35);
+          color: rgba(255,255,255,0.85);
+          font-size: 13px;
+          line-height: 1.5;
+        }
+        .auth-invite strong { color: #fff; }
+        .auth-choice {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          margin: 0;
+          padding: 12px 14px;
+          border-radius: 12px;
+          border: 1px solid rgba(255,255,255,0.12);
+          background: rgba(255,255,255,0.04);
+        }
+        .auth-choice legend { padding: 0 4px; }
+        .auth-choice-option {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          font-size: 13px;
+          color: rgba(255,255,255,0.8);
+          cursor: pointer;
+        }
+        .auth-choice-option input { accent-color: #7C5CFC; }
+        .auth-optional { text-transform: none; letter-spacing: 0; font-weight: 500; }
+        .auth-hint { margin: 2px 0 0; font-size: 11.5px; color: rgba(255,255,255,0.4); line-height: 1.5; }
         .auth-field { display: flex; flex-direction: column; gap: 6px; }
         .auth-label {
           font-size: 11.5px;

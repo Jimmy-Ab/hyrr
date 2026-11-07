@@ -144,6 +144,9 @@ model User {
   receivedMessages Message[] @relation("ReceivedMessages")
   calendarEvents CalendarEvent[]
   companyMemberships CompanyMember[]
+  invitesSent        CompanyInvite[]      @relation("InviteSender")
+  joinRequests       CompanyJoinRequest[] @relation("JoinRequester")
+  joinDecisions      CompanyJoinRequest[] @relation("JoinDecider")
   conversationStates ConversationState[]
   authTokens         AuthToken[]
   jobAlerts     JobAlert[]
@@ -172,6 +175,8 @@ model Company {
   // Relations
   members     User[]
   teamMembers CompanyMember[]
+  invites      CompanyInvite[]
+  joinRequests CompanyJoinRequest[]
   jobs        Job[]
   wallet       CreditWallet?
   transactions CreditTransaction[]
@@ -517,6 +522,47 @@ model CompanyMember {
   role      CompanyMemberRole @default(RECRUITER)
   createdAt DateTime          @default(now())
   @@unique([companyId, userId])
+}
+
+/// Owner invites a colleague by e-mail; accepted through a one-time link (stored as a sha256 hash).
+model CompanyInvite {
+  id          String            @id @default(uuid())
+  companyId   String
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  email       String
+  role        CompanyMemberRole @default(RECRUITER)
+  tokenHash   String            @unique
+  invitedById String?
+  invitedBy   User?             @relation("InviteSender", fields: [invitedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime          @default(now())
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  declinedAt  DateTime?
+  revokedAt   DateTime?
+  @@index([companyId, email])
+}
+
+enum JoinRequestStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  CANCELED
+}
+
+/// A recruiter whose e-mail domain matches a verified company asks to join it.
+model CompanyJoinRequest {
+  id          String            @id @default(uuid())
+  companyId   String
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User              @relation("JoinRequester", fields: [userId], references: [id], onDelete: Cascade)
+  status      JoinRequestStatus @default(PENDING)
+  createdAt   DateTime          @default(now())
+  decidedById String?
+  decidedBy   User?             @relation("JoinDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt   DateTime?
+  @@index([companyId, status])
+  @@index([userId, status])
 }
 
 model ScreeningQuestion {

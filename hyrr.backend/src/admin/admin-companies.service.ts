@@ -158,6 +158,24 @@ export class AdminCompaniesService {
         this.prisma.subscription.findUnique({ where: { companyId: id } }),
         this.audit.forTarget(`company:${id}`, 10),
       ])
+    const [invites, joinRequests] = await Promise.all([
+      this.prisma.companyInvite.findMany({
+        where: { companyId: id, acceptedAt: null, declinedAt: null, revokedAt: null },
+        select: { id: true, email: true, role: true, createdAt: true, expiresAt: true },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+      }),
+      this.prisma.companyJoinRequest.findMany({
+        where: { companyId: id, status: "PENDING" },
+        select: {
+          id: true,
+          createdAt: true,
+          user: { select: { id: true, name: true, email: true } },
+        },
+        orderBy: { createdAt: "asc" },
+        take: 50,
+      }),
+    ])
     const members = memberRows.map((m) => ({ ...m.user, role: m.role as string }))
     // Accounts linked only through the legacy User.companyId count as owners.
     for (const u of legacyMembers)
@@ -177,6 +195,8 @@ export class AdminCompaniesService {
       payments,
       subscription,
       audit,
+      invites: invites.map((i) => ({ ...i, expired: i.expiresAt.getTime() <= Date.now() })),
+      joinRequests,
     }
   }
 
@@ -320,6 +340,43 @@ export class AdminCompaniesService {
       data: { status },
     })
     return { id, status }
+  }
+
+  /** Backstop when an owner is gone: makes `userId` the only OWNER (others become Recruiters). */
+  async transferOwnership(id: string, userId: string, reason: string, ctx: AdminCtx) {
+    const company = await this.load(id)
+    const target = await this.prisma.companyMember.findUnique({
+      where: { companyId_userId: { companyId: id, userId } },
+      include: { user: { select: { name: true, email: true } } },
+    })
+    if (!target)
+      throw new NotFoundAppException(
+        "That person isn't a member of this company",
+        "MEMBER_NOT_FOUND"
+      )
+    const before = await this.memberIds(id, true)
+    await this.prisma.$transaction(async (tx) => {
+      await tx.companyMember.updateMany({
+        where: { companyId: id, role: "OWNER", userId: { not: userId } },
+        data: { role: "RECRUITER" },
+      })
+      await tx.companyMember.update({ where: { id: target.id }, data: { role: "OWNER" } })
+      await this.audit.record(
+        {
+          actorId: ctx.actorId,
+          action: "company.transfer_owner",
+          target: `company:${id}`,
+          details: `Made ${target.user.email} the owner of ${company.name}`,
+          reason,
+          meta: { before: { owners: before }, after: { owners: [userId] } },
+          ip: ctx.ip,
+          severity: "warning",
+        },
+        tx
+      )
+    })
+    await this.inform(id, `Hyrr made ${target.user.name} the owner of ${company.name}: ${reason}`)
+    return { id, ownerUserId: userId }
   }
 
   /** ADJUSTMENT credit (amount > 0) or debit (amount < 0; 402 INSUFFICIENT_CREDITS beyond the balance). */

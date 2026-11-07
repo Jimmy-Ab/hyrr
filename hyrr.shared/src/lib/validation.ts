@@ -360,3 +360,15 @@ export const creditAdjustmentSchema = z.object({
     .refine((n) => n !== 0, "Amount can't be zero"),
   reason: reasonSchema.shape.reason,
 })
+
+// ─── Company setup (recruiter sign-up, "Set up your company") ───
+
+export const companySetupSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "Enter your company name")
+    .max(120, "Company name can be at most 120 characters"),
+  website: optionalUrl,
+})
+export type CompanySetupInput = z.infer<typeof companySetupSchema>

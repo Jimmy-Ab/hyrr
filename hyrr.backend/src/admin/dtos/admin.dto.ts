@@ -176,6 +176,11 @@ export class NoteDto {
 
 export const CREDIT_ADJUSTMENT_MAX = 100_000
 
+export class TransferOwnerDto extends ReasonDto {
+  @IsUUID(undefined, { message: "Choose a member" })
+  userId: string
+}
+
 export class CreditAdjustmentDto extends ReasonDto {
   @IsInt({ message: "Amount must be a whole number of credits" })
   @NotEquals(0, { message: "Amount can't be 0" })

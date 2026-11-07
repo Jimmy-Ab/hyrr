@@ -2,7 +2,8 @@ import { HttpStatus } from "@nestjs/common"
 import { PrismaClient } from "@prisma/client"
 import { AppException } from "../core/exceptions/app-exception"
 
-type SeatDb = Pick<PrismaClient, "user" | "company" | "subscription" | "plan">
+type SeatDb = Pick<PrismaClient, "user" | "company" | "subscription" | "plan"> &
+  Partial<Pick<PrismaClient, "companyInvite">>
 
 /** Company.plan holds the plan *name* ("Starter" / "Pro" / "Enterprise"); map it to Plan.code. */
 export function planCodeFromName(name?: string | null): string {
@@ -25,20 +26,33 @@ export async function effectivePlanCode(db: SeatDb, companyId: string): Promise<
   return planCodeFromName(company?.plan)
 }
 
-/** Seats = distinct users attached to the company (member rows or the legacy User.companyId). */
+/** Open (not accepted/declined/revoked, not expired) invites hold a seat until they are answered. */
+export const openInviteWhere = (companyId: string, now = new Date()) => ({
+  companyId,
+  acceptedAt: null,
+  declinedAt: null,
+  revokedAt: null,
+  expiresAt: { gt: now },
+})
+
+/**
+ * Seats = distinct users attached to the company (member rows or the legacy User.companyId)
+ * plus open invites.
+ */
 export async function seatUsage(
   db: SeatDb,
   companyId: string
 ): Promise<{ used: number; limit: number | null; planCode: string }> {
   const planCode = await effectivePlanCode(db, companyId)
-  const [used, plan] = await Promise.all([
+  const [members, invites, plan] = await Promise.all([
     db.user.count({
       where: { OR: [{ companyId }, { companyMemberships: { some: { companyId } } }] },
     }),
+    db.companyInvite ? db.companyInvite.count({ where: openInviteWhere(companyId) }) : 0,
     db.plan.findUnique({ where: { code: planCode }, select: { seatLimit: true } }),
   ])
   const limit = plan ? plan.seatLimit : (DEFAULT_SEATS[planCode] ?? null)
-  return { used: used ?? 0, limit, planCode }
+  return { used: (members ?? 0) + (invites ?? 0), limit, planCode }
 }
 
 /** Throws 402 SEAT_LIMIT_REACHED when adding one more member would exceed the plan's seats. */

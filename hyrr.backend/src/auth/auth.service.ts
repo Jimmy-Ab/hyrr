@@ -15,6 +15,7 @@ import { supportEmail, suspendedMessage } from "../core/config/support"
 import { AppException } from "../core/exceptions/app-exception"
 import { CaptchaService } from "../core/security/captcha.service"
 import { PrismaService } from "../prisma/prisma.service"
+import { TeamService } from "../team/team.service"
 import { AccountEmailService } from "./account-email.service"
 import { LoginDto } from "./dtos/login.dto"
 import { RegisterDto } from "./dtos/register.dto"
@@ -83,7 +84,8 @@ export class AuthService {
     private twoFactor: TwoFactorService,
     private accountEmail: AccountEmailService,
     private wallet: WalletService,
-    private pricing: PricingService
+    private pricing: PricingService,
+    private team: TeamService
   ) {}
 
   /** Momentum credits a new recruiter company starts with (read before the signup transaction). */
@@ -98,21 +100,39 @@ export class AuthService {
     const existing = await this.prisma.user.findUnique({ where: { email } })
     if (existing) throw new ConflictException("Email already registered")
 
+    const recruiter = dto.role === "RECRUITER"
+    const viaInvite = recruiter && !!dto.inviteToken
+    const viaJoinRequest = recruiter && !viaInvite && !!dto.joinCompanyId
+    // Fail fast with a clear message before anything is written.
+    if (viaInvite) await this.team.openInvite(this.prisma, dto.inviteToken!)
+
     const passwordHash = await bcrypt.hash(dto.password, 12)
-    const signupBonus = await this.signupBonusFor(dto.role)
-    const user = await this.prisma.$transaction((tx) =>
-      this.createAccount(tx, {
+    // Joining an existing company brings no welcome bonus (the company already has a wallet).
+    const signupBonus = viaInvite || viaJoinRequest ? 0 : await this.signupBonusFor(dto.role)
+    const user = await this.prisma.$transaction(async (tx) => {
+      const created = await this.createAccount(tx, {
         name: dto.name,
         email,
         passwordHash,
         avatar: avatarFor(dto.name),
         role: dto.role,
         signupBonus,
+        // The invite link was delivered to this inbox, so the address is proven.
+        ...(viaInvite ? { emailVerifiedAt: new Date() } : {}),
+        company:
+          recruiter && !viaInvite && !viaJoinRequest
+            ? { name: dto.companyName!, website: dto.companyWebsite }
+            : null,
       })
-    )
-    void this.accountEmail
-      .sendVerification(user)
-      .catch((error) => this.logger.warn(`Verification e-mail failed: ${error?.message}`))
+      if (viaInvite) await this.team.consumeInvite(tx, dto.inviteToken!, created)
+      if (viaJoinRequest) await this.team.createJoinRequest(tx, created, dto.joinCompanyId!)
+      return tx.user.findUniqueOrThrow({ where: { id: created.id } })
+    })
+    if (viaJoinRequest) await this.team.notifyJoinRequest(dto.joinCompanyId!, user.name)
+    if (!viaInvite)
+      void this.accountEmail
+        .sendVerification(user)
+        .catch((error) => this.logger.warn(`Verification e-mail failed: ${error?.message}`))
     return this.generateTokens(user)
   }
 
@@ -130,6 +150,11 @@ export class AuthService {
       emailVerifiedAt?: Date
       /** SIGNUP_BONUS credited to the new recruiter company's or seeker's wallet. */
       signupBonus?: number
+      /**
+       * Recruiters: the company to create. `null` = none yet (OAuth sign-up, invite, join request);
+       * they get the "Set up your company" screen until they create or join one.
+       */
+      company?: { name: string; website?: string | null } | null
     }
   ): Promise<User> {
     const role = data.role === "RECRUITER" ? UserRole.RECRUITER : UserRole.SEEKER
@@ -160,31 +185,9 @@ export class AuthService {
           },
           tx
         )
-    } else {
-      const company = await tx.company.create({
-        data: {
-          name: `${data.name}'s Company`,
-          logo: data.name.charAt(0).toUpperCase() || "C",
-          country: "United States",
-        },
-      })
-      user = await tx.user.update({ where: { id: user.id }, data: { companyId: company.id } })
-      await tx.companyMember.create({
-        data: { companyId: company.id, userId: user.id, role: CompanyMemberRole.OWNER },
-      })
-      await this.wallet.ensureWallet(company.id, tx)
-      if (data.signupBonus && data.signupBonus > 0)
-        await this.wallet.credit(
-          {
-            companyId: company.id,
-            amount: data.signupBonus,
-            type: "SIGNUP_BONUS",
-            referenceId: company.id,
-            actorId: user.id,
-            note: "Welcome bonus",
-          },
-          tx
-        )
+    } else if (data.company) {
+      await this.team.createCompanyFor(tx, user, data.company, data.signupBonus ?? 0)
+      user = await tx.user.findUniqueOrThrow({ where: { id: user.id } })
     }
     return user
   }

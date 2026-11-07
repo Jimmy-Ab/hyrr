@@ -8,7 +8,17 @@ import {
   VerifiedBadge,
   jobStatusTone,
 } from "hyrr.shared"
-import { BadgeCheck, BadgeX, Ban, Building2, Coins, RotateCcw } from "lucide-react"
+import {
+  BadgeCheck,
+  BadgeX,
+  Ban,
+  Building2,
+  Coins,
+  Crown,
+  Mail,
+  RotateCcw,
+  UserPlus,
+} from "lucide-react"
 import * as React from "react"
 import { ActionConfirm } from "../components/ui/action-confirm"
 import { AuditList } from "../components/ui/audit-list"
@@ -153,7 +163,7 @@ export function Companies() {
   )
 }
 
-type Pending = "verify" | "unverify" | "suspend" | "reactivate" | "credits" | null
+type Pending = "verify" | "unverify" | "suspend" | "reactivate" | "credits" | "owner" | null
 
 function CompanySheet({ companyId, onClose }: { companyId: string | null; onClose: () => void }) {
   const go = useNav((s) => s.go)
@@ -163,6 +173,7 @@ function CompanySheet({ companyId, onClose }: { companyId: string | null; onClos
     { enabled: !!companyId }
   )
   const [pending, setPending] = React.useState<Pending>(null)
+  const [newOwner, setNewOwner] = React.useState<{ id: string; name: string } | null>(null)
   const act = useAdminAction(({ path, body }: { path: string; body?: object }) =>
     api.post(`/companies/${companyId}/${path}`, body)
   )
@@ -275,7 +286,7 @@ function CompanySheet({ companyId, onClose }: { companyId: string | null; onClos
           <SheetSection title={`Members (${c.members.length})`}>
             <ul className="flex flex-col gap-1.5">
               {c.members.map((m) => (
-                <li key={m.id}>
+                <li key={m.id} className="flex items-center gap-1">
                   <button
                     type="button"
                     onClick={() => {
@@ -298,10 +309,49 @@ function CompanySheet({ companyId, onClose }: { companyId: string | null; onClos
                       <TonePill tone={userStatusTone(m.status)}>{humanize(m.status)}</TonePill>
                     )}
                   </button>
+                  {m.role !== "OWNER" && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setNewOwner({ id: m.id, name: m.name })
+                        setPending("owner")
+                      }}
+                      aria-label={`Make ${m.name} the owner`}
+                    >
+                      <Crown className="h-3.5 w-3.5" /> Make owner
+                    </Button>
+                  )}
                 </li>
               ))}
             </ul>
           </SheetSection>
+
+          {(c.invites?.length > 0 || c.joinRequests?.length > 0) && (
+            <SheetSection title="Pending invites and join requests">
+              <ul className="flex flex-col gap-1.5 text-[13px]">
+                {c.invites.map((i) => (
+                  <li key={i.id} className="flex items-center gap-3 px-2 py-1">
+                    <Mail className="h-4 w-4 shrink-0 text-txt-caption" aria-hidden="true" />
+                    <span className="min-w-0 flex-1 truncate text-txt-heading">{i.email}</span>
+                    <span className="text-[11.5px] text-txt-caption">{humanize(i.role)}</span>
+                    <TonePill tone={i.expired ? "slate" : "blue"}>
+                      {i.expired ? "Invite expired" : "Invited"}
+                    </TonePill>
+                  </li>
+                ))}
+                {c.joinRequests.map((r) => (
+                  <li key={r.id} className="flex items-center gap-3 px-2 py-1">
+                    <UserPlus className="h-4 w-4 shrink-0 text-txt-caption" aria-hidden="true" />
+                    <span className="min-w-0 flex-1 truncate text-txt-heading">
+                      {r.user.name} <span className="text-txt-caption">· {r.user.email}</span>
+                    </span>
+                    <TonePill tone="amber">Asked to join</TonePill>
+                  </li>
+                ))}
+              </ul>
+            </SheetSection>
+          )}
 
           <SheetSection title={`Jobs (${c.jobs.length})`}>
             {c.jobs.length ? (
@@ -397,6 +447,16 @@ function CompanySheet({ companyId, onClose }: { companyId: string | null; onClos
         confirmLabel="Reactivate"
         successTitle="Company reactivated"
         run={() => act.run({ path: "reactivate" })}
+      />
+      <ReasonDialog
+        open={pending === "owner"}
+        onOpenChange={(o) => !o && setPending(null)}
+        destructive={false}
+        title={`Make ${newOwner?.name ?? "this member"} the owner?`}
+        description="Use this when the current owner is gone. Other owners become Recruiters. Everyone in the company is notified."
+        confirmLabel="Transfer ownership"
+        successTitle="Ownership transferred"
+        onConfirm={(body) => act.run({ path: "owner", body: { ...body, userId: newOwner?.id } })}
       />
       <ReasonDialog
         open={pending === "credits"}
