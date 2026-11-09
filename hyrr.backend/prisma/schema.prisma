@@ -156,6 +156,7 @@ model User {
   resumeTailorings   ResumeTailoring[]
   mockInterviews     MockInterview[]
   skillAssessments   SkillAssessment[]
+  aiFeedback         AiFeedback[]
   joinRequests       CompanyJoinRequest[] @relation("JoinRequester")
   joinDecisions      CompanyJoinRequest[] @relation("JoinDecider")
   conversationStates ConversationState[]
@@ -383,6 +384,7 @@ model Application {
   interviewInvites   InterviewInvite[]
   scorecards         Scorecard[]
   offers             Offer[]
+  aiFeedback         AiFeedback[]
   labels             ApplicationLabel[]
   recruiterNotes     ApplicationNote[]
   answers            ScreeningAnswer[]
@@ -857,6 +859,35 @@ model CompanyStats {
   fastResponder            Boolean  @default(false)
   computedAt               DateTime @default(now())
   @@index([fastResponder])
+}
+
+/// One AI call (all features). Tokens and cost are estimates from text length and the price table.
+model AiUsage {
+  id           String   @id @default(uuid())
+  provider     String
+  model        String
+  feature      String
+  ok           Boolean
+  latencyMs    Int
+  inputTokens  Int
+  outputTokens Int
+  costUsd      Float?
+  createdAt    DateTime @default(now())
+  @@index([createdAt])
+}
+
+/// Recruiter thumbs up/down on an AI candidate analysis (drift signal for admins).
+model AiFeedback {
+  id            String      @id @default(uuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  helpful       Boolean
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  @@unique([applicationId, userId])
+  @@index([createdAt])
 }
 
 model ScreeningQuestion {

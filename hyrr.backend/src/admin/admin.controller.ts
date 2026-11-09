@@ -80,6 +80,13 @@ export class AdminController {
     return this.stats.analytics(new Date(q.from), new Date(q.to), q.interval)
   }
 
+  @Get("ai-usage")
+  @ApiOperation({ summary: "AI calls, failures, latency, estimated cost and recruiter feedback" })
+  aiUsage(@Query("days") days?: string) {
+    const n = Number(days)
+    return this.stats.aiUsage(Number.isFinite(n) && n >= 1 && n <= 90 ? Math.round(n) : 30)
+  }
+
   @Get("liquidity")
   @ApiOperation({
     summary: "Supply (active applicants) vs demand (open jobs) per category or location",

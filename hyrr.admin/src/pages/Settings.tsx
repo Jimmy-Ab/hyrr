@@ -33,6 +33,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import * as React from "react"
+import { AiUsageCard } from "../components/ai-usage-card"
 import { ErrorBlock } from "../components/ui/common"
 import { api, useAdminAction, useAdminQuery } from "../lib/api"
 import { humanize } from "../lib/format"
@@ -55,6 +56,7 @@ export function Settings() {
         <AiCard />
         <SystemCard />
       </div>
+      <AiUsageCard />
       <WebJobsCard />
     </div>
   )

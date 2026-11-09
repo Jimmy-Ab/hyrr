@@ -569,6 +569,19 @@ export class ApplicationsService implements OnModuleInit {
     return candidate
   }
 
+  /** Recruiter feedback on the AI analysis of a candidate (one vote per recruiter, editable). */
+  async aiFeedback(id: string, helpful: boolean, actor: Actor) {
+    if (actor.role !== "RECRUITER")
+      throw new ForbiddenAppException("Only the hiring team can rate AI analyses")
+    await this.access.applicationFor(actor, id, "view")
+    await this.prisma.aiFeedback.upsert({
+      where: { applicationId_userId: { applicationId: id, userId: actor.userId } },
+      create: { applicationId: id, userId: actor.userId, helpful },
+      update: { helpful },
+    })
+    return { applicationId: id, helpful }
+  }
+
   /** Recruiter-side candidate payload (same shape as GET /applications/candidates). */
   async candidatePayload(applicationId: string) {
     const app = await this.prisma.application.findUnique({

@@ -15,6 +15,7 @@ import {
 } from "@nestjs/common"
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from "@nestjs/swagger"
 import { Roles } from "../auth/decorators/roles.decorator"
+import { IsBoolean } from "class-validator"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { OptionalJwtAuthGuard } from "../auth/guards/optional-jwt-auth.guard"
 import { RolesGuard } from "../auth/guards/roles.guard"
@@ -27,6 +28,11 @@ import { BulkApplicationsDto } from "./dtos/bulk-applications.dto"
 import { CreateApplicationDto } from "./dtos/create-application.dto"
 import { CreateCandidateDto } from "./dtos/create-candidate.dto"
 import { UpdateApplicationDto } from "./dtos/update-application.dto"
+
+export class AiFeedbackDto {
+  @IsBoolean({ message: "Choose helpful or not helpful" })
+  helpful: boolean
+}
 
 @ApiTags("Applications")
 @Controller("applications")
@@ -202,6 +208,13 @@ export class ApplicationsController {
   @ApiResponse({ status: 200, description: "[{ status, label, at, actor?: { name } }]" })
   timeline(@Param("id") id: string, @Req() req: any) {
     return this.applicationsService.getTimeline(id, req.user)
+  }
+
+  // ─── Recruiter: was the AI analysis helpful? (admin drift signal) ──
+  @Post(":id/ai-feedback")
+  @ApiOperation({ summary: "Thumbs up/down on the AI candidate analysis (one per recruiter)" })
+  aiFeedback(@Param("id") id: string, @Body() body: AiFeedbackDto, @Req() req: any) {
+    return this.applicationsService.aiFeedback(id, body.helpful, req.user)
   }
 
   // ─── Shared: update application status / move Kanban ─────────────

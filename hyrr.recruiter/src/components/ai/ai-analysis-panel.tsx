@@ -1,5 +1,6 @@
 import {
   AI_RECOMMENDATION_LABEL,
+  apiFetch,
   Badge,
   Button,
   ConfirmDialog,
@@ -282,6 +283,7 @@ export function AiAnalysisPanel({ candidate }: { candidate: Candidate }) {
                 )}
               </p>
             )}
+            <AiFeedbackButtons applicationId={candidate.id} />
           </div>
         </div>
         <div className="shrink-0">{runButton(pending ? "Analyzing…" : "Re-run analysis")}</div>
@@ -352,6 +354,40 @@ export function AiAnalysisPanel({ candidate }: { candidate: Candidate }) {
           </p>
         </div>
       )}
+    </div>
+  )
+}
+
+/** Was this analysis helpful? (admins track the rate over time to spot model drift) */
+function AiFeedbackButtons({ applicationId }: { applicationId: string }) {
+  const [vote, setVote] = useState<boolean | null>(null)
+  const send = async (helpful: boolean) => {
+    const previous = vote
+    setVote(helpful)
+    try {
+      await apiFetch(`/applications/${applicationId}/ai-feedback`, {
+        method: "POST",
+        body: JSON.stringify({ helpful }),
+      })
+    } catch {
+      setVote(previous)
+    }
+  }
+  return (
+    <div className="mt-1.5 flex items-center gap-1 text-[11.5px] text-txt-caption">
+      <span>{vote === null ? "Was this helpful?" : "Thanks for the feedback"}</span>
+      {[true, false].map((helpful) => (
+        <button
+          key={String(helpful)}
+          type="button"
+          aria-pressed={vote === helpful}
+          aria-label={helpful ? "Helpful" : "Not helpful"}
+          onClick={() => send(helpful)}
+          className={`rounded-full px-1.5 py-0.5 cursor-pointer hover:bg-bg-hover ${vote === helpful ? "bg-primary/10 text-primary" : ""}`}
+        >
+          {helpful ? "👍" : "👎"}
+        </button>
+      ))}
     </div>
   )
 }

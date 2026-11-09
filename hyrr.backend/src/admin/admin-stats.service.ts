@@ -1,5 +1,6 @@
 import { HttpStatus, Injectable, Optional } from "@nestjs/common"
 import { ApplicationStatus, JobStatus, Prisma, UserRole } from "@prisma/client"
+import { priceTable } from "../ai/ai-usage"
 import { resolveActiveModel } from "../ai/ai.models"
 import { CacheService } from "../cache/cache.service"
 import { EmailService } from "../core/delivery/email.service"
@@ -7,6 +8,7 @@ import { AppException } from "../core/exceptions/app-exception"
 import { HealthService } from "../health/health.service"
 import { PrismaService } from "../prisma/prisma.service"
 import { QueueService } from "../queue/queue.service"
+import { usageReport } from "./ai-usage-report"
 import { liquidityRows, locationBucket } from "./liquidity"
 import {
   AnalyticsInterval,
@@ -513,5 +515,18 @@ export class AdminStatsService {
       b.seekers.add(a.userId!)
     }
     return { by, since, rows: liquidityRows(buckets) }
+  }
+
+  /** AI observatory: calls, failures, latency, estimated tokens/cost and recruiter feedback. */
+  async aiUsage(days = 30, now = new Date()) {
+    const since = new Date(now.getTime() - days * 86_400_000)
+    const [rows, feedback] = await Promise.all([
+      this.prisma.aiUsage.findMany({ where: { createdAt: { gte: since } }, take: 200_000 }),
+      this.prisma.aiFeedback.findMany({
+        where: { updatedAt: { gte: new Date(now.getTime() - 90 * 86_400_000) } },
+        select: { helpful: true, createdAt: true },
+      }),
+    ])
+    return { days, since, pricedModels: Object.keys(priceTable()), ...usageReport(rows, feedback) }
   }
 }
