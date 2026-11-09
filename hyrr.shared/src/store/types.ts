@@ -640,6 +640,31 @@ export interface CvTailoring {
   cached?: boolean
 }
 
+export interface MockInterview {
+  id: string
+  jobId?: string | null
+  jobTitle: string
+  company?: string | null
+  status: "IN_PROGRESS" | "COMPLETED"
+  questions: { question: string; kind: "technical" | "behavioral"; tip: string }[]
+  answers: {
+    index: number
+    answer: string
+    score: number
+    feedback: string
+    star: { situation: boolean; task: boolean; action: boolean; result: boolean }
+    betterAnswer: string
+  }[]
+  summary: {
+    overall: number
+    readiness: "ready" | "almost" | "needs_practice"
+    strengths: string[]
+    improvements: string[]
+  } | null
+  createdAt: string
+  charged?: number
+}
+
 export type ExternalStage = "BOOKMARKED" | "APPLIED" | "INTERVIEWING" | "OFFER" | "REJECTED"
 
 /** A job the seeker tracks outside Hyrr. */
@@ -1216,6 +1241,11 @@ export interface JobState {
   fetchCvTailoring: (jobId: string) => Promise<CvTailoring | null>
   /** Runs (or reopens) CV tailoring; charges resumeTailorCost unless saved, refunded if AI fails. */
   tailorCv: (jobId: string, rerun?: boolean) => Promise<CvTailoring>
+
+  fetchMockInterviews: () => Promise<MockInterview[]>
+  /** Charges mockInterviewCost (refunded if question generation fails). */
+  startMockInterview: (jobId: string) => Promise<MockInterview>
+  answerMockQuestion: (id: string, index: number, answer: string) => Promise<MockInterview>
 
   // ── Jobs from the web (seekers) ─────────────────────────────────────────
   fetchWebJobs: (

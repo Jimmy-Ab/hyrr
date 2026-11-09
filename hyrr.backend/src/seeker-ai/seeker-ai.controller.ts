@@ -10,7 +10,17 @@ import {
   UseGuards,
 } from "@nestjs/common"
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger"
-import { IsBoolean, IsOptional, IsUUID } from "class-validator"
+import {
+  IsBoolean,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+} from "class-validator"
 import { Roles } from "../auth/decorators/roles.decorator"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { RolesGuard } from "../auth/guards/roles.guard"
@@ -25,6 +35,23 @@ export class TailorDto {
   @IsOptional()
   @IsBoolean()
   rerun?: boolean
+}
+
+export class StartMockDto {
+  @IsUUID(undefined, { message: "Choose a job" })
+  jobId: string
+}
+
+export class MockAnswerDto {
+  @IsInt()
+  @Min(0)
+  @Max(9)
+  index: number
+
+  @IsString()
+  @MinLength(20, { message: "Write at least a few sentences (20+ characters)" })
+  @MaxLength(4000, { message: "Keep your answer under 4000 characters" })
+  answer: string
 }
 
 @ApiTags("Seeker AI tools")
@@ -48,5 +75,30 @@ export class SeekerAiController {
   @Roles("SEEKER")
   tailor(@Req() req: any, @Body() dto: TailorDto) {
     return this.seekerAi.tailor(req.user.userId, dto.jobId, !!dto.rerun)
+  }
+
+  @Get("mock-interviews")
+  @Roles("SEEKER")
+  listMocks(@Req() req: any) {
+    return this.seekerAi.listMocks(req.user.userId)
+  }
+
+  @Get("mock-interviews/:id")
+  @Roles("SEEKER")
+  getMock(@Req() req: any, @Param("id", uuid) id: string) {
+    return this.seekerAi.getMock(req.user.userId, id)
+  }
+
+  /** Starts a practice interview (charges mockInterviewCost; refunded if question generation fails). */
+  @Post("mock-interviews")
+  @Roles("SEEKER")
+  startMock(@Req() req: any, @Body() dto: StartMockDto) {
+    return this.seekerAi.startMock(req.user.userId, dto.jobId)
+  }
+
+  @Post("mock-interviews/:id/answers")
+  @Roles("SEEKER")
+  answerMock(@Req() req: any, @Param("id", uuid) id: string, @Body() dto: MockAnswerDto) {
+    return this.seekerAi.answerMock(req.user.userId, id, dto.index, dto.answer)
   }
 }

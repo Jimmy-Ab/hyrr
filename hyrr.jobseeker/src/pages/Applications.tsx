@@ -37,6 +37,7 @@ import {
 import { useId, useState } from "react"
 import { ExternalTracker } from "../components/external-tracker"
 import { PendingInterviewInvites } from "../components/interview-invites"
+import { MockInterviewButton } from "../components/mock-interview"
 import { openOfferSheet } from "../components/offer-sheet"
 import { OutreachInvitations } from "../components/outreach"
 
@@ -241,6 +242,17 @@ function JobCard({
               {application.jobRemoved && (
                 <p className="mt-1 text-[11.5px] font-semibold text-sec-red">No longer available</p>
               )}
+              {(application.status === "APPLIED" ||
+                application.status === "IN_PROCESS" ||
+                application.status === "INTERVIEWING") &&
+                !application.jobRemoved && (
+                  <div className="mt-2" onPointerDown={(e) => e.stopPropagation()}>
+                    <MockInterviewButton
+                      jobId={application.publicJobId}
+                      jobTitle={application.title}
+                    />
+                  </div>
+                )}
               {liveOffer && (
                 <button
                   type="button"

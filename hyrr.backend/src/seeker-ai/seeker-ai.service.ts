@@ -5,7 +5,29 @@ import { PricingService, type MomentumConfig } from "../billing/pricing.service"
 import { WalletService } from "../billing/wallet.service"
 import { AppException } from "../core/exceptions/app-exception"
 import { PrismaService } from "../prisma/prisma.service"
-import { TAILOR_SYSTEM_PROMPT, tailorSchema, type TailorResult } from "./schemas"
+import {
+  MOCK_GRADE_PROMPT,
+  MOCK_QUESTIONS_PROMPT,
+  MOCK_SUMMARY_PROMPT,
+  TAILOR_SYSTEM_PROMPT,
+  mockGradeSchema,
+  mockQuestionsSchema,
+  mockSummarySchema,
+  tailorSchema,
+  type TailorResult,
+} from "./schemas"
+
+type MockQuestion = { question: string; kind: "technical" | "behavioral"; tip: string }
+type MockAnswer = {
+  index: number
+  answer: string
+  score: number
+  feedback: string
+  star: { situation: boolean; task: boolean; action: boolean; result: boolean }
+  betterAnswer: string
+}
+const ANSWER_MIN = 20
+const ANSWER_MAX = 4000
 
 type CostKey = "resumeTailorCost" | "mockInterviewCost" | "negotiationAdviceCost"
 const CV_MAX = 12_000
@@ -182,5 +204,171 @@ export class SeekerAiService {
       charged,
       cached: false,
     }
+  }
+
+  // ─── Mock interview ────────────────────────────────────────────────────────
+
+  private presentMock(m: any) {
+    return {
+      id: m.id,
+      jobId: m.jobId,
+      jobTitle: m.jobTitle,
+      company: m.company,
+      status: m.status,
+      questions: m.questions as MockQuestion[],
+      answers: m.answers as MockAnswer[],
+      summary: m.summary,
+      createdAt: m.createdAt,
+      updatedAt: m.updatedAt,
+    }
+  }
+
+  /** Starts a practice interview for a Hyrr job: 5 tailored questions (charges mockInterviewCost). */
+  async startMock(userId: string, jobId: string) {
+    const job = await this.prisma.job.findUnique({
+      where: { id: jobId },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        description: true,
+        requirements: true,
+        skills: true,
+        company: { select: { name: true } },
+        screeningQuestions: { select: { question: true } },
+      },
+    })
+    if (!job || job.status === JobStatus.DRAFT)
+      throw new AppException("Job not found", HttpStatus.NOT_FOUND, "JOB_NOT_FOUND")
+    const prompt = [
+      `JOB: ${job.title} at ${job.company?.name ?? "the company"}`,
+      `Requirements: ${job.requirements.join("; ") || "-"}`,
+      `Skills: ${job.skills.join(", ") || "-"}`,
+      job.screeningQuestions.length
+        ? `The company's screening questions: ${job.screeningQuestions.map((q) => q.question).join(" | ")}`
+        : "",
+      `Description:\n${job.description.replace(/<[^>]+>/g, " ").slice(0, 5000)}`,
+    ]
+      .filter(Boolean)
+      .join("\n")
+    const { value, charged } = await this.chargedRun(
+      userId,
+      "mockInterviewCost",
+      job.id,
+      `Practice interview: ${job.title}`,
+      () =>
+        this.ai.structured<{ questions: MockQuestion[] }>(
+          MOCK_QUESTIONS_PROMPT,
+          prompt,
+          mockQuestionsSchema,
+          "mock_questions"
+        )
+    )
+    const mock = await this.prisma.mockInterview.create({
+      data: {
+        userId,
+        jobId: job.id,
+        jobTitle: job.title,
+        company: job.company?.name ?? null,
+        questions: value.result.questions as any,
+      },
+    })
+    return { ...this.presentMock(mock), charged }
+  }
+
+  async listMocks(userId: string) {
+    const rows = await this.prisma.mockInterview.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      take: 30,
+    })
+    return rows.map((r) => this.presentMock(r))
+  }
+
+  private async ownMock(userId: string, id: string) {
+    const mock = await this.prisma.mockInterview.findUnique({ where: { id } })
+    if (!mock || mock.userId !== userId)
+      throw new AppException("Practice interview not found", HttpStatus.NOT_FOUND, "MOCK_NOT_FOUND")
+    return mock
+  }
+
+  async getMock(userId: string, id: string) {
+    return this.presentMock(await this.ownMock(userId, id))
+  }
+
+  /**
+   * Grades one answer (STAR feedback; included in the session price). After the last answer a
+   * summary is written and the session completes. A failed grading isn't saved, so it can be retried.
+   */
+  async answerMock(userId: string, id: string, index: number, answer: string) {
+    const mock = await this.ownMock(userId, id)
+    if (mock.status === "COMPLETED")
+      throw new AppException(
+        "This practice interview is finished.",
+        HttpStatus.CONFLICT,
+        "MOCK_COMPLETED"
+      )
+    const questions = mock.questions as MockQuestion[]
+    const answers = mock.answers as MockAnswer[]
+    const text = answer.trim()
+    if (!questions[index])
+      throw new AppException("Unknown question", HttpStatus.BAD_REQUEST, "MOCK_QUESTION_NOT_FOUND")
+    if (answers.some((a) => a.index === index))
+      throw new AppException(
+        "You already answered this question.",
+        HttpStatus.CONFLICT,
+        "MOCK_ALREADY_ANSWERED"
+      )
+    if (text.length < ANSWER_MIN || text.length > ANSWER_MAX)
+      throw new AppException(
+        `Write between ${ANSWER_MIN} and ${ANSWER_MAX} characters.`,
+        HttpStatus.BAD_REQUEST,
+        "VALIDATION_FAILED"
+      )
+    const q = questions[index]
+    const graded = await this.ai.structured<Omit<MockAnswer, "index" | "answer">>(
+      MOCK_GRADE_PROMPT,
+      `JOB: ${mock.jobTitle}\nQUESTION (${q.kind}): ${q.question}\nANSWER:\n${text}`,
+      mockGradeSchema,
+      "mock_grade"
+    )
+    const next: MockAnswer[] = [...answers, { index, answer: text, ...graded.result }].sort(
+      (a, b) => a.index - b.index
+    )
+    let summary: unknown = null
+    if (next.length === questions.length) {
+      const transcript = next
+        .map(
+          (a) =>
+            `Q${a.index + 1}: ${questions[a.index].question}\nScore ${a.score}/5. ${a.feedback}`
+        )
+        .join("\n\n")
+      summary = await this.ai
+        .structured(
+          MOCK_SUMMARY_PROMPT,
+          `JOB: ${mock.jobTitle}\n\n${transcript}`,
+          mockSummarySchema,
+          "mock_summary"
+        )
+        .then((r) => r.result)
+        .catch(() => {
+          // The answers are kept; the summary falls back to the average.
+          const avg = Math.round(next.reduce((s, a) => s + a.score, 0) / next.length)
+          return {
+            overall: avg,
+            readiness: avg >= 4 ? "ready" : avg >= 3 ? "almost" : "needs_practice",
+            strengths: [],
+            improvements: [],
+          }
+        })
+    }
+    const saved = await this.prisma.mockInterview.update({
+      where: { id },
+      data: {
+        answers: next as any,
+        ...(summary ? { summary: summary as any, status: "COMPLETED" as const } : {}),
+      },
+    })
+    return this.presentMock(saved)
   }
 }

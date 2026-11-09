@@ -1021,3 +1021,40 @@ test("CV tailor: without an AI provider the seeker is told and nothing is charge
   })
   expect(await seekerBalance(seeker.email)).toBe(before)
 })
+
+test("practice interview: offered on active applications; no AI provider means no charge", async ({
+  page,
+}) => {
+  const rec = await createUser("RECRUITER", "Kebede")
+  const seeker = await createUser("SEEKER", "Hiwot")
+  const title = `E2E Practice Job ${uid()}`
+  const job = await api(
+    "POST",
+    "/jobs",
+    {
+      title,
+      location: "Remote",
+      type: "FULL_TIME",
+      description: "<p>Practice makes perfect.</p>",
+      requirements: ["Go"],
+      skills: ["Go"],
+      categoryId: await firstCategoryId(),
+    },
+    rec.token
+  )
+  await api(
+    "POST",
+    `/applications/jobs/${job.id}/apply`,
+    { name: "Hiwot", email: seeker.email, title: "Dev", location: "Remote" },
+    seeker.token
+  )
+  const before = await seekerBalance(seeker.email)
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await login(page, SEEKER_URL, seeker.email)
+  await page.goto(`${SEEKER_URL}/applications`)
+  await page.getByRole("button", { name: "Practice interview" }).first().click()
+  const dialog = page.getByRole("dialog")
+  await dialog.getByRole("button", { name: /^Start · \d+ credits$/ }).click()
+  await expect(dialog.getByText(/nothing was charged/)).toBeVisible({ timeout: 10_000 })
+  expect(await seekerBalance(seeker.email)).toBe(before)
+})

@@ -154,6 +154,7 @@ model User {
   externalApplications ExternalApplication[]
   externalJobApplies ExternalJobApply[]
   resumeTailorings   ResumeTailoring[]
+  mockInterviews     MockInterview[]
   joinRequests       CompanyJoinRequest[] @relation("JoinRequester")
   joinDecisions      CompanyJoinRequest[] @relation("JoinDecider")
   conversationStates ConversationState[]
@@ -786,6 +787,28 @@ model ResumeTailoring {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@unique([userId, jobId])
+}
+
+enum MockInterviewStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+/// AI practice interview for a job: 5 questions, STAR feedback per answer, final summary.
+model MockInterview {
+  id        String              @id @default(uuid())
+  userId    String
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId     String?
+  jobTitle  String
+  company   String?
+  questions Json
+  answers   Json                @default("[]")
+  summary   Json?
+  status    MockInterviewStatus @default(IN_PROGRESS)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  @@index([userId, createdAt])
 }
 
 model ScreeningQuestion {

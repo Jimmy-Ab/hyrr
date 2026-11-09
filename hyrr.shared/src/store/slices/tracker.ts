@@ -14,6 +14,9 @@ export type TrackerSlice = Pick<
   | "applyWebJob"
   | "fetchCvTailoring"
   | "tailorCv"
+  | "fetchMockInterviews"
+  | "startMockInterview"
+  | "answerMockQuestion"
 >
 
 const map = (e: any): ExternalApplication => ({
@@ -60,6 +63,25 @@ export const createTrackerSlice: StateCreator<JobState, [], [], TrackerSlice> = 
         .catch(() => undefined)
     return res
   },
+
+  fetchMockInterviews: () => apiFetch("/seeker-ai/mock-interviews"),
+
+  startMockInterview: async (jobId) => {
+    const res = await apiFetch("/seeker-ai/mock-interviews", {
+      method: "POST",
+      body: JSON.stringify({ jobId }),
+    })
+    void get()
+      .fetchWallet()
+      .catch(() => undefined)
+    return res
+  },
+
+  answerMockQuestion: (id, index, answer) =>
+    apiFetch(`/seeker-ai/mock-interviews/${id}/answers`, {
+      method: "POST",
+      body: JSON.stringify({ index, answer }),
+    }),
 
   applyWebJob: async (id) => {
     const res = await apiFetch(`/external-jobs/${id}/apply`, { method: "POST" })

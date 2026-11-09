@@ -122,4 +122,103 @@ describe("SeekerAiService", () => {
       tailorSchema.safeParse({ ...RESULT, missingKeywords: Array(20).fill("x") }).success
     ).toBe(false)
   })
+
+  describe("mock interview", () => {
+    const questions = Array.from({ length: 5 }, (_, i) => ({
+      question: `Question number ${i + 1} about the role?`,
+      kind: i < 3 ? "technical" : "behavioral",
+      tip: "Be specific",
+    }))
+    const grade = {
+      score: 4,
+      feedback: "Clear situation and action; quantify the result.",
+      star: { situation: true, task: true, action: true, result: false },
+      betterAnswer: "In my last role I … which cut costs by [X%].",
+    }
+    const mock = (over: Record<string, any> = {}) => ({
+      id: "m1",
+      userId: "u1",
+      jobId: "job-1",
+      jobTitle: "Backend Engineer",
+      company: "Acme",
+      questions,
+      answers: [],
+      summary: null,
+      status: "IN_PROGRESS",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      ...over,
+    })
+
+    beforeEach(() => {
+      ;(service as any).pricing.getConfig.mockResolvedValue({ mockInterviewCost: 3 })
+      prisma.job.findUnique.mockResolvedValue({
+        id: "job-1",
+        title: "Backend Engineer",
+        status: "ACTIVE",
+        description: "<p>APIs</p>",
+        requirements: ["Go"],
+        skills: ["Go"],
+        company: { name: "Acme" },
+        screeningQuestions: [{ question: "Why us?" }],
+      })
+      prisma.mockInterview.update.mockImplementation(async ({ data }: any) => mock(data))
+    })
+
+    it("start charges once and stores 5 questions", async () => {
+      ai.structured.mockResolvedValue({ result: { questions }, model: "m" })
+      prisma.mockInterview.create.mockResolvedValue(mock())
+      const res = await service.startMock("u1", "job-1")
+      expect(wallet.debit).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 3, type: "AI_SEEKER_TOOL", referenceId: "job-1" })
+      )
+      expect(ai.structured.mock.calls[0][1]).toContain("Why us?")
+      expect(res).toMatchObject({ charged: 3, questions })
+    })
+
+    it("an answer is graded (included in the price) and saved; repeats are refused", async () => {
+      prisma.mockInterview.findUnique.mockResolvedValue(mock())
+      ai.structured.mockResolvedValue({ result: grade, model: "m" })
+      const res = await service.answerMock(
+        "u1",
+        "m1",
+        0,
+        "I led the migration of our payment API to Go."
+      )
+      expect(res.answers[0]).toMatchObject({ index: 0, score: 4 })
+      expect(wallet.debit).not.toHaveBeenCalled()
+      prisma.mockInterview.findUnique.mockResolvedValue(mock({ answers: res.answers }))
+      expect(await code(service.answerMock("u1", "m1", 0, "x".repeat(30)))).toBe(
+        "MOCK_ALREADY_ANSWERED"
+      )
+    })
+
+    it("the last answer writes the summary and completes the session", async () => {
+      const four = [0, 1, 2, 3].map((index) => ({ index, answer: "x".repeat(30), ...grade }))
+      prisma.mockInterview.findUnique.mockResolvedValue(mock({ answers: four }))
+      ai.structured.mockResolvedValueOnce({ result: grade, model: "m" }).mockResolvedValueOnce({
+        result: {
+          overall: 4,
+          readiness: "almost",
+          strengths: ["Structure"],
+          improvements: ["Metrics"],
+        },
+        model: "m",
+      })
+      const res = await service.answerMock("u1", "m1", 4, "Teamwork story with a clear result.")
+      expect(res.status).toBe("COMPLETED")
+      expect(res.summary).toMatchObject({ readiness: "almost" })
+    })
+
+    it("other people's sessions, finished sessions and failed grading", async () => {
+      prisma.mockInterview.findUnique.mockResolvedValue(mock({ userId: "u2" }))
+      expect(await code(service.getMock("u1", "m1"))).toBe("MOCK_NOT_FOUND")
+      prisma.mockInterview.findUnique.mockResolvedValue(mock({ status: "COMPLETED" }))
+      expect(await code(service.answerMock("u1", "m1", 0, "x".repeat(30)))).toBe("MOCK_COMPLETED")
+      prisma.mockInterview.findUnique.mockResolvedValue(mock())
+      ai.structured.mockRejectedValue(Object.assign(new Error("x"), { errorCode: "AI_FAILED" }))
+      expect(await code(service.answerMock("u1", "m1", 1, "x".repeat(30)))).toBe("AI_FAILED")
+      expect(prisma.mockInterview.update).not.toHaveBeenCalled()
+    })
+  })
 })
