@@ -28,6 +28,7 @@ import {
   insufficientCreditsDetails,
   isApiError,
   isInsufficientCredits,
+  takePendingJob,
   useJobStore,
   useToast,
   type JobMatch,
@@ -324,9 +325,27 @@ function DiscoverHyrr() {
     return matchType && matchSearch && matchLocation && matchRemote
   })
 
+  // Arriving from a public job page (/jobs/<id> → Apply on Hyrr): open that job.
+  const pendingTried = useRef(false)
+  useEffect(() => {
+    if (listLoading) return
+    const pending = takePendingJob(true)
+    if (!pending) return
+    const job = filtered.find((j) => j.id === pending)
+    if (job) {
+      takePendingJob()
+      setSelectedJob(job)
+    } else if (!pendingTried.current && matchTab !== "all") {
+      pendingTried.current = true
+      void loadMatches("all")
+    } else takePendingJob()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listLoading, filtered.map((j) => j.id).join(",")])
+
   // Keep the selection inside the visible list (tab switches and filters change it).
   useEffect(() => {
     if (listLoading) return
+    if (takePendingJob(true)) return
     if (!selectedJob || !filtered.some((j) => j.id === selectedJob.id)) {
       setSelectedJob(filtered[0] ?? null)
     } else {

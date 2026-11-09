@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test"
 import {
+  API,
   api,
   companyBalance,
   createUser,
@@ -1152,4 +1153,58 @@ test("reject kindly: the candidate gets a respectful message and is archived", a
   const notes = await api<any>("GET", "/notifications", undefined, seeker.token)
   const list: any[] = Array.isArray(notes) ? notes : (notes.items ?? [])
   expect(list.some((n) => /application for .* was sent/i.test(n.title))).toBe(true)
+})
+
+test("public job page: readable signed-out, Google JobPosting data, sitemap, widget and deep link", async ({
+  page,
+}) => {
+  const rec = await createUser("RECRUITER", "Selamawit")
+  const seeker = await createUser("SEEKER", "Dagim")
+  const title = `E2E Public Job ${uid()}`
+  const job = await api(
+    "POST",
+    "/jobs",
+    {
+      title,
+      location: "Addis Ababa, Ethiopia",
+      type: "FULL_TIME",
+      description: "<p>Build the future of hiring in East Africa with a kind, ambitious team.</p>",
+      requirements: ["TypeScript"],
+      skills: ["TypeScript"],
+      salaryMin: 40000,
+      salaryMax: 60000,
+      salaryCurrency: "USD",
+      salaryPeriod: "YEAR",
+      categoryId: await firstCategoryId(),
+    },
+    rec.token
+  )
+
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await page.goto(`${SEEKER_URL}/jobs/${job.id}`)
+  await expect(page.getByRole("heading", { name: title })).toBeVisible({ timeout: 20_000 })
+  const ld = JSON.parse((await page.locator("#job-posting-ld").textContent())!)
+  expect(ld).toMatchObject({
+    "@type": "JobPosting",
+    title,
+    employmentType: "FULL_TIME",
+    hiringOrganization: { name: "Selamawit Studio" },
+    jobLocation: { address: { addressLocality: "Addis Ababa", addressCountry: "Ethiopia" } },
+    baseSalary: { currency: "USD", value: { minValue: 40000, maxValue: 60000, unitText: "YEAR" } },
+  })
+
+  const sitemap = await (await fetch(`${API}/public/sitemap.xml`)).text()
+  expect(sitemap).toContain(`/jobs/${job.id}</loc>`)
+  const companyId = (await api<any>("GET", "/auth/me", undefined, rec.token)).company.id
+  const widget = await (await fetch(`${API}/public/companies/${companyId}/jobs.js`)).text()
+  expect(widget).toContain(`/jobs/${job.id}`)
+
+  // Apply on Hyrr → sign in → Discover opens this job.
+  await page.getByRole("button", { name: "Apply on Hyrr" }).click()
+  await page.locator("#auth-email").fill(seeker.email)
+  await page.locator("#auth-password").fill(PASSWORD)
+  await page.locator("#auth-submit").click()
+  await expect(page.getByRole("heading", { name: title, level: 2 })).toBeVisible({
+    timeout: 20_000,
+  })
 })

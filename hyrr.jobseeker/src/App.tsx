@@ -36,6 +36,7 @@ import { Documents } from "./pages/Documents"
 import { CandidateMessages } from "./pages/Messages"
 import { NotificationsPage } from "./pages/Notifications"
 import { ProfilePage } from "./pages/ProfilePage"
+import { PublicJobPage } from "./pages/PublicJobPage"
 import { SettingsPage } from "./pages/Settings"
 
 const VIEW_PATHS: Record<SeekerView, string> = {
@@ -291,7 +292,16 @@ function AppContent() {
   )
 }
 
+/** Public job pages (/jobs/<id>) render without the app shell or a session. */
+const PUBLIC_JOB_ID = /^\/jobs\/([0-9a-f-]{36})\/?$/i.exec(window.location.pathname)?.[1] ?? null
+
 function App() {
+  if (PUBLIC_JOB_ID)
+    return (
+      <ToastProvider>
+        <PublicJobPage id={PUBLIC_JOB_ID} />
+      </ToastProvider>
+    )
   return (
     <ToastProvider>
       <AppContent />

@@ -29,6 +29,7 @@ import { TalentSearchModule } from "./talent-search/talent-search.module"
 import { ExternalJobsModule } from "./external-jobs/external-jobs.module"
 import { SeekerAiModule } from "./seeker-ai/seeker-ai.module"
 import { ResponsivenessModule } from "./responsiveness/responsiveness.module"
+import { PublicSiteModule } from "./public-site/public-site.module"
 
 import { CoreModule } from "./core/core.module"
 import { SecurityModule } from "./core/security/security.module"
@@ -77,6 +78,7 @@ import { UploadsModule } from "./uploads/uploads.module"
     ExternalJobsModule,
     SeekerAiModule,
     ResponsivenessModule,
+    PublicSiteModule,
     AdminModule,
   ],
 })
