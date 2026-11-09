@@ -218,3 +218,26 @@ export interface AiAnalysis {
 export type ConversationClosedReason = "WITHDRAWN" | "SAVED"
 export type MessageSenderType = "SEEKER" | "RECRUITER" | "ADMIN" | "SYSTEM"
 export type MessageDeliveryStatus = "sending" | "sent" | "failed"
+
+/**
+ * Real-time events shared by the three apps (socket.io). The backend emits these names;
+ * hyrr.shared/src/store/socket.ts and hyrr.admin/src/lib/live.ts listen.
+ */
+export const SYNC_SOCKET_EVENTS = {
+  // Candidate lifecycle
+  CANDIDATE_APPLIED: "candidate_applied",
+  APPLICATION_STATUS_UPDATED: "application_status_updated",
+  CANDIDATE_AI_SCORED: "candidate_ai_scored",
+  CANDIDATE_AI_STATUS: "candidate_ai_status",
+  // Governance & economy
+  WALLET_UPDATED: "wallet_updated",
+  JOB_MODERATED: "job_moderated",
+  JOB_REMOVED: "job_removed",
+  COMPANY_STATUS: "company_status",
+  COMPANY_VERIFIED: "company_verified",
+  ACCOUNT_SUSPENDED: "account_suspended",
+  // Admin live counters (admins with 2FA only)
+  ADMIN_METRIC: "admin_metric",
+} as const
+
+export type SyncSocketEvent = (typeof SYNC_SOCKET_EVENTS)[keyof typeof SYNC_SOCKET_EVENTS]

@@ -1,6 +1,9 @@
 import {
   AccountSecuritySettings,
   Card,
+  newApplicantSoundEnabled,
+  playChime,
+  setNewApplicantSound,
   useToast,
   VerifiedBadge,
   type TeamMember,
@@ -114,6 +117,8 @@ export function Settings() {
 
       <LabelsManager />
 
+      <LiveSoundSetting />
+
       <Card className="p-6 rounded-2xl border border-bg-border/60 bg-bg-card">
         <section aria-labelledby="settings-appearance">
           <h2 id="settings-appearance" className="text-[16px] font-semibold text-txt-heading">
@@ -154,5 +159,46 @@ export function Settings() {
 
       <AccountSecuritySettings />
     </div>
+  )
+}
+
+/** "Sound for new applicants": off by default, remembered in this browser only. */
+function LiveSoundSetting() {
+  const [on, setOn] = React.useState(() => newApplicantSoundEnabled())
+  const toggle = () => {
+    const next = !on
+    setOn(next)
+    setNewApplicantSound(next)
+    if (next) playChime()
+  }
+  return (
+    <Card className="p-6 rounded-2xl border border-bg-border/60 bg-bg-card">
+      <section className="flex items-center justify-between gap-4">
+        <div>
+          <h2 id="settings-live-sound" className="text-[16px] font-semibold text-txt-heading">
+            Sound for new applicants
+          </h2>
+          <p className="text-[13px] text-txt-caption mt-1">
+            Play a short chime when someone applies while Hyrr is open. Saved on this browser.
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={on}
+          aria-labelledby="settings-live-sound"
+          onClick={toggle}
+          className={`relative h-6 w-11 shrink-0 rounded-full transition-colors cursor-pointer ${
+            on ? "bg-primary" : "bg-bg-border"
+          }`}
+        >
+          <span
+            className={`absolute top-0.5 h-5 w-5 rounded-full bg-bg-secondary shadow transition-transform ${
+              on ? "translate-x-[22px]" : "translate-x-0.5"
+            }`}
+          />
+        </button>
+      </section>
+    </Card>
   )
 }

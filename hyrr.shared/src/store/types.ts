@@ -519,7 +519,15 @@ export interface JobApplication {
   offerAmount?: string
   notes?: string
   tag?: string
+  /** The job was removed by Hyrr moderation (live `job_removed`). */
+  jobRemoved?: boolean
 }
+
+/** Latest live event for toasts/sounds in the apps (set by store/socket.ts). */
+export type LiveEvent =
+  | { kind: "applicant"; id: string; name: string; jobTitle: string; at: number }
+  | { kind: "status"; id: string; status: ApplicationStatusCode; title: string; at: number }
+  | { kind: "job_removed"; jobId: string; title: string; at: number }
 
 export interface CalendarEvent {
   id: string
@@ -819,6 +827,7 @@ export interface JobState {
   authLoading: boolean
   authError: string | null
   socket: Socket | null
+  liveEvent: LiveEvent | null
 
   // ── Auth actions ─────────────────────────────────────────────────────────
   /** Set while a password login waits for the second factor. */

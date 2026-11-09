@@ -328,6 +328,7 @@ Each app works as follows:
   - "Set up your company" for recruiters without a company;
   - links: e-mail verification, password reset, `/invite?token=…`.
 - **Careers (5174):** Discover ("For you" or all jobs), applications, messages, notifications, calendar, documents (CV), job alerts, Momentum (seeker credits), profile, settings.
+- **Live updates (all apps):** new applicants appear on the recruiter board without reloading (optional chime in Recruiter → Settings), teammates see each other's kanban moves, seekers see status changes and removed jobs, and the admin dashboard refreshes itself ("Live" dot) for admins with 2FA. Several API instances need Redis for this ([§7.11](#711-redis)).
 - **Admin (5175):**
   - sign-in needs an admin account and 2FA;
   - every admin action is written to the audit log, and actions with consequences ask for a reason;

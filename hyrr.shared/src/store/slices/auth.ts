@@ -35,6 +35,7 @@ export type AuthSlice = Pick<
   | "authLoading"
   | "authError"
   | "socket"
+  | "liveEvent"
   | "mfaPending"
   | "loginUser"
   | "verifyTwoFactorLogin"
@@ -149,6 +150,7 @@ export const createAuthSlice: StateCreator<JobState, [], [], AuthSlice> = (set, 
   authLoading: false,
   authError: null,
   socket: null,
+  liveEvent: null,
   mfaPending: null,
   signedOutReason: null,
 

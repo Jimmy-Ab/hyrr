@@ -585,3 +585,54 @@ test("seeker calendar shows the interview with company and recruiter on the date
   // A recruiter's interview can't be deleted by the seeker.
   await expect(sheet.getByRole("button", { name: /delete event/i })).toHaveCount(0)
 })
+
+test("live sync: a new applicant appears on the recruiter board and the seeker sees moves", async ({
+  page,
+  browser,
+}) => {
+  const rec = await createUser("RECRUITER", "Liv")
+  const seeker = await createUser("SEEKER", "Lena")
+  const job = await api(
+    "POST",
+    "/jobs",
+    {
+      title: `E2E Live Job ${uid()}`,
+      location: "Berlin",
+      type: "FULL_TIME",
+      description: "<p>Live updates between the recruiter and seeker apps.</p>",
+      requirements: ["Go"],
+      skills: ["Go"],
+      categoryId: await firstCategoryId(),
+    },
+    rec.token
+  )
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await login(page, RECRUITER_URL, rec.email)
+  await page.goto(`${RECRUITER_URL}/applications`)
+  await expect(page.getByRole("heading", { name: "Applied", level: 2 })).toBeVisible({
+    timeout: 20_000,
+  })
+  await expect(page.getByText("Lena", { exact: true })).toHaveCount(0)
+
+  // The seeker applies while the board is open: no reload.
+  const app = await api(
+    "POST",
+    `/applications/jobs/${job.id}/apply`,
+    { name: "Lena", email: seeker.email, title: "Dev", location: "Berlin" },
+    seeker.token
+  )
+  await expect(page.getByText("Lena", { exact: true }).first()).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByText("New applicant").first()).toBeVisible()
+
+  // The recruiter's move shows up on the seeker's board live.
+  const seekerPage = await (
+    await browser.newContext({ viewport: { width: 1400, height: 900 } })
+  ).newPage()
+  await login(seekerPage, SEEKER_URL, seeker.email)
+  await seekerPage.goto(`${SEEKER_URL}/applications`)
+  await expect(seekerPage.getByText(job.title).first()).toBeVisible({ timeout: 20_000 })
+  await api("PUT", `/applications/${app.id}`, { status: "INTERVIEWING" }, rec.token)
+  await expect(seekerPage.getByText("Application updated").first()).toBeVisible({
+    timeout: 10_000,
+  })
+})

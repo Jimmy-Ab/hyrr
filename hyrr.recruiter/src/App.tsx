@@ -12,8 +12,11 @@ import {
   apiFetch,
   captureInviteToken,
   isPublicRoute,
+  newApplicantSoundEnabled,
+  playChime,
   resolvePublicRoute,
   useSmoothScroll,
+  useToast,
 } from "hyrr.shared"
 import { AlertTriangle, RefreshCw } from "lucide-react"
 import * as React from "react"
@@ -93,7 +96,23 @@ function ContentSkeleton() {
   )
 }
 
+/** Toast (+ optional chime) when a candidate applies while the board is open. */
+function useLiveApplicantToasts() {
+  const liveEvent = useJobStore((s) => s.liveEvent)
+  const { toast } = useToast()
+  React.useEffect(() => {
+    if (liveEvent?.kind !== "applicant") return
+    toast(
+      "New applicant",
+      `${liveEvent.name}${liveEvent.jobTitle ? ` applied for ${liveEvent.jobTitle}` : " applied"}.`,
+      "info"
+    )
+    if (newApplicantSoundEnabled()) playChime()
+  }, [liveEvent, toast])
+}
+
 function AppContent() {
+  useLiveApplicantToasts()
   const {
     activeView,
     isAuthenticated,

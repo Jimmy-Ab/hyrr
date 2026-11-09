@@ -186,6 +186,13 @@ function JobCard({
 }) {
   const { setCandidateActiveView, openConversation } = useJobStore()
   const { toast } = useToast()
+  // Moved by the recruiter a moment ago (live `application_status_updated`).
+  const justMoved = useJobStore(
+    (st) =>
+      st.liveEvent?.kind === "status" &&
+      st.liveEvent.id === application.id &&
+      Date.now() - st.liveEvent.at < 4000
+  )
 
   const isSaved = application.status === APPLICATION_STATUS.SAVED
   const isWithdrawn = application.status === APPLICATION_STATUS.WITHDRAWN
@@ -200,8 +207,12 @@ function JobCard({
           : ("secondary" as const)
 
   return (
-    <div className="group select-none outline-none">
-      <Card className="p-4 relative border border-bg-border/60 bg-bg-secondary transition-all hover:shadow-card-hover hover:border-bg-border/90">
+    <div className={`group select-none outline-none ${justMoved ? "animate-rise" : ""}`}>
+      <Card
+        className={`p-4 relative border bg-bg-secondary transition-all hover:shadow-card-hover hover:border-bg-border/90 ${
+          justMoved ? "border-primary/50 ring-2 ring-primary/15" : "border-bg-border/60"
+        }`}
+      >
         <div className="flex items-start justify-between gap-2">
           {/* Company Logo + Info */}
           <div className="flex min-w-0 gap-3">
@@ -218,6 +229,9 @@ function JobCard({
                 {application.company}
                 {application.companyVerified && <VerifiedBadge focusable={false} />}
               </p>
+              {application.jobRemoved && (
+                <p className="mt-1 text-[11.5px] font-semibold text-sec-red">No longer available</p>
+              )}
             </div>
           </div>
 

@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable, Logger } from "@nestjs/common"
+import { HttpStatus, Injectable, Logger, Optional } from "@nestjs/common"
 import { CompanyMemberRole, Payment, Prisma } from "@prisma/client"
 import { randomUUID } from "crypto"
 import { Actor } from "../core/access/access.service"
@@ -10,6 +10,7 @@ import {
   ForbiddenAppException,
   NotFoundAppException,
 } from "../core/exceptions/app-exception"
+import { RealtimeService } from "../core/realtime/realtime.service"
 import { PrismaService } from "../prisma/prisma.service"
 import { PricingService } from "./pricing.service"
 import { ChapaProvider } from "./providers/chapa.provider"
@@ -75,7 +76,8 @@ export class BillingService {
     private readonly pricing: PricingService,
     private readonly stripe: StripeProvider,
     private readonly chapa: ChapaProvider,
-    private readonly email: EmailService
+    private readonly email: EmailService,
+    @Optional() private readonly realtime?: RealtimeService
   ) {}
 
   // ─── Reads ──────────────────────────────────────────────────────────────────
@@ -480,6 +482,7 @@ export class BillingService {
       return { payment, balanceAfter }
     })
     if (!result) return false
+    this.realtime?.adminMetric("payment", { provider: result.payment.provider })
     this.sendReceipt(result.payment, result.balanceAfter).catch(() => undefined)
     return true
   }

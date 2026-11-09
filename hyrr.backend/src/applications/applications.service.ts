@@ -377,6 +377,7 @@ export class ApplicationsService implements OnModuleInit {
       // The application itself is committed; side effects must not fail the request.
       this.logger.warn(`Post-apply side effects failed for ${applicationId}: ${err?.message}`)
     }
+    if (isNew) await this.emitApplied(applicationId)
     this.scoreInBackground(applicationId)
   }
 
@@ -546,7 +547,34 @@ export class ApplicationsService implements OnModuleInit {
       return created
     })
     this.scoreInBackground(app.id)
-    return this.toCandidate(app)
+    const candidate = this.toCandidate(app)
+    if (app.job?.companyId)
+      this.messagesGateway?.emitToCompany(app.job.companyId, "candidate_applied", {
+        candidate,
+        actorId: actor.userId,
+      })
+    return candidate
+  }
+
+  /** Live kanban card for the hiring team + admin counter (after commit, never fails the apply). */
+  private async emitApplied(applicationId: string) {
+    if (!this.messagesGateway) return
+    try {
+      const app = await this.prisma.application.findUnique({
+        where: { id: applicationId },
+        include: RECRUITER_CANDIDATE_INCLUDE,
+      })
+      if (!app) return
+      this.messagesGateway.emitToCompany(
+        app.job.companyId,
+        "candidate_applied",
+        { candidate: this.toCandidate(app) },
+        [app.job.recruiterId]
+      )
+      this.messagesGateway.emitAdminMetric("application", { jobId: app.jobId })
+    } catch (err: any) {
+      this.logger.warn(`Live applicant event failed for ${applicationId}: ${err?.message}`)
+    }
   }
 
   // ─── Seeker: save a job without applying ─────────────────────────
@@ -735,12 +763,16 @@ export class ApplicationsService implements OnModuleInit {
           NotificationAction.APPLICATIONS
         )
         .catch((err) => this.logger.warn(`Status notification failed: ${err?.message}`))
-      this.messagesGateway?.emitApplicationUpdate(app.userId, {
-        applicationId: id,
-        status,
-        tag: app.tag,
-      })
-    } else if (statusChanged && app.email && this.email) {
+    }
+    if (statusChanged) {
+      // Seeker's board + every teammate's kanban (the mover's client ignores its own echo).
+      this.messagesGateway?.emitApplicationUpdate(
+        app.userId,
+        { applicationId: id, status, tag: app.tag, actorId: actor.userId },
+        app.job.companyId
+      )
+    }
+    if (statusChanged && !app.userId && app.email && this.email) {
       // Guest applicant (no account): the status change is delivered by e-mail only.
       const content = applicationStatus({
         name: app.name,

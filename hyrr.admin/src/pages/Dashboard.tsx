@@ -35,6 +35,7 @@ import * as React from "react"
 import { Delta, ErrorBlock, Sparkline, StatusDot } from "../components/ui/common"
 import { useAdminQuery } from "../lib/api"
 import { date, money, num } from "../lib/format"
+import { useAdminLive } from "../lib/live"
 import { useNav, type AdminView } from "../lib/nav"
 import type { Dashboard as DashboardData, MetricKey, Period } from "../lib/types"
 
@@ -172,6 +173,7 @@ function AttentionCard({
 
 export function Dashboard() {
   const [period, setPeriod] = React.useState<Period>("today")
+  const live = useAdminLive()
   const { data, error, isLoading, refetch, isFetching } = useAdminQuery<DashboardData>(
     "/dashboard",
     { period }
@@ -189,13 +191,27 @@ export function Dashboard() {
             : "Platform activity at a glance"
         }
         actions={
-          <FilterChips
-            id="dashboard-period"
-            label="Period"
-            options={PERIODS}
-            value={period}
-            onChange={setPeriod}
-          />
+          <div className="flex items-center gap-3">
+            {live && (
+              <span
+                className="tone-emerald inline-flex items-center gap-1.5 text-[12px] font-semibold text-[var(--tone-fg)]"
+                title="New sign-ups, applications, jobs and payments update this page automatically"
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--tone-fg)] opacity-60" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--tone-fg)]" />
+                </span>
+                Live
+              </span>
+            )}
+            <FilterChips
+              id="dashboard-period"
+              label="Period"
+              options={PERIODS}
+              value={period}
+              onChange={setPeriod}
+            />
+          </div>
         }
       />
 

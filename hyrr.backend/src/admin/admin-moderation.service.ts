@@ -3,6 +3,7 @@ import { JobStatus, NotificationType } from "@prisma/client"
 import { WalletService } from "../billing/wallet.service"
 import { CacheService } from "../cache/cache.service"
 import { NotFoundAppException } from "../core/exceptions/app-exception"
+import { MessagesGateway } from "../messages/messages.gateway"
 import { NotificationsService } from "../notifications/notifications.service"
 import { PrismaService } from "../prisma/prisma.service"
 import { SearchService } from "../search/search.service"
@@ -24,8 +25,34 @@ export class AdminModerationService {
     private readonly audit: AuditService,
     private readonly cache: CacheService,
     @Optional() private readonly notifications?: NotificationsService,
-    @Optional() private readonly search?: SearchService
+    @Optional() private readonly search?: SearchService,
+    @Optional() private readonly gateway?: MessagesGateway
   ) {}
+
+  /** Live: the hiring team sees the moderation state; seekers who applied/saved drop the job. */
+  private async broadcastModeration(
+    job: { id: string; companyId: string; recruiterId: string },
+    removed: { removedAt: string | null; removedReason: string | null; status: string }
+  ) {
+    if (!this.gateway) return
+    try {
+      this.gateway.emitToCompany(job.companyId, "job_moderated", { jobId: job.id, ...removed }, [
+        job.recruiterId,
+      ])
+      if (removed.removedAt) {
+        const seekers = await this.prisma.application.findMany({
+          where: { jobId: job.id, userId: { not: null } },
+          select: { userId: true },
+        })
+        this.gateway.emitToUsers(seekers.map((a) => a.userId!).filter(Boolean), "job_removed", {
+          jobId: job.id,
+        })
+      }
+    } catch (err: any) {
+      // Live updates are best effort; the data change is committed.
+      console.warn(`Moderation broadcast failed for ${job.id}: ${err?.message}`)
+    }
+  }
 
   /** "open" = FLAGGED jobs and jobs with a PENDING report; "all" = flagged or ever reported. */
   async list(status: "open" | "all" = "open", cursor?: string, limit?: number) {
@@ -206,6 +233,11 @@ export class AdminModerationService {
       `Thanks for your report. We reviewed "${job.title}" and it stays up.`,
       jobId
     )
+    await this.broadcastModeration(job, {
+      removedAt: null,
+      removedReason: null,
+      status: result.restored ? JobStatus.ACTIVE : job.status,
+    })
     return {
       job: { id: jobId, status: result.restored ? JobStatus.ACTIVE : job.status },
       dismissedReports: result.dismissed,
@@ -273,6 +305,11 @@ export class AdminModerationService {
       jobId
     )
     await this.notifyMany(reporterIds, `Thanks for your report. We removed "${job.title}".`, jobId)
+    await this.broadcastModeration(job, {
+      removedAt: new Date().toISOString(),
+      removedReason: reason,
+      status: JobStatus.CLOSED,
+    })
     return {
       job: { id: jobId, status: JobStatus.CLOSED },
       resolvedReports: result.resolved,

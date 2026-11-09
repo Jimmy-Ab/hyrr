@@ -12,6 +12,7 @@ import {
   formatDateTime,
   isVisible,
   mapAiAnalysis,
+  mapCandidate,
   mapMessage,
   mapNotification,
   upsertMessage,
@@ -84,9 +85,79 @@ export function initializeSocket(set: StoreSet, get: StoreGet) {
     if (/auth|token|jwt|unauthor/i.test(err?.message || "")) recoverAuth()
   })
 
+  socket.on("candidate_applied", (data: any) => {
+    const raw = data?.candidate
+    if (!raw?.id || get().user?.role !== "RECRUITER") return
+    // The recruiter who added it already has it (optimistic add).
+    if (data.actorId && data.actorId === get().user?.id) return
+    const candidate = mapCandidate(raw)
+    const known = get().candidates.some((c) => c.id === candidate.id)
+    set((state) => ({
+      candidates: known
+        ? state.candidates.map((c) => (c.id === candidate.id ? { ...c, ...candidate } : c))
+        : [candidate, ...state.candidates],
+      ...(known
+        ? {}
+        : {
+            liveEvent: {
+              kind: "applicant" as const,
+              id: candidate.id,
+              name: candidate.name,
+              jobTitle: state.jobs.find((j) => j.id === candidate.jobId)?.title ?? "",
+              at: Date.now(),
+            },
+          }),
+    }))
+  })
+
+  socket.on("job_moderated", (data: any) => {
+    if (!data?.jobId) return
+    set((state) => ({
+      jobs: state.jobs.map((j) =>
+        j.id === data.jobId
+          ? {
+              ...j,
+              removedAt: data.removedAt ?? null,
+              removedReason: data.removedReason ?? null,
+              ...(data.removedAt ? { status: "Closed" as const } : {}),
+            }
+          : j
+      ),
+    }))
+  })
+
+  socket.on("job_removed", (data: any) => {
+    if (!data?.jobId) return
+    const title =
+      get().jobApplications.find((a) => a.publicJobId === data.jobId)?.title ??
+      get().publicJobs.find((j) => j.id === data.jobId)?.title ??
+      "A job"
+    set((state) => ({
+      publicJobs: state.publicJobs.filter((j) => j.id !== data.jobId),
+      recommendedJobs: state.recommendedJobs.filter((j) => j.id !== data.jobId),
+      jobApplications: state.jobApplications.map((a) =>
+        a.publicJobId === data.jobId ? { ...a, jobRemoved: true } : a
+      ),
+      liveEvent: { kind: "job_removed" as const, jobId: data.jobId, title, at: Date.now() },
+    }))
+  })
+
   socket.on("application_status_updated", (data: any) => {
     if (!isApplicationStatus(data?.status)) return
+    // Our own move was applied optimistically; a late echo must not undo a newer move.
+    if (data.actorId && data.actorId === get().user?.id) return
     const status = data.status as ApplicationStatusCode
+    const mine = get().jobApplications.find((a) => a.id === data.applicationId)
+    if (mine && mine.status !== status)
+      set({
+        liveEvent: {
+          kind: "status",
+          id: mine.id,
+          status,
+          title: mine.title,
+          at: Date.now(),
+        },
+      })
     set((state) => ({
       jobApplications: state.jobApplications.map((app) =>
         app.id === data.applicationId

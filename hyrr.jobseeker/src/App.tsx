@@ -12,10 +12,12 @@ import {
   Skeleton,
   ToastProvider,
   apiFetch,
+  applicationStatusLabel,
   isPublicRoute,
   resolvePublicRoute,
   useJobStore,
   useSmoothScroll,
+  useToast,
 } from "hyrr.shared"
 import { AlertTriangle } from "lucide-react"
 import * as React from "react"
@@ -128,7 +130,24 @@ function LoadError({ message, onRetry }: { message: string; onRetry: () => void 
   )
 }
 
+/** Live updates from recruiters and moderation, as toasts. */
+function useLiveSeekerToasts() {
+  const liveEvent = useJobStore((s) => s.liveEvent)
+  const { toast } = useToast()
+  React.useEffect(() => {
+    if (liveEvent?.kind === "status")
+      toast(
+        "Application updated",
+        `${liveEvent.title}: ${applicationStatusLabel(liveEvent.status)}`,
+        "info"
+      )
+    else if (liveEvent?.kind === "job_removed")
+      toast("Job no longer available", `${liveEvent.title} was removed by Hyrr.`, "info")
+  }, [liveEvent, toast])
+}
+
 function AppContent() {
+  useLiveSeekerToasts()
   const candidateActiveView = useJobStore((s) => s.candidateActiveView)
   const fetchInitialData = useJobStore((s) => s.fetchInitialData)
   const isAuthenticated = useJobStore((s) => s.isAuthenticated)

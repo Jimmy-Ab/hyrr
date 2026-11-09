@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   UnauthorizedException,
 } from "@nestjs/common"
 import { JwtService } from "@nestjs/jwt"
@@ -13,6 +14,7 @@ import { PricingService } from "../billing/pricing.service"
 import { WalletService } from "../billing/wallet.service"
 import { supportEmail, suspendedMessage } from "../core/config/support"
 import { AppException } from "../core/exceptions/app-exception"
+import { RealtimeService } from "../core/realtime/realtime.service"
 import { CaptchaService } from "../core/security/captcha.service"
 import { PrismaService } from "../prisma/prisma.service"
 import { TeamService } from "../team/team.service"
@@ -85,7 +87,8 @@ export class AuthService {
     private accountEmail: AccountEmailService,
     private wallet: WalletService,
     private pricing: PricingService,
-    private team: TeamService
+    private team: TeamService,
+    @Optional() private realtime?: RealtimeService
   ) {}
 
   /** Momentum credits a new recruiter company starts with (read before the signup transaction). */
@@ -129,6 +132,7 @@ export class AuthService {
       return tx.user.findUniqueOrThrow({ where: { id: created.id } })
     })
     if (viaJoinRequest) await this.team.notifyJoinRequest(dto.joinCompanyId!, user.name)
+    this.realtime?.adminMetric("signup", { role: user.role })
     if (!viaInvite)
       void this.accountEmail
         .sendVerification(user)

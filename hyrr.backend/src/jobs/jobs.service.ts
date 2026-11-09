@@ -158,8 +158,15 @@ export class JobsService {
     const count = await this.prisma.job.count({ where: { recruiterId } })
     const color = JOB_COLORS[count % JOB_COLORS.length]
 
-    let companyId = user?.companyId ?? null
-    if (companyId) {
+    const companyId = user?.companyId ?? null
+    // Companies are created at sign-up or on "Set up your company" (TeamService), never here.
+    if (!companyId)
+      throw new AppException(
+        "Set up your company before posting jobs.",
+        HttpStatus.FORBIDDEN,
+        "COMPANY_REQUIRED"
+      )
+    {
       const scope = await this.access.companyScope(recruiterId)
       if (scope.suspendedCompanyIds?.includes(companyId)) throw companySuspended()
       if (!scope.manageCompanyIds.includes(companyId)) {
@@ -182,12 +189,9 @@ export class JobsService {
           categoryId: dto.categoryId,
         })
       : 0
-    const signupBonus = companyId ? 0 : (await this.pricing.getConfig()).signupBonus
-
     // One transaction: auto-created company (+ sign-up bonus), the job and its publish charge.
     // 402 INSUFFICIENT_CREDITS rolls everything back, so nothing is written.
     const job = await this.prisma.$transaction(async (tx) => {
-      if (!companyId) companyId = await this.createCompanyFor(tx, recruiterId, user, signupBonus)
       const created = await tx.job.create({
         data: {
           title: dto.title,
@@ -228,48 +232,14 @@ export class JobsService {
     // Invalidate cached public listings
     await this.cache.delByPattern("jobs:public*")
     this.afterJobChange(job.id, { index: job.status === JobStatus.ACTIVE, embed: true })
+    if (job.status === JobStatus.ACTIVE)
+      this.messagesGateway?.emitAdminMetric("job_published", { jobId: job.id })
     // Alerts never block job creation (drafts are not announced)
     if (job.status === JobStatus.ACTIVE)
       this.alerts
         ?.onJobPublished(job.id)
         .catch((err) => this.logger.warn(`Job alert fan-out failed for ${job.id}: ${err?.message}`))
     return this.withRequirements(job)
-  }
-
-  /** Company + OWNER membership for a recruiter without one, plus its wallet and sign-up bonus. */
-  private async createCompanyFor(
-    tx: Prisma.TransactionClient,
-    recruiterId: string,
-    user: { name?: string | null } | null,
-    signupBonus: number
-  ): Promise<string> {
-    const company = await tx.company.create({
-      data: {
-        name: user?.name ? `${user.name}'s Company` : "Hyrr Hiring Co",
-        logo: user?.name ? user.name.charAt(0).toUpperCase() : "H",
-        country: "United States",
-      },
-    })
-    if (user) {
-      await tx.user.update({ where: { id: recruiterId }, data: { companyId: company.id } })
-      await tx.companyMember.create({
-        data: { companyId: company.id, userId: recruiterId, role: "OWNER" },
-      })
-    }
-    await this.wallet.ensureWallet(company.id, tx)
-    if (signupBonus > 0)
-      await this.wallet.credit(
-        {
-          companyId: company.id,
-          amount: signupBonus,
-          type: "SIGNUP_BONUS",
-          referenceId: company.id,
-          actorId: user ? recruiterId : null,
-          note: "Welcome bonus",
-        },
-        tx
-      )
-    return company.id
   }
 
   // ─── Recruiter: update / close a job ─────────────────────────────
@@ -374,6 +344,8 @@ export class JobsService {
       index: job.status === JobStatus.ACTIVE || current.status === JobStatus.ACTIVE,
       embed: EMBEDDED_FIELDS.some((f) => data[f] !== undefined),
     })
+    if (published && job.status === JobStatus.ACTIVE)
+      this.messagesGateway?.emitAdminMetric("job_published", { jobId: job.id })
     // The first publication is announced like a newly created job (reopening is not).
     if (published && job.status === JobStatus.ACTIVE)
       this.alerts
