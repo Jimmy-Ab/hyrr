@@ -528,6 +528,7 @@ export type LiveEvent =
   | { kind: "applicant"; id: string; name: string; jobTitle: string; at: number }
   | { kind: "status"; id: string; status: ApplicationStatusCode; title: string; at: number }
   | { kind: "job_removed"; jobId: string; title: string; at: number }
+  | { kind: "scorecard"; applicationId: string; at: number }
   | { kind: "interview_invite"; id: string; jobTitle: string; companyName?: string; at: number }
   | {
       kind: "interview_booked"
@@ -590,6 +591,39 @@ export interface NewInterviewInvite {
   location?: string
   meetingUrl?: string
   note?: string
+}
+
+export type ScorecardRecommendation = "STRONG_YES" | "YES" | "NEUTRAL" | "NO" | "STRONG_NO"
+
+export interface Scorecard {
+  id: string
+  interviewer: { id: string; name: string; avatar?: string | null }
+  recommendation: ScorecardRecommendation
+  overallNotes: string
+  submittedAt: string
+  ratings: { competency: string; score: number; notes?: string | null }[]
+}
+
+/** GET /scorecards/applications/:id (blind until you submit your own). */
+export interface ScorecardView {
+  competencies: string[]
+  canSubmit: boolean
+  mine: Scorecard | null
+  submittedCount: number
+  locked: boolean
+  others: Scorecard[]
+  debrief: {
+    perCompetency: { competency: string; average: number | null; count: number }[]
+    recommendations: Record<ScorecardRecommendation, number>
+    consensus: "HIRE" | "NO_HIRE" | "MIXED" | null
+    overallAverage: number | null
+  } | null
+}
+
+export interface ScorecardInput {
+  recommendation: ScorecardRecommendation
+  overallNotes: string
+  ratings: { competency: string; score: number; notes?: string }[]
 }
 
 export interface Document {
@@ -1030,6 +1064,11 @@ export interface JobState {
   cancelInterviewInvite: (inviteId: string) => Promise<void>
   /** Socket: insert or replace an invite (and its booked event). */
   upsertInterviewInvite: (invite: any, event?: any) => void
+
+  // ── Scorecards (hiring team only) ────────────────────────────────────────
+  fetchScorecards: (applicationId: string) => Promise<ScorecardView>
+  submitScorecard: (applicationId: string, input: ScorecardInput) => Promise<ScorecardView>
+  setScorecardCompetencies: (jobId: string, competencies: string[]) => Promise<string[]>
 
   // ── Documents ────────────────────────────────────────────────────────────
   documents: Document[]

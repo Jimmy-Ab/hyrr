@@ -37,8 +37,9 @@ import { CandidateLabelsEditor } from "../candidate/candidate-labels-editor"
 import { CandidateNotes } from "../candidate/candidate-notes"
 import { CandidateTimeline } from "../candidate/candidate-timeline"
 import { InterviewSlotsOffer } from "./interview-slots-offer"
+import { ScorecardsPanel } from "./scorecards-panel"
 
-type CandidateTab = "details" | "notes" | "timeline" | "ai" | "schedule"
+type CandidateTab = "details" | "notes" | "timeline" | "ai" | "schedule" | "scorecards"
 
 export function CandidateDetailDialog() {
   const {
@@ -244,6 +245,7 @@ export function CandidateDetailDialog() {
             },
             { id: "timeline", label: "Timeline" },
             { id: "ai", label: "AI Screening Match" },
+            { id: "scorecards", label: "Scorecards" },
             { id: "schedule", label: "Interview Scheduler" },
           ].map((tab) => (
             <button
@@ -381,6 +383,8 @@ export function CandidateDetailDialog() {
           {activeTab === "timeline" && <CandidateTimeline applicationId={candidate.id} />}
 
           {activeTab === "ai" && <AiAnalysisPanel candidate={candidate} />}
+
+          {activeTab === "scorecards" && <ScorecardsPanel applicationId={candidate.id} />}
 
           {activeTab === "schedule" && (
             <div className="space-y-6">

@@ -23,6 +23,7 @@ import { SeekerToolsModule } from "./seeker-tools/seeker-tools.module"
 import { SettingsModule } from "./settings/settings.module"
 import { TalentModule } from "./talent/talent.module"
 import { TeamModule } from "./team/team.module"
+import { ScorecardsModule } from "./scorecards/scorecards.module"
 
 import { CoreModule } from "./core/core.module"
 import { SecurityModule } from "./core/security/security.module"
@@ -65,6 +66,7 @@ import { UploadsModule } from "./uploads/uploads.module"
     SettingsModule,
     TalentModule,
     TeamModule,
+    ScorecardsModule,
     AdminModule,
   ],
 })

@@ -124,6 +124,11 @@ export function initializeSocket(set: StoreSet, get: StoreGet) {
     })
   })
 
+  socket.on("scorecard_submitted", (data: any) => {
+    if (!data?.applicationId || data.interviewerId === get().user?.id) return
+    set({ liveEvent: { kind: "scorecard", applicationId: data.applicationId, at: Date.now() } })
+  })
+
   socket.on("interview_invite_updated", (data: any) => {
     if (data?.id) get().upsertInterviewInvite(data)
   })

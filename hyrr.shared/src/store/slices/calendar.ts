@@ -16,6 +16,9 @@ export type CalendarSlice = Pick<
   | "bookInterviewSlot"
   | "cancelInterviewInvite"
   | "upsertInterviewInvite"
+  | "fetchScorecards"
+  | "submitScorecard"
+  | "setScorecardCompetencies"
 >
 
 export const createCalendarSlice: StateCreator<JobState, [], [], CalendarSlice> = (set, get) => ({
@@ -24,6 +27,22 @@ export const createCalendarSlice: StateCreator<JobState, [], [], CalendarSlice> 
   events: [],
   eventsLoading: false,
   interviewInvites: [],
+
+  fetchScorecards: (applicationId) => apiFetch(`/scorecards/applications/${applicationId}`),
+
+  submitScorecard: (applicationId, input) =>
+    apiFetch(`/scorecards/applications/${applicationId}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }),
+
+  setScorecardCompetencies: async (jobId, competencies) => {
+    const res = await apiFetch(`/scorecards/jobs/${jobId}/competencies`, {
+      method: "PUT",
+      body: JSON.stringify({ competencies }),
+    })
+    return res?.competencies ?? competencies
+  },
 
   fetchInterviewInvites: async (applicationId) => {
     const qs = applicationId ? `?applicationId=${encodeURIComponent(applicationId)}` : ""

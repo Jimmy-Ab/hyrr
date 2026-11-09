@@ -409,3 +409,25 @@ export const interviewInviteSchema = z.object({
     .optional(),
   note: z.string().trim().max(1000, "The note can be at most 1000 characters").optional(),
 })
+
+// ─── Interview scorecards ───
+
+export const scorecardSchema = z.object({
+  recommendation: z.enum(["STRONG_YES", "YES", "NEUTRAL", "NO", "STRONG_NO"], {
+    message: "Choose a recommendation",
+  }),
+  overallNotes: z
+    .string()
+    .trim()
+    .min(10, "Write at least a sentence of overall feedback")
+    .max(4000, "Overall feedback can be at most 4000 characters"),
+  ratings: z
+    .array(
+      z.object({
+        competency: z.string(),
+        score: z.number().int().min(1, "Rate this from 1 to 5").max(5, "Rate this from 1 to 5"),
+        notes: z.string().max(1000, "Notes can be at most 1000 characters").optional(),
+      })
+    )
+    .min(1),
+})

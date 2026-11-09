@@ -709,3 +709,76 @@ test("interview slots: the seeker picks a time live and both sides see the booki
   const list: any[] = Array.isArray(cands) ? cands : cands.items
   expect(list.find((c) => c.id === app.id)?.status).toBe("INTERVIEWING")
 })
+
+test("scorecards are blind until you submit, then show the team debrief", async ({ page }) => {
+  const owner = await createUser("RECRUITER", "Mara")
+  const mate = await createUser("RECRUITER", "Nils")
+  // Nils joins Mara's company through an invite.
+  await api(
+    "POST",
+    "/talent/team/invites",
+    { email: mate.email, role: "HIRING_MANAGER" },
+    owner.token
+  )
+  const token = `sc-${uid()}`
+  await setInviteToken(mate.email, token)
+  await api("POST", `/team/invites/${token}/accept`, undefined, mate.token)
+
+  const seeker = await createUser("SEEKER", "Selam")
+  const job = await api(
+    "POST",
+    "/jobs",
+    {
+      title: `E2E Scorecard Job ${uid()}`,
+      location: "Berlin",
+      type: "FULL_TIME",
+      description: "<p>Structured interview feedback with blind scorecards.</p>",
+      requirements: ["SQL"],
+      skills: ["SQL"],
+      categoryId: await firstCategoryId(),
+    },
+    owner.token
+  )
+  const app = await api(
+    "POST",
+    `/applications/jobs/${job.id}/apply`,
+    { name: "Selam", email: seeker.email, title: "Analyst", location: "Berlin" },
+    seeker.token
+  )
+  const criteria = ["Technical skills", "Problem solving", "Communication", "Culture add"]
+  await api(
+    "PUT",
+    `/scorecards/applications/${app.id}`,
+    {
+      recommendation: "STRONG_YES",
+      overallNotes: "Owner says: excellent SQL depth and calm under pressure.",
+      ratings: criteria.map((competency) => ({ competency, score: 5 })),
+    },
+    owner.token
+  )
+
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await login(page, RECRUITER_URL, mate.email)
+  await page.goto(`${RECRUITER_URL}/applications`)
+  await page
+    .getByRole("button", { name: /^list$/i })
+    .first()
+    .click()
+  await page.getByText("Selam", { exact: true }).first().click()
+  const sheet = page.getByRole("dialog")
+  await sheet.getByRole("tab", { name: "Scorecards" }).click()
+  await expect(sheet.getByText(/1 colleague has submitted/)).toBeVisible({ timeout: 10_000 })
+  await expect(sheet.getByText("Owner says")).toHaveCount(0)
+
+  for (const c of criteria)
+    await sheet.getByRole("radiogroup", { name: c }).getByRole("radio", { name: "4 of 5" }).click()
+  await sheet.getByRole("radio", { name: "Yes", exact: true }).click()
+  await sheet
+    .locator("#scorecard-notes")
+    .fill("Clear communicator, would like to probe system design.")
+  await sheet.getByRole("button", { name: "Submit scorecard" }).click()
+
+  await expect(sheet.getByText(/Owner says/)).toBeVisible({ timeout: 10_000 })
+  await expect(sheet.getByText("Team leans hire")).toBeVisible()
+  await expect(sheet.getByText(/Debrief · 2 scorecards/)).toBeVisible()
+})

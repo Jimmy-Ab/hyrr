@@ -146,6 +146,7 @@ model User {
   companyMemberships CompanyMember[]
   invitesSent        CompanyInvite[]      @relation("InviteSender")
   interviewInvites   InterviewInvite[]    @relation("InterviewInviteCreator")
+  scorecards         Scorecard[]
   joinRequests       CompanyJoinRequest[] @relation("JoinRequester")
   joinDecisions      CompanyJoinRequest[] @relation("JoinDecider")
   conversationStates ConversationState[]
@@ -305,6 +306,8 @@ model Job {
   /// Set when an admin removes the job (moderation); the recruiter can't reopen it.
   removedAt     DateTime?
   removedReason String?
+  /// Scorecard criteria for this job; empty = the default four
+  scorecardCompetencies String[] @default([])
   publishedAt   DateTime? // first time the job went live (publishing is charged once)
   remote        Boolean     @default(false)
   momentumCost  Int         @default(0) // Momentum credits charged when it was published
@@ -360,6 +363,7 @@ model Application {
   messages           Message[]
   calendarEvents     CalendarEvent[]
   interviewInvites   InterviewInvite[]
+  scorecards         Scorecard[]
   labels             ApplicationLabel[]
   recruiterNotes     ApplicationNote[]
   answers            ScreeningAnswer[]
@@ -601,6 +605,39 @@ model InterviewSlot {
   endTime   DateTime
   bookedAt  DateTime?
   @@index([inviteId])
+}
+
+enum ScorecardRecommendation {
+  STRONG_YES
+  YES
+  NEUTRAL
+  NO
+  STRONG_NO
+}
+
+/// One interviewer's structured evaluation of an application (blind until they submit).
+model Scorecard {
+  id             String                  @id @default(uuid())
+  applicationId  String
+  application    Application             @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  interviewerId  String
+  interviewer    User                    @relation(fields: [interviewerId], references: [id], onDelete: Cascade)
+  recommendation ScorecardRecommendation
+  overallNotes   String                  @db.Text
+  submittedAt    DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  ratings        ScorecardRating[]
+  @@unique([applicationId, interviewerId])
+}
+
+model ScorecardRating {
+  id          String    @id @default(uuid())
+  scorecardId String
+  scorecard   Scorecard @relation(fields: [scorecardId], references: [id], onDelete: Cascade)
+  competency  String
+  score       Int
+  notes       String?   @db.Text
+  @@index([scorecardId])
 }
 
 model ScreeningQuestion {

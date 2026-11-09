@@ -229,6 +229,7 @@ export const SYNC_SOCKET_EVENTS = {
   APPLICATION_STATUS_UPDATED: "application_status_updated",
   CANDIDATE_AI_SCORED: "candidate_ai_scored",
   CANDIDATE_AI_STATUS: "candidate_ai_status",
+  SCORECARD_SUBMITTED: "scorecard_submitted",
   // Scheduling
   INTERVIEW_INVITE_RECEIVED: "interview_invite_received",
   INTERVIEW_INVITE_UPDATED: "interview_invite_updated",
