@@ -153,6 +153,7 @@ model User {
   companyBlocks      CompanyBlock[]
   externalApplications ExternalApplication[]
   externalJobApplies ExternalJobApply[]
+  resumeTailorings   ResumeTailoring[]
   joinRequests       CompanyJoinRequest[] @relation("JoinRequester")
   joinDecisions      CompanyJoinRequest[] @relation("JoinDecider")
   conversationStates ConversationState[]
@@ -318,6 +319,7 @@ model Job {
   removedReason String?
   /// Scorecard criteria for this job; empty = the default four
   scorecardCompetencies String[] @default([])
+  resumeTailorings ResumeTailoring[]
   publishedAt   DateTime? // first time the job went live (publishing is charged once)
   remote        Boolean     @default(false)
   momentumCost  Int         @default(0) // Momentum credits charged when it was published
@@ -771,6 +773,21 @@ model ExternalJobApply {
   @@unique([userId, externalJobId])
 }
 
+/// AI comparison of the seeker's CV/profile with one Hyrr job (kept so reopening is free).
+model ResumeTailoring {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  result    Json
+  model     String?
+  cvUsed    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([userId, jobId])
+}
+
 model ScreeningQuestion {
   id        String   @id @default(uuid())
   jobId     String
@@ -945,6 +962,7 @@ enum CreditTransactionType {
   APPLICATION
   OUTREACH
   EXTERNAL_APPLY
+  AI_SEEKER_TOOL
   REFUND
   ADJUSTMENT
 }

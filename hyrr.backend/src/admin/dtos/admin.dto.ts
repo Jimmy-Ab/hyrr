@@ -275,6 +275,24 @@ export class PricingDto {
   externalApplyCost?: number
 
   @IsOptional()
+  @IsInt(costMsg("Resume tailor cost"))
+  @Min(0, costMsg("Resume tailor cost"))
+  @Max(COST_MAX, costMsg("Resume tailor cost"))
+  resumeTailorCost?: number
+
+  @IsOptional()
+  @IsInt(costMsg("Mock interview cost"))
+  @Min(0, costMsg("Mock interview cost"))
+  @Max(COST_MAX, costMsg("Mock interview cost"))
+  mockInterviewCost?: number
+
+  @IsOptional()
+  @IsInt(costMsg("Negotiation advice cost"))
+  @Min(0, costMsg("Negotiation advice cost"))
+  @Max(COST_MAX, costMsg("Negotiation advice cost"))
+  negotiationAdviceCost?: number
+
+  @IsOptional()
   @IsInt(costMsg("Seeker sign-up bonus"))
   @Min(0, costMsg("Seeker sign-up bonus"))
   @Max(COST_MAX, costMsg("Seeker sign-up bonus"))

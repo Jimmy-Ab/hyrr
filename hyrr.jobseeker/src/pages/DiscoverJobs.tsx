@@ -60,6 +60,7 @@ import {
   Zap,
 } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { CvTailorButton } from "../components/cv-tailor"
 import { WebJobs } from "../components/web-jobs"
 
 const colorBg: Record<string, string> = {
@@ -935,6 +936,7 @@ function DiscoverHyrr() {
                       ? "✓ Applied"
                       : "Apply Now"}
                 </Button>
+                <CvTailorButton jobId={selectedJob.id} jobTitle={selectedJob.title} />
                 {!isApplied(selectedJob.id) && (
                   <Button
                     variant="secondary"

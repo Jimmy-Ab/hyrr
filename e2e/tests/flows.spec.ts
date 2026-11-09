@@ -983,3 +983,41 @@ test("jobs from the web: apply charges once, opens the posting and auto-tracks i
   await expect.poll(() => again.url()).toContain("/terms?posting=")
   expect(await seekerBalance(seeker.email)).toBe(before - 1)
 })
+
+test("CV tailor: without an AI provider the seeker is told and nothing is charged", async ({
+  page,
+}) => {
+  const rec = await createUser("RECRUITER", "Saba")
+  const seeker = await createUser("SEEKER", "Yared")
+  await setSeekerProfile(seeker.email, { title: "Backend Engineer", skills: ["Go", "PostgreSQL"] })
+  const title = `E2E Tailor Job ${uid()}`
+  await api(
+    "POST",
+    "/jobs",
+    {
+      title,
+      location: "Remote",
+      type: "FULL_TIME",
+      description: "<p>Go services on Kubernetes.</p>",
+      requirements: ["Go"],
+      skills: ["Go", "Kubernetes"],
+      categoryId: await firstCategoryId(),
+    },
+    rec.token
+  )
+  const before = await seekerBalance(seeker.email)
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await login(page, SEEKER_URL, seeker.email)
+  await page.goto(`${SEEKER_URL}/discover`)
+  await page
+    .getByRole("tab", { name: "All jobs" })
+    .or(page.getByRole("button", { name: "All jobs" }))
+    .first()
+    .click()
+  await page.getByText(title).first().click()
+  await page.getByRole("button", { name: /Tailor my CV · \d+ credits/ }).click()
+  await expect(page.getByRole("dialog").getByText(/nothing was charged/)).toBeVisible({
+    timeout: 10_000,
+  })
+  expect(await seekerBalance(seeker.email)).toBe(before)
+})

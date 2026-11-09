@@ -263,6 +263,34 @@ export class AiService implements OnModuleInit {
     }
   }
 
+  /**
+   * Runs a structured prompt with the active model. 503 AI_DISABLED without a provider key,
+   * 502 AI_FAILED (user-safe message) when the model fails or returns invalid output.
+   */
+  async structured<T>(systemPrompt: string, prompt: string, schema: any, name: string) {
+    const resolved = await this.resolveModel()
+    if (!resolved)
+      throw new AppException(
+        "AI isn't available right now. Please try again later.",
+        HttpStatus.SERVICE_UNAVAILABLE,
+        "AI_DISABLED"
+      )
+    try {
+      const result = await this.factory
+        .getAdapter(resolved.model)
+        .structured<T>(resolved.model, systemPrompt, prompt, schema, name)
+      return { result, model: resolved.model }
+    } catch (err) {
+      this.logger.warn(`${name} failed (${resolved.model}): ${(err as Error)?.message || err}`)
+      throw new AppException(userSafeAiError(err), HttpStatus.BAD_GATEWAY, "AI_FAILED")
+    }
+  }
+
+  /** Text of the seeker's active CV (most recent active RESUME), or null with a reason. */
+  seekerCvText(userId: string) {
+    return this.loadCv({ resumeUrl: null, userId })
+  }
+
   /** Conversational assistant using the configured active model. Falls back to canned tips. */
   async chat(message: string, history: ChatTurn[], role: ChatRole): Promise<string> {
     const systemPrompt = CHAT_SYSTEM_PROMPTS[role] || CHAT_SYSTEM_PROMPTS.SEEKER

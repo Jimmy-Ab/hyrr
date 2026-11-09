@@ -262,6 +262,9 @@ export type MomentumConfig = {
   applyCost: number
   outreachCost: number
   externalApplyCost: number
+  resumeTailorCost: number
+  mockInterviewCost: number
+  negotiationAdviceCost: number
   seekerSignupBonus: number
   source?: Record<string, "defaults" | "env" | "settings">
 }

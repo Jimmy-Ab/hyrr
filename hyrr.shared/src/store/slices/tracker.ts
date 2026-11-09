@@ -12,6 +12,8 @@ export type TrackerSlice = Pick<
   | "removeExternalApplication"
   | "fetchWebJobs"
   | "applyWebJob"
+  | "fetchCvTailoring"
+  | "tailorCv"
 >
 
 const map = (e: any): ExternalApplication => ({
@@ -36,6 +38,27 @@ export const createTrackerSlice: StateCreator<JobState, [], [], TrackerSlice> = 
     if (remote) params.set("remote", "true")
     if (cursor) params.set("cursor", cursor)
     return apiFetch(`/external-jobs?${params.toString()}`)
+  },
+
+  fetchCvTailoring: async (jobId) => {
+    try {
+      return await apiFetch(`/seeker-ai/tailor/${jobId}`)
+    } catch (err: any) {
+      if (err?.status === 404) return null
+      throw err
+    }
+  },
+
+  tailorCv: async (jobId, rerun) => {
+    const res = await apiFetch("/seeker-ai/tailor", {
+      method: "POST",
+      body: JSON.stringify({ jobId, ...(rerun ? { rerun: true } : {}) }),
+    })
+    if (res?.charged)
+      void get()
+        .fetchWallet()
+        .catch(() => undefined)
+    return res
   },
 
   applyWebJob: async (id) => {

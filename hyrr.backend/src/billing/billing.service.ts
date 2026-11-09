@@ -227,6 +227,9 @@ export class BillingService {
       applyCost: c.applyCost,
       outreachCost: c.outreachCost,
       externalApplyCost: c.externalApplyCost,
+      resumeTailorCost: c.resumeTailorCost,
+      mockInterviewCost: c.mockInterviewCost,
+      negotiationAdviceCost: c.negotiationAdviceCost,
     }
   }
 

@@ -623,6 +623,23 @@ export interface WebJob {
   applied: boolean
 }
 
+/** AI comparison of the seeker's CV with a job (Discover → Tailor my CV). */
+export interface CvTailoring {
+  jobId: string
+  result: {
+    matchScore: number
+    summary: string
+    strengths: string[]
+    missingKeywords: string[]
+    skillGaps: string[]
+    bulletSuggestions: { original: string | null; improved: string }[]
+  }
+  cvUsed: boolean
+  createdAt: string
+  charged?: number
+  cached?: boolean
+}
+
 export type ExternalStage = "BOOKMARKED" | "APPLIED" | "INTERVIEWING" | "OFFER" | "REJECTED"
 
 /** A job the seeker tracks outside Hyrr. */
@@ -931,6 +948,9 @@ export interface MomentumPricing {
   applyCost: number
   outreachCost?: number
   externalApplyCost?: number
+  resumeTailorCost?: number
+  mockInterviewCost?: number
+  negotiationAdviceCost?: number
 }
 
 export type CreditTransactionType =
@@ -1190,6 +1210,12 @@ export interface JobState {
   cancelInterviewInvite: (inviteId: string) => Promise<void>
   /** Socket: insert or replace an invite (and its booked event). */
   upsertInterviewInvite: (invite: any, event?: any) => void
+
+  // ── Seeker AI tools ──────────────────────────────────────────────────────
+  /** Saved tailoring for a job, or null. */
+  fetchCvTailoring: (jobId: string) => Promise<CvTailoring | null>
+  /** Runs (or reopens) CV tailoring; charges resumeTailorCost unless saved, refunded if AI fails. */
+  tailorCv: (jobId: string, rerun?: boolean) => Promise<CvTailoring>
 
   // ── Jobs from the web (seekers) ─────────────────────────────────────────
   fetchWebJobs: (

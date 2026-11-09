@@ -48,6 +48,18 @@ export interface LLMAdapter {
    */
   extractProfile(model: string, cvText: string): Promise<CvSuggestions>
 
+  /**
+   * Generic structured output validated by a zod schema (native structured output when available,
+   * otherwise tolerant JSON parsing). Throws on failure or when the output doesn't match.
+   */
+  structured<T>(
+    model: string,
+    systemPrompt: string,
+    prompt: string,
+    schema: any,
+    name: string
+  ): Promise<T>
+
   /** Free-form assistant reply. Throws on failure. */
   chat(
     model: string,

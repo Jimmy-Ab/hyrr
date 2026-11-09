@@ -102,6 +102,40 @@ export abstract class BaseLLMAdapter implements LLMAdapter {
     return parseCvSuggestionsResponse(messageText(response.content))
   }
 
+  async structured<T>(
+    model: string,
+    systemPrompt: string,
+    prompt: string,
+    schema: any,
+    name: string
+  ): Promise<T> {
+    const signal = AbortSignal.timeout(ANALYSIS_TIMEOUT_MS)
+    const llm = this.createModel(model, 0.2, ANALYSIS_TIMEOUT_MS)
+    const human = new HumanMessage(prompt)
+    if (typeof (llm as any).withStructuredOutput === "function") {
+      try {
+        const out = await llm
+          .withStructuredOutput(schema, { name })
+          .invoke([new SystemMessage(systemPrompt), human], { signal })
+        return schema.parse(out) as T
+      } catch (err) {
+        if (!isRecoverable(err, signal)) throw err
+      }
+    }
+    const response = await llm.invoke(
+      [
+        new SystemMessage(`${systemPrompt}\n\nReply with a single JSON object only, no prose.`),
+        human,
+      ],
+      { signal }
+    )
+    const text = messageText(response.content)
+    const start = text.indexOf("{")
+    const end = text.lastIndexOf("}")
+    if (start < 0 || end <= start) throw new Error("The AI reply contained no JSON")
+    return schema.parse(JSON.parse(text.slice(start, end + 1))) as T
+  }
+
   async chat(
     model: string,
     systemPrompt: string,

@@ -27,6 +27,7 @@ import { ScorecardsModule } from "./scorecards/scorecards.module"
 import { OffersModule } from "./offers/offers.module"
 import { TalentSearchModule } from "./talent-search/talent-search.module"
 import { ExternalJobsModule } from "./external-jobs/external-jobs.module"
+import { SeekerAiModule } from "./seeker-ai/seeker-ai.module"
 
 import { CoreModule } from "./core/core.module"
 import { SecurityModule } from "./core/security/security.module"
@@ -73,6 +74,7 @@ import { UploadsModule } from "./uploads/uploads.module"
     OffersModule,
     TalentSearchModule,
     ExternalJobsModule,
+    SeekerAiModule,
     AdminModule,
   ],
 })

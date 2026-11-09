@@ -214,7 +214,10 @@ export function buildCandidatePrompt(input: CandidatePromptInput): string {
     line("Title", job.title),
     line("Category", job.category),
     line("Employment type", job.type),
-    line("Location", [job.location, job.remote ? "(remote possible)" : ""].filter(Boolean).join(" ")),
+    line(
+      "Location",
+      [job.location, job.remote ? "(remote possible)" : ""].filter(Boolean).join(" ")
+    ),
     `Required skills: ${list(job.skills)}`,
     (job.requirements || []).length
       ? `Requirements:\n${(job.requirements || [])
@@ -260,7 +263,8 @@ export function buildCandidatePrompt(input: CandidatePromptInput): string {
   } else {
     parts.push("(No platform profile: assess from the CV and the details above.)")
   }
-  if (candidate.coverLetter?.trim()) parts.push(`Cover letter:\n${clip(candidate.coverLetter, 3000)}`)
+  if (candidate.coverLetter?.trim())
+    parts.push(`Cover letter:\n${clip(candidate.coverLetter, 3000)}`)
   const screening = (candidate.screening || []).slice(0, 15)
   if (screening.length) {
     parts.push(

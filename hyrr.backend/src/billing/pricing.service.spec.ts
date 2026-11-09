@@ -42,6 +42,9 @@ describe("PricingService", () => {
       applyCost: 1,
       outreachCost: 5,
       externalApplyCost: 1,
+      resumeTailorCost: 2,
+      mockInterviewCost: 3,
+      negotiationAdviceCost: 1,
       seekerSignupBonus: 10,
     })
   })
