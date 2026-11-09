@@ -4,6 +4,7 @@
  */
 export const APPLICATION_STATUS = {
   SAVED: "SAVED",
+  SOURCED: "SOURCED",
   APPLIED: "APPLIED",
   IN_PROCESS: "IN_PROCESS",
   INTERVIEWING: "INTERVIEWING",
@@ -16,6 +17,7 @@ export type ApplicationStatusCode = (typeof APPLICATION_STATUS)[keyof typeof APP
 
 export const APPLICATION_STATUS_LABEL = {
   SAVED: "Saved",
+  SOURCED: "Reached out",
   APPLIED: "Applied",
   IN_PROCESS: "In Process",
   INTERVIEWING: "Interviewing",
@@ -235,6 +237,8 @@ export const SYNC_SOCKET_EVENTS = {
   OFFER_UPDATED: "offer_updated",
   OFFER_ACCEPTED: "offer_accepted",
   OFFER_DECLINED: "offer_declined",
+  // Talent search
+  OUTREACH_RECEIVED: "outreach_received",
   // Scheduling
   INTERVIEW_INVITE_RECEIVED: "interview_invite_received",
   INTERVIEW_INVITE_UPDATED: "interview_invite_updated",

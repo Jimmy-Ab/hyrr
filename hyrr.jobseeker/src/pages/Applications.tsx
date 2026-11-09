@@ -37,6 +37,7 @@ import {
 import { useId, useState } from "react"
 import { PendingInterviewInvites } from "../components/interview-invites"
 import { openOfferSheet } from "../components/offer-sheet"
+import { OutreachInvitations } from "../components/outreach"
 
 // ─── Stage timeline ───────────────────────────────────────────────────────────
 function ApplicationTimeline({ applicationId }: { applicationId: string }) {
@@ -407,6 +408,7 @@ export function ApplicationsBoard() {
         subtitle="Track every application from saved to offer."
       />
 
+      <OutreachInvitations />
       <PendingInterviewInvites />
 
       {/* Stats strip */}

@@ -106,6 +106,7 @@ const STATUS_TAGS: Partial<Record<ApplicationStatus, string>> = {
 
 export const STATUS_LABELS: Record<ApplicationStatus, string> = {
   SAVED: "Saved",
+  SOURCED: "Reached out",
   APPLIED: "Applied",
   IN_PROCESS: "In Process",
   INTERVIEWING: "Interviewing",
@@ -215,6 +216,9 @@ export class ApplicationsService implements OnModuleInit {
         answer: a.answer,
       })),
     }
+    // Unanswered outreach: no contact details or CV until the seeker says they're interested.
+    if (candidate.status === "SOURCED")
+      Object.assign(candidate, { email: "", phone: null, resumeUrl: null })
     return this.signResume(candidate) as T
   }
 
@@ -556,6 +560,15 @@ export class ApplicationsService implements OnModuleInit {
     return candidate
   }
 
+  /** Recruiter-side candidate payload (same shape as GET /applications/candidates). */
+  async candidatePayload(applicationId: string) {
+    const app = await this.prisma.application.findUnique({
+      where: { id: applicationId },
+      include: RECRUITER_CANDIDATE_INCLUDE,
+    })
+    return app ? this.toCandidate(app) : null
+  }
+
   /** Live kanban card for the hiring team + admin counter (after commit, never fails the apply). */
   private async emitApplied(applicationId: string) {
     if (!this.messagesGateway) return
@@ -723,6 +736,18 @@ export class ApplicationsService implements OnModuleInit {
       (status !== undefined || rest.offerAmount !== undefined)
     )
       throw withdrawnConflict()
+    // Outreach: the seeker answers first (Interested → APPLIED); the team may only archive it.
+    if (
+      current.status === ApplicationStatus.SOURCED &&
+      status !== undefined &&
+      status !== ApplicationStatus.SOURCED &&
+      status !== ApplicationStatus.ARCHIVED
+    )
+      throw new AppException(
+        "Waiting for the candidate to answer your message. You can move them once they're interested.",
+        HttpStatus.CONFLICT,
+        "AWAITING_CANDIDATE"
+      )
 
     const statusChanged = status !== undefined && status !== current.status
     const data: Prisma.ApplicationUpdateInput = { ...rest }

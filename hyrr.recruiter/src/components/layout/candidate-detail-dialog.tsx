@@ -27,7 +27,7 @@ import {
   avatarFallback,
   errorMessage,
   isWithdrawn,
-  PIPELINE_STATUSES,
+  MOVABLE_STATUSES,
   sourceLabel,
   statusBadgeVariant,
 } from "../../lib/recruiter"
@@ -221,7 +221,7 @@ export function CandidateDetailDialog() {
                     onChange={(e) => handleStatusChange(e.target.value as Candidate["status"])}
                     className="h-9 px-3.5 rounded-[12px] border border-bg-border bg-bg-secondary text-[12.5px] font-bold text-txt-heading focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer disabled:opacity-60"
                   >
-                    {PIPELINE_STATUSES.map((s) => (
+                    {MOVABLE_STATUSES.map((s) => (
                       <option key={s} value={s}>
                         {s}
                       </option>

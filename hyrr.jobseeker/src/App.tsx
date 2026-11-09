@@ -143,6 +143,12 @@ function useLiveSeekerToasts() {
         `${liveEvent.title}: ${applicationStatusLabel(liveEvent.status)}`,
         "info"
       )
+    else if (liveEvent?.kind === "outreach")
+      toast(
+        `${liveEvent.companyName} reached out`,
+        `About ${liveEvent.jobTitle}. Answer on your Applications page.`,
+        "info"
+      )
     else if (liveEvent?.kind === "interview_booked")
       toast("Interview confirmed", `${liveEvent.title} is in your calendar.`, "success")
     else if (liveEvent?.kind === "job_removed")

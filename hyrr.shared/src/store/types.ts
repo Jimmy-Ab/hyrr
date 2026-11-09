@@ -131,12 +131,13 @@ export interface Candidate {
   screeningAnswers: { questionId: string; question: string; answer: string }[]
 }
 
-export type ApplicationSource = "DIRECT" | "GUEST" | "RECRUITER_ADDED"
+export type ApplicationSource = "DIRECT" | "GUEST" | "RECRUITER_ADDED" | "OUTREACH"
 
 export const APPLICATION_SOURCE_LABEL: Record<ApplicationSource, string> = {
   DIRECT: "Applied directly",
   GUEST: "Guest application",
   RECRUITER_ADDED: "Added by recruiter",
+  OUTREACH: "Talent search outreach",
 }
 
 export interface NewCandidateInput {
@@ -529,6 +530,7 @@ export type LiveEvent =
   | { kind: "status"; id: string; status: ApplicationStatusCode; title: string; at: number }
   | { kind: "job_removed"; jobId: string; title: string; at: number }
   | { kind: "scorecard"; applicationId: string; at: number }
+  | { kind: "outreach"; applicationId: string; companyName: string; jobTitle: string; at: number }
   | { kind: "offer"; id: string; jobTitle: string; companyName?: string; at: number }
   | {
       kind: "offer_answered"
@@ -600,6 +602,42 @@ export interface NewInterviewInvite {
   location?: string
   meetingUrl?: string
   note?: string
+}
+
+export interface TalentCard {
+  id: string
+  name: string
+  avatar?: string | null
+  title: string
+  location: string
+  skills: string[]
+  headline: string | null
+  yearsExperience: number
+  relevance: number
+  existingJobIds: string[]
+}
+
+export interface TalentProfile extends Omit<TalentCard, "relevance" | "existingJobIds"> {
+  bio?: string | null
+  experiences: {
+    role: string
+    company: string
+    startDate?: string | null
+    endDate?: string | null
+    current: boolean
+  }[]
+  educations: {
+    school: string
+    degree: string
+    startYear?: number | null
+    endYear?: number | null
+  }[]
+}
+
+export interface TalentVisibility {
+  open: boolean
+  since?: string | null
+  blockedCompanies: { id: string; name: string }[]
 }
 
 export interface Offer {
@@ -852,6 +890,7 @@ export interface MomentumPricing {
   aiRerunCost: number
   /** Seeker side: credits per job application. */
   applyCost: number
+  outreachCost?: number
 }
 
 export type CreditTransactionType =
@@ -1111,6 +1150,18 @@ export interface JobState {
   cancelInterviewInvite: (inviteId: string) => Promise<void>
   /** Socket: insert or replace an invite (and its booked event). */
   upsertInterviewInvite: (invite: any, event?: any) => void
+
+  // ── Talent search (recruiters) and outreach answers (seekers) ───────────
+  searchTalent: (q?: string, location?: string) => Promise<{ total: number; results: TalentCard[] }>
+  fetchTalentProfile: (seekerId: string) => Promise<TalentProfile>
+  /** Debits the company's outreach cost and adds a "Reached out" card. */
+  reachOut: (seekerId: string, jobId: string, message: string) => Promise<void>
+  talentVisibility: TalentVisibility | null
+  fetchTalentVisibility: () => Promise<void>
+  setTalentVisibility: (open: boolean) => Promise<void>
+  unblockCompany: (companyId: string) => Promise<void>
+  respondToOutreach: (applicationId: string, interested: boolean) => Promise<void>
+  blockOutreachCompany: (applicationId: string) => Promise<void>
 
   // ── Offers ───────────────────────────────────────────────────────────────
   /** Seeker: their offers. Recruiter: offers of applications opened in the panel. */

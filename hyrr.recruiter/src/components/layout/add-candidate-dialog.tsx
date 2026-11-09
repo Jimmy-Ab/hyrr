@@ -12,7 +12,7 @@ import {
 } from "hyrr.shared"
 import { Loader2 } from "lucide-react"
 import { useEffect, useState, type FormEvent } from "react"
-import { errorMessage, PIPELINE_STATUSES } from "../../lib/recruiter"
+import { errorMessage, MOVABLE_STATUSES } from "../../lib/recruiter"
 import { useJobStore, type Candidate } from "../../store/useJobStore"
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -47,7 +47,7 @@ export function AddCandidateDialog() {
     if (isAddCandidateOpen) {
       setJobId(selectedJobId || jobs[0]?.id || "")
       setStatus(
-        (PIPELINE_STATUSES as readonly string[]).includes(addCandidateColumn)
+        (MOVABLE_STATUSES as readonly string[]).includes(addCandidateColumn)
           ? addCandidateColumn
           : "Applied"
       )
@@ -139,7 +139,7 @@ export function AddCandidateDialog() {
                 onChange={(e) => setStatus(e.target.value as Candidate["status"])}
                 className={selectCls}
               >
-                {PIPELINE_STATUSES.map((s) => (
+                {MOVABLE_STATUSES.map((s) => (
                   <option key={s} value={s}>
                     {s}
                   </option>

@@ -81,7 +81,12 @@ export function computeFunnelAnalytics(
     INTERVIEWING: [],
     OFFER: [],
   }
-  const bySource: Record<ApplicationSource, number> = { DIRECT: 0, GUEST: 0, RECRUITER_ADDED: 0 }
+  const bySource: Record<ApplicationSource, number> = {
+    DIRECT: 0,
+    GUEST: 0,
+    RECRUITER_ADDED: 0,
+    OUTREACH: 0,
+  }
   const perJob = new Map<string, FunnelAnalytics["perJob"][number]>()
   for (const job of jobs)
     perJob.set(job.id, {
@@ -94,7 +99,8 @@ export function computeFunnelAnalytics(
     })
 
   for (const app of applications) {
-    if (app.status === ApplicationStatus.SAVED) continue
+    // Bookmarks and unanswered outreach aren't applicants.
+    if (app.status === ApplicationStatus.SAVED || app.status === ApplicationStatus.SOURCED) continue
     const appEvents = (byApp.get(app.id) || [])
       .filter((e) => e.toStatus !== ApplicationStatus.SAVED)
       .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())

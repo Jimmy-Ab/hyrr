@@ -260,6 +260,7 @@ export type MomentumConfig = {
   aiRerunCost: number
   signupBonus: number
   applyCost: number
+  outreachCost: number
   seekerSignupBonus: number
   source?: Record<string, "defaults" | "env" | "settings">
 }

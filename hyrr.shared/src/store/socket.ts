@@ -124,6 +124,25 @@ export function initializeSocket(set: StoreSet, get: StoreGet) {
     })
   })
 
+  socket.on("outreach_received", (data: any) => {
+    if (!data?.applicationId) return
+    void get()
+      .fetchApplications()
+      .catch(() => undefined)
+    void get()
+      .fetchConversations()
+      .catch(() => undefined)
+    set({
+      liveEvent: {
+        kind: "outreach",
+        applicationId: data.applicationId,
+        companyName: data.companyName ?? "A company",
+        jobTitle: data.jobTitle ?? "",
+        at: Date.now(),
+      },
+    })
+  })
+
   socket.on("offer_extended", (data: any) => {
     if (!data?.id) return
     get().upsertOffer(data)

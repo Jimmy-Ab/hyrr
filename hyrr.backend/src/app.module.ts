@@ -25,6 +25,7 @@ import { TalentModule } from "./talent/talent.module"
 import { TeamModule } from "./team/team.module"
 import { ScorecardsModule } from "./scorecards/scorecards.module"
 import { OffersModule } from "./offers/offers.module"
+import { TalentSearchModule } from "./talent-search/talent-search.module"
 
 import { CoreModule } from "./core/core.module"
 import { SecurityModule } from "./core/security/security.module"
@@ -69,6 +70,7 @@ import { UploadsModule } from "./uploads/uploads.module"
     TeamModule,
     ScorecardsModule,
     OffersModule,
+    TalentSearchModule,
     AdminModule,
   ],
 })

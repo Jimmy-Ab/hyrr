@@ -12,6 +12,8 @@ export type MomentumConfig = {
   signupBonus: number
   /** Seeker side: credits per application and the new-seeker welcome bonus. */
   applyCost: number
+  /** Recruiter credits to message a seeker found in talent search (outreach). */
+  outreachCost: number
   seekerSignupBonus: number
 }
 
@@ -42,6 +44,7 @@ const DEFAULTS: MomentumConfig = {
   aiRerunCost: 2,
   signupBonus: 20,
   applyCost: 1,
+  outreachCost: 5,
   seekerSignupBonus: 10,
 }
 
@@ -97,6 +100,7 @@ export class PricingService {
       aiRerunCost: num(env.MOMENTUM_AI_RERUN_COST, DEFAULTS.aiRerunCost),
       signupBonus: num(env.MOMENTUM_SIGNUP_BONUS, DEFAULTS.signupBonus),
       applyCost: num(env.MOMENTUM_APPLY_COST, DEFAULTS.applyCost),
+      outreachCost: num(env.MOMENTUM_OUTREACH_COST, DEFAULTS.outreachCost),
       seekerSignupBonus: num(env.MOMENTUM_SEEKER_SIGNUP_BONUS, DEFAULTS.seekerSignupBonus),
     }
     try {
@@ -119,6 +123,7 @@ export class PricingService {
           aiRerunCost: num(o.aiRerunCost, config.aiRerunCost),
           signupBonus: num(o.signupBonus, config.signupBonus),
           applyCost: num(o.applyCost, config.applyCost),
+          outreachCost: num(o.outreachCost, config.outreachCost),
           seekerSignupBonus: num(o.seekerSignupBonus, config.seekerSignupBonus),
         }
       }

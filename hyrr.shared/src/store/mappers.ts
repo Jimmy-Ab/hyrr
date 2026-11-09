@@ -199,7 +199,7 @@ export function mapCandidate(c: any): Candidate {
 }
 
 export function mapApplicationSource(value: unknown): ApplicationSource {
-  return value === "GUEST" || value === "RECRUITER_ADDED" ? value : "DIRECT"
+  return value === "GUEST" || value === "RECRUITER_ADDED" || value === "OUTREACH" ? value : "DIRECT"
 }
 
 export function mapLabel(l: any): CandidateLabel {

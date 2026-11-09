@@ -47,7 +47,17 @@ export const FEATURE_DAY_OPTIONS = [7, 14, 30] as const
 const DAY_MS = 24 * 60 * 60 * 1000
 
 const APPLICANT_COUNT = {
-  _count: { select: { applications: { where: { status: { not: ApplicationStatus.SAVED } } } } },
+  _count: {
+    select: {
+      applications: {
+        where: {
+          status: {
+            notIn: [ApplicationStatus.SAVED, ApplicationStatus.SOURCED] as ApplicationStatus[],
+          },
+        },
+      },
+    },
+  },
 } as const
 
 /** Structured salary columns + their generated display text (all null clears the range). */
@@ -618,7 +628,10 @@ export class JobsService {
     const totalJobs = await this.prisma.job.count({ where: jobScope })
 
     const applications = await this.prisma.application.findMany({
-      where: { job: jobScope, status: { not: ApplicationStatus.SAVED } },
+      where: {
+        job: jobScope,
+        status: { notIn: [ApplicationStatus.SAVED, ApplicationStatus.SOURCED] },
+      },
       select: {
         id: true,
         jobId: true,

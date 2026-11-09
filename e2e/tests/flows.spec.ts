@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test"
 import {
   api,
+  companyBalance,
   createUser,
   detachFromCompany,
   disconnect,
@@ -11,6 +12,7 @@ import {
   SEEKER_URL,
   seekerBalance,
   setInviteToken,
+  setSeekerProfile,
   setUserStatus,
   uid,
   userWithCompany,
@@ -849,4 +851,72 @@ test("offers: the recruiter sends terms, the seeker signs live, the team celebra
 
   // Live on the recruiter side.
   await expect(page.getByText(/Dawit accepted the offer/).first()).toBeVisible({ timeout: 10_000 })
+})
+
+test("talent search: an opted-in seeker is found, contacted and says Interested", async ({
+  page,
+  browser,
+}) => {
+  const rec = await createUser("RECRUITER", "Tariku")
+  const seeker = await createUser("SEEKER", "Amina")
+  const skill = `Elixir${uid()}`
+  await setSeekerProfile(seeker.email, { title: "Backend Engineer", skills: [skill, "PostgreSQL"] })
+  const job = await api(
+    "POST",
+    "/jobs",
+    {
+      title: `E2E Outreach Job ${uid()}`,
+      location: "Nairobi",
+      type: "FULL_TIME",
+      description: "<p>Reaching out to opted-in talent from search.</p>",
+      requirements: ["Elixir"],
+      skills: ["Elixir"],
+      categoryId: await firstCategoryId(),
+    },
+    rec.token
+  )
+
+  // Seeker opts in (off by default).
+  const seekerPage = await (
+    await browser.newContext({ viewport: { width: 1400, height: 900 } })
+  ).newPage()
+  await login(seekerPage, SEEKER_URL, seeker.email)
+  await seekerPage.goto(`${SEEKER_URL}/settings`)
+  await seekerPage.getByRole("tab", { name: /privacy/i }).click()
+  const toggle = seekerPage.getByRole("switch", { name: "Open to recruiters" })
+  await expect(toggle).toHaveAttribute("aria-checked", "false")
+  await toggle.click()
+  await expect(toggle).toHaveAttribute("aria-checked", "true")
+  await seekerPage.goto(`${SEEKER_URL}/applications`)
+
+  // Recruiter finds and contacts them.
+  const before = await companyBalance(rec.email)
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await login(page, RECRUITER_URL, rec.email)
+  await page.goto(`${RECRUITER_URL}/candidates`)
+  await page.getByRole("button", { name: "Talent search" }).click()
+  await page.locator("#talent-q").fill(skill)
+  await page.getByRole("button", { name: "Search", exact: true }).click()
+  await page.getByText("Amina", { exact: true }).first().click()
+  const sheet = page.getByRole("dialog")
+  await expect(sheet.getByText(/never|Contact details/i).first()).toBeVisible()
+  await sheet.locator("#outreach-job").selectOption({ label: job.title })
+  await sheet
+    .locator("#outreach-message")
+    .fill("Hi Amina, your Elixir work fits our payments team well.")
+  await sheet.getByRole("button", { name: /^Send · \d+ credits$/ }).click()
+  await expect(sheet.getByText(/Sent\. They'll find your message/)).toBeVisible({ timeout: 10_000 })
+  expect(await companyBalance(rec.email)).toBe(before - 5)
+
+  // Live on the seeker side; Interested is free.
+  await expect(seekerPage.getByText(/reached out about/).first()).toBeVisible({ timeout: 10_000 })
+  await seekerPage.getByRole("button", { name: "Interested", exact: true }).click()
+  await expect(seekerPage.getByText("Great, you're in").first()).toBeVisible({ timeout: 10_000 })
+
+  const cands = await api<any>("GET", "/applications/candidates", undefined, rec.token)
+  const list: any[] = Array.isArray(cands) ? cands : cands.items
+  const card = list.find((c) => c.jobId === job.id)
+  expect(card?.status).toBe("APPLIED")
+  expect(card?.source).toBe("OUTREACH")
+  expect(card?.email).toBe(seeker.email)
 })

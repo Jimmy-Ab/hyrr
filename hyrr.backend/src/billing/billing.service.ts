@@ -225,6 +225,7 @@ export class BillingService {
       featureDays: c.featureDays,
       aiRerunCost: c.aiRerunCost,
       applyCost: c.applyCost,
+      outreachCost: c.outreachCost,
     }
   }
 

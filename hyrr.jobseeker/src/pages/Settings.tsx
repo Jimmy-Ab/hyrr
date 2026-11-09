@@ -22,6 +22,7 @@ import {
   User,
 } from "lucide-react"
 import { useEffect, useState } from "react"
+import { OpenToRecruiters } from "../components/outreach"
 
 type Tab = "General" | "Account" | "Security" | "Notifications" | "Appearance" | "Privacy"
 
@@ -408,6 +409,7 @@ export function SettingsPage() {
       case "Privacy":
         return (
           <div className="space-y-4">
+            <OpenToRecruiters />
             {prefsLoading ? (
               <div className="flex items-center gap-2 text-txt-caption text-[13px]">
                 <Loader2 className="w-4 h-4 animate-spin" /> Loading preferences…

@@ -40,6 +40,7 @@ describe("PricingService", () => {
       aiRerunCost: 2,
       signupBonus: 20,
       applyCost: 1,
+      outreachCost: 5,
       seekerSignupBonus: 10,
     })
   })

@@ -116,3 +116,22 @@ export async function detachFromCompany(email: string) {
   await prisma.companyMember.deleteMany({ where: { userId: user.id } })
   await prisma.user.update({ where: { id: user.id }, data: { companyId: null } })
 }
+
+export async function setSeekerProfile(
+  email: string,
+  data: { title: string; skills: string[]; location?: string }
+) {
+  const user = await prisma.user.findUniqueOrThrow({ where: { email } })
+  await prisma.seekerProfile.update({
+    where: { userId: user.id },
+    data: { title: data.title, skills: data.skills, location: data.location ?? "Nairobi" },
+  })
+}
+
+export async function companyBalance(email: string) {
+  const user = await prisma.user.findUniqueOrThrow({ where: { email } })
+  const wallet = await prisma.creditWallet.findUniqueOrThrow({
+    where: { companyId: user.companyId! },
+  })
+  return wallet.balance
+}

@@ -34,6 +34,7 @@ enum JobStatus {
 
 enum ApplicationStatus {
   SAVED
+  SOURCED   // a recruiter reached out from talent search; the seeker hasn't answered yet
   APPLIED
   IN_PROCESS
   INTERVIEWING
@@ -75,6 +76,7 @@ enum ApplicationSource {
   DIRECT          // a signed-in job seeker applied
   GUEST           // applied without an account
   RECRUITER_ADDED // added manually by the hiring team
+  OUTREACH        // a recruiter contacted an opted-in seeker from talent search
 }
 
 enum AlertFrequency {
@@ -148,6 +150,7 @@ model User {
   interviewInvites   InterviewInvite[]    @relation("InterviewInviteCreator")
   scorecards         Scorecard[]
   offersCreated      Offer[]              @relation("OfferCreator")
+  companyBlocks      CompanyBlock[]
   joinRequests       CompanyJoinRequest[] @relation("JoinRequester")
   joinDecisions      CompanyJoinRequest[] @relation("JoinDecider")
   conversationStates ConversationState[]
@@ -180,6 +183,7 @@ model Company {
   teamMembers CompanyMember[]
   invites      CompanyInvite[]
   joinRequests CompanyJoinRequest[]
+  blockedBy    CompanyBlock[]
   jobs        Job[]
   wallet       CreditWallet?
   transactions CreditTransaction[]
@@ -210,6 +214,9 @@ model SeekerProfile {
   availability       String?    // e.g. "2 weeks notice"
   preferredLocations String[]
   visibility         String     @default("public") // public, private
+  /// Opt-in: recruiters can find this profile in talent search and reach out (off by default)
+  openToRecruiters   Boolean    @default(false)
+  openToRecruitersAt DateTime?
   skills             String[]
   languages          String[]
   phone              String?
@@ -677,6 +684,17 @@ model Offer {
   @@index([applicationId, status])
 }
 
+/// A seeker hides their profile from a company's talent search (and its outreach).
+model CompanyBlock {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@unique([userId, companyId])
+}
+
 model ScreeningQuestion {
   id        String   @id @default(uuid())
   jobId     String
@@ -849,6 +867,7 @@ enum CreditTransactionType {
   JOB_FEATURE
   AI_ANALYSIS
   APPLICATION
+  OUTREACH
   REFUND
   ADJUSTMENT
 }

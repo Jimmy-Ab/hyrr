@@ -37,6 +37,7 @@ import { BulkActionDialog } from "../components/candidates/bulk-action-dialog"
 import { JobFilter, PipelineViewSwitch, useApplicantCounts } from "../components/jobs/job-filter"
 import { LabelChips, LabelFilterSelect, matchesLabel } from "../components/labels/labels"
 import { ConfirmDialog } from "../components/layout/confirm-dialog"
+import { TalentSearch } from "../components/talent/talent-search"
 import { avatarFallback, errorMessage, PIPELINE_STATUSES, WITHDRAWN_STATUS } from "../lib/recruiter"
 import { useJobStore } from "../store/useJobStore"
 
@@ -44,7 +45,7 @@ const STAGES = [...PIPELINE_STATUSES, WITHDRAWN_STATUS] as const
 type SortKey = "recent" | "name" | "ai"
 
 /** Recruiter candidates directory: job + stage + label filters, sortable, bulk actions. */
-export function Candidates() {
+function CandidatePipeline() {
   const {
     candidates,
     jobs,
@@ -568,5 +569,26 @@ function RowAction({
     >
       {children}
     </button>
+  )
+}
+
+/** Candidates page: your pipeline, or Talent search (opted-in seekers you can reach out to). */
+export function Candidates() {
+  const [mode, setMode] = useState<"pipeline" | "talent">("pipeline")
+  return (
+    <div className="flex flex-col gap-4">
+      <FilterChips
+        id="candidates-mode"
+        label="Candidates view"
+        value={mode}
+        onChange={setMode}
+        className="self-start"
+        options={[
+          { value: "pipeline", label: "Your candidates" },
+          { value: "talent", label: "Talent search", tone: "violet" },
+        ]}
+      />
+      {mode === "pipeline" ? <CandidatePipeline /> : <TalentSearch />}
+    </div>
   )
 }
