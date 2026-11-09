@@ -6,6 +6,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   Req,
   UseGuards,
 } from "@nestjs/common"
@@ -100,5 +101,27 @@ export class SeekerAiController {
   @Roles("SEEKER")
   answerMock(@Req() req: any, @Param("id", uuid) id: string, @Body() dto: MockAnswerDto) {
     return this.seekerAi.answerMock(req.user.userId, id, dto.index, dto.answer)
+  }
+
+  /** Free: yearly percentiles from real postings in one currency (null figures below 10 samples). */
+  @Get("salary-benchmark")
+  @Roles("SEEKER")
+  salaryBenchmark(
+    @Query("title") title = "",
+    @Query("currency") currency = "USD",
+    @Query("location") location?: string
+  ) {
+    return this.seekerAi.salaryBenchmark(
+      title.slice(0, 120),
+      currency.toUpperCase().slice(0, 3),
+      location?.slice(0, 120)
+    )
+  }
+
+  /** Paid: AI negotiation advice for an open offer (negotiationAdviceCost; refunded on AI failure). */
+  @Post("offers/:offerId/negotiation")
+  @Roles("SEEKER")
+  negotiation(@Req() req: any, @Param("offerId", uuid) offerId: string) {
+    return this.seekerAi.negotiationAdvice(req.user.userId, offerId)
   }
 }

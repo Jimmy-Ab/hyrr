@@ -844,6 +844,9 @@ test("offers: the recruiter sends terms, the seeker signs live, the team celebra
   const sheet = seekerPage.getByRole("dialog")
   await expect(sheet.getByText(/Offer from/)).toBeVisible({ timeout: 10_000 })
   await expect(sheet.getByText("Health insurance")).toBeVisible()
+  // Free market check (no invented numbers when there are too few postings).
+  await expect(sheet.getByText("Market check")).toBeVisible()
+  await expect(sheet.getByText(/Not enough postings in ETB|postings for similar roles/)).toBeVisible()
   await sheet.getByRole("button", { name: "Accept offer" }).click()
   await expect(sheet.getByText("Type your full name to sign")).toBeVisible()
   await sheet.locator("#offer-signature").fill("Dawit Bekele")

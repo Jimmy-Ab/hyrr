@@ -221,4 +221,54 @@ describe("SeekerAiService", () => {
       expect(prisma.mockInterview.update).not.toHaveBeenCalled()
     })
   })
+
+  describe("negotiation advice", () => {
+    const offer = (over: Record<string, any> = {}) => ({
+      id: "of-1",
+      jobTitle: "Backend Engineer",
+      baseSalary: 90000,
+      salaryCurrency: "EUR",
+      salaryPeriod: "YEAR",
+      bonusAmount: null,
+      equityPercentage: null,
+      startDate: new Date("2026-12-01"),
+      benefits: [],
+      status: "SENT",
+      application: { userId: "u1", job: { location: "Berlin" } },
+      ...over,
+    })
+
+    it("only the candidate, only open offers", async () => {
+      prisma.offer.findUnique.mockResolvedValue(offer({ application: { userId: "u2", job: {} } }))
+      expect(await code(service.negotiationAdvice("u1", "of-1"))).toBe("OFFER_NOT_FOUND")
+      prisma.offer.findUnique.mockResolvedValue(offer({ status: "ACCEPTED" }))
+      expect(await code(service.negotiationAdvice("u1", "of-1"))).toBe("OFFER_CLOSED")
+    })
+
+    it("charges, includes market data when there is enough, and returns the advice", async () => {
+      ;(service as any).pricing.getConfig.mockResolvedValue({ negotiationAdviceCost: 1 })
+      prisma.offer.findUnique.mockResolvedValue(offer())
+      prisma.job.findMany.mockResolvedValue(
+        Array.from({ length: 12 }, (_, i) => ({
+          salaryMin: 80000 + i * 2000,
+          salaryMax: 90000 + i * 2000,
+          salaryPeriod: "YEAR",
+        }))
+      )
+      prisma.externalJob.findMany.mockResolvedValue([])
+      const advice = {
+        assessment: "Slightly below median.",
+        counterOffer: { baseSalary: 98000, rationale: "Median is ~96k" },
+        talkingPoints: ["Scope"],
+        emailDraft: "Hi …",
+      }
+      ai.structured.mockResolvedValue({ result: advice, model: "m" })
+      const res = await service.negotiationAdvice("u1", "of-1")
+      expect(wallet.debit).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 1, referenceId: "of-1" })
+      )
+      expect(ai.structured.mock.calls[0][1]).toContain("MARKET (yearly EUR, 12 postings)")
+      expect(res).toMatchObject({ charged: 1, advice, benchmark: { enoughData: true } })
+    })
+  })
 })

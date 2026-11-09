@@ -16,6 +16,7 @@ import {
 } from "hyrr.shared"
 import { BadgeCheck, CalendarDays, Gift, Loader2, Wallet } from "lucide-react"
 import { useEffect, useState } from "react"
+import { OfferNegotiation } from "./negotiation"
 
 const OPEN_EVENT = "hyrr:review-offer"
 export const openOfferSheet = (offerId: string) =>
@@ -172,6 +173,8 @@ export function OfferSheet() {
                 </p>
               )}
             </dl>
+
+            <OfferNegotiation offer={offer} />
 
             {offer.status === "ACCEPTED" && (
               <p className="mt-5 flex items-center gap-2 text-[13px] text-txt-body">

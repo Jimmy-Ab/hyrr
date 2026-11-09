@@ -5,14 +5,17 @@ import { PricingService, type MomentumConfig } from "../billing/pricing.service"
 import { WalletService } from "../billing/wallet.service"
 import { AppException } from "../core/exceptions/app-exception"
 import { PrismaService } from "../prisma/prisma.service"
+import { roleTerms, summarise, yearlyMid } from "./salary-benchmark"
 import {
   MOCK_GRADE_PROMPT,
   MOCK_QUESTIONS_PROMPT,
   MOCK_SUMMARY_PROMPT,
-  TAILOR_SYSTEM_PROMPT,
   mockGradeSchema,
   mockQuestionsSchema,
   mockSummarySchema,
+  NEGOTIATION_PROMPT,
+  negotiationSchema,
+  TAILOR_SYSTEM_PROMPT,
   tailorSchema,
   type TailorResult,
 } from "./schemas"
@@ -370,5 +373,93 @@ export class SeekerAiService {
       },
     })
     return this.presentMock(saved)
+  }
+
+  // ─── Salary benchmark (free) and negotiation advice (paid) ─────────────────
+
+  /**
+   * Yearly salary percentiles for a role from real postings (Hyrr jobs + jobs from the web) in one
+   * currency. No currency conversion: only postings in `currency` count. Fewer than 10 → no figures.
+   */
+  async salaryBenchmark(title: string, currency: string, location?: string) {
+    const terms = roleTerms(title)
+    if (!terms.length) return { title, currency, terms, ...summarise([]) }
+    const titleWhere = {
+      AND: terms.map((t) => ({ title: { contains: t, mode: "insensitive" as const } })),
+    }
+    const locWhere = location?.trim()
+      ? { location: { contains: location.trim(), mode: "insensitive" as const } }
+      : {}
+    const [hyrr, web] = await Promise.all([
+      this.prisma.job.findMany({
+        where: {
+          ...titleWhere,
+          ...locWhere,
+          salaryCurrency: currency,
+          status: { not: JobStatus.DRAFT },
+        },
+        select: { salaryMin: true, salaryMax: true, salaryPeriod: true },
+        take: 2000,
+      }),
+      this.prisma.externalJob.findMany({
+        where: { ...titleWhere, ...locWhere, salaryCurrency: currency },
+        select: { salaryMin: true, salaryMax: true },
+        take: 2000,
+      }),
+    ])
+    const values = [...hyrr, ...web.map((w) => ({ ...w, salaryPeriod: "YEAR" }))]
+      .map(yearlyMid)
+      .filter((v): v is number => v !== null && v > 0)
+    return {
+      title,
+      currency,
+      terms,
+      location: location?.trim() || null,
+      period: "YEAR",
+      ...summarise(values),
+    }
+  }
+
+  /** AI advice on a received offer: assessment, counter-offer, talking points, e-mail draft. */
+  async negotiationAdvice(userId: string, offerId: string) {
+    const offer = await this.prisma.offer.findUnique({
+      where: { id: offerId },
+      include: { application: { select: { userId: true, job: { select: { location: true } } } } },
+    })
+    if (!offer || offer.application.userId !== userId)
+      throw new AppException("Offer not found", HttpStatus.NOT_FOUND, "OFFER_NOT_FOUND")
+    if (offer.status !== "SENT")
+      throw new AppException(
+        "Advice is for offers you haven't answered yet.",
+        HttpStatus.CONFLICT,
+        "OFFER_CLOSED"
+      )
+    const [benchmark, candidate] = await Promise.all([
+      this.salaryBenchmark(offer.jobTitle, offer.salaryCurrency, undefined),
+      this.candidateText(userId),
+    ])
+    const yearly = yearlyMid({
+      salaryMin: offer.baseSalary,
+      salaryMax: offer.baseSalary,
+      salaryPeriod: offer.salaryPeriod,
+    })
+    const prompt = [
+      `OFFER: ${offer.jobTitle}; base ${offer.baseSalary} ${offer.salaryCurrency} per ${offer.salaryPeriod.toLowerCase()} (≈${yearly} per year)` +
+        `${offer.bonusAmount ? `; bonus ${offer.bonusAmount}` : ""}${offer.equityPercentage ? `; equity ${offer.equityPercentage}%` : ""}` +
+        `; start ${offer.startDate.toISOString().slice(0, 10)}; benefits: ${offer.benefits.join(", ") || "-"}`,
+      benchmark.enoughData
+        ? `MARKET (yearly ${offer.salaryCurrency}, ${benchmark.samples} postings): p25 ${benchmark.p25}, median ${benchmark.p50}, p75 ${benchmark.p75}`
+        : `MARKET: not enough postings in ${offer.salaryCurrency} for this role (${benchmark.samples}); rely on the offer and background.`,
+      `CANDIDATE:\n${candidate.text || "No profile details."}`,
+    ].join("\n\n")
+    const { value, charged } = await this.chargedRun(
+      userId,
+      "negotiationAdviceCost",
+      offer.id,
+      `Negotiation advice: ${offer.jobTitle}`,
+      () =>
+        this.ai.structured<any>(NEGOTIATION_PROMPT, prompt, negotiationSchema, "negotiation_advice")
+    )
+    return { offerId, benchmark, advice: value.result, charged }
   }
 }

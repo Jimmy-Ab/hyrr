@@ -665,6 +665,27 @@ export interface MockInterview {
   charged?: number
 }
 
+export interface SalaryBenchmark {
+  title: string
+  currency: string
+  samples: number
+  enoughData: boolean
+  p25: number | null
+  p50: number | null
+  p75: number | null
+}
+
+export interface NegotiationAdvice {
+  benchmark: SalaryBenchmark
+  advice: {
+    assessment: string
+    counterOffer: { baseSalary: number; rationale: string }
+    talkingPoints: string[]
+    emailDraft: string
+  }
+  charged: number
+}
+
 export type ExternalStage = "BOOKMARKED" | "APPLIED" | "INTERVIEWING" | "OFFER" | "REJECTED"
 
 /** A job the seeker tracks outside Hyrr. */
@@ -1242,6 +1263,9 @@ export interface JobState {
   /** Runs (or reopens) CV tailoring; charges resumeTailorCost unless saved, refunded if AI fails. */
   tailorCv: (jobId: string, rerun?: boolean) => Promise<CvTailoring>
 
+  fetchSalaryBenchmark: (title: string, currency: string) => Promise<SalaryBenchmark>
+  /** Charges negotiationAdviceCost (refunded if the AI fails). */
+  getNegotiationAdvice: (offerId: string) => Promise<NegotiationAdvice>
   fetchMockInterviews: () => Promise<MockInterview[]>
   /** Charges mockInterviewCost (refunded if question generation fails). */
   startMockInterview: (jobId: string) => Promise<MockInterview>

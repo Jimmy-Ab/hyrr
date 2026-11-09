@@ -14,6 +14,8 @@ export type TrackerSlice = Pick<
   | "applyWebJob"
   | "fetchCvTailoring"
   | "tailorCv"
+  | "fetchSalaryBenchmark"
+  | "getNegotiationAdvice"
   | "fetchMockInterviews"
   | "startMockInterview"
   | "answerMockQuestion"
@@ -61,6 +63,17 @@ export const createTrackerSlice: StateCreator<JobState, [], [], TrackerSlice> = 
       void get()
         .fetchWallet()
         .catch(() => undefined)
+    return res
+  },
+
+  fetchSalaryBenchmark: (title, currency) =>
+    apiFetch(`/seeker-ai/salary-benchmark?${new URLSearchParams({ title, currency }).toString()}`),
+
+  getNegotiationAdvice: async (offerId) => {
+    const res = await apiFetch(`/seeker-ai/offers/${offerId}/negotiation`, { method: "POST" })
+    void get()
+      .fetchWallet()
+      .catch(() => undefined)
     return res
   },
 
