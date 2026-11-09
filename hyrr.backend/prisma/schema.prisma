@@ -189,6 +189,7 @@ model Company {
   invites      CompanyInvite[]
   joinRequests CompanyJoinRequest[]
   blockedBy    CompanyBlock[]
+  stats        CompanyStats?
   jobs        Job[]
   wallet       CreditWallet?
   transactions CreditTransaction[]
@@ -843,6 +844,19 @@ model SkillAssessment {
   submittedAt DateTime?
   validUntil  DateTime?
   @@index([userId, skill])
+}
+
+/// Nightly responsiveness stats (last 30 days) behind the "Fast Responder" badge.
+model CompanyStats {
+  companyId                String   @id
+  company                  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  applications30d          Int      @default(0)
+  medianFirstResponseHours Float?
+  reviewRate30d            Float?
+  ghostRate30d             Float?
+  fastResponder            Boolean  @default(false)
+  computedAt               DateTime @default(now())
+  @@index([fastResponder])
 }
 
 model ScreeningQuestion {

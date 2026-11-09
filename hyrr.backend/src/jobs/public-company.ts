@@ -15,4 +15,5 @@ export const PUBLIC_COMPANY_SELECT = {
   description: true,
   industry: true,
   verified: true,
+  stats: { select: { fastResponder: true } },
 } satisfies Prisma.CompanySelect

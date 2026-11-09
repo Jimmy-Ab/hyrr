@@ -258,6 +258,8 @@ export interface PublicJob {
   company: string
   companyColor: "purple" | "blue" | "green" | "orange"
   companyVerified: boolean
+  /** Company answers applicants quickly (nightly responsiveness stats). */
+  companyFastResponder?: boolean
   location: string
   type: JobType
   salary: string

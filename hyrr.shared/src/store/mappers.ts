@@ -245,6 +245,7 @@ export function mapPublicJob(pj: any): PublicJob {
     company: pj.company?.name || "Company",
     companyColor: pj.company?.color || "purple",
     companyVerified: pj.company?.verified === true,
+    companyFastResponder: pj.company?.stats?.fastResponder === true,
     location: pj.location || "",
     type: employmentTypeLabel(pj.type),
     salary: pj.salary || "Competitive",

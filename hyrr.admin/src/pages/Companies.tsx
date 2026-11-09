@@ -40,7 +40,7 @@ import { useNav } from "../lib/nav"
 import { companyStatusTone, paymentStatusTone, userStatusTone } from "../lib/tones"
 import type { AdminCompany, AdminCompanyDetail, CompanyStatus } from "../lib/types"
 
-type StatusFilter = "ALL" | CompanyStatus
+type StatusFilter = "ALL" | CompanyStatus | "GHOSTING"
 
 export function Companies() {
   const focus = useNav((s) => s.focus)
@@ -50,7 +50,8 @@ export function Companies() {
   const [openId, setOpenId] = React.useState<string | null>(null)
   const list = useCursorList<AdminCompany>("/companies", {
     q,
-    status: status === "ALL" ? undefined : status,
+    status: status === "ALL" || status === "GHOSTING" ? undefined : status,
+    ghosting: status === "GHOSTING" ? "true" : undefined,
   })
 
   React.useEffect(() => {
@@ -89,6 +90,7 @@ export function Companies() {
           { value: "VERIFIED", label: "Verified", tone: "emerald" },
           { value: "PENDING", label: "Pending", tone: "amber" },
           { value: "SUSPENDED", label: "Suspended", tone: "rose" },
+          { value: "GHOSTING", label: "Ghosting applicants", tone: "rose" },
         ]}
       />
 
@@ -246,6 +248,37 @@ function CompanySheet({ companyId, onClose }: { companyId: string | null; onClos
                 ],
               ]}
             />
+          </SheetSection>
+
+          <SheetSection title="Responsiveness (30 days)">
+            {c.stats && c.stats.applications30d > 0 ? (
+              <KeyValues
+                rows={[
+                  ["Applications", num(c.stats.applications30d)],
+                  [
+                    "Median first response",
+                    c.stats.medianFirstResponseHours == null
+                      ? "No responses yet"
+                      : `${Math.round(c.stats.medianFirstResponseHours)} h`,
+                  ],
+                  [
+                    "Reviewed",
+                    c.stats.reviewRate30d == null
+                      ? "—"
+                      : `${Math.round(c.stats.reviewRate30d * 100)}%`,
+                  ],
+                  [
+                    "Ghosted (21+ days, untouched)",
+                    c.stats.ghostRate30d == null
+                      ? "—"
+                      : `${Math.round(c.stats.ghostRate30d * 100)}%`,
+                  ],
+                  ["Fast Responder badge", c.stats.fastResponder ? "Yes" : "No"],
+                ]}
+              />
+            ) : (
+              <p className="text-[13px] text-txt-caption">No applications in the last 30 days.</p>
+            )}
           </SheetSection>
 
           <SheetSection title="Wallet">

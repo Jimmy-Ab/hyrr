@@ -200,6 +200,14 @@ export type AdminCompany = {
   liveJobs: number
   balance: number
   plan: string | null
+  /** Nightly responsiveness stats (null until the first run). */
+  stats?: {
+    fastResponder: boolean
+    medianFirstResponseHours: number | null
+    reviewRate30d: number | null
+    ghostRate30d: number | null
+    applications30d: number
+  } | null
 }
 
 export type LedgerRow = {

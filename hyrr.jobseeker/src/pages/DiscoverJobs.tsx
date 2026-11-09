@@ -754,6 +754,14 @@ function DiscoverHyrr() {
                       <p className="text-[13px] text-txt-body mt-0.5 flex items-center gap-1 min-w-0">
                         <span className="truncate">{job.company}</span>
                         {job.companyVerified && <VerifiedBadge focusable={false} />}
+                        {job.companyFastResponder && (
+                          <span
+                            title="This company usually replies to applicants within 2 days"
+                            className="shrink-0 text-[11px] font-semibold text-sec-green"
+                          >
+                            ⚡ Fast responder
+                          </span>
+                        )}
                       </p>
                       <div className="flex items-center gap-2 mt-2 flex-wrap">
                         <span className="text-[12px] text-txt-caption flex items-center gap-0.5">

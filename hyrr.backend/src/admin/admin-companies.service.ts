@@ -22,12 +22,21 @@ const COMPANY_LIST_SELECT = {
   plan: true,
   wallet: { select: { balance: true } },
   subscription: { select: { plan: true } },
+  stats: {
+    select: {
+      fastResponder: true,
+      medianFirstResponseHours: true,
+      reviewRate30d: true,
+      ghostRate30d: true,
+      applications30d: true,
+    },
+  },
   _count: { select: { teamMembers: true, jobs: true } },
 } satisfies Prisma.CompanySelect
 
 type CompanyRow = Prisma.CompanyGetPayload<{ select: typeof COMPANY_LIST_SELECT }>
 
-export type CompanyFilters = { q?: string; status?: CompanyStatus }
+export type CompanyFilters = { q?: string; status?: CompanyStatus; ghosting?: boolean }
 
 /** Admin company management: verify badge, suspension, credit adjustments. */
 @Injectable()
@@ -108,6 +117,7 @@ export class AdminCompaniesService {
     const where: Prisma.CompanyWhereInput = {}
     if (filters.status) where.status = filters.status
     if (filters.q) where.name = { contains: filters.q, mode: "insensitive" }
+    if (filters.ghosting) where.stats = { ghostRate30d: { gt: 0.8 }, applications30d: { gte: 10 } }
     const rows = await this.prisma.company.findMany({
       where,
       select: COMPANY_LIST_SELECT,

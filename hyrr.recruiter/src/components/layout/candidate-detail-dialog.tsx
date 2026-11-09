@@ -38,6 +38,7 @@ import { CandidateNotes } from "../candidate/candidate-notes"
 import { CandidateTimeline } from "../candidate/candidate-timeline"
 import { InterviewSlotsOffer } from "./interview-slots-offer"
 import { OfferPanel } from "./offer-panel"
+import { RejectKindly } from "./reject-kindly"
 import { ScorecardsPanel } from "./scorecards-panel"
 
 type CandidateTab = "details" | "notes" | "timeline" | "ai" | "schedule" | "scorecards" | "offer"
@@ -476,6 +477,12 @@ export function CandidateDetailDialog() {
         </div>
 
         <DialogFooter className="p-4 border-t border-bg-border/40 shrink-0 bg-bg-primary/20">
+          {candidate.source === "DIRECT" && (
+            <RejectKindly
+              candidate={candidate}
+              jobTitle={jobs.find((j) => j.id === candidate.jobId)?.title ?? candidate.title ?? ""}
+            />
+          )}
           <Button
             type="button"
             variant="ghost"

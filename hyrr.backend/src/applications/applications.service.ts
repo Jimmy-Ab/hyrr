@@ -377,6 +377,15 @@ export class ApplicationsService implements OnModuleInit {
         NotificationType.APPLICATION,
         NotificationAction.APPLICATIONS
       )
+      // Acknowledgement for the applicant (in-app + e-mail per their preferences).
+      if (isNew && actorId && actorId !== job.recruiterId)
+        await this.notificationsService.createNotification(
+          actorId,
+          `✓ Your application for ${job.title} was sent. We'll let you know as soon as the team responds.`,
+          NotificationType.APPLICATION,
+          NotificationAction.APPLICATIONS,
+          applicationId
+        )
     } catch (err: any) {
       // The application itself is committed; side effects must not fail the request.
       this.logger.warn(`Post-apply side effects failed for ${applicationId}: ${err?.message}`)

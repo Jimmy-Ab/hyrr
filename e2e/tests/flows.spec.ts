@@ -1110,3 +1110,46 @@ test("scam signals: a risky posting goes to moderation instead of going live", a
   const items: any[] = Array.isArray(publicJobs) ? publicJobs : (publicJobs.items ?? [])
   expect(items.some((j) => j.id === job.id)).toBe(false)
 })
+
+test("reject kindly: the candidate gets a respectful message and is archived", async ({ page }) => {
+  const rec = await createUser("RECRUITER", "Mahlet")
+  const seeker = await createUser("SEEKER", "Bereket")
+  const job = await api(
+    "POST",
+    "/jobs",
+    {
+      title: `E2E Kind Reject ${uid()}`,
+      location: "Remote",
+      type: "FULL_TIME",
+      description: "<p>We reply to every applicant, always with respect.</p>",
+      requirements: ["Go"],
+      skills: ["Go"],
+      categoryId: await firstCategoryId(),
+    },
+    rec.token
+  )
+  const app = await api(
+    "POST",
+    `/applications/jobs/${job.id}/apply`,
+    { name: "Bereket", email: seeker.email, title: "Dev", location: "Remote" },
+    seeker.token
+  )
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await login(page, RECRUITER_URL, rec.email)
+  await page.goto(`${RECRUITER_URL}/applications`)
+  await page
+    .getByRole("button", { name: /^list$/i })
+    .first()
+    .click()
+  await page.getByText("Bereket", { exact: true }).first().click()
+  await page.getByRole("button", { name: "Reject kindly" }).click()
+  await expect(page.locator("#reject-message")).toHaveValue(/Thank you for applying/)
+  await page.getByRole("button", { name: "Send and archive" }).click()
+  await expect(page.getByText("Candidate informed").first()).toBeVisible({ timeout: 10_000 })
+
+  const mine = await api<any[]>("GET", "/applications/my", undefined, seeker.token)
+  expect(mine.find((a) => a.id === app.id)?.status).toBe("ARCHIVED")
+  const notes = await api<any>("GET", "/notifications", undefined, seeker.token)
+  const list: any[] = Array.isArray(notes) ? notes : (notes.items ?? [])
+  expect(list.some((n) => /application for .* was sent/i.test(n.title))).toBe(true)
+})

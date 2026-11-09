@@ -151,7 +151,11 @@ export class AdminController {
   // ─── Companies ───────────────────────────────────────────────────
   @Get("companies")
   companiesList(@Query() q: CompaniesQueryDto) {
-    return this.companies.list({ q: q.q || undefined, status: q.status }, q.cursor, q.limit)
+    return this.companies.list(
+      { q: q.q || undefined, status: q.status, ghosting: q.ghosting === "true" },
+      q.cursor,
+      q.limit
+    )
   }
 
   @Get("companies/:id")

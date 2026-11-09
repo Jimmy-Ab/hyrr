@@ -92,6 +92,11 @@ export class CompaniesQueryDto extends PageQueryDto {
   @IsOptional()
   @IsIn(Object.values(CompanyStatus), { message: "Status must be VERIFIED, PENDING or SUSPENDED" })
   status?: CompanyStatus
+
+  /** "true": companies ignoring most applicants (ghost rate > 80%, 10+ applications). */
+  @IsOptional()
+  @IsIn(["true", "false"])
+  ghosting?: string
 }
 
 export class PaymentsQueryDto extends PageQueryDto {
