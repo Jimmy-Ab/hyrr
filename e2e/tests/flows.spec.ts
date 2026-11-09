@@ -3,6 +3,7 @@ import {
   api,
   companyBalance,
   createUser,
+  createWebJob,
   detachFromCompany,
   disconnect,
   firstCategoryId,
@@ -14,6 +15,7 @@ import {
   setInviteToken,
   setSeekerProfile,
   setUserStatus,
+  trackedJobs,
   uid,
   userWithCompany,
   verifyEmail,
@@ -942,4 +944,42 @@ test("external tracker: a seeker tracks a job from elsewhere and moves its stage
   const rows = await api<any[]>("GET", "/external-applications", undefined, seeker.token)
   expect(rows).toHaveLength(1)
   expect(rows[0]).toMatchObject({ company: "Stripe", stage: "INTERVIEWING" })
+})
+
+test("jobs from the web: apply charges once, opens the posting and auto-tracks it", async ({
+  page,
+  context,
+}) => {
+  const seeker = await createUser("SEEKER", "Leul")
+  const title = `E2E Web Job ${uid()}`
+  const postingUrl = `${SEEKER_URL}/terms?posting=${uid()}`
+  await createWebJob(title, postingUrl)
+  const before = await seekerBalance(seeker.email)
+
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await login(page, SEEKER_URL, seeker.email)
+  await page.goto(`${SEEKER_URL}/discover`)
+  await page.getByRole("button", { name: "From the web" }).click()
+  await page.locator("#web-q").fill(title)
+  await page.getByRole("button", { name: "Search", exact: true }).click()
+  await page.getByText(title, { exact: true }).first().click()
+  await expect(page.getByText(/Listing provided by/)).toBeVisible()
+
+  const [posting] = await Promise.all([
+    context.waitForEvent("page"),
+    page.getByRole("button", { name: /^Apply on localhost · 1 credit$/ }).click(),
+  ])
+  await expect.poll(() => posting.url()).toContain("/terms?posting=")
+  await expect(page.getByText("Opened the application").first()).toBeVisible()
+  expect(await seekerBalance(seeker.email)).toBe(before - 1)
+  const tracked = await trackedJobs(seeker.email)
+  expect(tracked.map((t) => [t.title, t.stage])).toEqual([[title, "APPLIED"]])
+
+  // Reopening is free.
+  const [again] = await Promise.all([
+    context.waitForEvent("page"),
+    page.getByRole("button", { name: /^Open on localhost$/ }).click(),
+  ])
+  await expect.poll(() => again.url()).toContain("/terms?posting=")
+  expect(await seekerBalance(seeker.email)).toBe(before - 1)
 })

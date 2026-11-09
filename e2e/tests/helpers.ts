@@ -135,3 +135,25 @@ export async function companyBalance(email: string) {
   })
   return wallet.balance
 }
+
+export async function createWebJob(title: string, url: string) {
+  return prisma.externalJob.create({
+    data: {
+      source: "REMOTIVE",
+      sourceId: `e2e-${Date.now()}-${Math.random()}`,
+      title,
+      company: "Globex",
+      location: "Remote",
+      remote: true,
+      description: "Build delightful things for a global team.",
+      url,
+      postedAt: new Date(),
+      expiresAt: new Date(Date.now() + 7 * 86_400_000),
+    },
+  })
+}
+
+export async function trackedJobs(email: string) {
+  const user = await prisma.user.findUniqueOrThrow({ where: { email } })
+  return prisma.externalApplication.findMany({ where: { userId: user.id } })
+}

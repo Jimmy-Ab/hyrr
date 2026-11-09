@@ -152,6 +152,7 @@ model User {
   offersCreated      Offer[]              @relation("OfferCreator")
   companyBlocks      CompanyBlock[]
   externalApplications ExternalApplication[]
+  externalJobApplies ExternalJobApply[]
   joinRequests       CompanyJoinRequest[] @relation("JoinRequester")
   joinDecisions      CompanyJoinRequest[] @relation("JoinDecider")
   conversationStates ConversationState[]
@@ -716,9 +717,58 @@ model ExternalApplication {
   stage     ExternalStage @default(APPLIED)
   notes     String?       @db.Text
   appliedAt DateTime?
+  /// Set when the seeker applied to a job from the web through Hyrr (auto-tracked)
+  externalJobId String?
+  externalJob   ExternalJob? @relation(fields: [externalJobId], references: [id], onDelete: SetNull)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
   @@index([userId, stage])
+}
+
+enum ExternalJobSource {
+  ADZUNA
+  JOOBLE
+  REMOTIVE
+  ARBEITNOW
+}
+
+/// Job aggregated from a licensed job API; applying opens the original posting.
+model ExternalJob {
+  id             String            @id @default(uuid())
+  source         ExternalJobSource
+  sourceId       String
+  title          String
+  company        String
+  location       String?
+  remote         Boolean           @default(false)
+  description    String?           @db.Text
+  url            String
+  salaryMin      Int?
+  salaryMax      Int?
+  salaryCurrency String?
+  employmentType String?
+  category       String?
+  postedAt       DateTime?
+  fetchedAt      DateTime          @default(now())
+  /// Hidden after this (refreshed on every sync while the source still lists it)
+  expiresAt      DateTime
+  active         Boolean           @default(true)
+  applies        ExternalJobApply[]
+  tracked        ExternalApplication[]
+  @@unique([source, sourceId])
+  @@index([active, postedAt])
+}
+
+/// A seeker paid to open an external job (once per job; reopening is free).
+model ExternalJobApply {
+  id            String      @id @default(uuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  externalJobId String
+  externalJob   ExternalJob @relation(fields: [externalJobId], references: [id], onDelete: Cascade)
+  credits       Int
+  createdAt     DateTime    @default(now())
+  @@unique([userId, externalJobId])
 }
 
 model ScreeningQuestion {
@@ -894,6 +944,7 @@ enum CreditTransactionType {
   AI_ANALYSIS
   APPLICATION
   OUTREACH
+  EXTERNAL_APPLY
   REFUND
   ADJUSTMENT
 }

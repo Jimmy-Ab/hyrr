@@ -18,6 +18,7 @@ import type { Response } from "express"
 import { AiService } from "../ai/ai.service"
 import { UpdateAiSettingsDto } from "../ai/dtos/ai.dto"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
+import { ExternalJobsService } from "../external-jobs/external-jobs.service"
 import { AdminCompaniesService } from "./admin-companies.service"
 import { AdminCtx, AdminModerationService } from "./admin-moderation.service"
 import { AdminMoneyService } from "./admin-money.service"
@@ -62,7 +63,8 @@ export class AdminController {
     private readonly money: AdminMoneyService,
     private readonly system: AdminSystemService,
     private readonly audit: AuditService,
-    private readonly ai: AiService
+    private readonly ai: AiService,
+    private readonly externalJobs: ExternalJobsService
   ) {}
 
   // ─── Dashboard & analytics ───────────────────────────────────────
@@ -262,6 +264,30 @@ export class AdminController {
       severity: "warning",
     })
     return this.ai.getSettingsView()
+  }
+
+  @Get("external-jobs")
+  @ApiOperation({ summary: "Jobs from the web: providers configured, active count, last sync" })
+  externalJobsStatus() {
+    return this.externalJobs.status()
+  }
+
+  @Post("external-jobs/sync")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Fetch jobs from the configured licensed APIs now (audited)" })
+  async syncExternalJobs(@Req() req: any) {
+    const report = await this.externalJobs.sync()
+    const ctx = ctxOf(req)
+    await this.audit.record({
+      actorId: ctx.actorId,
+      action: "external_jobs.sync",
+      target: "external-jobs",
+      details: "Synced jobs from the web",
+      meta: { report },
+      ip: ctx.ip,
+      severity: "info",
+    })
+    return report
   }
 
   @Get("system")

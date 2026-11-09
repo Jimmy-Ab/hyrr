@@ -1,6 +1,13 @@
 import { isRedisConfigured } from "../core/redis/redis-options"
 
-export const QUEUE_NAMES = ["email", "ai-scoring", "alerts", "maintenance", "search"] as const
+export const QUEUE_NAMES = [
+  "email",
+  "ai-scoring",
+  "alerts",
+  "maintenance",
+  "search",
+  "external-jobs",
+] as const
 export type QueueName = (typeof QUEUE_NAMES)[number]
 
 export type JobOpts = {
@@ -21,7 +28,12 @@ export type QueueStatus = {
 
 export type JobHandler<T = any> = (data: T) => Promise<unknown>
 
-export type ResolvedJobOpts = { attempts: number; backoffMs: number; delayMs: number; jobId?: string }
+export type ResolvedJobOpts = {
+  attempts: number
+  backoffMs: number
+  delayMs: number
+  jobId?: string
+}
 
 export const DEFAULT_ATTEMPTS = 3
 export const DEFAULT_BACKOFF_MS = 5000
@@ -29,7 +41,11 @@ export const DEFAULT_BACKOFF_MS = 5000
 export const REMOVE_ON_COMPLETE = 1000
 export const REMOVE_ON_FAIL = 5000
 /** Repeatable (cron) runs are not retried: the next tick runs again. */
-export const REPEAT_OPTS: ResolvedJobOpts = { attempts: 1, backoffMs: DEFAULT_BACKOFF_MS, delayMs: 0 }
+export const REPEAT_OPTS: ResolvedJobOpts = {
+  attempts: 1,
+  backoffMs: DEFAULT_BACKOFF_MS,
+  delayMs: 0,
+}
 
 export function resolveOpts(opts: JobOpts = {}): ResolvedJobOpts {
   const attempts = Math.max(1, Math.floor(Number(opts.attempts ?? DEFAULT_ATTEMPTS)) || 1)

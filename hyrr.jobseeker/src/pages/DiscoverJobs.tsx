@@ -17,6 +17,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
   EmptyState,
+  FilterChips,
   Input,
   JOB_REPORT_REASONS,
   JOB_TYPES,
@@ -59,6 +60,7 @@ import {
   Zap,
 } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { WebJobs } from "../components/web-jobs"
 
 const colorBg: Record<string, string> = {
   purple: "bg-primary text-white",
@@ -124,7 +126,7 @@ function JobSkeleton() {
   )
 }
 
-export function DiscoverJobs() {
+function DiscoverHyrr() {
   const {
     publicJobs,
     publicJobsLoading,
@@ -1318,6 +1320,27 @@ export function DiscoverJobs() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+/** Discover: Hyrr jobs, or jobs from the web (licensed job APIs). */
+export function DiscoverJobs() {
+  const [source, setSource] = useState<"hyrr" | "web">("hyrr")
+  return (
+    <div className="flex flex-col gap-4">
+      <FilterChips
+        id="discover-source"
+        label="Job source"
+        value={source}
+        onChange={setSource}
+        className="self-start"
+        options={[
+          { value: "hyrr", label: "Hyrr jobs" },
+          { value: "web", label: "From the web", tone: "teal" },
+        ]}
+      />
+      {source === "hyrr" ? <DiscoverHyrr /> : <WebJobs />}
     </div>
   )
 }

@@ -369,6 +369,12 @@ const PRICING_FIELDS: {
     hint: "Recruiter credits to contact a seeker from talent search",
     suffix: "credits",
   },
+  {
+    key: "externalApplyCost",
+    label: "External apply cost",
+    hint: "Seeker credits to open a job from the web (once per job)",
+    suffix: "credits",
+  },
   { key: "signupBonus", label: "Recruiter signup bonus", hint: "New companies", suffix: "credits" },
   {
     key: "seekerSignupBonus",
@@ -411,6 +417,7 @@ function Pricing() {
     signupBonus: toNum(values.signupBonus ?? ""),
     applyCost: toNum(values.applyCost ?? ""),
     outreachCost: toNum(values.outreachCost ?? ""),
+    externalApplyCost: toNum(values.externalApplyCost ?? ""),
     seekerSignupBonus: toNum(values.seekerSignupBonus ?? ""),
   }
   const dirty = !!data && PRICING_FIELDS.some((f) => String(getPath(data, f.key)) !== values[f.key])

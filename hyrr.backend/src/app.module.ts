@@ -26,6 +26,7 @@ import { TeamModule } from "./team/team.module"
 import { ScorecardsModule } from "./scorecards/scorecards.module"
 import { OffersModule } from "./offers/offers.module"
 import { TalentSearchModule } from "./talent-search/talent-search.module"
+import { ExternalJobsModule } from "./external-jobs/external-jobs.module"
 
 import { CoreModule } from "./core/core.module"
 import { SecurityModule } from "./core/security/security.module"
@@ -71,6 +72,7 @@ import { UploadsModule } from "./uploads/uploads.module"
     ScorecardsModule,
     OffersModule,
     TalentSearchModule,
+    ExternalJobsModule,
     AdminModule,
   ],
 })

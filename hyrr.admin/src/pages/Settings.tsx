@@ -34,7 +34,7 @@ import {
 } from "lucide-react"
 import * as React from "react"
 import { ErrorBlock } from "../components/ui/common"
-import { useAdminAction, useAdminQuery } from "../lib/api"
+import { api, useAdminAction, useAdminQuery } from "../lib/api"
 import { humanize } from "../lib/format"
 import { aiSettingsSchema } from "../lib/schemas"
 import type { AiSettings, SystemStatus } from "../lib/types"
@@ -55,6 +55,7 @@ export function Settings() {
         <AiCard />
         <SystemCard />
       </div>
+      <WebJobsCard />
     </div>
   )
 }
@@ -377,6 +378,93 @@ function SystemCard() {
             ok={data.sentry}
           />
         </ul>
+      )}
+    </Card>
+  )
+}
+
+type WebJobsStatus = {
+  enabled: boolean
+  providers: { source: string; configured: boolean }[]
+  active: number
+  bySource: Record<string, number>
+  lastSync: {
+    at: string
+    report: Record<string, { fetched: number; saved: number; skipped: number; error?: string }>
+  } | null
+}
+
+const SOURCE_NAME: Record<string, string> = {
+  ADZUNA: "Adzuna (ADZUNA_APP_ID + ADZUNA_APP_KEY)",
+  JOOBLE: "Jooble (JOOBLE_API_KEY)",
+  REMOTIVE: "Remotive (free, REMOTIVE_ENABLED)",
+  ARBEITNOW: "Arbeitnow (free, ARBEITNOW_ENABLED)",
+}
+
+/** Jobs from the web: which licensed APIs are configured, how many postings are live, sync now. */
+function WebJobsCard() {
+  const { data, error, refetch } = useAdminQuery<WebJobsStatus>("/external-jobs")
+  const sync = useAdminAction(() => api.post("/external-jobs/sync"))
+  const { toast } = useToast()
+  const run = async () => {
+    try {
+      await sync.run(undefined)
+      toast("Sync finished", "Jobs from the web were refreshed.", "success")
+    } catch (err) {
+      toast("Sync failed", errorMessage(err), "error")
+    }
+  }
+  return (
+    <Card className="p-6">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <IconTile icon={ShieldCheck} tone="teal" />
+          <div>
+            <h2 className="text-[16px] font-semibold text-txt-heading">Jobs from the web</h2>
+            <p className="text-[12.5px] text-txt-caption">
+              Postings from licensed job APIs, shown to seekers in Discover. Scheduled sync every 6
+              hours when EXTERNAL_JOBS_ENABLED=true.
+            </p>
+          </div>
+        </div>
+        <Button size="sm" variant="secondary" onClick={run} disabled={sync.busy}>
+          {sync.busy ? "Syncing…" : "Sync now"}
+        </Button>
+      </div>
+      {error && !data ? (
+        <ErrorBlock error={error} onRetry={() => void refetch()} />
+      ) : !data ? (
+        <Skeleton className="h-24" />
+      ) : (
+        <div className="space-y-3 text-[13px]">
+          <p className="text-txt-body">
+            <TonePill tone={data.enabled ? "emerald" : "slate"}>
+              {data.enabled ? "Scheduled sync on" : "Scheduled sync off"}
+            </TonePill>{" "}
+            {data.active.toLocaleString()} live postings
+            {data.lastSync ? ` · last sync ${new Date(data.lastSync.at).toLocaleString()}` : ""}
+          </p>
+          <ul className="divide-y divide-bg-border/60">
+            {data.providers.map((p) => {
+              const last = data.lastSync?.report[p.source]
+              return (
+                <li
+                  key={p.source}
+                  className="flex flex-wrap items-center justify-between gap-2 py-2"
+                >
+                  <span className="text-txt-heading">{SOURCE_NAME[p.source] ?? p.source}</span>
+                  <span className="flex items-center gap-2 text-txt-caption">
+                    {data.bySource[p.source] ?? 0} live
+                    {last?.error && <TonePill tone="rose">Last sync failed</TonePill>}
+                    <TonePill tone={p.configured ? "emerald" : "slate"}>
+                      {p.configured ? "On" : "Off"}
+                    </TonePill>
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
       )}
     </Card>
   )

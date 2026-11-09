@@ -226,6 +226,7 @@ export class BillingService {
       aiRerunCost: c.aiRerunCost,
       applyCost: c.applyCost,
       outreachCost: c.outreachCost,
+      externalApplyCost: c.externalApplyCost,
     }
   }
 

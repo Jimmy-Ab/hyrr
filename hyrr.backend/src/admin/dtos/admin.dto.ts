@@ -269,6 +269,12 @@ export class PricingDto {
   outreachCost?: number
 
   @IsOptional()
+  @IsInt(costMsg("External apply cost"))
+  @Min(0, costMsg("External apply cost"))
+  @Max(COST_MAX, costMsg("External apply cost"))
+  externalApplyCost?: number
+
+  @IsOptional()
   @IsInt(costMsg("Seeker sign-up bonus"))
   @Min(0, costMsg("Seeker sign-up bonus"))
   @Max(COST_MAX, costMsg("Seeker sign-up bonus"))

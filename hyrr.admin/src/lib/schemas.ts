@@ -36,6 +36,7 @@ export const pricingSchema = z.object({
   signupBonus: cost("Recruiter signup bonus"),
   applyCost: cost("Apply cost"),
   outreachCost: cost("Outreach cost"),
+  externalApplyCost: cost("External apply cost"),
   seekerSignupBonus: cost("Seeker signup bonus"),
 })
 

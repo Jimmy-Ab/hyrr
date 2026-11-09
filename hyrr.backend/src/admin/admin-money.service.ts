@@ -22,6 +22,7 @@ const ENV_KEYS: Partial<Record<keyof MomentumConfig, string>> = {
   signupBonus: "MOMENTUM_SIGNUP_BONUS",
   applyCost: "MOMENTUM_APPLY_COST",
   outreachCost: "MOMENTUM_OUTREACH_COST",
+  externalApplyCost: "MOMENTUM_EXTERNAL_APPLY_COST",
   seekerSignupBonus: "MOMENTUM_SEEKER_SIGNUP_BONUS",
 }
 

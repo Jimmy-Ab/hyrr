@@ -10,6 +10,8 @@ export type TrackerSlice = Pick<
   | "addExternalApplication"
   | "updateExternalApplication"
   | "removeExternalApplication"
+  | "fetchWebJobs"
+  | "applyWebJob"
 >
 
 const map = (e: any): ExternalApplication => ({
@@ -27,6 +29,26 @@ const map = (e: any): ExternalApplication => ({
 /** Seeker's tracker for jobs applied to outside Hyrr (free, private). */
 export const createTrackerSlice: StateCreator<JobState, [], [], TrackerSlice> = (set, get) => ({
   externalApplications: [],
+
+  fetchWebJobs: (q, remote, cursor) => {
+    const params = new URLSearchParams()
+    if (q?.trim()) params.set("q", q.trim())
+    if (remote) params.set("remote", "true")
+    if (cursor) params.set("cursor", cursor)
+    return apiFetch(`/external-jobs?${params.toString()}`)
+  },
+
+  applyWebJob: async (id) => {
+    const res = await apiFetch(`/external-jobs/${id}/apply`, { method: "POST" })
+    // Credits were spent and the job was added to the tracker.
+    void get()
+      .fetchWallet()
+      .catch(() => undefined)
+    void get()
+      .fetchExternalApplications()
+      .catch(() => undefined)
+    return res
+  },
 
   fetchExternalApplications: async () => {
     set({ externalApplications: ((await apiFetch("/external-applications")) || []).map(map) })

@@ -330,6 +330,7 @@ Each app works as follows:
 - **Interview scheduling:** in the candidate panel's "Interview Scheduler" tab, recruiters can offer up to 10 times ("Let … pick a time"). The seeker picks one in the Careers app, which opens the picker live. Both calendars update instantly, and both sides get an e-mail with an `.ics` invite. Candidates without a Hyrr account are scheduled with a fixed time instead.
 - **Offers:** the candidate panel's Offer tab sends formal terms (salary, currency, period, bonus, equity, start date, deadline, benefits). The candidate reviews them in the Careers app and accepts by typing their name; Hyrr records the time and IP address. This is an in-app acceptance, not a qualified e-signature. The hiring team sees the answer live.
 - **Talent search:** seekers who turn on "Open to recruiters" (Settings → Privacy, off by default) can be found in the recruiter app (Candidates → Talent search). Reaching out costs `outreachCost` credits (default 5, set in Admin → Pricing). The seeker answers Interested (free, they become an applicant), Not interested, or blocks the company. Their e-mail, phone and CV stay hidden until they're interested.
+- **Jobs from the web:** Discover → "From the web" lists postings from licensed job APIs. Applying costs `externalApplyCost` credits (default 1, once per job), opens the original posting in a new tab and adds the job to the seeker's tracker on Applications. Set it up in [§7.12](#712-jobs-from-the-web).
 - **Careers (5174):** Discover ("For you" or all jobs), applications, messages, notifications, calendar, documents (CV), job alerts, Momentum (seeker credits), profile, settings.
 - **Live updates (all apps):** new applicants appear on the recruiter board without reloading (optional chime in Recruiter → Settings), teammates see each other's kanban moves, seekers see status changes and removed jobs, and the admin dashboard refreshes itself ("Live" dot) for admins with 2FA. Several API instances need Redis for this ([§7.11](#711-redis)).
 - **Admin (5175):**
@@ -425,6 +426,16 @@ Docker Compose already runs Meilisearch and connects the backend to it. Elsewher
 ### 7.11 Redis
 
 Docker Compose runs Redis for you. For a managed Redis, set `REDIS_HOST`, `REDIS_PORT` and `REDIS_PASSWORD`. Redis is required as soon as you run more than one API instance, because sockets, rate limits and queues are shared through it.
+
+### 7.12 Jobs from the web
+
+Hyrr shows jobs from other sites through **licensed job APIs**, never by scraping. LinkedIn and Indeed forbid scraping and have no open jobs API.
+
+1. **Free, no key (on by default once enabled):** Remotive (remote jobs) and Arbeitnow (Europe). Their terms ask for a link back to the posting, which Hyrr shows on every listing.
+2. **Adzuna** (many countries, salaries): sign up at https://developer.adzuna.com, then set `ADZUNA_APP_ID`, `ADZUNA_APP_KEY` and `ADZUNA_COUNTRIES` (for example `gb,us,za,in`).
+3. **Jooble** (global, including Africa): request a key at https://jooble.org/api/about, then set `JOOBLE_API_KEY` and optionally `JOOBLE_LOCATIONS`.
+4. **Turn it on:** set `EXTERNAL_JOBS_ENABLED=true` and restart the API. The first sync runs shortly after start, then every 6 hours. Admin → Settings → "Jobs from the web" shows each provider and the live count, and has **Sync now**.
+5. **Price:** Admin → Pricing → "External apply cost" (default 1 credit, charged once per job).
 
 ---
 

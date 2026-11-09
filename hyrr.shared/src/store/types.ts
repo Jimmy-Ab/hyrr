@@ -604,6 +604,25 @@ export interface NewInterviewInvite {
   note?: string
 }
 
+/** A job aggregated from a licensed job API (Adzuna, Jooble, Remotive, Arbeitnow). */
+export interface WebJob {
+  id: string
+  source: "ADZUNA" | "JOOBLE" | "REMOTIVE" | "ARBEITNOW"
+  title: string
+  company: string
+  location?: string | null
+  remote: boolean
+  description?: string | null
+  url: string
+  salaryMin?: number | null
+  salaryMax?: number | null
+  salaryCurrency?: string | null
+  employmentType?: string | null
+  category?: string | null
+  postedAt?: string | null
+  applied: boolean
+}
+
 export type ExternalStage = "BOOKMARKED" | "APPLIED" | "INTERVIEWING" | "OFFER" | "REJECTED"
 
 /** A job the seeker tracks outside Hyrr. */
@@ -911,6 +930,7 @@ export interface MomentumPricing {
   /** Seeker side: credits per job application. */
   applyCost: number
   outreachCost?: number
+  externalApplyCost?: number
 }
 
 export type CreditTransactionType =
@@ -1170,6 +1190,15 @@ export interface JobState {
   cancelInterviewInvite: (inviteId: string) => Promise<void>
   /** Socket: insert or replace an invite (and its booked event). */
   upsertInterviewInvite: (invite: any, event?: any) => void
+
+  // ── Jobs from the web (seekers) ─────────────────────────────────────────
+  fetchWebJobs: (
+    q?: string,
+    remote?: boolean,
+    cursor?: string
+  ) => Promise<{ items: WebJob[]; nextCursor: string | null }>
+  /** Charges the external apply cost once; returns the original posting URL. */
+  applyWebJob: (id: string) => Promise<{ url: string; charged: number; alreadyApplied: boolean }>
 
   // ── External job tracker (seekers) ───────────────────────────────────────
   externalApplications: ExternalApplication[]

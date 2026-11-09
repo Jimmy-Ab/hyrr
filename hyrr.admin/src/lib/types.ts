@@ -261,6 +261,7 @@ export type MomentumConfig = {
   signupBonus: number
   applyCost: number
   outreachCost: number
+  externalApplyCost: number
   seekerSignupBonus: number
   source?: Record<string, "defaults" | "env" | "settings">
 }
