@@ -35,6 +35,7 @@ import {
   User,
 } from "lucide-react"
 import { useId, useState } from "react"
+import { ExternalTracker } from "../components/external-tracker"
 import { PendingInterviewInvites } from "../components/interview-invites"
 import { openOfferSheet } from "../components/offer-sheet"
 import { OutreachInvitations } from "../components/outreach"
@@ -445,6 +446,8 @@ export function ApplicationsBoard() {
           />
         ))}
       </div>
+
+      <ExternalTracker />
 
       <ConfirmDialog
         open={!!pending}

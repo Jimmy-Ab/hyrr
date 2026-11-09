@@ -102,6 +102,9 @@ const loadSeeker = async (set: StoreSet, get: StoreGet) => {
       profile,
       loadSettings(set),
       get()
+        .fetchExternalApplications()
+        .catch((e) => console.warn("Failed to load tracked jobs.", e)),
+      get()
         .fetchOffers()
         .catch((e) => console.warn("Failed to load offers.", e)),
       get()

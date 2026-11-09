@@ -604,6 +604,26 @@ export interface NewInterviewInvite {
   note?: string
 }
 
+export type ExternalStage = "BOOKMARKED" | "APPLIED" | "INTERVIEWING" | "OFFER" | "REJECTED"
+
+/** A job the seeker tracks outside Hyrr. */
+export interface ExternalApplication {
+  id: string
+  company: string
+  title: string
+  url?: string
+  location?: string
+  stage: ExternalStage
+  notes?: string
+  appliedAt?: string
+  updatedAt: string
+}
+
+export type ExternalApplicationInput = Partial<Omit<ExternalApplication, "id" | "updatedAt">> & {
+  company?: string
+  title?: string
+}
+
 export interface TalentCard {
   id: string
   name: string
@@ -1150,6 +1170,15 @@ export interface JobState {
   cancelInterviewInvite: (inviteId: string) => Promise<void>
   /** Socket: insert or replace an invite (and its booked event). */
   upsertInterviewInvite: (invite: any, event?: any) => void
+
+  // ── External job tracker (seekers) ───────────────────────────────────────
+  externalApplications: ExternalApplication[]
+  fetchExternalApplications: () => Promise<void>
+  addExternalApplication: (
+    input: ExternalApplicationInput & { company: string; title: string }
+  ) => Promise<void>
+  updateExternalApplication: (id: string, patch: ExternalApplicationInput) => Promise<void>
+  removeExternalApplication: (id: string) => Promise<void>
 
   // ── Talent search (recruiters) and outreach answers (seekers) ───────────
   searchTalent: (q?: string, location?: string) => Promise<{ total: number; results: TalentCard[] }>

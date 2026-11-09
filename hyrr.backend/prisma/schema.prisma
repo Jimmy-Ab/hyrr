@@ -151,6 +151,7 @@ model User {
   scorecards         Scorecard[]
   offersCreated      Offer[]              @relation("OfferCreator")
   companyBlocks      CompanyBlock[]
+  externalApplications ExternalApplication[]
   joinRequests       CompanyJoinRequest[] @relation("JoinRequester")
   joinDecisions      CompanyJoinRequest[] @relation("JoinDecider")
   conversationStates ConversationState[]
@@ -693,6 +694,31 @@ model CompanyBlock {
   company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   @@unique([userId, companyId])
+}
+
+enum ExternalStage {
+  BOOKMARKED
+  APPLIED
+  INTERVIEWING
+  OFFER
+  REJECTED
+}
+
+/// A job the seeker tracks outside Hyrr (LinkedIn, company sites…), shown next to Hyrr applications.
+model ExternalApplication {
+  id        String        @id @default(uuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company   String
+  title     String
+  url       String?
+  location  String?
+  stage     ExternalStage @default(APPLIED)
+  notes     String?       @db.Text
+  appliedAt DateTime?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  @@index([userId, stage])
 }
 
 model ScreeningQuestion {

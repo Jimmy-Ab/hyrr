@@ -920,3 +920,26 @@ test("talent search: an opted-in seeker is found, contacted and says Interested"
   expect(card?.source).toBe("OUTREACH")
   expect(card?.email).toBe(seeker.email)
 })
+
+test("external tracker: a seeker tracks a job from elsewhere and moves its stage", async ({
+  page,
+}) => {
+  const seeker = await createUser("SEEKER", "Ruth")
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await login(page, SEEKER_URL, seeker.email)
+  await page.goto(`${SEEKER_URL}/applications`)
+  await page.getByRole("button", { name: "Track a job" }).click()
+  const dialog = page.getByRole("dialog")
+  await dialog.getByRole("button", { name: "Add job" }).click()
+  await expect(dialog.getByText("Enter the company")).toBeVisible()
+  await dialog.locator("#ext-company").fill("Stripe")
+  await dialog.locator("#ext-title").fill("Payments Engineer")
+  await dialog.locator("#ext-url").fill("https://stripe.com/jobs/123")
+  await dialog.getByRole("button", { name: "Add job" }).click()
+  await expect(page.getByText("Added to your tracker").first()).toBeVisible()
+  await page.getByLabel("Stage for Payments Engineer").selectOption("INTERVIEWING")
+  await expect(page.getByText(/Interviewing · 1/)).toBeVisible()
+  const rows = await api<any[]>("GET", "/external-applications", undefined, seeker.token)
+  expect(rows).toHaveLength(1)
+  expect(rows[0]).toMatchObject({ company: "Stripe", stage: "INTERVIEWING" })
+})

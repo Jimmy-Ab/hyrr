@@ -474,3 +474,20 @@ export const acceptOfferSchema = z.object({
   signatureName: z.string().trim().min(2, "Type your full name to sign").max(120),
   agree: z.literal(true, { message: "Confirm that you accept the terms" }),
 })
+
+// ─── External job tracker ───
+
+export const externalApplicationSchema = z.object({
+  company: z.string().trim().min(1, "Enter the company").max(120),
+  title: z.string().trim().min(1, "Enter the job title").max(160),
+  url: z
+    .string()
+    .trim()
+    .max(500)
+    .refine((v) => !v || /^https?:\/\/\S+\.\S+/i.test(v), {
+      message: "Enter a valid link, e.g. https://…",
+    })
+    .optional(),
+  location: z.string().trim().max(120).optional(),
+  notes: z.string().max(2000, "Notes can be at most 2000 characters").optional(),
+})
