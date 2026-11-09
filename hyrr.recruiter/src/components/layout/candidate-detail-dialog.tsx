@@ -36,6 +36,7 @@ import { AiAnalysisPanel } from "../ai/ai-analysis-panel"
 import { CandidateLabelsEditor } from "../candidate/candidate-labels-editor"
 import { CandidateNotes } from "../candidate/candidate-notes"
 import { CandidateTimeline } from "../candidate/candidate-timeline"
+import { InterviewSlotsOffer } from "./interview-slots-offer"
 
 type CandidateTab = "details" | "notes" | "timeline" | "ai" | "schedule"
 
@@ -382,75 +383,81 @@ export function CandidateDetailDialog() {
           {activeTab === "ai" && <AiAnalysisPanel candidate={candidate} />}
 
           {activeTab === "schedule" && (
-            <form onSubmit={handleScheduleSubmit} className="space-y-4">
-              <div>
-                <label
-                  htmlFor="schedule-title"
-                  className="text-[11px] font-bold text-txt-caption uppercase tracking-wider block mb-1.5"
-                >
-                  Interview Stage / Meeting Title
-                </label>
-                <input
-                  id="schedule-title"
-                  type="text"
-                  placeholder="e.g. Technical Round 1"
-                  value={meetingTitle}
-                  onChange={(e) => setMeetingTitle(e.target.value)}
-                  maxLength={200}
-                  aria-invalid={!!meetingErrors.title || undefined}
-                  className="w-full h-10 px-3.5 rounded-[12px] border border-bg-border bg-bg-secondary text-txt-heading text-[13px] placeholder:text-txt-caption focus:outline-none focus:border-primary/30 transition-all font-medium"
-                />
-                <FieldError id="schedule-title-error" message={meetingErrors.title} />
+            <div className="space-y-6">
+              <InterviewSlotsOffer candidate={candidate} />
+              <div className="border-t border-bg-border/40 pt-4">
+                <h3 className="text-[14px] font-semibold text-txt-heading">Or book a fixed time</h3>
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <form onSubmit={handleScheduleSubmit} className="space-y-4">
                 <div>
                   <label
-                    htmlFor="schedule-date"
+                    htmlFor="schedule-title"
                     className="text-[11px] font-bold text-txt-caption uppercase tracking-wider block mb-1.5"
                   >
-                    Meeting Date
+                    Interview Stage / Meeting Title
                   </label>
                   <input
-                    id="schedule-date"
-                    type="date"
-                    value={meetingDate}
-                    onChange={(e) => setMeetingDate(e.target.value)}
-                    min={new Date().toISOString().slice(0, 10)}
-                    aria-invalid={!!meetingErrors.date || undefined}
-                    className="w-full h-10 px-3.5 rounded-[12px] border border-bg-border bg-bg-secondary text-txt-heading text-[13px] focus:outline-none focus:border-primary/30 transition-all cursor-pointer font-medium"
+                    id="schedule-title"
+                    type="text"
+                    placeholder="e.g. Technical Round 1"
+                    value={meetingTitle}
+                    onChange={(e) => setMeetingTitle(e.target.value)}
+                    maxLength={200}
+                    aria-invalid={!!meetingErrors.title || undefined}
+                    className="w-full h-10 px-3.5 rounded-[12px] border border-bg-border bg-bg-secondary text-txt-heading text-[13px] placeholder:text-txt-caption focus:outline-none focus:border-primary/30 transition-all font-medium"
                   />
-                  <FieldError id="schedule-date-error" message={meetingErrors.date} />
+                  <FieldError id="schedule-title-error" message={meetingErrors.title} />
                 </div>
-                <div>
-                  <label
-                    htmlFor="schedule-time"
-                    className="text-[11px] font-bold text-txt-caption uppercase tracking-wider block mb-1.5"
-                  >
-                    Meeting Time
-                  </label>
-                  <input
-                    id="schedule-time"
-                    type="time"
-                    required
-                    value={meetingTime}
-                    onChange={(e) => setMeetingTime(e.target.value)}
-                    className="w-full h-10 px-3.5 rounded-[12px] border border-bg-border bg-bg-secondary text-txt-heading text-[13px] focus:outline-none focus:border-primary/30 transition-all cursor-pointer font-medium"
-                  />
-                </div>
-              </div>
 
-              <div className="pt-2">
-                <Button
-                  type="submit"
-                  disabled={scheduling}
-                  className="w-full h-10 font-bold cursor-pointer"
-                >
-                  {scheduling ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                  Schedule and Send Invite <Calendar className="w-4 h-4 ml-1.5" />
-                </Button>
-              </div>
-            </form>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label
+                      htmlFor="schedule-date"
+                      className="text-[11px] font-bold text-txt-caption uppercase tracking-wider block mb-1.5"
+                    >
+                      Meeting Date
+                    </label>
+                    <input
+                      id="schedule-date"
+                      type="date"
+                      value={meetingDate}
+                      onChange={(e) => setMeetingDate(e.target.value)}
+                      min={new Date().toISOString().slice(0, 10)}
+                      aria-invalid={!!meetingErrors.date || undefined}
+                      className="w-full h-10 px-3.5 rounded-[12px] border border-bg-border bg-bg-secondary text-txt-heading text-[13px] focus:outline-none focus:border-primary/30 transition-all cursor-pointer font-medium"
+                    />
+                    <FieldError id="schedule-date-error" message={meetingErrors.date} />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="schedule-time"
+                      className="text-[11px] font-bold text-txt-caption uppercase tracking-wider block mb-1.5"
+                    >
+                      Meeting Time
+                    </label>
+                    <input
+                      id="schedule-time"
+                      type="time"
+                      required
+                      value={meetingTime}
+                      onChange={(e) => setMeetingTime(e.target.value)}
+                      className="w-full h-10 px-3.5 rounded-[12px] border border-bg-border bg-bg-secondary text-txt-heading text-[13px] focus:outline-none focus:border-primary/30 transition-all cursor-pointer font-medium"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <Button
+                    type="submit"
+                    disabled={scheduling}
+                    className="w-full h-10 font-bold cursor-pointer"
+                  >
+                    {scheduling ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                    Schedule and Send Invite <Calendar className="w-4 h-4 ml-1.5" />
+                  </Button>
+                </div>
+              </form>
+            </div>
           )}
         </div>
 

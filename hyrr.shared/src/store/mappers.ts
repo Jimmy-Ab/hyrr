@@ -28,6 +28,7 @@ import type {
   ConversationThread,
   CvSuggestions,
   Document,
+  InterviewInvite,
   Job,
   JobAlertItem,
   JobApplication,
@@ -595,6 +596,31 @@ export function mapSeekerProfile(p: any): SeekerProfileData {
       duration: e.duration || "",
       startYear: typeof e.startYear === "number" ? e.startYear : null,
       endYear: typeof e.endYear === "number" ? e.endYear : null,
+    })),
+  }
+}
+
+export function mapInterviewInvite(i: any): InterviewInvite {
+  return {
+    id: i.id,
+    applicationId: i.applicationId,
+    title: i.title,
+    durationMin: i.durationMin,
+    location: i.location ?? undefined,
+    meetingUrl: i.meetingUrl ?? undefined,
+    note: i.note ?? undefined,
+    status: i.status,
+    eventId: i.eventId ?? undefined,
+    createdAt: i.createdAt,
+    jobTitle: i.jobTitle ?? "",
+    companyName: i.companyName ?? undefined,
+    candidateName: i.candidateName ?? "",
+    organizerName: i.organizerName ?? undefined,
+    slots: (i.slots ?? []).map((s: any) => ({
+      id: s.id,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      booked: !!s.booked,
     })),
   }
 }

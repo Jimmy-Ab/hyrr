@@ -101,6 +101,20 @@ function useLiveApplicantToasts() {
   const liveEvent = useJobStore((s) => s.liveEvent)
   const { toast } = useToast()
   React.useEffect(() => {
+    if (liveEvent?.kind === "interview_booked") {
+      toast(
+        "Interview booked",
+        `${liveEvent.who} picked ${new Date(liveEvent.startTime).toLocaleString([], {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })} for ${liveEvent.title}.`,
+        "success"
+      )
+      return
+    }
     if (liveEvent?.kind !== "applicant") return
     toast(
       "New applicant",

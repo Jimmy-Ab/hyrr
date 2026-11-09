@@ -110,6 +110,44 @@ export function initializeSocket(set: StoreSet, get: StoreGet) {
     }))
   })
 
+  socket.on("interview_invite_received", (data: any) => {
+    if (!data?.id) return
+    get().upsertInterviewInvite(data)
+    set({
+      liveEvent: {
+        kind: "interview_invite",
+        id: data.id,
+        jobTitle: data.jobTitle ?? "",
+        companyName: data.companyName ?? undefined,
+        at: Date.now(),
+      },
+    })
+  })
+
+  socket.on("interview_invite_updated", (data: any) => {
+    if (data?.id) get().upsertInterviewInvite(data)
+  })
+
+  socket.on("calendar_event_confirmed", (data: any) => {
+    if (!data?.invite?.id) return
+    const known = get().events.some((e) => e.id === data.event?.id)
+    get().upsertInterviewInvite(data.invite, data.event)
+    if (!known && data.event?.startTime)
+      set({
+        liveEvent: {
+          kind: "interview_booked",
+          id: data.invite.id,
+          title: data.invite.title,
+          who:
+            get().user?.role === "RECRUITER"
+              ? (data.invite.candidateName ?? "The candidate")
+              : (data.invite.companyName ?? "The hiring team"),
+          startTime: data.event.startTime,
+          at: Date.now(),
+        },
+      })
+  })
+
   socket.on("job_moderated", (data: any) => {
     if (!data?.jobId) return
     set((state) => ({

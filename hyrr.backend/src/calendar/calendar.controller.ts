@@ -1,15 +1,62 @@
-import { Body, Controller, Delete, Get, Param, Post, Req, UseGuards } from "@nestjs/common"
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from "@nestjs/common"
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from "@nestjs/swagger"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { CalendarService } from "./calendar.service"
 import { CreateCalendarEventDto } from "./dtos/create-calendar-event.dto"
+import { BookInterviewSlotDto, CreateInterviewInviteDto } from "./dtos/interview-invite.dto"
+import { InterviewInvitesService } from "./interview-invites.service"
+
+const uuid = new ParseUUIDPipe({ version: undefined })
 
 @ApiTags("Calendar")
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller("calendar")
 export class CalendarController {
-  constructor(private readonly calendarService: CalendarService) {}
+  constructor(
+    private readonly calendarService: CalendarService,
+    private readonly invites: InterviewInvitesService
+  ) {}
+
+  // ─── Interview invites (candidate picks a time) ─── declared before :id routes
+  @Get("invites")
+  @ApiOperation({ summary: "Seeker: my interview invites. Recruiter: ?applicationId=" })
+  listInvites(@Req() req: any, @Query("applicationId") applicationId?: string) {
+    return this.invites.list(req.user, applicationId)
+  }
+
+  @Post("invites")
+  @ApiOperation({ summary: "Recruiter offers interview times" })
+  createInvite(@Req() req: any, @Body() dto: CreateInterviewInviteDto) {
+    return this.invites.create(req.user, dto)
+  }
+
+  @Post("invites/:id/book")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Candidate books one of the offered times" })
+  bookInvite(@Req() req: any, @Param("id", uuid) id: string, @Body() dto: BookInterviewSlotDto) {
+    return this.invites.book(req.user, id, dto.slotId)
+  }
+
+  @Post("invites/:id/cancel")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Recruiter withdraws open interview times" })
+  cancelInvite(@Req() req: any, @Param("id", uuid) id: string) {
+    return this.invites.cancel(req.user, id)
+  }
 
   @Get()
   @ApiOperation({ summary: "Get calendar events for the logged-in user (Seeker or Recruiter)" })

@@ -25,6 +25,7 @@ import { Header } from "./components/layout/header"
 import { Sidebar } from "./components/layout/sidebar"
 
 // Pages
+import { InterviewPicker } from "./components/interview-invites"
 import { AlertsPage } from "./pages/Alerts"
 import { ApplicationsBoard } from "./pages/Applications"
 import { CandidateCalendar } from "./pages/CalendarPage"
@@ -141,6 +142,8 @@ function useLiveSeekerToasts() {
         `${liveEvent.title}: ${applicationStatusLabel(liveEvent.status)}`,
         "info"
       )
+    else if (liveEvent?.kind === "interview_booked")
+      toast("Interview confirmed", `${liveEvent.title} is in your calendar.`, "success")
     else if (liveEvent?.kind === "job_removed")
       toast("Job no longer available", `${liveEvent.title} was removed by Hyrr.`, "info")
   }, [liveEvent, toast])
@@ -274,6 +277,7 @@ function AppContent() {
       </div>
 
       {/* Floating AI Assistant bubble */}
+      <InterviewPicker />
       <AiChatWidget role="SEEKER" />
     </div>
   )

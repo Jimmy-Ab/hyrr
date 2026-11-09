@@ -23,6 +23,7 @@ Plan: `~/.claude/plans/floofy-yawning-cascade.md`. Decisions: talent search is *
 - `application_status_updated` goes to the seeker **and** `company_<id>`, carrying `actorId` so the mover's own client ignores the echo.
 - Job removal is `POST /api/admin/moderation/:jobId/remove`; the company gets `job_moderated {jobId, removedAt, removedReason, status}`, applicants get `job_removed {jobId}`.
 - The applicant chime is generated with Web Audio and is **off by default** (Recruiter → Settings → "Sound for new applicants").
+- Slot booking (as built): `POST /api/calendar/invites` (recruiter, 1–10 non-overlapping future times, one open invite per application), `GET /api/calendar/invites` (seeker: own; recruiter: `?applicationId=`), `POST /api/calendar/invites/:id/book {slotId}` (only one booking wins, 409 `SLOT_TAKEN`), `POST /api/calendar/invites/:id/cancel`. Booking creates the calendar event, moves APPLIED/IN_PROCESS to INTERVIEWING and e-mails both sides an .ics. Events: `interview_invite_received`, `interview_invite_updated`, `calendar_event_confirmed`.
 - The event catalogue lives in `hyrr.shared/src/lib/contracts.ts` (`SYNC_SOCKET_EVENTS`); new events are added there as each phase lands.
 
 ---

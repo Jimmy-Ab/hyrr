@@ -35,6 +35,7 @@ import {
   User,
 } from "lucide-react"
 import { useId, useState } from "react"
+import { PendingInterviewInvites } from "../components/interview-invites"
 
 // ─── Stage timeline ───────────────────────────────────────────────────────────
 function ApplicationTimeline({ applicationId }: { applicationId: string }) {
@@ -389,6 +390,8 @@ export function ApplicationsBoard() {
         title="My Applications"
         subtitle="Track every application from saved to offer."
       />
+
+      <PendingInterviewInvites />
 
       {/* Stats strip */}
       <div className="stagger grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4">

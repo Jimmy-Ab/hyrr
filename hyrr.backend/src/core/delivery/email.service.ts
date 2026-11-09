@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit, Optional } from "@nestjs/common"
-import * as nodemailer from "nodemailer"
 import type { Transporter } from "nodemailer"
+import * as nodemailer from "nodemailer"
 import { QueueService } from "../../queue/queue.service"
 
 export type EmailMessage = {
@@ -9,6 +9,7 @@ export type EmailMessage = {
   html: string
   text: string
   replyTo?: string
+  attachments?: { filename: string; content: string; contentType: string }[]
 }
 
 const DEFAULT_FROM = "Hyrr <no-reply@hyrr.local>"
@@ -94,6 +95,7 @@ export class EmailService implements OnModuleInit {
       html: message.html,
       text: message.text,
       ...(message.replyTo ? { replyTo: oneLine(message.replyTo) } : {}),
+      ...(message.attachments?.length ? { attachments: message.attachments } : {}),
     })
     return { delivered: true }
   }

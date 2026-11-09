@@ -528,6 +528,15 @@ export type LiveEvent =
   | { kind: "applicant"; id: string; name: string; jobTitle: string; at: number }
   | { kind: "status"; id: string; status: ApplicationStatusCode; title: string; at: number }
   | { kind: "job_removed"; jobId: string; title: string; at: number }
+  | { kind: "interview_invite"; id: string; jobTitle: string; companyName?: string; at: number }
+  | {
+      kind: "interview_booked"
+      id: string
+      title: string
+      who: string
+      startTime: string
+      at: number
+    }
 
 export interface CalendarEvent {
   id: string
@@ -544,6 +553,43 @@ export interface CalendarEvent {
   jobTitle?: string
   /** Recruiter who scheduled it, when it wasn't created by the viewer (seeker calendar). */
   organizerName?: string
+}
+
+export interface InterviewSlot {
+  id: string
+  startTime: string
+  endTime: string
+  booked: boolean
+}
+
+export interface InterviewInvite {
+  id: string
+  applicationId: string
+  title: string
+  durationMin: number
+  location?: string
+  meetingUrl?: string
+  note?: string
+  /** EXPIRED = still open but every offered time has passed. */
+  status: "OPEN" | "BOOKED" | "CANCELED" | "EXPIRED"
+  eventId?: string
+  createdAt: string
+  jobTitle: string
+  companyName?: string
+  candidateName: string
+  organizerName?: string
+  slots: InterviewSlot[]
+}
+
+export interface NewInterviewInvite {
+  applicationId: string
+  title: string
+  durationMin: number
+  /** ISO start times */
+  slots: string[]
+  location?: string
+  meetingUrl?: string
+  note?: string
 }
 
 export interface Document {
@@ -974,6 +1020,16 @@ export interface JobState {
   fetchEvents: () => Promise<void>
   createEvent: (data: Omit<CalendarEvent, "id">) => Promise<void>
   deleteEvent: (id: string) => Promise<void>
+
+  // ── Interview invites (candidate picks a time) ──────────────────────────
+  /** Seeker: their open/booked invites. Recruiter: invites of applications opened in the sheet. */
+  interviewInvites: InterviewInvite[]
+  fetchInterviewInvites: (applicationId?: string) => Promise<void>
+  createInterviewInvite: (input: NewInterviewInvite) => Promise<InterviewInvite>
+  bookInterviewSlot: (inviteId: string, slotId: string) => Promise<void>
+  cancelInterviewInvite: (inviteId: string) => Promise<void>
+  /** Socket: insert or replace an invite (and its booked event). */
+  upsertInterviewInvite: (invite: any, event?: any) => void
 
   // ── Documents ────────────────────────────────────────────────────────────
   documents: Document[]

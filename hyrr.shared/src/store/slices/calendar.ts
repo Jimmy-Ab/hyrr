@@ -1,11 +1,21 @@
 import type { StateCreator } from "zustand"
 import { apiFetch } from "../../lib/api"
-import { mapEvent, normalizeIso, toError } from "../mappers"
+import { mapEvent, mapInterviewInvite, normalizeIso, toError } from "../mappers"
 import type { JobState } from "../types"
 
 export type CalendarSlice = Pick<
   JobState,
-  "events" | "eventsLoading" | "fetchEvents" | "createEvent" | "deleteEvent"
+  | "events"
+  | "eventsLoading"
+  | "fetchEvents"
+  | "createEvent"
+  | "deleteEvent"
+  | "interviewInvites"
+  | "fetchInterviewInvites"
+  | "createInterviewInvite"
+  | "bookInterviewSlot"
+  | "cancelInterviewInvite"
+  | "upsertInterviewInvite"
 >
 
 export const createCalendarSlice: StateCreator<JobState, [], [], CalendarSlice> = (set, get) => ({
@@ -13,6 +23,78 @@ export const createCalendarSlice: StateCreator<JobState, [], [], CalendarSlice> 
 
   events: [],
   eventsLoading: false,
+  interviewInvites: [],
+
+  fetchInterviewInvites: async (applicationId) => {
+    const qs = applicationId ? `?applicationId=${encodeURIComponent(applicationId)}` : ""
+    const data = await apiFetch(`/calendar/invites${qs}`)
+    const fresh = (data || []).map(mapInterviewInvite)
+    set((state) => ({
+      // Recruiters load per application: keep invites of other applications.
+      interviewInvites: applicationId
+        ? [...state.interviewInvites.filter((i) => i.applicationId !== applicationId), ...fresh]
+        : fresh,
+    }))
+  },
+
+  createInterviewInvite: async (input) => {
+    const created = mapInterviewInvite(
+      await apiFetch("/calendar/invites", {
+        method: "POST",
+        body: JSON.stringify({
+          applicationId: input.applicationId,
+          title: input.title,
+          durationMin: input.durationMin,
+          slots: input.slots.map((startTime) => ({ startTime })),
+          location: input.location || undefined,
+          meetingUrl: input.meetingUrl || undefined,
+          note: input.note || undefined,
+        }),
+      })
+    )
+    get().upsertInterviewInvite(created)
+    return created
+  },
+
+  bookInterviewSlot: async (inviteId, slotId) => {
+    const result = await apiFetch(`/calendar/invites/${inviteId}/book`, {
+      method: "POST",
+      body: JSON.stringify({ slotId }),
+    })
+    get().upsertInterviewInvite(result?.invite, result?.event)
+  },
+
+  cancelInterviewInvite: async (inviteId) => {
+    const previous = get().interviewInvites
+    set({
+      interviewInvites: previous.map((i) =>
+        i.id === inviteId ? { ...i, status: "CANCELED" as const } : i
+      ),
+    })
+    try {
+      await apiFetch(`/calendar/invites/${inviteId}/cancel`, { method: "POST" })
+    } catch (err) {
+      set({ interviewInvites: previous })
+      throw toError(err, "Could not withdraw the interview times")
+    }
+  },
+
+  upsertInterviewInvite: (raw, rawEvent) => {
+    if (!raw?.id) return
+    const invite = mapInterviewInvite(raw)
+    const event = rawEvent?.id
+      ? {
+          ...mapEvent(rawEvent),
+          companyName: invite.companyName,
+          jobTitle: invite.jobTitle,
+          organizerName: invite.organizerName,
+        }
+      : null
+    set((state) => ({
+      interviewInvites: [invite, ...state.interviewInvites.filter((i) => i.id !== invite.id)],
+      ...(event ? { events: [...state.events.filter((e) => e.id !== event.id), event] } : {}),
+    }))
+  },
 
   fetchEvents: async () => {
     set({ eventsLoading: true })

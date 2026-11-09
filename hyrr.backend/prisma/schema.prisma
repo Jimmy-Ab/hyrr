@@ -145,6 +145,7 @@ model User {
   calendarEvents CalendarEvent[]
   companyMemberships CompanyMember[]
   invitesSent        CompanyInvite[]      @relation("InviteSender")
+  interviewInvites   InterviewInvite[]    @relation("InterviewInviteCreator")
   joinRequests       CompanyJoinRequest[] @relation("JoinRequester")
   joinDecisions      CompanyJoinRequest[] @relation("JoinDecider")
   conversationStates ConversationState[]
@@ -358,6 +359,7 @@ model Application {
   // Relations
   messages           Message[]
   calendarEvents     CalendarEvent[]
+  interviewInvites   InterviewInvite[]
   labels             ApplicationLabel[]
   recruiterNotes     ApplicationNote[]
   answers            ScreeningAnswer[]
@@ -563,6 +565,42 @@ model CompanyJoinRequest {
   decidedAt   DateTime?
   @@index([companyId, status])
   @@index([userId, status])
+}
+
+enum InterviewInviteStatus {
+  OPEN
+  BOOKED
+  CANCELED
+}
+
+/// Recruiter offers interview times; the candidate books one in the seeker app.
+model InterviewInvite {
+  id            String                @id @default(uuid())
+  applicationId String
+  application   Application           @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  createdById   String?
+  createdBy     User?                 @relation("InterviewInviteCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  title         String
+  durationMin   Int
+  location      String?
+  meetingUrl    String?
+  note          String?               @db.Text
+  status        InterviewInviteStatus @default(OPEN)
+  /// CalendarEvent created when the candidate books a slot
+  eventId       String?               @unique
+  createdAt     DateTime              @default(now())
+  slots         InterviewSlot[]
+  @@index([applicationId, status])
+}
+
+model InterviewSlot {
+  id        String          @id @default(uuid())
+  inviteId  String
+  invite    InterviewInvite @relation(fields: [inviteId], references: [id], onDelete: Cascade)
+  startTime DateTime
+  endTime   DateTime
+  bookedAt  DateTime?
+  @@index([inviteId])
 }
 
 model ScreeningQuestion {

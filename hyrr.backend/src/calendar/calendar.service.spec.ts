@@ -62,7 +62,10 @@ describe("CalendarService", () => {
   })
 
   it("stores offset ISO datetimes as Date and keeps meetingUrl/location", async () => {
-    prismaMock.calendarEvent.create.mockImplementation(async ({ data }: any) => ({ id: "e", ...data }))
+    prismaMock.calendarEvent.create.mockImplementation(async ({ data }: any) => ({
+      id: "e",
+      ...data,
+    }))
 
     const result: any = await service.createEvent(
       {

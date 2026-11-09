@@ -101,6 +101,9 @@ const loadSeeker = async (set: StoreSet, get: StoreGet) => {
       recommendations,
       profile,
       loadSettings(set),
+      get()
+        .fetchInterviewInvites()
+        .catch((e) => console.warn("Failed to load interview invites.", e)),
       get().fetchEvents(),
       get().fetchDocuments(),
       get()

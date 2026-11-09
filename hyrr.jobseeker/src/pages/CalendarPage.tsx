@@ -32,6 +32,7 @@ import {
   X,
 } from "lucide-react"
 import { useState } from "react"
+import { PendingInterviewInvites } from "../components/interview-invites"
 
 const formatTime = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
@@ -373,6 +374,8 @@ export function CandidateCalendar() {
           </Button>
         }
       />
+
+      <PendingInterviewInvites />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Calendar grid */}

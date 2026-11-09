@@ -636,3 +636,76 @@ test("live sync: a new applicant appears on the recruiter board and the seeker s
     timeout: 10_000,
   })
 })
+
+test("interview slots: the seeker picks a time live and both sides see the booking", async ({
+  page,
+  browser,
+}) => {
+  const rec = await createUser("RECRUITER", "Ines")
+  const seeker = await createUser("SEEKER", "Omar")
+  const job = await api(
+    "POST",
+    "/jobs",
+    {
+      title: `E2E Slots Job ${uid()}`,
+      location: "Berlin",
+      type: "FULL_TIME",
+      description: "<p>Self-serve interview scheduling between the apps.</p>",
+      requirements: ["Rust"],
+      skills: ["Rust"],
+      categoryId: await firstCategoryId(),
+    },
+    rec.token
+  )
+  const app = await api(
+    "POST",
+    `/applications/jobs/${job.id}/apply`,
+    { name: "Omar", email: seeker.email, title: "Dev", location: "Berlin" },
+    seeker.token
+  )
+
+  // Both apps open before the invite exists.
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await login(page, SEEKER_URL, seeker.email)
+  await page.goto(`${SEEKER_URL}/applications`)
+  await expect(page.getByText(job.title).first()).toBeVisible({ timeout: 20_000 })
+  const recPage = await (
+    await browser.newContext({ viewport: { width: 1400, height: 900 } })
+  ).newPage()
+  await login(recPage, RECRUITER_URL, rec.email)
+  await recPage.goto(`${RECRUITER_URL}/calendar`)
+
+  const at = (days: number, hour: number) => {
+    const d = new Date()
+    d.setDate(d.getDate() + days)
+    d.setHours(hour, 0, 0, 0)
+    return d.toISOString()
+  }
+  await api(
+    "POST",
+    "/calendar/invites",
+    {
+      applicationId: app.id,
+      title: "Culture chat",
+      durationMin: 30,
+      slots: [{ startTime: at(2, 10) }, { startTime: at(2, 15) }],
+      meetingUrl: "https://meet.example.com/abc",
+    },
+    rec.token
+  )
+
+  // The picker opens by itself on the seeker side.
+  const dialog = page.getByRole("dialog", { name: "Pick your interview time" })
+  await expect(dialog).toBeVisible({ timeout: 10_000 })
+  await dialog.getByRole("radio").first().click()
+  await dialog.getByRole("button", { name: "Book this time" }).click()
+  await expect(page.getByText("Interview booked").first()).toBeVisible({ timeout: 10_000 })
+
+  // The recruiter sees it live.
+  await expect(recPage.getByText("Interview booked").first()).toBeVisible({ timeout: 10_000 })
+  const events = await api<any[]>("GET", "/calendar", undefined, rec.token)
+  expect(events.some((e) => e.applicationId === app.id && e.title === "Culture chat")).toBe(true)
+  const cands = await api<any>("GET", "/applications/candidates", undefined, rec.token)
+  const list: any[] = Array.isArray(cands) ? cands : cands.items
+  expect(list.find((c) => c.id === app.id)?.status).toBe("INTERVIEWING")
+})

@@ -372,3 +372,40 @@ export const companySetupSchema = z.object({
   website: optionalUrl,
 })
 export type CompanySetupInput = z.infer<typeof companySetupSchema>
+
+// ─── Interview times offered to the candidate ───
+
+export const INTERVIEW_DURATIONS = [15, 30, 45, 60, 90, 120] as const
+
+export const interviewInviteSchema = z.object({
+  title: z
+    .string()
+    .trim()
+    .min(2, "Give the interview a title")
+    .max(120, "The title can be at most 120 characters"),
+  durationMin: z.number().refine((v) => (INTERVIEW_DURATIONS as readonly number[]).includes(v), {
+    message: "Duration must be 15, 30, 45, 60, 90 or 120 minutes",
+  }),
+  slots: z
+    .array(
+      z
+        .string()
+        .refine((v) => !Number.isNaN(Date.parse(v)), "Pick a date and time")
+        .refine(
+          (v) => Date.parse(v) >= Date.now() + 15 * 60_000,
+          "Pick a time at least 15 minutes from now"
+        )
+    )
+    .min(1, "Offer at least one time")
+    .max(10, "Offer at most 10 times"),
+  location: z.string().trim().max(200, "Location can be at most 200 characters").optional(),
+  meetingUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .refine((v) => !v || /^https?:\/\/\S+\.\S+/i.test(v), {
+      message: "Enter a valid meeting link, e.g. https://meet.google.com/…",
+    })
+    .optional(),
+  note: z.string().trim().max(1000, "The note can be at most 1000 characters").optional(),
+})
