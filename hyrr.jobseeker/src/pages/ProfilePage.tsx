@@ -56,6 +56,7 @@ import {
 import React, { useEffect, useRef, useState } from "react"
 import { CvImportDialog, type CvSection } from "../components/profile/cv-import-dialog"
 import { ProfileStrengthCard } from "../components/profile/profile-strength"
+import { VerifiedSkills } from "../components/skill-badges"
 
 /* ══════════════════════════════════════════════════════════════
    Small reusable helpers
@@ -1726,6 +1727,8 @@ export function ProfilePage() {
         onOpenChange={setCvImportOpen}
         onApply={applyCvSuggestions}
       />
+
+      <VerifiedSkills />
     </div>
   )
 }

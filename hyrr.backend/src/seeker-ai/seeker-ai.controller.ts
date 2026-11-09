@@ -12,6 +12,8 @@ import {
 } from "@nestjs/common"
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger"
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsInt,
   IsOptional,
@@ -26,6 +28,7 @@ import { Roles } from "../auth/decorators/roles.decorator"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { RolesGuard } from "../auth/guards/roles.guard"
 import { SeekerAiService } from "./seeker-ai.service"
+import { SkillAssessmentsService } from "./skill-assessments.service"
 
 const uuid = new ParseUUIDPipe({ version: undefined })
 
@@ -55,12 +58,28 @@ export class MockAnswerDto {
   answer: string
 }
 
+export class StartSkillTestDto {
+  @IsString()
+  @MaxLength(60)
+  skill: string
+}
+
+export class SubmitSkillTestDto {
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsInt({ each: true })
+  answers: number[]
+}
+
 @ApiTags("Seeker AI tools")
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller("seeker-ai")
 export class SeekerAiController {
-  constructor(private readonly seekerAi: SeekerAiService) {}
+  constructor(
+    private readonly seekerAi: SeekerAiService,
+    private readonly skills: SkillAssessmentsService
+  ) {}
 
   /** Saved CV tailoring for a job (free to reopen). */
   @Get("tailor/:jobId")
@@ -123,5 +142,24 @@ export class SeekerAiController {
   @Roles("SEEKER")
   negotiation(@Req() req: any, @Param("offerId", uuid) offerId: string) {
     return this.seekerAi.negotiationAdvice(req.user.userId, offerId)
+  }
+
+  // ─── Verified skill badges ───
+  @Get("skills")
+  @Roles("SEEKER")
+  skillOverview(@Req() req: any) {
+    return this.skills.overview(req.user.userId)
+  }
+
+  @Post("skills/tests")
+  @Roles("SEEKER")
+  startSkillTest(@Req() req: any, @Body() dto: StartSkillTestDto) {
+    return this.skills.start(req.user.userId, dto.skill)
+  }
+
+  @Post("skills/tests/:id/submit")
+  @Roles("SEEKER")
+  submitSkillTest(@Req() req: any, @Param("id", uuid) id: string, @Body() dto: SubmitSkillTestDto) {
+    return this.skills.submit(req.user.userId, id, dto.answers)
   }
 }

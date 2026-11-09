@@ -155,6 +155,7 @@ model User {
   externalJobApplies ExternalJobApply[]
   resumeTailorings   ResumeTailoring[]
   mockInterviews     MockInterview[]
+  skillAssessments   SkillAssessment[]
   joinRequests       CompanyJoinRequest[] @relation("JoinRequester")
   joinDecisions      CompanyJoinRequest[] @relation("JoinDecider")
   conversationStates ConversationState[]
@@ -809,6 +810,36 @@ model MockInterview {
   createdAt DateTime            @default(now())
   updatedAt DateTime            @updatedAt
   @@index([userId, createdAt])
+}
+
+/// Multiple-choice question bank per skill (answers never leave the server).
+model SkillQuestion {
+  id           String   @id @default(uuid())
+  skill        String
+  question     String   @db.Text
+  options      String[]
+  correctIndex Int
+  explanation  String?  @db.Text
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  @@index([skill, active])
+}
+
+/// One timed attempt; passing (>= 80%) is a "Verified" badge until validUntil.
+model SkillAssessment {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill       String
+  questionIds String[]
+  answers     Int[]     @default([])
+  score       Int?
+  passed      Boolean   @default(false)
+  startedAt   DateTime  @default(now())
+  expiresAt   DateTime
+  submittedAt DateTime?
+  validUntil  DateTime?
+  @@index([userId, skill])
 }
 
 model ScreeningQuestion {

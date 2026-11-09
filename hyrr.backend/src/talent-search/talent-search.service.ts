@@ -19,6 +19,10 @@ import { MessagesGateway } from "../messages/messages.gateway"
 import { NotificationsService } from "../notifications/notifications.service"
 import { PrismaService } from "../prisma/prisma.service"
 import { QueueService } from "../queue/queue.service"
+import { SkillAssessmentsService } from "../seeker-ai/skill-assessments.service"
+
+/** Ranking boost for people with at least one verified skill badge. */
+export const VERIFIED_BOOST = 1.25
 
 const fail = (message: string, status: HttpStatus, code: string) =>
   new AppException(message, status, code)
@@ -109,7 +113,8 @@ export class TalentSearchService {
     private readonly notifications: NotificationsService,
     @Optional() private readonly applications?: ApplicationsService,
     @Optional() private readonly gateway?: MessagesGateway,
-    @Optional() private readonly queue?: QueueService
+    @Optional() private readonly queue?: QueueService,
+    @Optional() private readonly skills?: SkillAssessmentsService
   ) {}
 
   private async recruiterCompany(actor: Actor) {
@@ -147,9 +152,17 @@ export class TalentSearchService {
       take: POOL_LIMIT,
     })
     const terms = tokens(q)
-    const ranked = profiles
+    const matched = profiles
       .map((p) => ({ p, score: relevance(p, terms) }))
       .filter((r) => r.score > 0)
+    const verified =
+      (await this.skills?.verifiedSkills(matched.map((m) => m.p.user.id))) ?? new Map()
+    const ranked = matched
+      .map((m) => ({
+        ...m,
+        verifiedSkills: (verified.get(m.p.user.id) ?? []) as string[],
+        score: verified.has(m.p.user.id) ? m.score * VERIFIED_BOOST : m.score,
+      }))
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
     const ids = ranked.map((r) => r.p.user.id)
@@ -161,9 +174,10 @@ export class TalentSearchService {
       : []
     return {
       total: ranked.length,
-      results: ranked.map(({ p, score }) => ({
+      results: ranked.map(({ p, score, verifiedSkills }) => ({
         ...card(p),
-        relevance: score,
+        verifiedSkills,
+        relevance: Math.round(score * 100) / 100,
         // Jobs of yours this person already applied to or was contacted about.
         existingJobIds: contacted.filter((c) => c.userId === p.user.id).map((c) => c.jobId),
       })),
@@ -177,8 +191,10 @@ export class TalentSearchService {
       select: PROFILE_SELECT,
     })
     if (!p) throw fail("This profile isn't available", HttpStatus.NOT_FOUND, "PROFILE_NOT_FOUND")
+    const verified = (await this.skills?.verifiedSkills([p.user.id])) ?? new Map()
     return {
       ...card(p),
+      verifiedSkills: (verified.get(p.user.id) ?? []) as string[],
       bio: p.bio,
       experiences: p.experiences,
       educations: p.educations,

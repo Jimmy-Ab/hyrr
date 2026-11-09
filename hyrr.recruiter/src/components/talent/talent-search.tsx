@@ -367,6 +367,11 @@ export function TalentSearch() {
                   )}
                 </p>
                 {c.headline && <p className="text-[12.5px] text-txt-body">{c.headline}</p>}
+                {!!c.verifiedSkills?.length && (
+                  <p className="text-[12px] font-semibold text-sec-green">
+                    ✓ Verified: {c.verifiedSkills.join(", ")}
+                  </p>
+                )}
                 <div className="flex flex-wrap gap-1">
                   {c.skills.slice(0, 6).map((s) => (
                     <span

@@ -16,6 +16,9 @@ export type TrackerSlice = Pick<
   | "tailorCv"
   | "fetchSalaryBenchmark"
   | "getNegotiationAdvice"
+  | "fetchSkillOverview"
+  | "startSkillTest"
+  | "submitSkillTest"
   | "fetchMockInterviews"
   | "startMockInterview"
   | "answerMockQuestion"
@@ -76,6 +79,17 @@ export const createTrackerSlice: StateCreator<JobState, [], [], TrackerSlice> = 
       .catch(() => undefined)
     return res
   },
+
+  fetchSkillOverview: () => apiFetch("/seeker-ai/skills"),
+
+  startSkillTest: (skill) =>
+    apiFetch("/seeker-ai/skills/tests", { method: "POST", body: JSON.stringify({ skill }) }),
+
+  submitSkillTest: (id, answers) =>
+    apiFetch(`/seeker-ai/skills/tests/${id}/submit`, {
+      method: "POST",
+      body: JSON.stringify({ answers }),
+    }),
 
   fetchMockInterviews: () => apiFetch("/seeker-ai/mock-interviews"),
 

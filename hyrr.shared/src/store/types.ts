@@ -686,6 +686,34 @@ export interface NegotiationAdvice {
   charged: number
 }
 
+export interface SkillOverviewItem {
+  skill: string
+  verified: boolean
+  validUntil: string | null
+  lastScore: number | null
+  /** Set when a failed test can only be retaken later. */
+  retryAt: string | null
+}
+
+export interface SkillTest {
+  id: string
+  skill: string
+  expiresAt: string
+  passPercent: number
+  questions: { id: string; question: string; options: string[] }[]
+}
+
+export interface SkillTestResult {
+  id: string
+  skill: string
+  score: number
+  correct: number
+  total: number
+  passed: boolean
+  late: boolean
+  validUntil: string | null
+}
+
 export type ExternalStage = "BOOKMARKED" | "APPLIED" | "INTERVIEWING" | "OFFER" | "REJECTED"
 
 /** A job the seeker tracks outside Hyrr. */
@@ -715,6 +743,8 @@ export interface TalentCard {
   skills: string[]
   headline: string | null
   yearsExperience: number
+  /** Skills with a valid "Verified" badge (skill test passed). */
+  verifiedSkills?: string[]
   relevance: number
   existingJobIds: string[]
 }
@@ -1266,6 +1296,9 @@ export interface JobState {
   fetchSalaryBenchmark: (title: string, currency: string) => Promise<SalaryBenchmark>
   /** Charges negotiationAdviceCost (refunded if the AI fails). */
   getNegotiationAdvice: (offerId: string) => Promise<NegotiationAdvice>
+  fetchSkillOverview: () => Promise<SkillOverviewItem[]>
+  startSkillTest: (skill: string) => Promise<SkillTest>
+  submitSkillTest: (id: string, answers: number[]) => Promise<SkillTestResult>
   fetchMockInterviews: () => Promise<MockInterview[]>
   /** Charges mockInterviewCost (refunded if question generation fails). */
   startMockInterview: (jobId: string) => Promise<MockInterview>

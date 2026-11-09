@@ -10,6 +10,7 @@ import {
   login,
   PASSWORD,
   RECRUITER_URL,
+  seedSkillQuestions,
   SEEKER_URL,
   seekerBalance,
   setInviteToken,
@@ -846,7 +847,9 @@ test("offers: the recruiter sends terms, the seeker signs live, the team celebra
   await expect(sheet.getByText("Health insurance")).toBeVisible()
   // Free market check (no invented numbers when there are too few postings).
   await expect(sheet.getByText("Market check")).toBeVisible()
-  await expect(sheet.getByText(/Not enough postings in ETB|postings for similar roles/)).toBeVisible()
+  await expect(
+    sheet.getByText(/Not enough postings in ETB|postings for similar roles/)
+  ).toBeVisible()
   await sheet.getByRole("button", { name: "Accept offer" }).click()
   await expect(sheet.getByText("Type your full name to sign")).toBeVisible()
   await sheet.locator("#offer-signature").fill("Dawit Bekele")
@@ -1060,4 +1063,27 @@ test("practice interview: offered on active applications; no AI provider means n
   await dialog.getByRole("button", { name: /^Start · \d+ credits$/ }).click()
   await expect(dialog.getByText(/nothing was charged/)).toBeVisible({ timeout: 10_000 })
   expect(await seekerBalance(seeker.email)).toBe(before)
+})
+
+test("skill badge: a seeker passes a timed test and gets Verified", async ({ page }) => {
+  const key = await seedSkillQuestions("SQL")
+  const seeker = await createUser("SEEKER", "Meron")
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await login(page, SEEKER_URL, seeker.email)
+  await page.goto(`${SEEKER_URL}/profile`)
+  const row = page.locator("li").filter({ hasText: /^SQL/ })
+  await row.getByRole("button", { name: "Take test" }).click()
+  const dialog = page.getByRole("dialog")
+  await expect(dialog.getByText("SQL test")).toBeVisible()
+  const sets = dialog.locator("fieldset")
+  await expect(sets).toHaveCount(10)
+  for (let i = 0; i < 10; i++) {
+    const legend = (await sets.nth(i).locator("legend").innerText()).replace(/^\d+\.\s*/, "")
+    await sets.nth(i).getByText(key.get(legend)!, { exact: true }).click()
+  }
+  await dialog.getByRole("button", { name: "Submit answers" }).click()
+  await expect(dialog.getByText("100%")).toBeVisible({ timeout: 10_000 })
+  await expect(dialog.getByText("You're verified in SQL!")).toBeVisible()
+  await dialog.getByRole("button", { name: "Done" }).click()
+  await expect(row.getByText(/Verified until/)).toBeVisible()
 })

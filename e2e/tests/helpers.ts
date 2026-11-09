@@ -157,3 +157,18 @@ export async function trackedJobs(email: string) {
   const user = await prisma.user.findUniqueOrThrow({ where: { email } })
   return prisma.externalApplication.findMany({ where: { userId: user.id } })
 }
+
+/** A 15-question bank for a skill; returns question text → correct option text. */
+export async function seedSkillQuestions(skill: string) {
+  await prisma.skillQuestion.deleteMany({ where: { skill } })
+  const key = new Map<string, string>()
+  for (let i = 0; i < 15; i++) {
+    const options = ["A", "B", "C", "D"].map((l) => `${l}-${skill}-${i}`)
+    const question = `E2E ${skill} question number ${i}?`
+    await prisma.skillQuestion.create({
+      data: { skill, question, options, correctIndex: i % 4, explanation: "seeded" },
+    })
+    key.set(question, options[i % 4])
+  }
+  return key
+}
