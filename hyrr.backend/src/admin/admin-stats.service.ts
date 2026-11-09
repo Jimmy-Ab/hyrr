@@ -7,6 +7,7 @@ import { AppException } from "../core/exceptions/app-exception"
 import { HealthService } from "../health/health.service"
 import { PrismaService } from "../prisma/prisma.service"
 import { QueueService } from "../queue/queue.service"
+import { liquidityRows, locationBucket } from "./liquidity"
 import {
   AnalyticsInterval,
   bucketStarts,
@@ -449,5 +450,68 @@ export class AdminStatsService {
       const activeAfter30d = n(row?.active)
       return { month, joined, activeAfter30d, pct: pct(activeAfter30d, joined) }
     })
+  }
+
+  /**
+   * Marketplace liquidity: open jobs (demand) vs distinct seekers who applied in the last 30 days
+   * (supply) per category or location. Flags undersupplied markets for recruiter acquisition.
+   */
+  async liquidity(by: "category" | "location", now = new Date()) {
+    const since = new Date(now.getTime() - 30 * 86_400_000)
+    const [jobs, applications] = await Promise.all([
+      this.prisma.job.findMany({
+        where: { status: JobStatus.ACTIVE },
+        select: {
+          id: true,
+          location: true,
+          remote: true,
+          category: { select: { id: true, name: true } },
+        },
+      }),
+      this.prisma.application.findMany({
+        where: {
+          appliedAt: { gte: since },
+          status: { notIn: [ApplicationStatus.SAVED, ApplicationStatus.SOURCED] },
+          userId: { not: null },
+        },
+        select: {
+          userId: true,
+          job: {
+            select: {
+              location: true,
+              remote: true,
+              category: { select: { id: true, name: true } },
+            },
+          },
+        },
+      }),
+    ])
+    const keyOf = (j: {
+      location: string | null
+      remote: boolean
+      category: { id: string; name: string } | null
+    }) =>
+      by === "category"
+        ? { key: j.category?.id ?? "none", label: j.category?.name ?? "Uncategorised" }
+        : (() => {
+            const label = locationBucket(j.location, j.remote)
+            return { key: label.toLowerCase(), label }
+          })()
+    const buckets = new Map<
+      string,
+      { label: string; openJobs: number; seekers: Set<string>; applications: number }
+    >()
+    const bucket = (k: { key: string; label: string }) => {
+      if (!buckets.has(k.key))
+        buckets.set(k.key, { label: k.label, openJobs: 0, seekers: new Set(), applications: 0 })
+      return buckets.get(k.key)!
+    }
+    for (const j of jobs) bucket(keyOf(j)).openJobs++
+    for (const a of applications) {
+      const b = bucket(keyOf(a.job))
+      b.applications++
+      b.seekers.add(a.userId!)
+    }
+    return { by, since, rows: liquidityRows(buckets) }
   }
 }

@@ -80,6 +80,14 @@ export class AdminController {
     return this.stats.analytics(new Date(q.from), new Date(q.to), q.interval)
   }
 
+  @Get("liquidity")
+  @ApiOperation({
+    summary: "Supply (active applicants) vs demand (open jobs) per category or location",
+  })
+  liquidity(@Query("by") by?: string) {
+    return this.stats.liquidity(by === "location" ? "location" : "category")
+  }
+
   // ─── Moderation ──────────────────────────────────────────────────
   @Get("moderation")
   moderationList(@Query() q: ModerationQueryDto) {
