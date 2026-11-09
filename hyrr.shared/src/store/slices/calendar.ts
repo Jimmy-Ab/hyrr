@@ -1,6 +1,6 @@
 import type { StateCreator } from "zustand"
 import { apiFetch } from "../../lib/api"
-import { mapEvent, mapInterviewInvite, normalizeIso, toError } from "../mappers"
+import { mapEvent, mapInterviewInvite, mapOffer, normalizeIso, toError } from "../mappers"
 import type { JobState } from "../types"
 
 export type CalendarSlice = Pick<
@@ -16,6 +16,13 @@ export type CalendarSlice = Pick<
   | "bookInterviewSlot"
   | "cancelInterviewInvite"
   | "upsertInterviewInvite"
+  | "offers"
+  | "fetchOffers"
+  | "sendOffer"
+  | "acceptOffer"
+  | "declineOffer"
+  | "withdrawOffer"
+  | "upsertOffer"
   | "fetchScorecards"
   | "submitScorecard"
   | "setScorecardCompetencies"
@@ -27,6 +34,64 @@ export const createCalendarSlice: StateCreator<JobState, [], [], CalendarSlice> 
   events: [],
   eventsLoading: false,
   interviewInvites: [],
+
+  offers: [],
+
+  fetchOffers: async (applicationId) => {
+    const qs = applicationId ? `?applicationId=${encodeURIComponent(applicationId)}` : ""
+    const fresh = ((await apiFetch(`/offers${qs}`)) || []).map(mapOffer)
+    set((state) => ({
+      offers: applicationId
+        ? [...state.offers.filter((o) => o.applicationId !== applicationId), ...fresh]
+        : fresh,
+    }))
+  },
+
+  sendOffer: async (input) => {
+    const offer = mapOffer(
+      await apiFetch("/offers", { method: "POST", body: JSON.stringify(input) })
+    )
+    set((state) => ({
+      // A new offer replaces the previous live one.
+      offers: [
+        offer,
+        ...state.offers.map((o) =>
+          o.applicationId === offer.applicationId && o.status === "SENT"
+            ? { ...o, status: "WITHDRAWN" as const }
+            : o
+        ),
+      ],
+    }))
+    return offer
+  },
+
+  acceptOffer: async (offerId, signatureName) => {
+    get().upsertOffer(
+      await apiFetch(`/offers/${offerId}/accept`, {
+        method: "POST",
+        body: JSON.stringify({ signatureName, agree: true }),
+      })
+    )
+  },
+
+  declineOffer: async (offerId, reason) => {
+    get().upsertOffer(
+      await apiFetch(`/offers/${offerId}/decline`, {
+        method: "POST",
+        body: JSON.stringify(reason ? { reason } : {}),
+      })
+    )
+  },
+
+  withdrawOffer: async (offerId) => {
+    get().upsertOffer(await apiFetch(`/offers/${offerId}/withdraw`, { method: "POST" }))
+  },
+
+  upsertOffer: (raw) => {
+    if (!raw?.id) return
+    const offer = mapOffer(raw)
+    set((state) => ({ offers: [offer, ...state.offers.filter((o) => o.id !== offer.id)] }))
+  },
 
   fetchScorecards: (applicationId) => apiFetch(`/scorecards/applications/${applicationId}`),
 

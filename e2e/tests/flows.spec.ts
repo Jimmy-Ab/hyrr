@@ -782,3 +782,71 @@ test("scorecards are blind until you submit, then show the team debrief", async 
   await expect(sheet.getByText("Team leans hire")).toBeVisible()
   await expect(sheet.getByText(/Debrief · 2 scorecards/)).toBeVisible()
 })
+
+test("offers: the recruiter sends terms, the seeker signs live, the team celebrates", async ({
+  page,
+  browser,
+}) => {
+  const rec = await createUser("RECRUITER", "Hana")
+  const seeker = await createUser("SEEKER", "Dawit")
+  const job = await api(
+    "POST",
+    "/jobs",
+    {
+      title: `E2E Offer Job ${uid()}`,
+      location: "Addis Ababa",
+      type: "FULL_TIME",
+      description: "<p>Digital offer letters with in-app acceptance.</p>",
+      requirements: ["Go"],
+      skills: ["Go"],
+      categoryId: await firstCategoryId(),
+    },
+    rec.token
+  )
+  await api(
+    "POST",
+    `/applications/jobs/${job.id}/apply`,
+    { name: "Dawit", email: seeker.email, title: "Engineer", location: "Addis Ababa" },
+    seeker.token
+  )
+
+  const seekerPage = await (
+    await browser.newContext({ viewport: { width: 1400, height: 900 } })
+  ).newPage()
+  await login(seekerPage, SEEKER_URL, seeker.email)
+  await seekerPage.goto(`${SEEKER_URL}/applications`)
+  await expect(seekerPage.getByText(job.title).first()).toBeVisible({ timeout: 20_000 })
+
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await login(page, RECRUITER_URL, rec.email)
+  await page.goto(`${RECRUITER_URL}/applications`)
+  await page
+    .getByRole("button", { name: /^list$/i })
+    .first()
+    .click()
+  await page.getByText("Dawit", { exact: true }).first().click()
+  const panel = page.getByRole("dialog")
+  await panel.getByRole("tab", { name: "Offer" }).click()
+  await panel.getByRole("button", { name: "Make an offer" }).click()
+  await panel.locator("#offer-base").fill("85000")
+  await panel.locator("#offer-currency").selectOption("ETB")
+  await panel.locator("#offer-benefits").fill("Health insurance, Remote days")
+  await panel.getByRole("button", { name: "Send offer" }).click()
+  await expect(page.getByText("Offer sent").first()).toBeVisible({ timeout: 10_000 })
+  await expect(panel.getByText("Waiting for answer")).toBeVisible()
+  await panel.getByRole("button", { name: "Close Details" }).click()
+
+  // Opens by itself for the seeker.
+  const sheet = seekerPage.getByRole("dialog")
+  await expect(sheet.getByText(/Offer from/)).toBeVisible({ timeout: 10_000 })
+  await expect(sheet.getByText("Health insurance")).toBeVisible()
+  await sheet.getByRole("button", { name: "Accept offer" }).click()
+  await expect(sheet.getByText("Type your full name to sign")).toBeVisible()
+  await sheet.locator("#offer-signature").fill("Dawit Bekele")
+  await sheet.getByRole("checkbox").check()
+  await sheet.getByRole("button", { name: "Accept offer" }).click()
+  await expect(seekerPage.getByText(/Offer accepted/).first()).toBeVisible({ timeout: 10_000 })
+
+  // Live on the recruiter side.
+  await expect(page.getByText(/Dawit accepted the offer/).first()).toBeVisible({ timeout: 10_000 })
+})

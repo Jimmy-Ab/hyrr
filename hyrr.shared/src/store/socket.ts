@@ -124,6 +124,43 @@ export function initializeSocket(set: StoreSet, get: StoreGet) {
     })
   })
 
+  socket.on("offer_extended", (data: any) => {
+    if (!data?.id) return
+    get().upsertOffer(data)
+    set({
+      liveEvent: {
+        kind: "offer",
+        id: data.id,
+        jobTitle: data.jobTitle ?? "",
+        companyName: data.companyName ?? undefined,
+        at: Date.now(),
+      },
+    })
+  })
+
+  socket.on("offer_updated", (data: any) => {
+    if (data?.id) get().upsertOffer(data)
+  })
+
+  for (const [event, accepted] of [
+    ["offer_accepted", true],
+    ["offer_declined", false],
+  ] as const)
+    socket.on(event, (data: any) => {
+      if (!data?.id) return
+      get().upsertOffer(data)
+      set({
+        liveEvent: {
+          kind: "offer_answered",
+          id: data.id,
+          accepted,
+          name: data.candidateName ?? "The candidate",
+          jobTitle: data.jobTitle ?? "",
+          at: Date.now(),
+        },
+      })
+    })
+
   socket.on("scorecard_submitted", (data: any) => {
     if (!data?.applicationId || data.interviewerId === get().user?.id) return
     set({ liveEvent: { kind: "scorecard", applicationId: data.applicationId, at: Date.now() } })

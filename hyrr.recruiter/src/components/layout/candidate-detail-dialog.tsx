@@ -37,15 +37,17 @@ import { CandidateLabelsEditor } from "../candidate/candidate-labels-editor"
 import { CandidateNotes } from "../candidate/candidate-notes"
 import { CandidateTimeline } from "../candidate/candidate-timeline"
 import { InterviewSlotsOffer } from "./interview-slots-offer"
+import { OfferPanel } from "./offer-panel"
 import { ScorecardsPanel } from "./scorecards-panel"
 
-type CandidateTab = "details" | "notes" | "timeline" | "ai" | "schedule" | "scorecards"
+type CandidateTab = "details" | "notes" | "timeline" | "ai" | "schedule" | "scorecards" | "offer"
 
 export function CandidateDetailDialog() {
   const {
     selectedCandidateId,
     setSelectedCandidateId,
     candidates,
+    jobs,
     moveCandidate,
     toggleBookmark,
     createEvent,
@@ -246,6 +248,7 @@ export function CandidateDetailDialog() {
             { id: "timeline", label: "Timeline" },
             { id: "ai", label: "AI Screening Match" },
             { id: "scorecards", label: "Scorecards" },
+            { id: "offer", label: "Offer" },
             { id: "schedule", label: "Interview Scheduler" },
           ].map((tab) => (
             <button
@@ -385,6 +388,13 @@ export function CandidateDetailDialog() {
           {activeTab === "ai" && <AiAnalysisPanel candidate={candidate} />}
 
           {activeTab === "scorecards" && <ScorecardsPanel applicationId={candidate.id} />}
+
+          {activeTab === "offer" && (
+            <OfferPanel
+              candidate={candidate}
+              jobTitle={jobs.find((j) => j.id === candidate.jobId)?.title ?? candidate.title ?? ""}
+            />
+          )}
 
           {activeTab === "schedule" && (
             <div className="space-y-6">

@@ -230,6 +230,11 @@ export const SYNC_SOCKET_EVENTS = {
   CANDIDATE_AI_SCORED: "candidate_ai_scored",
   CANDIDATE_AI_STATUS: "candidate_ai_status",
   SCORECARD_SUBMITTED: "scorecard_submitted",
+  // Offer lifecycle
+  OFFER_EXTENDED: "offer_extended",
+  OFFER_UPDATED: "offer_updated",
+  OFFER_ACCEPTED: "offer_accepted",
+  OFFER_DECLINED: "offer_declined",
   // Scheduling
   INTERVIEW_INVITE_RECEIVED: "interview_invite_received",
   INTERVIEW_INVITE_UPDATED: "interview_invite_updated",

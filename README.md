@@ -328,6 +328,7 @@ Each app works as follows:
   - "Set up your company" for recruiters without a company;
   - links: e-mail verification, password reset, `/invite?token=…`.
 - **Interview scheduling:** in the candidate panel's "Interview Scheduler" tab, recruiters can offer up to 10 times ("Let … pick a time"). The seeker picks one in the Careers app, which opens the picker live. Both calendars update instantly, and both sides get an e-mail with an `.ics` invite. Candidates without a Hyrr account are scheduled with a fixed time instead.
+- **Offers:** the candidate panel's Offer tab sends formal terms (salary, currency, period, bonus, equity, start date, deadline, benefits). The candidate reviews them in the Careers app and accepts by typing their name; Hyrr records the time and IP address. This is an in-app acceptance, not a qualified e-signature. The hiring team sees the answer live.
 - **Careers (5174):** Discover ("For you" or all jobs), applications, messages, notifications, calendar, documents (CV), job alerts, Momentum (seeker credits), profile, settings.
 - **Live updates (all apps):** new applicants appear on the recruiter board without reloading (optional chime in Recruiter → Settings), teammates see each other's kanban moves, seekers see status changes and removed jobs, and the admin dashboard refreshes itself ("Live" dot) for admins with 2FA. Several API instances need Redis for this ([§7.11](#711-redis)).
 - **Admin (5175):**

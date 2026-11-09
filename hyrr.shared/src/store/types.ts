@@ -529,6 +529,15 @@ export type LiveEvent =
   | { kind: "status"; id: string; status: ApplicationStatusCode; title: string; at: number }
   | { kind: "job_removed"; jobId: string; title: string; at: number }
   | { kind: "scorecard"; applicationId: string; at: number }
+  | { kind: "offer"; id: string; jobTitle: string; companyName?: string; at: number }
+  | {
+      kind: "offer_answered"
+      id: string
+      accepted: boolean
+      name: string
+      jobTitle: string
+      at: number
+    }
   | { kind: "interview_invite"; id: string; jobTitle: string; companyName?: string; at: number }
   | {
       kind: "interview_booked"
@@ -591,6 +600,44 @@ export interface NewInterviewInvite {
   location?: string
   meetingUrl?: string
   note?: string
+}
+
+export interface Offer {
+  id: string
+  applicationId: string
+  jobTitle: string
+  companyName?: string
+  candidateName: string
+  createdBy?: string
+  baseSalary: number
+  salaryCurrency: string
+  salaryPeriod: "YEAR" | "MONTH" | "HOUR"
+  bonusAmount?: number
+  equityPercentage?: number
+  startDate: string
+  expiresAt: string
+  benefits: string[]
+  message?: string
+  status: "SENT" | "ACCEPTED" | "DECLINED" | "WITHDRAWN" | "EXPIRED"
+  signatureName?: string
+  signedAt?: string
+  declineReason?: string
+  createdAt: string
+}
+
+export interface OfferInput {
+  applicationId: string
+  jobTitle?: string
+  baseSalary: number
+  salaryCurrency: string
+  salaryPeriod: "YEAR" | "MONTH" | "HOUR"
+  bonusAmount?: number
+  equityPercentage?: number
+  /** ISO dates */
+  startDate: string
+  expiresAt: string
+  benefits?: string[]
+  message?: string
 }
 
 export type ScorecardRecommendation = "STRONG_YES" | "YES" | "NEUTRAL" | "NO" | "STRONG_NO"
@@ -1064,6 +1111,16 @@ export interface JobState {
   cancelInterviewInvite: (inviteId: string) => Promise<void>
   /** Socket: insert or replace an invite (and its booked event). */
   upsertInterviewInvite: (invite: any, event?: any) => void
+
+  // ── Offers ───────────────────────────────────────────────────────────────
+  /** Seeker: their offers. Recruiter: offers of applications opened in the panel. */
+  offers: Offer[]
+  fetchOffers: (applicationId?: string) => Promise<void>
+  sendOffer: (input: OfferInput) => Promise<Offer>
+  acceptOffer: (offerId: string, signatureName: string) => Promise<void>
+  declineOffer: (offerId: string, reason?: string) => Promise<void>
+  withdrawOffer: (offerId: string) => Promise<void>
+  upsertOffer: (raw: any) => void
 
   // ── Scorecards (hiring team only) ────────────────────────────────────────
   fetchScorecards: (applicationId: string) => Promise<ScorecardView>

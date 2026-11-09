@@ -26,6 +26,7 @@ import { Sidebar } from "./components/layout/sidebar"
 
 // Pages
 import { InterviewPicker } from "./components/interview-invites"
+import { OfferSheet } from "./components/offer-sheet"
 import { AlertsPage } from "./pages/Alerts"
 import { ApplicationsBoard } from "./pages/Applications"
 import { CandidateCalendar } from "./pages/CalendarPage"
@@ -278,6 +279,7 @@ function AppContent() {
 
       {/* Floating AI Assistant bubble */}
       <InterviewPicker />
+      <OfferSheet />
       <AiChatWidget role="SEEKER" />
     </div>
   )

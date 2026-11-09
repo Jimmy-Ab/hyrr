@@ -36,6 +36,7 @@ import {
 } from "lucide-react"
 import { useId, useState } from "react"
 import { PendingInterviewInvites } from "../components/interview-invites"
+import { openOfferSheet } from "../components/offer-sheet"
 
 // ─── Stage timeline ───────────────────────────────────────────────────────────
 function ApplicationTimeline({ applicationId }: { applicationId: string }) {
@@ -187,6 +188,11 @@ function JobCard({
 }) {
   const { setCandidateActiveView, openConversation } = useJobStore()
   const { toast } = useToast()
+  const liveOffer = useJobStore((st) =>
+    st.offers.find(
+      (o) => o.applicationId === application.id && (o.status === "SENT" || o.status === "ACCEPTED")
+    )
+  )
   // Moved by the recruiter a moment ago (live `application_status_updated`).
   const justMoved = useJobStore(
     (st) =>
@@ -232,6 +238,16 @@ function JobCard({
               </p>
               {application.jobRemoved && (
                 <p className="mt-1 text-[11.5px] font-semibold text-sec-red">No longer available</p>
+              )}
+              {liveOffer && (
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => openOfferSheet(liveOffer.id)}
+                  className="mt-2 inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-[12px] font-semibold text-white hover:bg-primary/90 cursor-pointer"
+                >
+                  🎉 {liveOffer.status === "SENT" ? "Review offer" : "View offer"}
+                </button>
               )}
             </div>
           </div>

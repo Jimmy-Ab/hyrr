@@ -101,6 +101,14 @@ function useLiveApplicantToasts() {
   const liveEvent = useJobStore((s) => s.liveEvent)
   const { toast } = useToast()
   React.useEffect(() => {
+    if (liveEvent?.kind === "offer_answered") {
+      toast(
+        liveEvent.accepted ? "Offer accepted 🎉" : "Offer declined",
+        `${liveEvent.name} ${liveEvent.accepted ? "accepted" : "declined"} the offer for ${liveEvent.jobTitle}.`,
+        liveEvent.accepted ? "success" : "info"
+      )
+      return
+    }
     if (liveEvent?.kind === "interview_booked") {
       toast(
         "Interview booked",
@@ -123,6 +131,28 @@ function useLiveApplicantToasts() {
     )
     if (newApplicantSoundEnabled()) playChime()
   }, [liveEvent, toast])
+}
+
+/** A short celebration across the top when a candidate accepts an offer. */
+function HireCelebration() {
+  const liveEvent = useJobStore((s) => s.liveEvent)
+  const [shown, setShown] = React.useState<{ name: string; jobTitle: string } | null>(null)
+  React.useEffect(() => {
+    if (liveEvent?.kind !== "offer_answered" || !liveEvent.accepted) return
+    setShown({ name: liveEvent.name, jobTitle: liveEvent.jobTitle })
+    const t = setTimeout(() => setShown(null), 8000)
+    return () => clearTimeout(t)
+  }, [liveEvent])
+  if (!shown) return null
+  return (
+    <div
+      role="status"
+      className="hire-celebration tone-emerald relative z-20 overflow-hidden border-b border-[var(--tone-ring)] bg-[var(--tone-bg)] px-4 py-3 text-center text-[14px] font-semibold text-txt-heading"
+    >
+      <span aria-hidden="true" className="hire-confetti" />
+      🎉 {shown.name} accepted the offer for {shown.jobTitle}!
+    </div>
+  )
 }
 
 function AppContent() {
@@ -269,6 +299,7 @@ function AppContent() {
       {/* Top Header */}
       <Header onMenuClick={() => setSidebarOpen(true)} />
       <CompanyStatusBanner />
+      <HireCelebration />
       <EmailVerificationBanner />
 
       {/* Main Container */}

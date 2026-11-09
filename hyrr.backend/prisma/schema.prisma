@@ -147,6 +147,7 @@ model User {
   invitesSent        CompanyInvite[]      @relation("InviteSender")
   interviewInvites   InterviewInvite[]    @relation("InterviewInviteCreator")
   scorecards         Scorecard[]
+  offersCreated      Offer[]              @relation("OfferCreator")
   joinRequests       CompanyJoinRequest[] @relation("JoinRequester")
   joinDecisions      CompanyJoinRequest[] @relation("JoinDecider")
   conversationStates ConversationState[]
@@ -364,6 +365,7 @@ model Application {
   calendarEvents     CalendarEvent[]
   interviewInvites   InterviewInvite[]
   scorecards         Scorecard[]
+  offers             Offer[]
   labels             ApplicationLabel[]
   recruiterNotes     ApplicationNote[]
   answers            ScreeningAnswer[]
@@ -638,6 +640,41 @@ model ScorecardRating {
   score       Int
   notes       String?   @db.Text
   @@index([scorecardId])
+}
+
+enum OfferStatus {
+  SENT
+  ACCEPTED
+  DECLINED
+  WITHDRAWN
+}
+
+/// Formal job offer; the candidate accepts in the app with a typed-name signature (audited).
+model Offer {
+  id               String       @id @default(uuid())
+  applicationId    String
+  application      Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  createdById      String?
+  createdBy        User?        @relation("OfferCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  jobTitle         String
+  baseSalary       Int
+  salaryCurrency   String
+  salaryPeriod     SalaryPeriod
+  bonusAmount      Int?
+  equityPercentage Float?
+  startDate        DateTime
+  expiresAt        DateTime
+  benefits         String[]     @default([])
+  message          String?      @db.Text
+  status           OfferStatus  @default(SENT)
+  signatureName    String?
+  signedAt         DateTime?
+  signedIp         String?
+  declineReason    String?      @db.Text
+  respondedAt      DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  @@index([applicationId, status])
 }
 
 model ScreeningQuestion {

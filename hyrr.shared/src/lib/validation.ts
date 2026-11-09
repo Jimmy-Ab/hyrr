@@ -431,3 +431,46 @@ export const scorecardSchema = z.object({
     )
     .min(1),
 })
+
+// ─── Job offers ───
+
+export const offerSchema = z
+  .object({
+    baseSalary: z
+      .number({ message: "Enter the base salary" })
+      .int("Base salary must be a whole number")
+      .min(1, "Base salary must be more than 0")
+      .max(SALARY_MAX_VALUE, "Base salary is too large"),
+    salaryCurrency: z.enum(CURRENCIES, { message: "Choose a supported currency" }),
+    salaryPeriod: z.enum(SALARY_PERIODS, { message: "Choose per year, month or hour" }),
+    bonusAmount: z
+      .number()
+      .int("Bonus must be a whole number")
+      .min(0, "Bonus can't be negative")
+      .optional(),
+    equityPercentage: z
+      .number()
+      .min(0, "Equity can't be negative")
+      .max(100, "Equity is a percentage (0–100)")
+      .optional(),
+    startDate: z.string().min(1, "Choose a start date"),
+    expiresAt: z.string().min(1, "Choose when the offer expires"),
+    benefits: z
+      .array(z.string().trim().max(80, "Each benefit can be at most 80 characters"))
+      .max(15)
+      .optional(),
+    message: z.string().max(4000, "The message can be at most 4000 characters").optional(),
+  })
+  .refine((o) => Date.parse(o.expiresAt) >= Date.now() + 3_600_000, {
+    path: ["expiresAt"],
+    message: "Give the candidate at least an hour to respond",
+  })
+  .refine((o) => Date.parse(o.expiresAt) <= Date.now() + 60 * 86_400_000, {
+    path: ["expiresAt"],
+    message: "An offer can stay open for at most 60 days",
+  })
+
+export const acceptOfferSchema = z.object({
+  signatureName: z.string().trim().min(2, "Type your full name to sign").max(120),
+  agree: z.literal(true, { message: "Confirm that you accept the terms" }),
+})

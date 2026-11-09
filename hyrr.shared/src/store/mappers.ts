@@ -34,6 +34,7 @@ import type {
   JobApplication,
   JobMatch,
   NotificationItem,
+  Offer,
   PublicJob,
   SavedSearchFilters,
   SavedSearchItem,
@@ -622,5 +623,30 @@ export function mapInterviewInvite(i: any): InterviewInvite {
       endTime: s.endTime,
       booked: !!s.booked,
     })),
+  }
+}
+
+export function mapOffer(o: any): Offer {
+  return {
+    id: o.id,
+    applicationId: o.applicationId,
+    jobTitle: o.jobTitle,
+    companyName: o.companyName ?? undefined,
+    candidateName: o.candidateName ?? "",
+    createdBy: o.createdBy ?? undefined,
+    baseSalary: o.baseSalary,
+    salaryCurrency: o.salaryCurrency,
+    salaryPeriod: o.salaryPeriod,
+    bonusAmount: o.bonusAmount ?? undefined,
+    equityPercentage: o.equityPercentage ?? undefined,
+    startDate: o.startDate,
+    expiresAt: o.expiresAt,
+    benefits: o.benefits ?? [],
+    message: o.message ?? undefined,
+    status: o.status,
+    signatureName: o.signatureName ?? undefined,
+    signedAt: o.signedAt ?? undefined,
+    declineReason: o.declineReason ?? undefined,
+    createdAt: o.createdAt,
   }
 }
