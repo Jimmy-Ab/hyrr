@@ -339,6 +339,19 @@ describe("JobsService", () => {
       })
     })
 
+    it("a posting with enough scam signals goes to moderation (FLAGGED) with its reasons", async () => {
+      await service.createJob("rec-1", {
+        ...dto,
+        description: "Earn $300 per day! Message us at t.me/jobsnow or hr@gmail.com",
+      })
+      const data = prismaMock.job.create.mock.calls[0][0].data
+      expect(data.status).toBe("FLAGGED")
+      expect(data.riskScore).toBeGreaterThanOrEqual(3)
+      expect(data.riskReasons).toEqual(
+        expect.arrayContaining([expect.stringMatching(/link shortener/)])
+      )
+    })
+
     it("publishing on create charges publishCost once and records publishedAt + momentumCost", async () => {
       const job: any = await service.createJob("rec-1", dto)
       expect(pricing.publishCost).toHaveBeenCalledWith({

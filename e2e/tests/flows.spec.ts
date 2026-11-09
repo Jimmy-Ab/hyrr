@@ -1087,3 +1087,26 @@ test("skill badge: a seeker passes a timed test and gets Verified", async ({ pag
   await dialog.getByRole("button", { name: "Done" }).click()
   await expect(row.getByText(/Verified until/)).toBeVisible()
 })
+
+test("scam signals: a risky posting goes to moderation instead of going live", async () => {
+  const rec = await createUser("RECRUITER", "Zelalem")
+  const job = await api(
+    "POST",
+    "/jobs",
+    {
+      title: `E2E Risky Job ${uid()}`,
+      location: "Remote",
+      type: "FULL_TIME",
+      description:
+        "<p>Earn $300 per day from home! Message t.me/quickjobs or hr.team@gmail.com</p>",
+      requirements: ["None"],
+      skills: ["Typing"],
+      categoryId: await firstCategoryId(),
+    },
+    rec.token
+  )
+  expect(job.status).toMatch(/FLAGGED/i)
+  const publicJobs = await api<any>("GET", "/jobs/public")
+  const items: any[] = Array.isArray(publicJobs) ? publicJobs : (publicJobs.items ?? [])
+  expect(items.some((j) => j.id === job.id)).toBe(false)
+})

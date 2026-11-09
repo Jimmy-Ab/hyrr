@@ -321,6 +321,9 @@ model Job {
   removedReason String?
   /// Scorecard criteria for this job; empty = the default four
   scorecardCompetencies String[] @default([])
+  /// Grey-area scam signals found at publish (job-risk.ts); >= threshold → FLAGGED for review
+  riskScore     Int?
+  riskReasons   String[] @default([])
   resumeTailorings ResumeTailoring[]
   publishedAt   DateTime? // first time the job went live (publishing is charged once)
   remote        Boolean     @default(false)

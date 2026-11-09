@@ -107,6 +107,8 @@ export type ModerationItem = {
     title: string
     status: string
     publishedAt: string | null
+    /** Automatic grey-area checks at publish (job-risk.ts). */
+    riskReasons?: string[]
     company: { id: string; name: string; verified: boolean; status: string }
   }
   reports: {
@@ -128,6 +130,8 @@ export type ModerationDetail = {
     createdAt?: string | null
     company?: { id: string; name: string; verified?: boolean; status?: string } | null
     recruiter?: { id: string; name: string; email: string } | null
+    riskScore?: number | null
+    riskReasons?: string[]
     [key: string]: unknown
   }
   reports: {

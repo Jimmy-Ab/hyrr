@@ -128,7 +128,10 @@ export function Moderation() {
                     {it.reports.reasons
                       .slice(0, 3)
                       .map((r) => `${humanize(r.reason)} (${r.count})`)
-                      .join(", ") || "—"}
+                      .join(", ") ||
+                      (it.job.riskReasons?.length
+                        ? `Auto-flagged: ${it.job.riskReasons.join("; ")}`
+                        : "—")}
                   </span>
                 </td>
                 <td className={`${td} whitespace-nowrap text-txt-caption`}>
@@ -273,6 +276,18 @@ function ModerationSheet({ jobId, onClose }: { jobId: string | null; onClose: ()
         </div>
       ) : (
         <>
+          {!!detail.job.riskReasons?.length && (
+            <SheetSection title={`Automatic checks (risk ${detail.job.riskScore ?? "–"})`}>
+              <ul className="list-disc space-y-1 pl-5 text-[13px] text-txt-body">
+                {detail.job.riskReasons.map((r) => (
+                  <li key={r}>{r}</li>
+                ))}
+              </ul>
+              <p className="mt-2 text-[12px] text-txt-caption">
+                Flagged at publish instead of going live. Restore to publish it, or remove it.
+              </p>
+            </SheetSection>
+          )}
           <SheetSection title={`Reports (${detail.reports.length})`}>
             <ul className="flex flex-col gap-2">
               {detail.reports.map((r) => (

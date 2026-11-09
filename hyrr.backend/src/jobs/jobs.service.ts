@@ -1,5 +1,11 @@
 import { HttpStatus, Injectable, Logger, Optional } from "@nestjs/common"
-import { ApplicationStatus, EmploymentType, JobStatus, Prisma } from "@prisma/client"
+import {
+  ApplicationStatus,
+  EmploymentType,
+  JobStatus,
+  NotificationType,
+  Prisma,
+} from "@prisma/client"
 import { assertEmailVerified, requireVerifiedEmail } from "../auth/email-verification"
 import { PricingService, PublishCostInput } from "../billing/pricing.service"
 import { WalletService } from "../billing/wallet.service"
@@ -13,11 +19,13 @@ import { MessagesGateway } from "../messages/messages.gateway"
 import { NotificationsService } from "../notifications/notifications.service"
 import { PrismaService } from "../prisma/prisma.service"
 import { SearchService } from "../search/search.service"
+import { roleTerms, summarise, yearlyMid } from "../seeker-ai/salary-benchmark"
 import { AlertsService } from "../seeker-tools/alerts.service"
 import { CreateJobDto } from "./dtos/create-job.dto"
 import { UpdateJobDto } from "./dtos/update-job.dto"
 import { computeFunnelAnalytics } from "./funnel-analytics"
 import { evaluateJobContent, JobContent } from "./job-content-policy"
+import { assessJobRisk, type RiskInput } from "./job-risk"
 import { PUBLIC_COMPANY_SELECT } from "./public-company"
 import { PUBLIC_JOB_WHERE } from "./public-job"
 
@@ -158,6 +166,52 @@ export class JobsService {
       )
   }
 
+  /** Risk score for a job about to go live (see job-risk.ts). */
+  private async assessRisk(companyId: string, job: RiskInput & { salaryCurrency?: string | null }) {
+    const terms = roleTerms(job.title)
+    const [company, recent, similar] = await Promise.all([
+      this.prisma.company.findUnique({
+        where: { id: companyId },
+        select: { joinedAt: true, verified: true },
+      }),
+      this.prisma.job.count({
+        where: { companyId, publishedAt: { gte: new Date(Date.now() - 86_400_000) } },
+      }),
+      job.salaryCurrency && terms.length
+        ? this.prisma.job.findMany({
+            where: {
+              AND: terms.map((t) => ({ title: { contains: t, mode: "insensitive" as const } })),
+              salaryCurrency: job.salaryCurrency,
+              status: { in: [JobStatus.ACTIVE, JobStatus.CLOSED] },
+            },
+            select: { salaryMin: true, salaryMax: true, salaryPeriod: true },
+            take: 2000,
+          })
+        : Promise.resolve([]),
+    ])
+    const market = summarise((similar ?? []).map(yearlyMid).filter((v): v is number => !!v))
+    return assessJobRisk(job, {
+      marketMedianYearly: market.p50,
+      companyAgeDays: company?.joinedAt
+        ? (Date.now() - company.joinedAt.getTime()) / 86_400_000
+        : 0,
+      companyVerified: !!company?.verified,
+      companyJobsLast24h: (recent ?? 0) + 1,
+    })
+  }
+
+  private async tellUnderReview(recruiterId: string, jobId: string, title: string) {
+    try {
+      await this.notifications.createNotification(
+        recruiterId,
+        `"${title}" is being reviewed by Hyrr before it goes live. This usually takes less than a day.`,
+        NotificationType.SYSTEM
+      )
+    } catch (err: any) {
+      this.logger.warn(`Review notice failed for ${jobId}: ${err?.message}`)
+    }
+  }
+
   // ─── Recruiter: create a job ──────────────────────────────────────
   async createJob(recruiterId: string, dto: CreateJobDto) {
     const user = await this.prisma.user.findUnique({ where: { id: recruiterId } })
@@ -190,6 +244,17 @@ export class JobsService {
 
     // Price + config are read before the transaction (cached, outside the row locks).
     const publishing = status === JobStatus.ACTIVE
+    // Grey-area scam signals: enough of them send the job to moderation instead of live.
+    const risk = publishing
+      ? await this.assessRisk(companyId, {
+          title: dto.title,
+          description: dto.description,
+          salaryMin: dto.salaryMin,
+          salaryMax: dto.salaryMax,
+          salaryPeriod: dto.salaryPeriod,
+          salaryCurrency: dto.salaryCurrency,
+        })
+      : null
     const cost = publishing
       ? await this.pricing.publishCost({
           remote: dto.remote ?? false,
@@ -219,7 +284,8 @@ export class JobsService {
           companyId,
           recruiterId,
           categoryId: dto.categoryId,
-          status,
+          status: risk?.flagged ? JobStatus.FLAGGED : status,
+          ...(risk ? { riskScore: risk.score, riskReasons: risk.reasons } : {}),
           ...(publishing ? { publishedAt: new Date(), momentumCost: cost } : {}),
         },
         include: { company: true, category: true },
@@ -244,6 +310,7 @@ export class JobsService {
     this.afterJobChange(job.id, { index: job.status === JobStatus.ACTIVE, embed: true })
     if (job.status === JobStatus.ACTIVE)
       this.messagesGateway?.emitAdminMetric("job_published", { jobId: job.id })
+    if (risk?.flagged) await this.tellUnderReview(recruiterId, job.id, job.title)
     // Alerts never block job creation (drafts are not announced)
     if (job.status === JobStatus.ACTIVE)
       this.alerts
@@ -316,6 +383,22 @@ export class JobsService {
           })
         : 0
 
+    // First publication goes through the same risk check as new jobs.
+    let risk: Awaited<ReturnType<JobsService["assessRisk"]>> | null = null
+    if (firstPublish && !isAdmin) {
+      risk = await this.assessRisk(current.companyId, {
+        title: (data.title as string | undefined) ?? current.title,
+        description: (data.description as string | undefined) ?? current.description,
+        salaryMin: (data.salaryMin as number | null | undefined) ?? current.salaryMin,
+        salaryMax: salaryMax !== undefined ? salaryMax : current.salaryMax,
+        salaryPeriod: salaryMax !== undefined ? salaryPeriod : current.salaryPeriod,
+        salaryCurrency: salaryMax !== undefined ? salaryCurrency : current.salaryCurrency,
+      })
+      data.riskScore = risk.score
+      data.riskReasons = risk.reasons
+      if (risk.flagged) data.status = JobStatus.FLAGGED
+    }
+
     let published = false
     const job = await this.prisma.$transaction(async (tx) => {
       if (firstPublish) {
@@ -356,6 +439,7 @@ export class JobsService {
     })
     if (published && job.status === JobStatus.ACTIVE)
       this.messagesGateway?.emitAdminMetric("job_published", { jobId: job.id })
+    if (risk?.flagged) await this.tellUnderReview(current.recruiterId, job.id, job.title)
     // The first publication is announced like a newly created job (reopening is not).
     if (published && job.status === JobStatus.ACTIVE)
       this.alerts

@@ -70,6 +70,7 @@ export class AdminModerationService {
         title: true,
         status: true,
         publishedAt: true,
+        riskReasons: true,
         company: { select: COMPANY_SELECT },
       },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
