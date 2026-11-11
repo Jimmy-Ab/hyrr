@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import * as React from "react"
 import { errorMessage } from "../../lib/api"
+import { date as fmtDate, dateTime as fmtDateTime } from "../../lib/format"
 import {
   CREDIT_TRANSACTION_LABEL,
   type BillingPlan,
@@ -44,17 +45,13 @@ export function formatCredits(n: number): string {
 }
 
 function formatDate(iso: string | null | undefined): string {
-  if (!iso) return ""
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString(undefined, { dateStyle: "medium" })
+  const label = fmtDate(iso)
+  return label === "—" ? "" : label
 }
 
 function formatDateTime(iso: string | null | undefined): string {
-  if (!iso) return ""
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime())
-    ? ""
-    : d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+  const label = fmtDateTime(iso)
+  return label === "—" ? "" : label
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

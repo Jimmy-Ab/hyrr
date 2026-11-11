@@ -1476,7 +1476,7 @@ test("skill badge: a seeker passes a timed test and gets Verified", async ({ pag
   await expect(dialog.getByText("100%")).toBeVisible({ timeout: 10_000 })
   await expect(dialog.getByText("You're verified in SQL!")).toBeVisible()
   await dialog.getByRole("button", { name: "Done" }).click()
-  await expect(row.getByText(/Verified until/)).toBeVisible()
+  await expect(row.getByText(/^Verified until [A-Z][a-z]{2} \d{1,2}, \d{4}$/)).toBeVisible()
 })
 
 test("scam signals: a risky posting goes to moderation instead of going live", async () => {

@@ -36,7 +36,7 @@ import * as React from "react"
 import { AiUsageCard } from "../components/ai-usage-card"
 import { ErrorBlock } from "../components/ui/common"
 import { api, useAdminAction, useAdminQuery } from "../lib/api"
-import { humanize } from "../lib/format"
+import { dateTime, humanize } from "../lib/format"
 import { aiSettingsSchema } from "../lib/schemas"
 import type { AiSettings, SystemStatus } from "../lib/types"
 
@@ -444,7 +444,7 @@ function WebJobsCard() {
               {data.enabled ? "Scheduled sync on" : "Scheduled sync off"}
             </TonePill>{" "}
             {data.active.toLocaleString()} live postings
-            {data.lastSync ? ` · last sync ${new Date(data.lastSync.at).toLocaleString()}` : ""}
+            {data.lastSync ? ` · last sync ${dateTime(data.lastSync.at)}` : ""}
           </p>
           <ul className="divide-y divide-bg-border/60">
             {data.providers.map((p) => {

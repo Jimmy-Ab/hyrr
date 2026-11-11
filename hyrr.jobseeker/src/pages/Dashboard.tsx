@@ -8,6 +8,7 @@ import {
   PageHeader,
   StatCard,
   VerifiedBadge,
+  dateTime,
   stageTone,
   useJobStore,
 } from "hyrr.shared"
@@ -94,13 +95,7 @@ export function CandidateDashboard() {
     ? {
         title: interviewApp?.title || nextInterview.title,
         company: interviewApp?.company || nextInterview.title,
-        when: new Date(nextInterview.startTime).toLocaleString([], {
-          weekday: "short",
-          month: "short",
-          day: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-        }),
+        when: dateTime(nextInterview.startTime),
       }
     : null
   const offerApps = jobApplications.filter((a) => a.status === APPLICATION_STATUS.OFFER)

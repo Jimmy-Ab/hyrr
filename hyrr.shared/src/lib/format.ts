@@ -51,13 +51,33 @@ const dateTimeFmt = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
   year: "numeric",
-  hour: "2-digit",
+  hour: "numeric",
   minute: "2-digit",
 })
+const timeFmt = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" })
 
-export const date = (iso: string | null | undefined) => (iso ? dateFmt.format(new Date(iso)) : "—")
-export const dateTime = (iso: string | null | undefined) =>
-  iso ? dateTimeFmt.format(new Date(iso)) : "—"
+type DateInput = string | number | Date | null | undefined
+const toDate = (v: DateInput) => {
+  if (v == null || v === "") return null
+  const d = v instanceof Date ? v : new Date(v)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+/** The one calendar-date format of the apps: "Jan 15, 2027" ("—" when missing). */
+export const date = (v: DateInput) => {
+  const d = toDate(v)
+  return d ? dateFmt.format(d) : "—"
+}
+/** "Jan 15, 2027, 3:40 PM" ("—" when missing). */
+export const dateTime = (v: DateInput) => {
+  const d = toDate(v)
+  return d ? dateTimeFmt.format(d) : "—"
+}
+/** "3:40 PM" ("" when missing). */
+export const time = (v: DateInput) => {
+  const d = toDate(v)
+  return d ? timeFmt.format(d) : ""
+}
 
 /** "3 min ago", "2 d ago", falls back to the date after 30 days. */
 export function ago(iso: string | null | undefined) {

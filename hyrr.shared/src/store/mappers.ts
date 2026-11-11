@@ -16,6 +16,7 @@ import {
   type NotificationType,
   type UserTheme,
 } from "../lib/contracts"
+import { date as fmtDate, dateTime as fmtDateTime } from "../lib/format"
 import type {
   AlertFrequency,
   ApplicationSource,
@@ -75,18 +76,10 @@ export function normalizeIso(value?: string): string | undefined {
   return value
 }
 
-/** Date + time label, e.g. "Nov 3, 10:42 AM" (year added when not the current year). */
+/** Date + time label, e.g. "Jan 15, 2027, 3:40 PM" ("" when invalid). */
 export function formatDateTime(value: string | number | Date): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ""
-  const sameYear = date.getFullYear() === new Date().getFullYear()
-  return date.toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    ...(sameYear ? {} : { year: "numeric" }),
-    hour: "numeric",
-    minute: "2-digit",
-  })
+  const label = fmtDateTime(value)
+  return label === "—" ? "" : label
 }
 
 /** The applicationId a MESSAGE notification points at, if any. */
@@ -126,7 +119,7 @@ export function mapJob(j: any): Job {
     title: j.title,
     location: j.location || "",
     type: j.type ? employmentTypeLabel(j.type) : "",
-    posted: "Posted " + new Date(j.createdAt || Date.now()).toLocaleDateString(),
+    posted: "Posted " + fmtDate(j.createdAt || Date.now()),
     status: mapJobStatus(j.status),
     color: j.color || j.company?.color || "purple",
     description: j.description || "",
@@ -174,7 +167,7 @@ export function mapCandidate(c: any): Candidate {
     location: c.location || "",
     coverLetter: c.coverLetter ?? undefined,
     resumeUrl: c.resumeUrl ?? undefined,
-    dateText: new Date(c.appliedAt || c.createdAt || Date.now()).toLocaleDateString(),
+    dateText: fmtDate(c.appliedAt || c.createdAt || Date.now()),
     status: applicationStatusLabel(isApplicationStatus(c.status) ? c.status : "APPLIED"),
     bookmarked: !!c.recruiterBookmarked,
     avatar: c.user?.avatar || avatarFor(name),
@@ -252,7 +245,7 @@ export function mapPublicJob(pj: any): PublicJob {
     salary: pj.salary || "Competitive",
     category: typeof pj.category?.name === "string" ? pj.category.name : undefined,
     languages: Array.isArray(pj.languages) && pj.languages.length ? pj.languages : ["English"],
-    posted: new Date(pj.createdAt || Date.now()).toLocaleDateString(),
+    posted: fmtDate(pj.createdAt || Date.now()),
     description: pj.description || "",
     requirements: pj.requirements || [],
     skills: pj.skills || [],
@@ -400,14 +393,14 @@ export function mapJobApplication(a: any): JobApplication {
     location: job.location || "",
     type: job.type ? employmentTypeLabel(job.type) : "",
     salary: job.salary || "Competitive",
-    appliedDate: new Date(a.appliedAt || a.createdAt || Date.now()).toLocaleDateString(),
+    appliedDate: fmtDate(a.appliedAt || a.createdAt || Date.now()),
     updatedAt: a.updatedAt || a.appliedAt || new Date().toISOString(),
     status: isApplicationStatus(a.status) ? a.status : APPLICATION_STATUS.APPLIED,
     bookmarked: !!a.seekerBookmarked,
     recruiterName: job.postedBy?.name || "Hiring Team",
     recruiterAvatar: job.postedBy?.avatar || avatarFor("Hiring Team"),
     interviewDate: a.calendarEvents?.[0]?.startTime
-      ? new Date(a.calendarEvents[0].startTime).toLocaleDateString()
+      ? fmtDate(a.calendarEvents[0].startTime)
       : undefined,
     offerAmount: a.offerAmount ?? undefined,
     tag: a.tag ?? undefined,

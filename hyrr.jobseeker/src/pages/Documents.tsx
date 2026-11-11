@@ -3,6 +3,7 @@ import {
   Button,
   Card,
   ConfirmDialog,
+  date,
   Dialog,
   DialogContent,
   DialogFooter,
@@ -399,7 +400,7 @@ export function Documents() {
                     <div className="flex items-center gap-3 text-[12.5px] text-txt-caption">
                       <span>{doc.size}</span>
                       <span>·</span>
-                      <span>{new Date(doc.createdAt).toLocaleDateString()}</span>
+                      <span>{date(doc.createdAt)}</span>
                       <span>·</span>
                       <span
                         className={

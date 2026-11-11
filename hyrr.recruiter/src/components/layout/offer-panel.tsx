@@ -4,6 +4,8 @@ import {
   FieldError,
   Input,
   TonePill,
+  date,
+  dateTime,
   errorMessage,
   fieldErrorsOf,
   offerSchema,
@@ -31,8 +33,7 @@ export const formatMoney = (amount: number, currency: string) =>
   new Intl.NumberFormat([], { style: "currency", currency, maximumFractionDigits: 0 }).format(
     amount
   )
-const dateOnly = (iso: string) =>
-  new Date(iso).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })
+const dateOnly = (iso: string) => date(iso)
 const inDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10)
 
 function OfferSummary({ offer, onWithdraw }: { offer: Offer; onWithdraw: () => void }) {
@@ -56,7 +57,7 @@ function OfferSummary({ offer, onWithdraw }: { offer: Offer; onWithdraw: () => v
       {offer.status === "ACCEPTED" && offer.signedAt && (
         <p className="flex items-center gap-1.5 text-[12.5px] text-txt-body">
           <BadgeCheck className="h-4 w-4 text-sec-green" />
-          Signed by "{offer.signatureName}" on {new Date(offer.signedAt).toLocaleString()}
+          Signed by "{offer.signatureName}" on {dateTime(offer.signedAt)}
         </p>
       )}
       {offer.status === "DECLINED" && offer.declineReason && (

@@ -1,4 +1,4 @@
-import { isApiError, type Candidate, type Job, type TeamMember } from "hyrr.shared"
+import { date, dateTime, isApiError, type Candidate, type Job, type TeamMember } from "hyrr.shared"
 import { useJobStore } from "../store/useJobStore"
 
 // ─── Views <-> URL paths ──────────────────────────────────────────────────────
@@ -175,10 +175,8 @@ export function relativeTime(iso: string | Date | null | undefined): string {
 }
 
 export function formatDateTime(iso: string | null | undefined): string {
-  if (!iso) return ""
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ""
-  return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+  const label = dateTime(iso)
+  return label === "—" ? "" : label
 }
 
 // ─── Momentum (credits) ───────────────────────────────────────────────────────
@@ -197,10 +195,8 @@ export function formatCredits(n: number): string {
 }
 
 export function formatDate(iso: string | null | undefined): string {
-  if (!iso) return ""
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ""
-  return d.toLocaleDateString(undefined, { dateStyle: "medium" })
+  const label = date(iso)
+  return label === "—" ? "" : label
 }
 
 /** true while the job's paid feature window is open. */

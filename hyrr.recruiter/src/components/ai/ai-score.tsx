@@ -1,4 +1,10 @@
-import { AI_RECOMMENDATION_LABEL, Badge, type AiRecommendation, type Candidate } from "hyrr.shared"
+import {
+  AI_RECOMMENDATION_LABEL,
+  Badge,
+  date,
+  type AiRecommendation,
+  type Candidate,
+} from "hyrr.shared"
 import { AlertCircle, Loader2, Sparkles } from "lucide-react"
 
 export const RECOMMENDATION_VARIANT: Record<
@@ -29,7 +35,7 @@ export function relativeTime(iso: string | null | undefined): string {
   if (h < 24) return `${h} h ago`
   const d = Math.round(h / 24)
   if (d < 30) return `${d} d ago`
-  return new Date(iso).toLocaleDateString()
+  return date(iso)
 }
 
 /** Compact AI indicator for cards and tables: spinner while analysing, else score + fit chip. */

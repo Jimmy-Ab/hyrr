@@ -4,6 +4,7 @@ import {
   INTERVIEW_DURATIONS,
   Input,
   TonePill,
+  dateTime,
   errorMessage,
   fieldErrorsOf,
   interviewInviteSchema,
@@ -17,14 +18,7 @@ import {
 import { CalendarClock, Loader2, Plus, Send, X } from "lucide-react"
 import { useEffect, useState, type FormEvent } from "react"
 
-const fmt = (iso: string) =>
-  new Date(iso).toLocaleString([], {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
+const fmt = (iso: string) => dateTime(iso)
 
 /** `datetime-local` value one day ahead at the given hour (local time). */
 const tomorrowAt = (hour: number, dayOffset = 1) => {

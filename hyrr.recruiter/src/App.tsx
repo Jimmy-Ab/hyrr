@@ -11,6 +11,7 @@ import {
   ToastProvider,
   apiFetch,
   captureInviteToken,
+  dateTime,
   isPublicRoute,
   newApplicantSoundEnabled,
   playChime,
@@ -112,13 +113,7 @@ function useLiveApplicantToasts() {
     if (liveEvent?.kind === "interview_booked") {
       toast(
         "Interview booked",
-        `${liveEvent.who} picked ${new Date(liveEvent.startTime).toLocaleString([], {
-          weekday: "short",
-          month: "short",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        })} for ${liveEvent.title}.`,
+        `${liveEvent.who} picked ${dateTime(liveEvent.startTime)} for ${liveEvent.title}.`,
         "success"
       )
       return

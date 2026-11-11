@@ -2,6 +2,7 @@ import {
   apiFetch,
   Button,
   Card,
+  date,
   educationSchema,
   emptySalaryRange,
   errorMessage,
@@ -1498,8 +1499,7 @@ export function ProfilePage() {
                           {activeResume.name}
                         </p>
                         <p className="text-[11.5px] text-txt-caption">
-                          {activeResume.size} · Updated{" "}
-                          {new Date(activeResume.createdAt).toLocaleDateString()}
+                          {activeResume.size} · Updated {date(activeResume.createdAt)}
                         </p>
                       </div>
                     </div>

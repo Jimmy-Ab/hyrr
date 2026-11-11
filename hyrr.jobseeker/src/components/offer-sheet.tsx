@@ -8,7 +8,9 @@ import {
   FieldError,
   Input,
   acceptOfferSchema,
+  dateTime,
   errorMessage,
+  date as fmtDate,
   useJobStore,
   useToast,
   validate,
@@ -25,13 +27,7 @@ export const openOfferSheet = (offerId: string) =>
 const PERIOD = { YEAR: "per year", MONTH: "per month", HOUR: "per hour" } as const
 const money = (n: number, currency: string) =>
   new Intl.NumberFormat([], { style: "currency", currency, maximumFractionDigits: 0 }).format(n)
-const date = (iso: string) =>
-  new Date(iso).toLocaleDateString([], {
-    weekday: "short",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  })
+const date = (iso: string) => fmtDate(iso)
 
 /** Offer review with typed-name acceptance. Opens by itself when an offer arrives. Mounted in App. */
 export function OfferSheet() {
@@ -179,8 +175,7 @@ export function OfferSheet() {
             {offer.status === "ACCEPTED" && (
               <p className="mt-5 flex items-center gap-2 text-[13px] text-txt-body">
                 <BadgeCheck className="h-4 w-4 text-sec-green" /> You signed as "
-                {offer.signatureName}"
-                {offer.signedAt ? ` on ${new Date(offer.signedAt).toLocaleString()}` : ""}.
+                {offer.signatureName}"{offer.signedAt ? ` on ${dateTime(offer.signedAt)}` : ""}.
               </p>
             )}
             {!open && offer.status !== "ACCEPTED" && (

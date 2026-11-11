@@ -1,5 +1,6 @@
 import {
   Button,
+  date,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -21,8 +22,7 @@ export const openInterviewPicker = (inviteId: string) =>
   window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: inviteId }))
 
 const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
-const day = (iso: string) =>
-  new Date(iso).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })
+const day = (iso: string) => date(iso)
 const time = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 

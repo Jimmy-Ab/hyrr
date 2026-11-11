@@ -1,6 +1,7 @@
 import {
   Button,
   Card,
+  date,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -128,11 +129,11 @@ export function VerifiedSkills() {
               <span className="shrink-0 text-[12px] text-txt-caption">Not testable</span>
             ) : it.verified ? (
               <span className="text-[12px] text-sec-green">
-                Verified until {new Date(it.validUntil!).toLocaleDateString()}
+                Verified until {date(it.validUntil)}
               </span>
             ) : it.retryAt ? (
               <span className="text-[12px] text-txt-caption">
-                {it.lastScore}% · retake {new Date(it.retryAt).toLocaleDateString()}
+                {it.lastScore}% · retake {date(it.retryAt)}
               </span>
             ) : (
               <Button
