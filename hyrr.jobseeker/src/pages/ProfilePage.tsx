@@ -39,6 +39,7 @@ import {
   Download,
   ExternalLink,
   FileText,
+  FileUp,
   Globe,
   GraduationCap,
   Heart,
@@ -168,7 +169,8 @@ export function ProfilePage() {
   const { toast } = useToast()
   const { documents, setCandidateActiveView, updateProfile, profileStrength } = useJobStore()
   const aiOn = useAiAvailable()
-  const [cvImportOpen, setCvImportOpen] = useState(false)
+  // Which import dialog is open: a CV, or the PDF LinkedIn exports.
+  const [cvImport, setCvImport] = useState<false | "cv" | "linkedin">(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   /* ── Loading / saving flags ─────────────────────────────── */
@@ -686,7 +688,7 @@ export function ProfilePage() {
           )}
           <Button
             variant="secondary"
-            onClick={() => setCvImportOpen(true)}
+            onClick={() => setCvImport("cv")}
             disabled={!aiOn}
             title={aiOn ? undefined : AI_UNAVAILABLE_MESSAGE}
             aria-describedby={aiOn ? undefined : "cv-import-ai-off"}
@@ -694,6 +696,17 @@ export function ProfilePage() {
           >
             <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
             Import from CV
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => setCvImport("linkedin")}
+            disabled={!aiOn}
+            title={aiOn ? undefined : AI_UNAVAILABLE_MESSAGE}
+            aria-describedby={aiOn ? undefined : "cv-import-ai-off"}
+            className="gap-2 cursor-pointer"
+          >
+            <FileUp className="w-3.5 h-3.5" aria-hidden="true" />
+            Import your LinkedIn profile
           </Button>
           <Button
             onClick={handleSaveAll}
@@ -1873,8 +1886,9 @@ export function ProfilePage() {
         </div>
       </div>
       <CvImportDialog
-        open={cvImportOpen}
-        onOpenChange={setCvImportOpen}
+        open={!!cvImport}
+        variant={cvImport || "cv"}
+        onOpenChange={(o) => !o && setCvImport(false)}
         onApply={applyCvSuggestions}
       />
 

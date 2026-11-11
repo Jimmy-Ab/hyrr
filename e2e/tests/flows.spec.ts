@@ -1240,6 +1240,51 @@ test("relevance: web jobs rank for the profile and Refresh re-ranks after a prof
   await expect(firstTitle()).toHaveText(`Rank ${tag} Florist`)
 })
 
+test("LinkedIn import: guided PDF export, PDF only, then the same CV import pipeline", async ({
+  page,
+}) => {
+  const seeker = await createUser("SEEKER", "Bethel")
+  // e2e runs without an AI key: show the AI tools as available in the browser only, so the flow
+  // reaches the real backend, which answers AI_DISABLED like it does for a CV.
+  await page.route("**/api/billing/pricing", async (route) => {
+    const res = await route.fetch()
+    const body = await res.json()
+    await route.fulfill({
+      response: res,
+      json: { ...body, features: { ...body.features, ai: true } },
+    })
+  })
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await login(page, SEEKER_URL, seeker.email)
+  await page.goto(`${SEEKER_URL}/profile`)
+  await expect(page.getByRole("button", { name: "Import from CV" })).toBeVisible()
+  await page.getByRole("button", { name: "Import your LinkedIn profile" }).click()
+
+  const dialog = page.getByRole("dialog")
+  await expect(dialog.getByRole("heading", { name: "Import your LinkedIn profile" })).toBeVisible()
+  const steps = dialog.getByRole("list", { name: "How to save your LinkedIn profile as a PDF" })
+  await expect(steps.getByRole("listitem")).toHaveCount(4)
+  await expect(steps).toContainText("Save to PDF")
+  // No CV picker: the LinkedIn PDF is always a fresh upload.
+  await expect(dialog.getByText("Which CV?")).toBeHidden()
+
+  const input = dialog.getByLabel("LinkedIn PDF")
+  await input.setInputFiles({
+    name: "Profile.docx",
+    mimeType: "application/msword",
+    buffer: Buffer.from("x"),
+  })
+  await expect(dialog.getByRole("alert")).toHaveText(/Choose the PDF you saved from LinkedIn/)
+
+  const pdf = Buffer.from(
+    "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Count 0/Kids[]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF"
+  )
+  await input.setInputFiles({ name: "Profile.pdf", mimeType: "application/pdf", buffer: pdf })
+  await dialog.getByRole("button", { name: "Read PDF" }).click()
+  // Same pipeline as a CV: upload → POST /profile/import-cv → extractProfileFromCv.
+  await expect(dialog.getByRole("alert")).toBeVisible({ timeout: 15_000 })
+})
+
 test("pricing: all prices and switches come from the server; recruiters load them at startup", async ({
   page,
   browser,
