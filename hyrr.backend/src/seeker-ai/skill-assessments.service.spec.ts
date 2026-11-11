@@ -32,8 +32,8 @@ describe("SkillAssessmentsService", () => {
     }))
   })
 
-  it("only curated skills; never sends the correct answers", async () => {
-    expect(await code(service.start("u1", "Astrology"))).toBe("SKILL_NOT_ASSESSABLE")
+  it("curated or profile skills only; never sends the correct answers", async () => {
+    expect(await code(service.start("u1", "Astrology"))).toBe("SKILL_NOT_ON_PROFILE")
     prisma.skillAssessment.findFirst.mockResolvedValue(null)
     const test = await service.start("u1", "sql")
     expect(test.skill).toBe("SQL")
@@ -49,6 +49,77 @@ describe("SkillAssessmentsService", () => {
     })
     await service.start("u1", "Python")
     expect(prisma.skillQuestion.createMany.mock.calls[0][0].data).toHaveLength(15)
+  })
+
+  it("profile skills: soft skills are rejected without AI; others are classified once and cached", async () => {
+    prisma.seekerProfile.findUnique.mockResolvedValue({
+      skills: ["Hardworking", "kubernetes"],
+      yearsOfExperience: "7",
+      experiences: [],
+    })
+    prisma.skillAssessment.findFirst.mockResolvedValue(null)
+    expect(await code(service.start("u1", "Hardworking"))).toBe("SKILL_NOT_ASSESSABLE")
+    expect(ai.structured).not.toHaveBeenCalled()
+
+    prisma.skillEligibility.findUnique.mockResolvedValue(null)
+    ai.structured.mockResolvedValueOnce({
+      result: { testable: true, label: "Kubernetes", reason: "" },
+    })
+    prisma.skillEligibility.upsert.mockResolvedValue({
+      skill: "kubernetes",
+      label: "Kubernetes",
+      testable: true,
+      reason: null,
+    })
+    prisma.skillQuestion.count.mockResolvedValue(20) // bank full: no generation
+    const test = await service.start("u1", "kubernetes")
+    expect(test.skill).toBe("Kubernetes")
+    expect(prisma.skillEligibility.upsert.mock.calls[0][0].create).toMatchObject({
+      skill: "kubernetes",
+      testable: true,
+    })
+    // 7 years of experience: advanced bank first; attempt records the level.
+    expect(prisma.skillQuestion.findMany.mock.calls[0][0].where).toEqual({
+      skill: "Kubernetes",
+      difficulty: "ADVANCED",
+      active: true,
+    })
+    expect(prisma.skillAssessment.create.mock.calls[0][0].data.difficulty).toBe("ADVANCED")
+    expect(ai.structured).toHaveBeenCalledTimes(1)
+  })
+
+  it("derives the level from years and role titles", () => {
+    const { levelForProfile } = jest.requireActual("./skill-eligibility")
+    expect(levelForProfile(null)).toBe("BEGINNER")
+    expect(levelForProfile({ yearsOfExperience: "1", experiences: [{ role: "Intern" }] })).toBe(
+      "BEGINNER"
+    )
+    expect(levelForProfile({ yearsOfExperience: "3", experiences: [] })).toBe("INTERMEDIATE")
+    expect(
+      levelForProfile({ yearsOfExperience: "1", experiences: [{ role: "Senior Engineer" }] })
+    ).toBe("ADVANCED")
+  })
+
+  it("reports: own attempts only, once per seeker, third report disables the question", async () => {
+    prisma.skillAssessment.findFirst.mockResolvedValueOnce(null)
+    expect(await code(service.reportQuestion("u1", "q-x"))).toBe("QUESTION_NOT_FOUND")
+
+    prisma.skillAssessment.findFirst.mockResolvedValue({ id: "t1" })
+    prisma.$transaction.mockImplementation((fn: any) => fn(prisma))
+    prisma.skillQuestionReport.findUnique.mockResolvedValue(null)
+    prisma.skillQuestion.update.mockResolvedValueOnce({ reportCount: 2 })
+    await service.reportQuestion("u1", "q1", "Two answers are correct")
+    expect(prisma.skillQuestion.update).toHaveBeenCalledTimes(1)
+
+    prisma.skillQuestion.update.mockResolvedValueOnce({ reportCount: 3 })
+    await service.reportQuestion("u2", "q1")
+    expect(prisma.skillQuestion.update).toHaveBeenLastCalledWith({
+      where: { id: "q1" },
+      data: { active: false },
+    })
+
+    prisma.skillQuestionReport.findUnique.mockResolvedValue({ id: "r1" })
+    expect(await service.reportQuestion("u2", "q1")).toMatchObject({ alreadyReported: true })
   })
 
   const attempt = (over: Record<string, any> = {}) => ({

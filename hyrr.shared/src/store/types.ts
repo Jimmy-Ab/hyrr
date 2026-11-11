@@ -702,6 +702,13 @@ export interface NegotiationAdvice {
 
 export interface SkillOverviewItem {
   skill: string
+  /** Listed on the seeker's profile (otherwise one of the always-available skills). */
+  onProfile: boolean
+  /** false = can't be tested (see reason); null = checked when the test starts. */
+  testable: boolean | null
+  reason: string | null
+  /** Test level from the seeker's experience. */
+  level: "BEGINNER" | "INTERMEDIATE" | "ADVANCED"
   verified: boolean
   validUntil: string | null
   lastScore: number | null
@@ -1328,6 +1335,11 @@ export interface JobState {
   fetchSkillOverview: () => Promise<SkillOverviewItem[]>
   startSkillTest: (skill: string) => Promise<SkillTest>
   submitSkillTest: (id: string, answers: number[]) => Promise<SkillTestResult>
+  /** "Report this question"; three reports take it out of the bank. */
+  reportSkillQuestion: (
+    questionId: string,
+    reason?: string
+  ) => Promise<{ reported: boolean; alreadyReported: boolean }>
   fetchMockInterviews: () => Promise<MockInterview[]>
   /** Charges mockInterviewCost (refunded if question generation fails). */
   startMockInterview: (jobId: string) => Promise<MockInterview>

@@ -1365,15 +1365,29 @@ test("pricing: all prices and switches come from the server; recruiters load the
 test("skill badge: a seeker passes a timed test and gets Verified", async ({ page }) => {
   const key = await seedSkillQuestions("SQL")
   const seeker = await createUser("SEEKER", "Meron")
+  await setSeekerProfile(seeker.email, { title: "Analyst", skills: ["SQL", "Hardworking"] })
   await page.setViewportSize({ width: 1400, height: 900 })
   await login(page, SEEKER_URL, seeker.email)
   await page.goto(`${SEEKER_URL}/profile`)
+  // A personal quality on the profile is listed but can't be tested (no AI needed to say so).
+  const soft = page.locator("li").filter({ hasText: /^Hardworking/ })
+  await expect(soft.getByText("Not testable")).toBeVisible()
+  await expect(soft.getByRole("button", { name: "Take test" })).toHaveCount(0)
+
   const row = page.locator("li").filter({ hasText: /^SQL/ })
+  const started = page.waitForResponse(
+    (r) => r.url().endsWith("/api/seeker-ai/skills/tests") && r.request().method() === "POST"
+  )
   await row.getByRole("button", { name: "Take test" }).click()
+  // The answer key never leaves the server.
+  const payload = await (await started).text()
+  expect(payload).not.toMatch(/correctIndex|explanation|reportCount/)
   const dialog = page.getByRole("dialog")
   await expect(dialog.getByText("SQL test")).toBeVisible()
   const sets = dialog.locator("fieldset")
   await expect(sets).toHaveCount(10)
+  await dialog.getByRole("button", { name: "Report question 1", exact: true }).click()
+  await expect(dialog.getByRole("button", { name: "Report question 1", exact: true })).toHaveText("Reported")
   for (let i = 0; i < 10; i++) {
     const legend = (await sets.nth(i).locator("legend").innerText()).replace(/^\d+\.\s*/, "")
     await sets.nth(i).getByText(key.get(legend)!, { exact: true }).click()

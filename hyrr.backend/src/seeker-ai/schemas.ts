@@ -105,6 +105,21 @@ export const skillQuestionsSchema = z.object({
 })
 
 export const SKILL_QUESTIONS_PROMPT = `You write rigorous multiple-choice assessment questions for professional skills.
-Write 15 questions for the given skill, mixing fundamentals and practical scenarios at intermediate level.
+Write 15 questions for the given skill, mixing fundamentals and practical scenarios at the given level
+(beginner: core concepts and everyday tasks; intermediate: applied scenarios; advanced: design trade-offs, edge cases).
 Each has exactly 4 options with ONE unambiguously correct answer (correctIndex 0-3), plausible distractors,
 no "all of the above", and a one-sentence explanation. Vary which index is correct.`
+
+/** Is a profile skill objectively testable with multiple-choice questions? */
+export const skillEligibilitySchema = z.object({
+  testable: z.boolean(),
+  /** Canonical name, e.g. "postgres" -> "PostgreSQL" */
+  label: z.string().min(1).max(60),
+  /** One short sentence for the seeker when not testable */
+  reason: z.string().max(200),
+})
+
+export const SKILL_ELIGIBILITY_PROMPT = `Decide whether a skill from a job seeker's profile can be objectively verified with a
+multiple-choice knowledge test (tools, technologies, methods, professional or domain knowledge: yes; personal
+qualities, traits, attitudes or vague phrases such as "hardworking", "team player", "fast learner": no).
+Return testable, the skill's canonical name as label, and a one-sentence reason (shown to the seeker when not testable).`

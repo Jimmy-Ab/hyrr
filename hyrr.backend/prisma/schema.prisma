@@ -823,16 +823,48 @@ model MockInterview {
 }
 
 /// Multiple-choice question bank per skill (answers never leave the server).
+enum SkillLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
 model SkillQuestion {
   id           String   @id @default(uuid())
   skill        String
+  /// Shared bank per skill and level; existing questions were written at intermediate level
+  difficulty   SkillLevel @default(INTERMEDIATE)
   question     String   @db.Text
   options      String[]
   correctIndex Int
   explanation  String?  @db.Text
   active       Boolean  @default(true)
+  /// Seeker reports; at 3 the question is deactivated and never sampled again
+  reportCount  Int      @default(0)
+  reports      SkillQuestionReport[]
   createdAt    DateTime @default(now())
   @@index([skill, active])
+  @@index([skill, difficulty, active])
+}
+
+/// One report per seeker per question ("Report this question" in a test).
+model SkillQuestionReport {
+  id         String        @id @default(uuid())
+  questionId String
+  question   SkillQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  userId     String
+  reason     String?
+  createdAt  DateTime      @default(now())
+  @@unique([questionId, userId])
+}
+
+/// Whether a skill can be assessed (cached once per skill for everyone; key = lower-case name).
+model SkillEligibility {
+  skill     String   @id
+  label     String
+  testable  Boolean
+  reason    String?
+  checkedAt DateTime @default(now())
 }
 
 /// One timed attempt; passing (>= 80%) is a "Verified" badge until validUntil.
@@ -841,6 +873,7 @@ model SkillAssessment {
   userId      String
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   skill       String
+  difficulty  SkillLevel @default(INTERMEDIATE)
   questionIds String[]
   answers     Int[]     @default([])
   score       Int?

@@ -64,6 +64,13 @@ export class StartSkillTestDto {
   skill: string
 }
 
+export class ReportSkillQuestionDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(300, { message: "Keep the reason under 300 characters" })
+  reason?: string
+}
+
 export class SubmitSkillTestDto {
   @IsArray()
   @ArrayMaxSize(20)
@@ -161,5 +168,16 @@ export class SeekerAiController {
   @Roles("SEEKER")
   submitSkillTest(@Req() req: any, @Param("id", uuid) id: string, @Body() dto: SubmitSkillTestDto) {
     return this.skills.submit(req.user.userId, id, dto.answers)
+  }
+
+  /** "Report this question" (wrong, unclear or off-topic). Three reports remove it from the bank. */
+  @Post("skills/questions/:id/report")
+  @Roles("SEEKER")
+  reportSkillQuestion(
+    @Req() req: any,
+    @Param("id", uuid) id: string,
+    @Body() dto: ReportSkillQuestionDto
+  ) {
+    return this.skills.reportQuestion(req.user.userId, id, dto.reason)
   }
 }

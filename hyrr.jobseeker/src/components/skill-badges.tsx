@@ -44,6 +44,17 @@ export function VerifiedSkills() {
   const fetchSkillOverview = useJobStore((s) => s.fetchSkillOverview)
   const startSkillTest = useJobStore((s) => s.startSkillTest)
   const submitSkillTest = useJobStore((s) => s.submitSkillTest)
+  const reportSkillQuestion = useJobStore((s) => s.reportSkillQuestion)
+  const [reported, setReported] = useState<Set<string>>(() => new Set())
+  const report = async (questionId: string) => {
+    try {
+      await reportSkillQuestion(questionId)
+      setReported((s) => new Set(s).add(questionId))
+      toast("Thanks for the report", "We review questions that seekers flag.", "success")
+    } catch (err) {
+      toast("Couldn't send the report", errorMessage(err), "error")
+    }
+  }
   const { toast } = useToast()
   const [items, setItems] = useState<SkillOverviewItem[]>([])
   const [test, setTest] = useState<SkillTest | null>(null)
@@ -90,8 +101,10 @@ export function VerifiedSkills() {
       <div className="mb-4">
         <h2 className="text-[16px] font-semibold text-txt-heading">Verified skills</h2>
         <p className="text-[12.5px] text-txt-caption">
-          A 10-question, 10-minute test per skill. Score 80% or more for a Verified badge (valid 12
-          months) that recruiters see, and you rank higher in their talent search. Free.
+          A 10-question, 10-minute test for the skills on your profile, pitched at your experience
+          {items[0] ? ` (${items[0].level.toLowerCase()} level)` : ""}. Score 80% or more for a
+          Verified badge (valid 12 months) that recruiters see, and you rank higher in their talent
+          search. Free.
         </p>
       </div>
       <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -104,9 +117,16 @@ export function VerifiedSkills() {
               {it.verified && (
                 <BadgeCheck className="h-4 w-4 text-sec-green" aria-label="Verified" />
               )}
-              {it.skill}
+              <span className="flex flex-col">
+                {it.skill}
+                {it.testable === false && it.reason && (
+                  <span className="text-[11.5px] font-normal text-txt-caption">{it.reason}</span>
+                )}
+              </span>
             </span>
-            {it.verified ? (
+            {it.testable === false ? (
+              <span className="shrink-0 text-[12px] text-txt-caption">Not testable</span>
+            ) : it.verified ? (
               <span className="text-[12px] text-sec-green">
                 Verified until {new Date(it.validUntil!).toLocaleDateString()}
               </span>
@@ -164,6 +184,15 @@ export function VerifiedSkills() {
                       <legend className="text-[13.5px] font-semibold text-txt-heading">
                         {i + 1}. {q.question}
                       </legend>
+                      <button
+                        type="button"
+                        onClick={() => void report(q.id)}
+                        disabled={reported.has(q.id)}
+                        aria-label={`Report question ${i + 1}`}
+                        className="text-[11.5px] font-medium text-txt-caption underline-offset-2 hover:text-sec-red hover:underline disabled:no-underline disabled:opacity-60 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded"
+                      >
+                        {reported.has(q.id) ? "Reported" : "Report this question"}
+                      </button>
                       {q.options.map((o, j) => (
                         <label
                           key={j}
