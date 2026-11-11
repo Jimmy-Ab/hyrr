@@ -4,6 +4,7 @@ import {
   EmptyState,
   FilterChips,
   jobColorTone,
+  MatchScore,
   PageHeader,
   scoreTone,
   stageTone,
@@ -533,9 +534,7 @@ function ScoreCell({ c, compact }: { c: Candidate; compact?: boolean }) {
           />
         </span>
       )}
-      <span className="text-[12.5px] font-semibold tabular-nums text-[var(--tone-fg)]">
-        {c.aiScore}%
-      </span>
+      <MatchScore score={c.aiScore} suffix="" icon={false} size="sm" />
     </span>
   )
 }

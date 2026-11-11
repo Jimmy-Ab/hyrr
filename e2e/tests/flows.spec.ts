@@ -1400,6 +1400,59 @@ test("discover: the job description scrolls on its own; the list and the page st
   expect(900 - bottom).toBeLessThan(80)
 })
 
+test("match scores: high green, medium yellow, low red, in bold", async ({ page }) => {
+  const seeker = await createUser("SEEKER", "Bisrat")
+  const job = (id: string, title: string, score: number) => ({
+    id,
+    source: "REMOTIVE",
+    sourceId: id,
+    title,
+    company: "Globex",
+    companyLogo: null,
+    location: "Remote",
+    remote: true,
+    description: "Build things.",
+    salaryMin: null,
+    salaryMax: null,
+    salaryCurrency: null,
+    employmentType: "full_time",
+    category: "Software",
+    postedAt: new Date().toISOString(),
+    applied: false,
+    match: { score, reasons: [] },
+  })
+  await page.route("**/api/external-jobs?*", (route) =>
+    route.fulfill({
+      json: {
+        items: [job("h", "High fit", 85), job("m", "Medium fit", 55), job("l", "Low fit", 20)],
+        nextCursor: null,
+      },
+    })
+  )
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await login(page, SEEKER_URL, seeker.email)
+  await page.goto(`${SEEKER_URL}/discover`)
+  await page.getByRole("button", { name: "From the web" }).click()
+  const list = page.getByTestId("web-job-list")
+  for (const [title, level, pct] of [
+    ["High fit", "high", "85%"],
+    ["Medium fit", "medium", "55%"],
+    ["Low fit", "low", "20%"],
+  ]) {
+    const score = list.getByRole("button", { name: new RegExp(title) }).getByTestId("match-score")
+    await expect(score).toHaveAttribute("data-level", level)
+    await expect(score).toContainText(pct)
+    expect(
+      Number(await score.evaluate((el) => getComputedStyle(el).fontWeight))
+    ).toBeGreaterThanOrEqual(700)
+  }
+  // Distinct colours per level.
+  const colors = await list
+    .getByTestId("match-score")
+    .evaluateAll((els) => els.map((el) => getComputedStyle(el).color))
+  expect(new Set(colors).size).toBe(3)
+})
+
 test("pricing: all prices and switches come from the server; recruiters load them at startup", async ({
   page,
   browser,

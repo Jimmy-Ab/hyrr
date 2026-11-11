@@ -5,6 +5,9 @@ import {
   Button,
   ConfirmDialog,
   insufficientCreditsDetails,
+  matchLevel,
+  scoreTone,
+  toneClass,
   useToast,
   type Candidate,
 } from "hyrr.shared"
@@ -31,13 +34,11 @@ function ScoreRing({ score }: { score: number }) {
   const radius = 30
   const circumference = 2 * Math.PI * radius
   const clamped = Math.max(0, Math.min(100, score))
-  const color =
-    clamped >= 75 ? "text-sec-green" : clamped >= 50 ? "text-sec-orange" : "text-sec-red"
   return (
     <div
-      className="relative w-[76px] h-[76px] shrink-0"
+      className={`relative w-[76px] h-[76px] shrink-0 ${toneClass(scoreTone(clamped))}`}
       role="img"
-      aria-label={`AI match score ${clamped} out of 100`}
+      aria-label={`AI match score ${clamped} out of 100, ${matchLevel(clamped)}`}
     >
       <svg viewBox="0 0 76 76" className="w-full h-full -rotate-90">
         <circle cx="38" cy="38" r={radius} strokeWidth="7" className="stroke-bg-border fill-none" />
@@ -49,10 +50,10 @@ function ScoreRing({ score }: { score: number }) {
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={circumference * (1 - clamped / 100)}
-          className={`fill-none stroke-current transition-[stroke-dashoffset] duration-700 ${color}`}
+          className="fill-none stroke-[var(--tone-fg)] transition-[stroke-dashoffset] duration-700"
         />
       </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-[19px] font-extrabold text-txt-heading">
+      <span className="absolute inset-0 flex items-center justify-center text-[19px] font-extrabold tabular-nums text-[var(--tone-fg)]">
         {clamped}
       </span>
     </div>

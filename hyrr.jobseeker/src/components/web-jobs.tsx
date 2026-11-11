@@ -5,6 +5,7 @@ import {
   EmptyState,
   InfiniteSentinel,
   Input,
+  MatchScore,
   PageHeader,
   creditSuffix,
   errorMessage,
@@ -312,9 +313,7 @@ export function WebJobs({ sourceSwitch }: { sourceSwitch?: ReactNode }) {
                       </span>
                     )}
                     {salary(j) && <span className="font-semibold text-primary">{salary(j)}</span>}
-                    {j.match && j.match.score > 0 && (
-                      <span className="font-semibold text-txt-heading">{j.match.score}% match</span>
-                    )}
+                    {j.match && j.match.score > 0 && <MatchScore score={j.match.score} size="xs" />}
                     {j.applied && <span className="font-semibold text-sec-green">Applied</span>}
                   </p>
                   <JobCardMeta remote={j.remote} category={j.category} />

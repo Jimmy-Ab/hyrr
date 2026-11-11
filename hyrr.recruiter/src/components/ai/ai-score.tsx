@@ -2,10 +2,11 @@ import {
   AI_RECOMMENDATION_LABEL,
   Badge,
   date,
+  MatchScore,
   type AiRecommendation,
   type Candidate,
 } from "hyrr.shared"
-import { AlertCircle, Loader2, Sparkles } from "lucide-react"
+import { AlertCircle, Loader2 } from "lucide-react"
 
 export const RECOMMENDATION_VARIANT: Record<
   AiRecommendation,
@@ -14,12 +15,6 @@ export const RECOMMENDATION_VARIANT: Record<
   STRONG_FIT: "success",
   POSSIBLE_FIT: "warning",
   NOT_A_FIT: "destructive",
-}
-
-export function scoreVariant(score: number): "success" | "warning" | "destructive" {
-  if (score >= 75) return "success"
-  if (score >= 50) return "warning"
-  return "destructive"
 }
 
 /** "just now", "5 min ago", "3 h ago", "2 d ago", or a date. */
@@ -62,14 +57,12 @@ export function AiScoreChips({
     const rec = candidate.aiAnalysis?.recommendation
     return (
       <span className="inline-flex items-center gap-1 flex-wrap">
-        <Badge
-          variant={scoreVariant(candidate.aiScore)}
-          className="flex items-center gap-1 shrink-0 py-0.5 px-2 text-[10.5px]"
-          title="AI match score"
-        >
-          <Sparkles className="w-3 h-3" />
-          {candidate.aiScore}%
-        </Badge>
+        <MatchScore
+          score={candidate.aiScore}
+          suffix=""
+          size="xs"
+          title={`AI match score ${candidate.aiScore}%`}
+        />
         {rec && (
           <Badge
             variant={RECOMMENDATION_VARIANT[rec]}

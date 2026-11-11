@@ -22,6 +22,7 @@ import {
   Input,
   JOB_REPORT_REASONS,
   JOB_TYPES,
+  MatchScore,
   PageHeader,
   RichTextRenderer,
   VerifiedBadge,
@@ -86,22 +87,8 @@ const MATCH_TABS: { id: MatchTab; label: string }[] = [
   { id: "all", label: "All jobs" },
 ]
 
-function matchTone(score: number) {
-  if (score >= 75) return "text-sec-green bg-sec-green/10 border-sec-green/25"
-  if (score >= 50) return "text-primary bg-primary-light border-primary-border/40"
-  return "text-txt-caption bg-bg-primary border-bg-border"
-}
-
 function MatchBadge({ match }: { match: JobMatch }) {
-  return (
-    <span
-      className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold ${matchTone(match.score)}`}
-      title={`${match.score}% match with your profile`}
-    >
-      <Sparkles className="h-3 w-3" aria-hidden="true" />
-      {match.score}% match
-    </span>
-  )
+  return <MatchScore score={match.score} title={`${match.score}% match with your profile`} />
 }
 
 function ReasonChips({ reasons, max }: { reasons: string[]; max: number }) {
