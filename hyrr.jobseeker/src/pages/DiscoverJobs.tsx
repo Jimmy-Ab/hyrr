@@ -755,7 +755,7 @@ function DiscoverHyrr({ sourceSwitch }: { sourceSwitch?: ReactNode }) {
       <div
         ref={splitRef}
         style={splitHeight ? { height: splitHeight } : undefined}
-        className="flex flex-col lg:flex-row lg:items-stretch lg:sticky lg:top-5 gap-5 flex-1 min-w-0 lg:flex-none lg:min-h-0"
+        className="flex flex-col lg:flex-row lg:items-stretch lg:sticky lg:top-5 gap-5 flex-1 min-w-0 lg:flex-none lg:min-h-0 lg:overflow-hidden"
       >
         {/* Job List */}
         {/* Narrow list beside the detail pane; full width (centred empty/error states) when the
@@ -766,7 +766,7 @@ function DiscoverHyrr({ sourceSwitch }: { sourceSwitch?: ReactNode }) {
           data-lenis-prevent
           className={`w-full flex flex-col gap-3 ${
             selectedJob || listLoading || filtered.length > 0
-              ? "lg:w-[360px] shrink-0 max-h-[70dvh] lg:max-h-none lg:h-full overflow-y-auto pr-1 -mr-1"
+              ? "lg:w-[360px] shrink-0 max-h-[70dvh] lg:max-h-none lg:h-full overflow-y-auto overscroll-contain pr-1 -mr-1"
               : "lg:flex-1 lg:items-center"
           }`}
         >
@@ -943,7 +943,7 @@ function DiscoverHyrr({ sourceSwitch }: { sourceSwitch?: ReactNode }) {
             ref={detailRef}
             data-testid="hyrr-job-detail"
             data-lenis-prevent
-            className="flex-1 min-w-0 scroll-mt-4 rounded-card lg:h-full lg:overflow-y-auto"
+            className="flex-1 min-w-0 scroll-mt-4 rounded-card lg:h-full lg:overflow-y-auto lg:overscroll-contain"
           >
             <Card className="p-5 sm:p-8">
               {/* Header */}

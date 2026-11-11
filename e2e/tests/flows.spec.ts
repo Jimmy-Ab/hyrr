@@ -1471,6 +1471,59 @@ test("match scores: high green, medium yellow, low red, in bold", async ({ page 
   expect(new Set(colors).size).toBe(3)
 })
 
+test("web jobs: long descriptions are formatted and never leave a blank page", async ({ page }) => {
+  const desc =
+    "The role\nWe are building a platform used by thousands of teams.\n\nWhat you'll do\n- Design and build APIs\n- Own services end to end\n\nWhat you'll bring\nStrong Python and backend engineering. You design maintainable APIs.\n\n".repeat(
+      8
+    )
+  const job = (i: number) => ({
+    id: `w${i}`,
+    source: "REMOTIVE",
+    sourceId: `w${i}`,
+    title: `Founding Engineer ${i}`,
+    company: "Planqor",
+    companyLogo: null,
+    location: "Berlin",
+    remote: true,
+    description: desc,
+    salaryMin: null,
+    salaryMax: null,
+    salaryCurrency: null,
+    employmentType: "full_time",
+    category: "Software Development",
+    postedAt: new Date().toISOString(),
+    applied: false,
+    match: { score: 75, reasons: [] },
+  })
+  await page.route("**/api/external-jobs?*", (route) =>
+    route.fulfill({
+      json: { items: Array.from({ length: 20 }, (_, i) => job(i)), nextCursor: null },
+    })
+  )
+  const seeker = await createUser("SEEKER", "Hanna")
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await login(page, SEEKER_URL, seeker.email)
+  await page.goto(`${SEEKER_URL}/discover`)
+  await page.getByRole("button", { name: "From the web" }).click()
+  await page.getByTestId("web-job-list").getByText("Founding Engineer 0", { exact: true }).click()
+  const detail = page.getByTestId("web-job-detail")
+  const text = detail.getByTestId("web-job-description")
+  await expect(text.getByRole("heading", { name: "What you'll do" }).first()).toBeVisible()
+  await expect(text.getByRole("listitem").first()).toHaveText("Design and build APIs")
+
+  const box = (await detail.boundingBox())!
+  await page.mouse.move(box.x + 300, box.y + 200)
+  for (let i = 0; i < 30; i++) await page.mouse.wheel(0, 500)
+  await page.waitForTimeout(500)
+  const main = await page.evaluate(() => {
+    const m = document.querySelector("main")!
+    return { top: m.scrollTop, extra: m.scrollHeight - m.clientHeight }
+  })
+  expect(main.top).toBe(0)
+  expect(main.extra).toBeLessThanOrEqual(2)
+  await expectPanesFillViewport(page, page.getByTestId("web-job-list"), detail)
+})
+
 test("pricing: all prices and switches come from the server; recruiters load them at startup", async ({
   page,
   browser,

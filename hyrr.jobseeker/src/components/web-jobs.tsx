@@ -15,11 +15,22 @@ import {
   type JobFilterInput,
   type WebJob,
 } from "hyrr.shared"
-import { ExternalLink, Globe, Loader2, MapPin, RefreshCw, Search } from "lucide-react"
+import {
+  Briefcase,
+  Clock,
+  DollarSign,
+  ExternalLink,
+  Globe,
+  Loader2,
+  MapPin,
+  RefreshCw,
+  Search,
+} from "lucide-react"
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react"
 import { useFillHeight } from "../lib/use-fill-height"
 import { JobCardMeta } from "./job-card-meta"
 import { JobFilterBar } from "./job-filter-bar"
+import { WebJobDescription } from "./web-job-description"
 
 /**
  * Attribution only where the provider's terms require it (one small line in the detail pane):
@@ -30,7 +41,7 @@ import { JobFilterBar } from "./job-filter-bar"
 function SourceAttribution({ source }: { source: WebJob["source"] }) {
   if (source === "REMOTIVE")
     return (
-      <p className="mt-6 text-[12px] text-txt-caption" data-testid="source-attribution">
+      <p className="text-[12px] text-txt-caption" data-testid="source-attribution">
         Listing from{" "}
         <a
           href="https://remotive.com"
@@ -44,7 +55,7 @@ function SourceAttribution({ source }: { source: WebJob["source"] }) {
     )
   if (source === "ADZUNA")
     return (
-      <p className="mt-6 text-[12px] text-txt-caption" data-testid="source-attribution">
+      <p className="text-[12px] text-txt-caption" data-testid="source-attribution">
         <a
           href="https://www.adzuna.com"
           target="_blank"
@@ -285,13 +296,13 @@ export function WebJobs({ sourceSwitch }: { sourceSwitch?: ReactNode }) {
         <div
           ref={splitRef}
           style={splitHeight ? { height: splitHeight } : undefined}
-          className="flex flex-col gap-5 lg:flex-row lg:items-stretch lg:sticky lg:top-5"
+          className="flex flex-col gap-5 lg:flex-row lg:items-stretch lg:sticky lg:top-5 lg:min-h-0 lg:overflow-hidden"
         >
           <ul
             ref={listRef}
             data-testid="web-job-list"
             data-lenis-prevent
-            className="flex w-full shrink-0 flex-col gap-2 lg:w-[360px] max-h-[70dvh] lg:max-h-none lg:h-full overflow-y-auto pr-1 -mr-1"
+            className="flex w-full shrink-0 flex-col gap-2 lg:w-[360px] max-h-[70dvh] lg:max-h-none lg:h-full overflow-y-auto overscroll-contain pr-1 -mr-1"
           >
             {jobs.map((j) => (
               <li key={j.id}>
@@ -345,58 +356,91 @@ export function WebJobs({ sourceSwitch }: { sourceSwitch?: ReactNode }) {
               ref={detailRef}
               data-testid="web-job-detail"
               data-lenis-prevent
-              className="min-w-0 flex-1 rounded-card lg:h-full lg:overflow-y-auto"
+              className="min-w-0 flex-1 rounded-card lg:h-full lg:overflow-y-auto lg:overscroll-contain"
             >
               <Card className="p-5 sm:p-8">
-                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-bg-border/40 pb-5">
-                  <div className="min-w-0">
-                    <h2 className="break-words text-[20px] font-extrabold text-txt-title">
-                      {selected.title}
-                    </h2>
-                    <p className="text-[14px] text-txt-body">
-                      {selected.company}
-                      {selected.location ? ` · ${selected.location}` : ""}
-                      {selected.remote ? " · Remote" : ""}
-                    </p>
-                    <p className="mt-1 text-[12.5px] text-txt-caption">
-                      {[
-                        salary(selected),
-                        selected.employmentType,
-                        ago(selected.postedAt) && `Posted ${ago(selected.postedAt)}`,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
+                {/* Header (same layout as a Hyrr job) */}
+                <div className="flex items-start gap-4 border-b border-bg-border/40 pb-6 sm:gap-5">
+                  <div className="hidden sm:block">
+                    <Avatar name={selected.company} src={selected.companyLogo} size={64} />
                   </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <Button onClick={() => apply(selected)} disabled={applying} className="gap-1.5">
-                      {applying ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <ExternalLink className="h-4 w-4" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-start justify-between gap-2 sm:gap-4">
+                      <div className="min-w-0">
+                        <h2 className="break-words text-[20px] font-extrabold text-txt-title sm:text-[22px]">
+                          {selected.title}
+                        </h2>
+                        <p className="mt-0.5 text-[14px] font-medium text-txt-body">
+                          {selected.company}
+                        </p>
+                      </div>
+                      {selected.match && selected.match.score > 0 && (
+                        <MatchScore score={selected.match.score} />
                       )}
-                      {selected.applied ? "Open the posting" : `Apply${creditSuffix(cost)}`}
-                    </Button>
-                    {!selected.applied && (
-                      <span className="text-[11.5px] text-txt-caption">
-                        Balance: {wallet?.balance ?? "–"} credits · reopening is free
-                      </span>
-                    )}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[13.5px] font-medium text-txt-caption">
+                      {selected.location && (
+                        <span className="flex items-center gap-1">
+                          <MapPin className="h-3.5 w-3.5" aria-hidden />
+                          {selected.location}
+                        </span>
+                      )}
+                      {selected.employmentType && (
+                        <span className="flex items-center gap-1 capitalize">
+                          <Briefcase className="h-3.5 w-3.5" aria-hidden />
+                          {selected.employmentType.replace(/[_-]+/g, " ")}
+                        </span>
+                      )}
+                      {salary(selected) && (
+                        <span className="flex items-center gap-1">
+                          <DollarSign className="h-3.5 w-3.5" aria-hidden />
+                          {salary(selected)}
+                        </span>
+                      )}
+                      {ago(selected.postedAt) && (
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3.5 w-3.5" aria-hidden />
+                          Posted {ago(selected.postedAt)}
+                        </span>
+                      )}
+                    </div>
+                    <JobCardMeta remote={selected.remote} category={selected.category} />
+                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                      <Button
+                        onClick={() => apply(selected)}
+                        disabled={applying}
+                        className="h-11 min-w-[160px] gap-1.5 px-5 text-[14px] font-bold shadow-button"
+                      >
+                        {applying ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <ExternalLink className="h-4 w-4" />
+                        )}
+                        {selected.applied ? "Open the posting" : `Apply${creditSuffix(cost)}`}
+                      </Button>
+                      {!selected.applied && (
+                        <span className="text-[12px] text-txt-caption">
+                          Balance: {wallet?.balance ?? "–"} credits · reopening is free
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-                {selected.description ? (
-                  <p className="mt-5 whitespace-pre-line text-[14px] leading-relaxed text-txt-body">
-                    {selected.description}
+                <div className="pt-6">
+                  {selected.description ? (
+                    <WebJobDescription text={selected.description} />
+                  ) : (
+                    <p className="text-[13px] text-txt-caption">
+                      The full description is on the original posting.
+                    </p>
+                  )}
+                </div>
+                <div className="mt-6 border-t border-bg-border/40 pt-4">
+                  <SourceAttribution source={selected.source} />
+                  <p className="mt-1 text-[12px] text-txt-caption">
+                    Hyrr doesn't review external postings; apply with the usual care.
                   </p>
-                ) : (
-                  <p className="mt-5 text-[13px] text-txt-caption">
-                    The full description is on the original posting.
-                  </p>
-                )}
-                <SourceAttribution source={selected.source} />
-                <p className="mt-2 text-[12px] text-txt-caption">
-                  Hyrr doesn't review external postings; apply with the usual care.
-                </p>
+                </div>
               </Card>
             </div>
           )}
