@@ -431,6 +431,9 @@ function DiscoverHyrr({ sourceSwitch }: { sourceSwitch?: ReactNode }) {
     // On narrow screens the detail pane is below the list.
     if (window.matchMedia?.("(max-width: 1023px)").matches) {
       requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: "smooth" }))
+    } else {
+      // Wide screens: the detail pane scrolls on its own; start each job at its top.
+      requestAnimationFrame(() => detailRef.current?.scrollTo({ top: 0 }))
     }
   }
 
@@ -751,13 +754,16 @@ function DiscoverHyrr({ sourceSwitch }: { sourceSwitch?: ReactNode }) {
       </Card>
 
       {/* Split Pane */}
-      <div className="flex flex-col lg:flex-row gap-5 flex-1 min-w-0">
+      {/* Wide screens: list and detail are two equal-height panes that each scroll on their own
+          (data-lenis-prevent keeps the page's smooth scroller from taking the wheel). */}
+      <div className="flex flex-col lg:flex-row lg:items-start gap-5 flex-1 min-w-0">
         {/* Job List */}
         {/* Narrow list beside the detail pane; full width (centred empty/error states) when the
             list has nothing to show and no detail pane is rendered. */}
         <div
           ref={listRef}
           data-testid="hyrr-job-list"
+          data-lenis-prevent
           className={`w-full flex flex-col gap-3 ${
             selectedJob || listLoading || filtered.length > 0
               ? "lg:w-[360px] shrink-0 max-h-[70dvh] lg:max-h-[calc(100dvh-260px)] overflow-y-auto overscroll-contain pr-1 -mr-1"
@@ -933,8 +939,13 @@ function DiscoverHyrr({ sourceSwitch }: { sourceSwitch?: ReactNode }) {
 
         {/* Job Detail */}
         {selectedJob && (
-          <div className="flex-1 min-w-0 scroll-mt-4" ref={detailRef}>
-            <Card className="p-5 sm:p-8 lg:sticky lg:top-0">
+          <div
+            ref={detailRef}
+            data-testid="hyrr-job-detail"
+            data-lenis-prevent
+            className="flex-1 min-w-0 scroll-mt-4 rounded-card lg:max-h-[calc(100dvh-260px)] lg:overflow-y-auto lg:overscroll-contain"
+          >
+            <Card className="p-5 sm:p-8">
               {/* Header */}
               <div className="flex items-start gap-4 sm:gap-5 pb-6 border-b border-bg-border/40">
                 <div

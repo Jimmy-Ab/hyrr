@@ -1357,6 +1357,49 @@ test("seeker pages: one page header each and no horizontal overflow at 375px and
   await expect(page).toHaveURL(/\/discover/)
 })
 
+test("discover: the job description scrolls on its own; the list and the page stay put", async ({
+  page,
+}) => {
+  const rec = await createUser("RECRUITER", "Saron")
+  const tag = uid()
+  const longText =
+    `<p>${"Build and run reliable services for millions of users. ".repeat(40)}</p>`.repeat(12)
+  await createActiveJobs(rec.email, 12, `Scroll ${tag}`, { description: longText })
+  const seeker = await createUser("SEEKER", "Abel")
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await login(page, SEEKER_URL, seeker.email)
+  await page.goto(`${SEEKER_URL}/discover`)
+  await page
+    .getByRole("tab", { name: "All jobs" })
+    .or(page.getByRole("button", { name: "All jobs" }))
+    .first()
+    .click()
+  const list = page.getByTestId("hyrr-job-list")
+  await list.getByText(`Scroll ${tag} 12`).click()
+  const detail = page.getByTestId("hyrr-job-detail")
+  await expect(detail).toBeVisible()
+
+  const mainTop = () => page.evaluate(() => document.querySelector("main")?.scrollTop ?? 0)
+  const listTop = () => list.evaluate((el) => el.scrollTop)
+  const [main0, list0] = [await mainTop(), await listTop()]
+  const box = (await detail.boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + Math.min(box.height / 2, 300))
+  for (let i = 0; i < 6; i++) await page.mouse.wheel(0, 400)
+  await expect.poll(() => detail.evaluate((el) => el.scrollTop)).toBeGreaterThan(300)
+  expect(await listTop()).toBe(list0)
+  expect(await mainTop()).toBe(main0)
+  // Page scrolled to its end: the list sits fully in view with no blank stretch below it.
+  await page.evaluate(() => {
+    const m = document.querySelector("main")!
+    m.scrollTop = m.scrollHeight
+  })
+  await page.waitForTimeout(300)
+  const listBox = (await list.boundingBox())!
+  const bottom = listBox.y + listBox.height
+  expect(bottom).toBeLessThanOrEqual(900)
+  expect(900 - bottom).toBeLessThan(80)
+})
+
 test("pricing: all prices and switches come from the server; recruiters load them at startup", async ({
   page,
   browser,

@@ -159,6 +159,11 @@ export function WebJobs({ sourceSwitch }: { sourceSwitch?: ReactNode }) {
   }, [remote, filtersKey])
 
   const selected = jobs.find((j) => j.id === selectedId) ?? null
+  // The detail pane scrolls on its own: start each job at its top.
+  const detailRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    detailRef.current?.scrollTo?.({ top: 0 })
+  }, [selectedId])
 
   const apply = async (job: WebJob) => {
     // Open the tab inside the click (popup blockers), point it at the posting once charged.
@@ -277,6 +282,7 @@ export function WebJobs({ sourceSwitch }: { sourceSwitch?: ReactNode }) {
           <ul
             ref={listRef}
             data-testid="web-job-list"
+            data-lenis-prevent
             className="flex w-full shrink-0 flex-col gap-2 lg:w-[360px] max-h-[70dvh] lg:max-h-[calc(100dvh-300px)] overflow-y-auto overscroll-contain pr-1 -mr-1"
           >
             {jobs.map((j) => (
@@ -329,57 +335,64 @@ export function WebJobs({ sourceSwitch }: { sourceSwitch?: ReactNode }) {
           </ul>
 
           {selected && (
-            <Card className="min-w-0 flex-1 p-5 sm:p-8 lg:sticky lg:top-0 lg:self-start">
-              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-bg-border/40 pb-5">
-                <div className="min-w-0">
-                  <h2 className="break-words text-[20px] font-extrabold text-txt-title">
-                    {selected.title}
-                  </h2>
-                  <p className="text-[14px] text-txt-body">
-                    {selected.company}
-                    {selected.location ? ` · ${selected.location}` : ""}
-                    {selected.remote ? " · Remote" : ""}
-                  </p>
-                  <p className="mt-1 text-[12.5px] text-txt-caption">
-                    {[
-                      salary(selected),
-                      selected.employmentType,
-                      ago(selected.postedAt) && `Posted ${ago(selected.postedAt)}`,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <Button onClick={() => apply(selected)} disabled={applying} className="gap-1.5">
-                    {applying ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <ExternalLink className="h-4 w-4" />
+            <div
+              ref={detailRef}
+              data-testid="web-job-detail"
+              data-lenis-prevent
+              className="min-w-0 flex-1 rounded-card lg:max-h-[calc(100dvh-300px)] lg:overflow-y-auto lg:overscroll-contain"
+            >
+              <Card className="p-5 sm:p-8">
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-bg-border/40 pb-5">
+                  <div className="min-w-0">
+                    <h2 className="break-words text-[20px] font-extrabold text-txt-title">
+                      {selected.title}
+                    </h2>
+                    <p className="text-[14px] text-txt-body">
+                      {selected.company}
+                      {selected.location ? ` · ${selected.location}` : ""}
+                      {selected.remote ? " · Remote" : ""}
+                    </p>
+                    <p className="mt-1 text-[12.5px] text-txt-caption">
+                      {[
+                        salary(selected),
+                        selected.employmentType,
+                        ago(selected.postedAt) && `Posted ${ago(selected.postedAt)}`,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <Button onClick={() => apply(selected)} disabled={applying} className="gap-1.5">
+                      {applying ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ExternalLink className="h-4 w-4" />
+                      )}
+                      {selected.applied ? "Open the posting" : `Apply${creditSuffix(cost)}`}
+                    </Button>
+                    {!selected.applied && (
+                      <span className="text-[11.5px] text-txt-caption">
+                        Balance: {wallet?.balance ?? "–"} credits · reopening is free
+                      </span>
                     )}
-                    {selected.applied ? "Open the posting" : `Apply${creditSuffix(cost)}`}
-                  </Button>
-                  {!selected.applied && (
-                    <span className="text-[11.5px] text-txt-caption">
-                      Balance: {wallet?.balance ?? "–"} credits · reopening is free
-                    </span>
-                  )}
+                  </div>
                 </div>
-              </div>
-              {selected.description ? (
-                <p className="mt-5 whitespace-pre-line text-[14px] leading-relaxed text-txt-body">
-                  {selected.description}
+                {selected.description ? (
+                  <p className="mt-5 whitespace-pre-line text-[14px] leading-relaxed text-txt-body">
+                    {selected.description}
+                  </p>
+                ) : (
+                  <p className="mt-5 text-[13px] text-txt-caption">
+                    The full description is on the original posting.
+                  </p>
+                )}
+                <SourceAttribution source={selected.source} />
+                <p className="mt-2 text-[12px] text-txt-caption">
+                  Hyrr doesn't review external postings; apply with the usual care.
                 </p>
-              ) : (
-                <p className="mt-5 text-[13px] text-txt-caption">
-                  The full description is on the original posting.
-                </p>
-              )}
-              <SourceAttribution source={selected.source} />
-              <p className="mt-2 text-[12px] text-txt-caption">
-                Hyrr doesn't review external postings; apply with the usual care.
-              </p>
-            </Card>
+              </Card>
+            </div>
           )}
         </div>
       )}
