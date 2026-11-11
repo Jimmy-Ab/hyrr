@@ -95,6 +95,8 @@ const emptyWorkspace = {
   initialLoadError: null,
   searchQuery: "",
   matchedJobs: [] as PublicJob[],
+  matchedJobsCursor: null,
+  matchedJobsLoadingMore: false,
   matchTab: "for-you" as const,
   profileStrength: 0,
   profileMissing: [] as string[],

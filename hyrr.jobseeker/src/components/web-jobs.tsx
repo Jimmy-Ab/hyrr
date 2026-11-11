@@ -2,6 +2,7 @@ import {
   Button,
   Card,
   EmptyState,
+  InfiniteSentinel,
   Input,
   PageHeader,
   creditSuffix,
@@ -11,7 +12,7 @@ import {
   type WebJob,
 } from "hyrr.shared"
 import { ExternalLink, Globe, Loader2, MapPin, Search } from "lucide-react"
-import { useCallback, useEffect, useState, type FormEvent } from "react"
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 
 const SOURCE_LABEL: Record<WebJob["source"], { name: string; site: string }> = {
   ADZUNA: { name: "Adzuna", site: "https://www.adzuna.com" },
@@ -69,19 +70,47 @@ export function WebJobs() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [applying, setApplying] = useState(false)
 
+  const listRef = useRef<HTMLUListElement>(null)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [moreError, setMoreError] = useState<string | null>(null)
+  // Bumped by every fresh search: a late "more" page from an older search is dropped.
+  const searchSeq = useRef(0)
+  const inFlight = useRef(false)
+
   const load = useCallback(
     async (more = false) => {
-      setLoading(true)
-      setError(null)
+      if (more && (inFlight.current || !cursor)) return
+      const seq = more ? searchSeq.current : ++searchSeq.current
+      inFlight.current = more
+      if (more) {
+        setLoadingMore(true)
+        setMoreError(null)
+      } else {
+        setLoading(true)
+        setError(null)
+      }
       try {
         const page = await fetchWebJobs(q, remote, more ? (cursor ?? undefined) : undefined)
-        setJobs((list) => (more ? [...list, ...page.items] : page.items))
+        if (seq !== searchSeq.current) return
+        setJobs((list) => {
+          if (!more) return page.items
+          const seen = new Set(list.map((j) => j.id))
+          return [...list, ...page.items.filter((j) => !seen.has(j.id))]
+        })
         setCursor(page.nextCursor)
-        if (!more) setSelectedId(page.items[0]?.id ?? null)
+        if (!more) {
+          setSelectedId(page.items[0]?.id ?? null)
+          listRef.current?.scrollTo({ top: 0 })
+        }
       } catch (err) {
-        setError(errorMessage(err, "Could not load jobs from the web."))
+        const message = errorMessage(err, "Could not load jobs from the web.")
+        if (more) setMoreError(message)
+        else setError(message)
       } finally {
-        setLoading(false)
+        if (more) {
+          inFlight.current = false
+          setLoadingMore(false)
+        } else setLoading(false)
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -171,7 +200,11 @@ export function WebJobs() {
         />
       ) : (
         <div className="flex flex-col gap-5 lg:flex-row">
-          <ul className="flex w-full shrink-0 flex-col gap-2 lg:w-[360px]">
+          <ul
+            ref={listRef}
+            data-testid="web-job-list"
+            className="flex w-full shrink-0 flex-col gap-2 lg:w-[360px] max-h-[70dvh] lg:max-h-[calc(100dvh-300px)] overflow-y-auto overscroll-contain pr-1 -mr-1"
+          >
             {jobs.map((j) => (
               <li key={j.id}>
                 <button
@@ -199,11 +232,17 @@ export function WebJobs() {
                 </button>
               </li>
             ))}
-            {cursor && (
-              <Button variant="secondary" disabled={loading} onClick={() => load(true)}>
-                Load more
-              </Button>
-            )}
+            <li>
+              <InfiniteSentinel
+                rootRef={listRef}
+                count={jobs.length}
+                hasMore={!!cursor}
+                loading={loadingMore}
+                error={moreError}
+                onMore={() => void load(true)}
+                endLabel="That's every job from the web for now"
+              />
+            </li>
           </ul>
 
           {selected && (

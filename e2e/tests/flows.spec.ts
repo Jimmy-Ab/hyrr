@@ -3,6 +3,7 @@ import {
   API,
   api,
   companyBalance,
+  createActiveJobs,
   createUser,
   createWebJob,
   detachFromCompany,
@@ -1064,6 +1065,39 @@ test("practice interview: offered on active applications; without AI, Start is o
   await expect(dialog.getByRole("button", { name: "Start · 3 credits" })).toBeDisabled()
   await expect(dialog.getByText(/AI tools are switched off on Hyrr right now/)).toBeVisible()
   expect(await seekerBalance(seeker.email)).toBe(before)
+})
+
+test("discover: the Hyrr job list scrolls on its own and loads every page once", async ({
+  page,
+}) => {
+  const rec = await createUser("RECRUITER", "Liya")
+  const prefix = `E2E Scroll ${uid()}`
+  await createActiveJobs(rec.email, 25, prefix)
+  const seeker = await createUser("SEEKER", "Dawit")
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await login(page, SEEKER_URL, seeker.email)
+  await page.goto(`${SEEKER_URL}/discover`)
+  await page
+    .getByRole("tab", { name: "All jobs" })
+    .or(page.getByRole("button", { name: "All jobs" }))
+    .first()
+    .click()
+  const list = page.getByTestId("hyrr-job-list")
+  await expect(list.getByText(`${prefix} 25`)).toBeVisible()
+  // Own scroll container: scrolling it never moves the page.
+  expect(await list.evaluate((el) => getComputedStyle(el).overflowY)).toBe("auto")
+  const pageY = await page.evaluate(() => window.scrollY)
+  const end = list.getByTestId("list-end")
+  for (let i = 0; i < 30 && !(await end.isVisible()); i++) {
+    await list.evaluate((el) => el.scrollTo({ top: el.scrollHeight }))
+    await page.waitForTimeout(300)
+  }
+  await expect(end).toBeVisible()
+  expect(await page.evaluate(() => window.scrollY)).toBe(pageY)
+  // Every created job exactly once (no duplicate pages).
+  const titles = await list.getByText(new RegExp(`^${prefix} \\d+$`)).allInnerTexts()
+  expect(titles).toHaveLength(25)
+  expect(new Set(titles).size).toBe(25)
 })
 
 test("pricing: all prices and switches come from the server; recruiters load them at startup", async ({

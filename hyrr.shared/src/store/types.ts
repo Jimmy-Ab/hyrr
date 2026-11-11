@@ -1422,6 +1422,11 @@ export interface JobState {
   /** No skills and no title: matches are meaningless */
   thinProfile: boolean
   fetchMatchedJobs: (tab: MatchTab) => Promise<void>
+  /** Cursor of the next matched-jobs page; null = no more pages. */
+  matchedJobsCursor: string | null
+  matchedJobsLoadingMore: boolean
+  /** Appends the next page of the current tab (no-op while loading or at the end). */
+  fetchMoreMatchedJobs: () => Promise<void>
   /** Reloads profileStrength / profileMissing from GET /profile. */
   refreshProfileStrength: () => Promise<void>
   alerts: JobAlertItem[]

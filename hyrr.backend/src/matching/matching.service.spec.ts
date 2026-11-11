@@ -73,7 +73,45 @@ describe("MatchingService", () => {
     expect(typeof result.profileStrength).toBe("number")
     expect(prisma.job.findMany.mock.calls[0][0].where).toEqual({ status: "ACTIVE" })
     expect(prisma.application.findMany.mock.calls[0][0].where.userId).toBe("u1")
-    expect(cache.set).toHaveBeenCalledWith("matching:u1:for-you:50", result, 300)
+    // The full ranked list is cached once; pages slice it.
+    expect(cache.set).toHaveBeenCalledWith(
+      "matching:u1:for-you:0",
+      expect.objectContaining({ jobs: [expect.objectContaining({ id: "good" })] }),
+      300
+    )
+    expect(result.nextCursor).toBeNull()
+  })
+
+  it("for-you pages through the cached ranking with an opaque cursor", async () => {
+    prisma.application.findMany.mockResolvedValue([])
+    const first = await service.getMatchedJobs("u1", "for-you", 1)
+    expect(first.jobs).toHaveLength(1)
+    expect(typeof first.nextCursor).toBe("string")
+    cache.get.mockResolvedValueOnce(cache.set.mock.calls[0][1])
+    const second = await service.getMatchedJobs("u1", "for-you", 1, first.nextCursor!)
+    expect(second.jobs[0].id).not.toBe(first.jobs[0].id)
+    expect(prisma.job.findMany).toHaveBeenCalledTimes(1)
+  })
+
+  it("all: keyset pages (createdAt, id) and a next cursor only when more rows exist", async () => {
+    const page = await service.getMatchedJobs("u1", "all", 3)
+    expect(page.jobs.map((j: any) => j.id)).toEqual(["applied", "saved", "good"])
+    expect(page.nextCursor).toEqual(expect.any(String))
+    expect(prisma.job.findMany.mock.calls[0][0]).toMatchObject({
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 4,
+    })
+    await service.getMatchedJobs("u1", "all", 3, page.nextCursor!)
+    expect(prisma.job.findMany.mock.calls[1][0].where.OR).toEqual([
+      { createdAt: { lt: new Date("2026-11-01") } },
+      { createdAt: new Date("2026-11-01"), id: { lt: "good" } },
+    ])
+  })
+
+  it("rejects a forged cursor with INVALID_CURSOR", async () => {
+    await expect(service.getMatchedJobs("u1", "all", 3, "not-a-cursor")).rejects.toMatchObject({
+      errorCode: "INVALID_CURSOR",
+    })
   })
 
   it("all: keeps every ACTIVE job in recency order, each with a match", async () => {
@@ -89,8 +127,12 @@ describe("MatchingService", () => {
     expect(result.thinProfile).toBe(true)
     expect(result.profileStrength).toBe(0)
 
-    cache.get.mockResolvedValue({ cached: true })
-    expect(await service.getMatchedJobs("u2", "for-you", 10)).toEqual({ cached: true })
+    cache.get.mockResolvedValue({ cached: true, jobs: [{ id: "c" }] })
+    expect(await service.getMatchedJobs("u2", "for-you", 10)).toEqual({
+      cached: true,
+      jobs: [{ id: "c" }],
+      nextCursor: null,
+    })
   })
 
   it("invalidate drops every cached list of the user", async () => {

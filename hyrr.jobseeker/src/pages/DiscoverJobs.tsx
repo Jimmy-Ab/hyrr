@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
   EmptyState,
   FilterChips,
+  InfiniteSentinel,
   Input,
   JOB_REPORT_REASONS,
   JOB_TYPES,
@@ -301,6 +302,15 @@ function DiscoverHyrr() {
   const [reporting, setReporting] = useState(false)
   const [reportedIds, setReportedIds] = useState<Set<string>>(() => new Set())
   const detailRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const matchedJobsCursor = useJobStore((s) => s.matchedJobsCursor)
+  const matchedJobsLoadingMore = useJobStore((s) => s.matchedJobsLoadingMore)
+  const fetchMoreMatchedJobs = useJobStore((s) => s.fetchMoreMatchedJobs)
+  const [moreError, setMoreError] = useState<string | null>(null)
+  const loadMore = useCallback(() => {
+    setMoreError(null)
+    fetchMoreMatchedJobs().catch((err) => setMoreError(errorMessage(err)))
+  }, [fetchMoreMatchedJobs])
 
   const resumes = documents.filter((d) => d.type === "resume")
 
@@ -669,9 +679,11 @@ function DiscoverHyrr() {
         {/* Narrow list beside the detail pane; full width (centred empty/error states) when the
             list has nothing to show and no detail pane is rendered. */}
         <div
+          ref={listRef}
+          data-testid="hyrr-job-list"
           className={`w-full flex flex-col gap-3 ${
             selectedJob || listLoading || filtered.length > 0
-              ? "lg:w-[360px] shrink-0"
+              ? "lg:w-[360px] shrink-0 max-h-[70dvh] lg:max-h-[calc(100dvh-260px)] overflow-y-auto overscroll-contain pr-1 -mr-1"
               : "lg:flex-1 lg:items-center"
           }`}
         >
@@ -823,6 +835,17 @@ function DiscoverHyrr() {
                 </button>
               )
             })
+          )}
+          {!listLoading && !matchError && !useFallback && (
+            <InfiniteSentinel
+              rootRef={listRef}
+              count={filtered.length}
+              hasMore={!!matchedJobsCursor}
+              loading={matchedJobsLoadingMore}
+              error={moreError}
+              onMore={loadMore}
+              endLabel="That's every job for now"
+            />
           )}
         </div>
 
@@ -1361,7 +1384,7 @@ export function DiscoverJobs() {
   return (
     <div className="flex flex-col gap-4">
       {webJobsOn && (
-        <FilterChips
+        <FilterChips<"hyrr" | "web">
           id="discover-source"
           label="Job source"
           value={source}

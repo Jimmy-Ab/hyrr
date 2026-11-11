@@ -172,3 +172,24 @@ export async function seedSkillQuestions(skill: string) {
   }
   return key
 }
+
+/** Inserts `count` ACTIVE jobs for the recruiter's company (no credits spent), dated in the past, newest last. */
+export async function createActiveJobs(recruiterEmail: string, count: number, prefix: string) {
+  const user = await prisma.user.findUniqueOrThrow({ where: { email: recruiterEmail } })
+  const category = await prisma.jobCategory.findFirstOrThrow()
+  const now = Date.now()
+  await prisma.job.createMany({
+    data: Array.from({ length: count }, (_, i) => ({
+      companyId: user.companyId!,
+      recruiterId: user.id,
+      categoryId: category.id,
+      title: `${prefix} ${String(i + 1).padStart(2, "0")}`,
+      location: "Remote",
+      type: "FULL_TIME" as const,
+      description: "<p>Scroll test.</p>",
+      status: "ACTIVE" as const,
+      createdAt: new Date(now - (count - i) * 1000),
+      publishedAt: new Date(now - (count - i) * 1000),
+    })),
+  })
+}

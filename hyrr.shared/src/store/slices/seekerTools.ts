@@ -12,7 +12,7 @@ import {
   toError,
 } from "../mappers"
 import type { StoreSet } from "../session"
-import type { JobState, SavedSearchFilters } from "../types"
+import type { JobState, PublicJob, SavedSearchFilters } from "../types"
 
 /** UI filters → API filters (job type label → EmploymentType code; "All" dropped). */
 const toApiFilters = (filters: SavedSearchFilters) => {
@@ -30,6 +30,9 @@ export type SeekerToolsSlice = Pick<
   | "profileMissing"
   | "thinProfile"
   | "fetchMatchedJobs"
+  | "matchedJobsCursor"
+  | "matchedJobsLoadingMore"
+  | "fetchMoreMatchedJobs"
   | "refreshProfileStrength"
   | "alerts"
   | "alertsLoading"
@@ -60,6 +63,7 @@ export const applyProfileStrength = (set: StoreSet, profile: any) => {
 
 /** Monotonic token: an older fetchMatchedJobs response never overwrites a newer tab. */
 let matchSeq = 0
+const MATCH_PAGE_SIZE = 20
 
 export const createSeekerToolsSlice: StateCreator<JobState, [], [], SeekerToolsSlice> = (
   set,
@@ -68,6 +72,8 @@ export const createSeekerToolsSlice: StateCreator<JobState, [], [], SeekerToolsS
   matchedJobs: [],
   matchTab: "for-you",
   matchedJobsLoading: false,
+  matchedJobsCursor: null,
+  matchedJobsLoadingMore: false,
   profileStrength: 0,
   profileMissing: [],
   thinProfile: false,
@@ -76,10 +82,13 @@ export const createSeekerToolsSlice: StateCreator<JobState, [], [], SeekerToolsS
     const seq = ++matchSeq
     set({ matchTab: tab, matchedJobsLoading: true })
     try {
-      const res = await apiFetch(`/matching/jobs?tab=${encodeURIComponent(tab)}&limit=50`)
+      const res = await apiFetch(
+        `/matching/jobs?tab=${encodeURIComponent(tab)}&limit=${MATCH_PAGE_SIZE}`
+      )
       if (seq !== matchSeq) return
       set({
         matchedJobs: Array.isArray(res?.jobs) ? res.jobs.map(mapPublicJob) : [],
+        matchedJobsCursor: typeof res?.nextCursor === "string" ? res.nextCursor : null,
         thinProfile: !!res?.thinProfile,
       })
       if (Array.isArray(res?.missing)) applyProfileStrength(set, res)
@@ -90,6 +99,38 @@ export const createSeekerToolsSlice: StateCreator<JobState, [], [], SeekerToolsS
       throw toError(err, "Failed to load jobs")
     } finally {
       if (seq === matchSeq) set({ matchedJobsLoading: false })
+    }
+  },
+
+  fetchMoreMatchedJobs: async () => {
+    const {
+      matchedJobsCursor: cursor,
+      matchedJobsLoadingMore,
+      matchedJobsLoading,
+      matchTab,
+    } = get()
+    // One request at a time, and nothing past the last page.
+    if (!cursor || matchedJobsLoadingMore || matchedJobsLoading) return
+    const seq = matchSeq
+    set({ matchedJobsLoadingMore: true })
+    try {
+      const res = await apiFetch(
+        `/matching/jobs?${new URLSearchParams({ tab: matchTab, limit: String(MATCH_PAGE_SIZE), cursor })}`
+      )
+      // The tab changed (or was reloaded) meanwhile: drop this page.
+      if (seq !== matchSeq) return
+      const page: PublicJob[] = Array.isArray(res?.jobs) ? res.jobs.map(mapPublicJob) : []
+      set((state) => {
+        const seen = new Set(state.matchedJobs.map((j) => j.id))
+        return {
+          matchedJobs: [...state.matchedJobs, ...page.filter((j) => !seen.has(j.id))],
+          matchedJobsCursor: typeof res?.nextCursor === "string" ? res.nextCursor : null,
+        }
+      })
+    } catch (err) {
+      throw toError(err, "Could not load more jobs")
+    } finally {
+      set({ matchedJobsLoadingMore: false })
     }
   },
 

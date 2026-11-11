@@ -17,6 +17,11 @@ export class MatchingController {
   @Roles("SEEKER")
   @ApiOperation({ summary: "ACTIVE jobs with a rule-based match score for the seeker" })
   getJobs(@Req() req: any, @Query() query: MatchingQueryDto) {
-    return this.matching.getMatchedJobs(req.user.userId, query.tab ?? "for-you", query.limit ?? 50)
+    return this.matching.getMatchedJobs(
+      req.user.userId,
+      query.tab ?? "for-you",
+      query.limit ?? 50,
+      query.cursor
+    )
   }
 }
