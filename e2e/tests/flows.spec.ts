@@ -971,6 +971,11 @@ test("jobs from the web: apply charges once, opens the posting and auto-tracks i
   await page.locator("#web-q").fill(title)
   await page.getByRole("button", { name: "Search", exact: true }).click()
   await page.getByText(title, { exact: true }).first().click()
+  await expectPanesFillViewport(
+    page,
+    page.getByTestId("web-job-list"),
+    page.getByTestId("web-job-detail")
+  )
   // Remotive requires naming the source: one small line; no "via", no raw posting URL anywhere.
   await expect(page.getByTestId("source-attribution")).toHaveText("Listing from Remotive")
   await expect(page.getByText(/^via /)).toHaveCount(0)
@@ -1357,6 +1362,28 @@ test("seeker pages: one page header each and no horizontal overflow at 375px and
   await expect(page).toHaveURL(/\/discover/)
 })
 
+/** List + detail end at the bottom of the screen (only main's padding below) and the detail
+ *  scrolls all the way to its last line. */
+async function expectPanesFillViewport(
+  page: import("@playwright/test").Page,
+  list: import("@playwright/test").Locator,
+  detail: import("@playwright/test").Locator
+) {
+  const viewport = page.viewportSize()!.height
+  for (const pane of [list, detail]) {
+    const box = (await pane.boundingBox())!
+    const gap = viewport - (box.y + box.height)
+    expect(gap).toBeGreaterThanOrEqual(0)
+    expect(gap).toBeLessThanOrEqual(32)
+  }
+  await detail.evaluate((el) => el.scrollTo({ top: el.scrollHeight }))
+  await expect
+    .poll(() =>
+      detail.evaluate((el) => Math.ceil(el.scrollTop + el.clientHeight) >= el.scrollHeight)
+    )
+    .toBe(true)
+}
+
 test("discover: the job description scrolls on its own; the list and the page stay put", async ({
   page,
 }) => {
@@ -1388,16 +1415,7 @@ test("discover: the job description scrolls on its own; the list and the page st
   await expect.poll(() => detail.evaluate((el) => el.scrollTop)).toBeGreaterThan(300)
   expect(await listTop()).toBe(list0)
   expect(await mainTop()).toBe(main0)
-  // Page scrolled to its end: the list sits fully in view with no blank stretch below it.
-  await page.evaluate(() => {
-    const m = document.querySelector("main")!
-    m.scrollTop = m.scrollHeight
-  })
-  await page.waitForTimeout(300)
-  const listBox = (await list.boundingBox())!
-  const bottom = listBox.y + listBox.height
-  expect(bottom).toBeLessThanOrEqual(900)
-  expect(900 - bottom).toBeLessThan(80)
+  await expectPanesFillViewport(page, list, detail)
 })
 
 test("match scores: high green, medium yellow, low red, in bold", async ({ page }) => {

@@ -74,6 +74,7 @@ import { CvTailorButton } from "../components/cv-tailor"
 import { JobCardMeta } from "../components/job-card-meta"
 import { JobFilterBar } from "../components/job-filter-bar"
 import { WebJobs } from "../components/web-jobs"
+import { useFillHeight } from "../lib/use-fill-height"
 
 const colorBg: Record<string, string> = {
   purple: "bg-primary text-white",
@@ -88,7 +89,13 @@ const MATCH_TABS: { id: MatchTab; label: string }[] = [
 ]
 
 function MatchBadge({ match }: { match: JobMatch }) {
-  return <MatchScore score={match.score} title={`${match.score}% match with your profile`} />
+  return (
+    <MatchScore
+      score={match.score}
+      title={`${match.score}% match with your profile`}
+      className="self-start"
+    />
+  )
 }
 
 function ReasonChips({ reasons, max }: { reasons: string[]; max: number }) {
@@ -332,6 +339,8 @@ function DiscoverHyrr({ sourceSwitch }: { sourceSwitch?: ReactNode }) {
   const [reportedIds, setReportedIds] = useState<Set<string>>(() => new Set())
   const detailRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  // Wide screens: list + detail fill from where they start to the bottom of the screen.
+  const { ref: splitRef, height: splitHeight } = useFillHeight()
   const matchedJobsCursor = useJobStore((s) => s.matchedJobsCursor)
   const matchedJobsLoadingMore = useJobStore((s) => s.matchedJobsLoadingMore)
   const fetchMoreMatchedJobs = useJobStore((s) => s.fetchMoreMatchedJobs)
@@ -743,7 +752,11 @@ function DiscoverHyrr({ sourceSwitch }: { sourceSwitch?: ReactNode }) {
       {/* Split Pane */}
       {/* Wide screens: list and detail are two equal-height panes that each scroll on their own
           (data-lenis-prevent keeps the page's smooth scroller from taking the wheel). */}
-      <div className="flex flex-col lg:flex-row lg:items-start gap-5 flex-1 min-w-0">
+      <div
+        ref={splitRef}
+        style={splitHeight ? { height: splitHeight } : undefined}
+        className="flex flex-col lg:flex-row lg:items-stretch lg:sticky lg:top-5 gap-5 flex-1 min-w-0 lg:flex-none lg:min-h-0"
+      >
         {/* Job List */}
         {/* Narrow list beside the detail pane; full width (centred empty/error states) when the
             list has nothing to show and no detail pane is rendered. */}
@@ -753,7 +766,7 @@ function DiscoverHyrr({ sourceSwitch }: { sourceSwitch?: ReactNode }) {
           data-lenis-prevent
           className={`w-full flex flex-col gap-3 ${
             selectedJob || listLoading || filtered.length > 0
-              ? "lg:w-[360px] shrink-0 max-h-[70dvh] lg:max-h-[calc(100dvh-260px)] overflow-y-auto overscroll-contain pr-1 -mr-1"
+              ? "lg:w-[360px] shrink-0 max-h-[70dvh] lg:max-h-none lg:h-full overflow-y-auto pr-1 -mr-1"
               : "lg:flex-1 lg:items-center"
           }`}
         >
@@ -930,7 +943,7 @@ function DiscoverHyrr({ sourceSwitch }: { sourceSwitch?: ReactNode }) {
             ref={detailRef}
             data-testid="hyrr-job-detail"
             data-lenis-prevent
-            className="flex-1 min-w-0 scroll-mt-4 rounded-card lg:max-h-[calc(100dvh-260px)] lg:overflow-y-auto lg:overscroll-contain"
+            className="flex-1 min-w-0 scroll-mt-4 rounded-card lg:h-full lg:overflow-y-auto"
           >
             <Card className="p-5 sm:p-8">
               {/* Header */}

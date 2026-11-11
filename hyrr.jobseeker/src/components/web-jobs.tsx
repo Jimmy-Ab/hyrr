@@ -17,6 +17,7 @@ import {
 } from "hyrr.shared"
 import { ExternalLink, Globe, Loader2, MapPin, RefreshCw, Search } from "lucide-react"
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react"
+import { useFillHeight } from "../lib/use-fill-height"
 import { JobCardMeta } from "./job-card-meta"
 import { JobFilterBar } from "./job-filter-bar"
 
@@ -99,6 +100,8 @@ export function WebJobs({ sourceSwitch }: { sourceSwitch?: ReactNode }) {
   const [applying, setApplying] = useState(false)
 
   const listRef = useRef<HTMLUListElement>(null)
+  // Wide screens: list + detail fill from where they start to the bottom of the screen.
+  const { ref: splitRef, height: splitHeight } = useFillHeight()
   const [filters, setFilters] = useState<JobFilterInput>({})
   const filtersKey = jobFiltersKey(filters)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -279,12 +282,16 @@ export function WebJobs({ sourceSwitch }: { sourceSwitch?: ReactNode }) {
           description="Try other words, or check back soon: new postings arrive every few hours."
         />
       ) : (
-        <div className="flex flex-col gap-5 lg:flex-row">
+        <div
+          ref={splitRef}
+          style={splitHeight ? { height: splitHeight } : undefined}
+          className="flex flex-col gap-5 lg:flex-row lg:items-stretch lg:sticky lg:top-5"
+        >
           <ul
             ref={listRef}
             data-testid="web-job-list"
             data-lenis-prevent
-            className="flex w-full shrink-0 flex-col gap-2 lg:w-[360px] max-h-[70dvh] lg:max-h-[calc(100dvh-300px)] overflow-y-auto overscroll-contain pr-1 -mr-1"
+            className="flex w-full shrink-0 flex-col gap-2 lg:w-[360px] max-h-[70dvh] lg:max-h-none lg:h-full overflow-y-auto pr-1 -mr-1"
           >
             {jobs.map((j) => (
               <li key={j.id}>
@@ -338,7 +345,7 @@ export function WebJobs({ sourceSwitch }: { sourceSwitch?: ReactNode }) {
               ref={detailRef}
               data-testid="web-job-detail"
               data-lenis-prevent
-              className="min-w-0 flex-1 rounded-card lg:max-h-[calc(100dvh-300px)] lg:overflow-y-auto lg:overscroll-contain"
+              className="min-w-0 flex-1 rounded-card lg:h-full lg:overflow-y-auto"
             >
               <Card className="p-5 sm:p-8">
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b border-bg-border/40 pb-5">
