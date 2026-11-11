@@ -150,6 +150,57 @@ describe("ExternalJobsService", () => {
     expect(page.items.map((j: any) => j.applied)).toEqual([false, true])
   })
 
+  it("ranks stored web jobs for the profile, caches the ranking, and refresh re-ranks without a sync", async () => {
+    const cache = { get: jest.fn().mockResolvedValue(null), set: jest.fn() }
+    service = new ExternalJobsService(
+      prisma,
+      wallet as any,
+      { getConfig: jest.fn() } as any,
+      cache as any
+    )
+    prisma.seekerProfile.findUnique.mockResolvedValue({
+      title: "Backend Engineer",
+      skills: ["Go", "PostgreSQL"],
+      interests: [{ id: "c-soft", name: "Software" }],
+      experiences: [],
+    })
+    const pool = [
+      { ...job({ title: "Accountant", category: "Finance", description: "Excel" }), id: "acc" },
+      {
+        ...job({
+          title: "Backend Engineer",
+          category: "Software Development",
+          description: "Go and PostgreSQL",
+        }),
+        id: "be",
+      },
+    ]
+    prisma.externalJob.findMany.mockImplementation(async (args: any) =>
+      args.select
+        ? pool
+        : pool.filter((p) => args.where.id.in.includes(p.id)).map((p) => ({ ...p, applies: [] }))
+    )
+    const page = await service.list("u1")
+    expect(page.items.map((j: any) => j.id)).toEqual(["be", "acc"])
+    expect(page.items[0].match.score).toBeGreaterThan(page.items[1].match.score)
+    expect(page.items[0].match.reasons).toContain("In a category you follow")
+    expect(cache.set).toHaveBeenCalledWith(
+      expect.stringMatching(/^webjobs:u1:/),
+      expect.any(Object),
+      300
+    )
+
+    cache.get.mockResolvedValue({ ids: ["acc"], matches: {} })
+    expect((await service.list("u1")).items.map((j: any) => j.id)).toEqual(["acc"])
+    // Refresh ignores the cached ranking and re-scores the stored rows.
+    expect(
+      (await service.list("u1", undefined, false, undefined, {}, { refresh: true })).items[0].id
+    ).toBe("be")
+    await expect(service.list("u1", undefined, false, "not-a-cursor")).rejects.toMatchObject({
+      errorCode: "INVALID_CURSOR",
+    })
+  })
+
   const provider = (source: any, jobs: ExternalJobInput[] | Error, enabled = true): Provider => ({
     source,
     enabled,

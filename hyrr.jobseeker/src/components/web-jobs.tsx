@@ -14,7 +14,7 @@ import {
   type JobFilterInput,
   type WebJob,
 } from "hyrr.shared"
-import { ExternalLink, Globe, Loader2, MapPin, Search } from "lucide-react"
+import { ExternalLink, Globe, Loader2, MapPin, RefreshCw, Search } from "lucide-react"
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { JobCardMeta } from "./job-card-meta"
 import { JobFilterBar } from "./job-filter-bar"
@@ -107,7 +107,7 @@ export function WebJobs() {
   const inFlight = useRef(false)
 
   const load = useCallback(
-    async (more = false) => {
+    async (more = false, refresh = false) => {
       if (more && (inFlight.current || !cursor)) return
       const seq = more ? searchSeq.current : ++searchSeq.current
       inFlight.current = more
@@ -123,7 +123,8 @@ export function WebJobs() {
           q,
           remote,
           more ? (cursor ?? undefined) : undefined,
-          filters
+          filters,
+          refresh
         )
         if (seq !== searchSeq.current) return
         setJobs((list) => {
@@ -196,7 +197,20 @@ export function WebJobs() {
         icon={Globe}
         tone="teal"
         title="Jobs from the web"
-        subtitle="Openings from trusted job sites. Applying takes you to the original posting."
+        subtitle="Openings from trusted job sites, best matches for your profile first."
+        actions={
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void load(false, true)}
+            disabled={loading}
+            className="gap-1.5"
+            title="Re-rank these jobs for your current profile"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden />
+            Refresh
+          </Button>
+        }
       />
       <form onSubmit={submit} className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="relative flex-1">
@@ -267,6 +281,9 @@ export function WebJobs() {
                       </span>
                     )}
                     {salary(j) && <span className="font-semibold text-primary">{salary(j)}</span>}
+                    {j.match && j.match.score > 0 && (
+                      <span className="font-semibold text-txt-heading">{j.match.score}% match</span>
+                    )}
                     {j.applied && <span className="font-semibold text-sec-green">Applied</span>}
                   </p>
                   <JobCardMeta remote={j.remote} category={j.category} />

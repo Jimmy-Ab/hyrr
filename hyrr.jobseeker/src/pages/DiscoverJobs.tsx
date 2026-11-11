@@ -59,6 +59,7 @@ import {
   History,
   MailWarning,
   MapPin,
+  RefreshCw,
   Search,
   Sparkles,
   Star,
@@ -198,10 +199,10 @@ function DiscoverHyrr() {
   const filtersKey = jobFiltersKey(serverFilters)
 
   const loadMatches = useCallback(
-    async (tab: MatchTab) => {
+    async (tab: MatchTab, opts?: { refresh?: boolean }) => {
       setMatchError(null)
       try {
-        await fetchMatchedJobs(tab, serverFiltersRef.current)
+        await fetchMatchedJobs(tab, serverFiltersRef.current, opts)
         setLoadedTab(tab)
       } catch (err) {
         if (useJobStore.getState().matchTab === tab) {
@@ -557,6 +558,22 @@ function DiscoverHyrr() {
         title="Discover Jobs"
         subtitle={`Find your next opportunity from ${publicJobs.length} open roles.`}
         className="relative z-10"
+        actions={
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void loadMatches(matchTab, { refresh: true })}
+            disabled={matchedJobsLoading}
+            className="gap-1.5"
+            title="Re-rank jobs for your current profile"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${matchedJobsLoading ? "animate-spin" : ""}`}
+              aria-hidden="true"
+            />
+            Refresh
+          </Button>
+        }
       />
 
       {/* For you / All jobs + saved searches */}

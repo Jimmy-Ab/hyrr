@@ -17,7 +17,9 @@ export class MatchingController {
   @Get("jobs")
   @Roles("SEEKER")
   @ApiOperation({ summary: "ACTIVE jobs with a rule-based match score for the seeker" })
-  getJobs(@Req() req: any, @Query() query: MatchingQueryDto) {
+  async getJobs(@Req() req: any, @Query() query: MatchingQueryDto) {
+    // Refresh: re-score stored jobs now (cached rankings dropped; no sync, no new embeddings).
+    if (query.refresh === "true" && !query.cursor) await this.matching.invalidate(req.user.userId)
     return this.matching.getMatchedJobs(
       req.user.userId,
       query.tab ?? "for-you",

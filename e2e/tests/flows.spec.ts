@@ -1216,6 +1216,30 @@ test("discover filters: category and salary narrow the list server-side; cards s
   await expect(list.getByText(`E2E Filter B ${tag} 01`)).toBeVisible()
 })
 
+test("relevance: web jobs rank for the profile and Refresh re-ranks after a profile change", async ({
+  page,
+}) => {
+  const tag = uid()
+  await createWebJob(`Rank ${tag} Go Developer`, `${SEEKER_URL}/terms?go=${tag}`)
+  await createWebJob(`Rank ${tag} Florist`, `${SEEKER_URL}/terms?fl=${tag}`) // newer
+  const seeker = await createUser("SEEKER", "Selam")
+  await setSeekerProfile(seeker.email, { title: "Go Developer", skills: ["Go"] })
+
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await login(page, SEEKER_URL, seeker.email)
+  await page.goto(`${SEEKER_URL}/discover`)
+  await page.getByRole("button", { name: "From the web" }).click()
+  await page.locator("#web-q").fill(`Rank ${tag}`)
+  await page.getByRole("button", { name: "Search", exact: true }).click()
+  const list = page.getByTestId("web-job-list")
+  const firstTitle = () => list.locator("li button p").first()
+  await expect(firstTitle()).toHaveText(`Rank ${tag} Go Developer`)
+
+  await setSeekerProfile(seeker.email, { title: "Florist", skills: ["Floristry"] })
+  await page.getByRole("button", { name: "Refresh" }).click()
+  await expect(firstTitle()).toHaveText(`Rank ${tag} Florist`)
+})
+
 test("pricing: all prices and switches come from the server; recruiters load them at startup", async ({
   page,
   browser,

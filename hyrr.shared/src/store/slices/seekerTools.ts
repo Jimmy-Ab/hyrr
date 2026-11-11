@@ -81,7 +81,7 @@ export const createSeekerToolsSlice: StateCreator<JobState, [], [], SeekerToolsS
   profileMissing: [],
   thinProfile: false,
 
-  fetchMatchedJobs: async (tab, filters) => {
+  fetchMatchedJobs: async (tab, filters, opts) => {
     const seq = ++matchSeq
     const active = filters ?? get().matchFilters
     set({ matchTab: tab, matchedJobsLoading: true, matchFilters: active })
@@ -91,6 +91,7 @@ export const createSeekerToolsSlice: StateCreator<JobState, [], [], SeekerToolsS
           tab,
           limit: String(MATCH_PAGE_SIZE),
           ...jobFilterParams(active),
+          ...(opts?.refresh ? { refresh: "true" } : {}),
         })}`
       )
       if (seq !== matchSeq) return

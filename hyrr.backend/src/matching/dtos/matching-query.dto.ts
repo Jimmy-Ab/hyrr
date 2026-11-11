@@ -1,5 +1,14 @@
 import { Type } from "class-transformer"
-import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from "class-validator"
+import {
+  IsBooleanString,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from "class-validator"
 import { JobFiltersDto } from "../../jobs/dtos/job-filters.dto"
 
 export const MATCH_TABS = ["for-you", "all"] as const
@@ -12,4 +21,9 @@ export class MatchingQueryDto extends JobFiltersDto {
 
   /** Opaque `nextCursor` from the previous page. */
   @IsOptional() @IsString() @MaxLength(400) cursor?: string
+
+  /** "true": drop this seeker's cached rankings and re-score stored jobs (no new embeddings). */
+  @IsOptional()
+  @IsBooleanString({ message: "Refresh must be true or false" })
+  refresh?: "true" | "false"
 }

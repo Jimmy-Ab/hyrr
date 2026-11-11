@@ -41,11 +41,12 @@ const map = (e: any): ExternalApplication => ({
 export const createTrackerSlice: StateCreator<JobState, [], [], TrackerSlice> = (set, get) => ({
   externalApplications: [],
 
-  fetchWebJobs: (q, remote, cursor, filters) => {
+  fetchWebJobs: (q, remote, cursor, filters, refresh) => {
     const params = new URLSearchParams(jobFilterParams(filters))
     if (q?.trim()) params.set("q", q.trim())
     if (remote) params.set("remote", "true")
     if (cursor) params.set("cursor", cursor)
+    if (refresh && !cursor) params.set("refresh", "true")
     return apiFetch(`/external-jobs?${params.toString()}`)
   },
 

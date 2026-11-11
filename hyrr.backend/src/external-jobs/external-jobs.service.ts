@@ -1,16 +1,35 @@
-import { HttpStatus, Injectable, Logger } from "@nestjs/common"
+import { HttpStatus, Injectable, Logger, Optional } from "@nestjs/common"
 import { Prisma } from "@prisma/client"
 import { PricingService } from "../billing/pricing.service"
 import { WalletService } from "../billing/wallet.service"
+import { CacheService } from "../cache/cache.service"
 import { AppException } from "../core/exceptions/app-exception"
 import type { JobFilters } from "../jobs/dtos/job-filters.dto"
 import { evaluateJobContent } from "../jobs/job-content-policy"
 import { webJobFilterWhere } from "../jobs/job-filters"
+import { scoreJobForProfile, type JobMatch } from "../matching/scoring"
 import { PrismaService } from "../prisma/prisma.service"
 import { providers, type ExternalJobInput, type Provider } from "./providers"
 
 const DAY = 86_400_000
 const PAGE = 30
+/** Newest matching rows ranked per request (search and filters narrow it first). */
+const RANK_POOL = 500
+const RANK_TTL_SECONDS = 5 * 60
+
+type RankedWebJobs = { ids: string[]; matches: Record<string, JobMatch> }
+
+/** Opaque page cursor: the offset into the cached ranking. */
+function decodeOffsetCursor(cursor?: string): number {
+  if (!cursor) return 0
+  if (!/^\d{1,5}$/.test(cursor))
+    throw new AppException(
+      "This list link has expired. Reload the page.",
+      HttpStatus.BAD_REQUEST,
+      "INVALID_CURSOR"
+    )
+  return Number(cursor)
+}
 
 /** EXTERNAL_JOBS_ENABLED=true turns on the scheduled sync (off by default: no outbound calls). */
 export const externalJobsEnabled = (env = process.env) =>
@@ -39,7 +58,8 @@ export class ExternalJobsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly wallet: WalletService,
-    private readonly pricing: PricingService
+    private readonly pricing: PricingService,
+    @Optional() private readonly cache?: CacheService
   ) {}
 
   /** Fetches every enabled provider, upserts by (source, sourceId), drops duplicates and scams. */
@@ -95,14 +115,58 @@ export class ExternalJobsService {
     return report
   }
 
+  /**
+   * Active web jobs ranked for the seeker (keyword scoring from matching/scoring.ts: title,
+   * skills in the text, preferred categories by name, location, type). The ranking of the newest
+   * RANK_POOL matches is cached per user + search for 5 minutes and paged by an opaque offset
+   * cursor. `refresh` recomputes it from stored rows: no provider calls, no embeddings.
+   */
   async list(
     userId: string,
     q?: string,
     remote?: boolean,
     cursor?: string,
-    filters: JobFilters = {}
+    filters: JobFilters = {},
+    opts: { refresh?: boolean } = {}
   ) {
+    const offset = decodeOffsetCursor(cursor)
     const terms = (q ?? "").trim()
+    const key = `webjobs:${userId}:${JSON.stringify({ terms, remote: !!remote, filters })}`
+    let ranked = opts.refresh ? null : await this.cache?.get<RankedWebJobs>(key)
+    if (!ranked || !Array.isArray(ranked.ids)) {
+      ranked = await this.rank(userId, terms, !!remote, filters)
+      await this.cache?.set(key, ranked, RANK_TTL_SECONDS)
+    }
+
+    const ids = ranked.ids.slice(offset, offset + PAGE)
+    const rows = ids.length
+      ? await this.prisma.externalJob.findMany({
+          where: { id: { in: ids }, active: true },
+          include: { applies: { where: { userId }, select: { id: true } } },
+        })
+      : []
+    const byId = new Map(rows.map((r) => [r.id, r]))
+    const end = offset + PAGE
+    return {
+      // No posting URL in the list: Apply (POST :id/apply) is the only way to the original posting.
+      items: ids
+        .map((id) => byId.get(id))
+        .filter((r): r is NonNullable<typeof r> => !!r)
+        .map(({ applies, url: _url, ...job }) => ({
+          ...job,
+          applied: applies.length > 0,
+          match: ranked!.matches[job.id] ?? null,
+        })),
+      nextCursor: end < ranked.ids.length ? String(end) : null,
+    }
+  }
+
+  private async rank(
+    userId: string,
+    terms: string,
+    remote: boolean,
+    filters: JobFilters
+  ): Promise<RankedWebJobs> {
     const categoryName = filters.categoryId
       ? (
           await this.prisma.jobCategory.findUnique({
@@ -126,21 +190,62 @@ export class ExternalJobsService {
           }
         : {}),
     }
-    const rows = await this.prisma.externalJob.findMany({
-      where,
-      orderBy: [{ postedAt: { sort: "desc", nulls: "last" } }, { id: "desc" }],
-      take: PAGE + 1,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      include: { applies: { where: { userId }, select: { id: true } } },
-    })
-    const page = rows.slice(0, PAGE)
+    const [profile, pool] = await Promise.all([
+      this.prisma.seekerProfile.findUnique({
+        where: { userId },
+        include: {
+          interests: { select: { id: true, name: true } },
+          experiences: { select: { role: true } },
+        },
+      }),
+      this.prisma.externalJob.findMany({
+        where,
+        orderBy: [{ postedAt: { sort: "desc", nulls: "last" } }, { id: "desc" }],
+        take: RANK_POOL,
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          location: true,
+          remote: true,
+          employmentType: true,
+          category: true,
+        },
+      }),
+    ])
+    const interests = profile?.interests ?? []
+    // Provider categories are free text: a preferred category matches when either name contains
+    // the other ("Software Development" ~ "Software").
+    const interestFor = (category: string | null) => {
+      const c = category?.toLowerCase()
+      if (!c) return null
+      return (
+        interests.find((i) => {
+          const n = i.name.toLowerCase()
+          return c.includes(n) || n.includes(c)
+        })?.id ?? null
+      )
+    }
+    const scored = pool.map((job, index) => ({
+      id: job.id,
+      index,
+      match: scoreJobForProfile(
+        {
+          title: job.title,
+          description: job.description,
+          location: job.location,
+          remote: job.remote,
+          type: job.employmentType,
+          categoryId: interestFor(job.category),
+        },
+        profile ?? {}
+      ),
+    }))
+    // Best match first; ties keep recency (pool order).
+    scored.sort((a, b) => b.match.score - a.match.score || a.index - b.index)
     return {
-      // No posting URL in the list: Apply (POST :id/apply) is the only way to the original posting.
-      items: page.map(({ applies, url: _url, ...job }) => ({
-        ...job,
-        applied: applies.length > 0,
-      })),
-      nextCursor: rows.length > PAGE ? page[page.length - 1].id : null,
+      ids: scored.map((s) => s.id),
+      matches: Object.fromEntries(scored.map((s) => [s.id, s.match])),
     }
   }
 

@@ -35,7 +35,8 @@ export class ExternalJobsController {
       query.q,
       query.remote === "true",
       query.cursor || undefined,
-      toJobFilters(query)
+      toJobFilters(query),
+      { refresh: query.refresh === "true" }
     )
   }
 

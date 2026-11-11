@@ -621,6 +621,8 @@ export interface WebJob {
   remote: boolean
   description?: string | null
   // No posting URL: the list never exposes it; POST /external-jobs/:id/apply returns it.
+  /** Profile match (keyword scoring); null when not ranked. */
+  match?: JobMatch | null
   salaryMin?: number | null
   salaryMax?: number | null
   salaryCurrency?: string | null
@@ -1329,7 +1331,8 @@ export interface JobState {
     q?: string,
     remote?: boolean,
     cursor?: string,
-    filters?: JobFilterInput
+    filters?: JobFilterInput,
+    refresh?: boolean
   ) => Promise<{ items: WebJob[]; nextCursor: string | null }>
   /** Charges the external apply cost once; returns the original posting URL. */
   applyWebJob: (id: string) => Promise<{ url: string; charged: number; alreadyApplied: boolean }>
@@ -1430,7 +1433,11 @@ export interface JobState {
   /** No skills and no title: matches are meaningless */
   thinProfile: boolean
   /** Loads page one of a tab; `filters` replaces the active Discover filters (kept otherwise). */
-  fetchMatchedJobs: (tab: MatchTab, filters?: JobFilterInput) => Promise<void>
+  fetchMatchedJobs: (
+    tab: MatchTab,
+    filters?: JobFilterInput,
+    opts?: { refresh?: boolean }
+  ) => Promise<void>
   /** Discover filters applied server-side to the matched list. */
   matchFilters: JobFilterInput
   /** Cursor of the next matched-jobs page; null = no more pages. */
