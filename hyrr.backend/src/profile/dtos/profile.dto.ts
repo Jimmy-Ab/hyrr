@@ -236,7 +236,13 @@ export class UpdateProfileDto {
   @IsString({ each: true })
   @MaxLength(160, { each: true, message: "Each location must be at most 160 characters" })
   preferredLocations?: string[]
-  @IsOptional() @IsArray() @IsString({ each: true }) interests?: string[]
+  /** Preferred job categories (JobCategory ids). */
+  @IsOptional()
+  @IsArray({ message: "Preferred categories must be a list" })
+  @ArrayMaxSize(10, { message: "Pick at most 10 preferred categories" })
+  @IsString({ each: true, message: "Each preferred category must be a category id" })
+  @MaxLength(64, { each: true, message: "Each preferred category must be a category id" })
+  interests?: string[]
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(30, { message: "At most 30 experiences" })

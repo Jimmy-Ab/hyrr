@@ -92,6 +92,15 @@ export class ProfileController {
     return this.profileService.addExperience(req.user.userId, body)
   }
 
+  @Put("experience/:id")
+  @UseGuards(RolesGuard)
+  @Roles("SEEKER")
+  @ApiOperation({ summary: "Edit a work experience entry" })
+  @ApiResponse({ status: 200, description: "Experience updated" })
+  updateExperience(@Param("id") id: string, @Req() req: any, @Body() body: ExperienceDto) {
+    return this.profileService.updateExperience(id, req.user.userId, body)
+  }
+
   @Delete("experience/:id")
   @UseGuards(RolesGuard)
   @Roles("SEEKER")
@@ -108,6 +117,15 @@ export class ProfileController {
   @ApiResponse({ status: 201, description: "Education history added" })
   addEducation(@Req() req: any, @Body() body: EducationDto) {
     return this.profileService.addEducation(req.user.userId, body)
+  }
+
+  @Put("education/:id")
+  @UseGuards(RolesGuard)
+  @Roles("SEEKER")
+  @ApiOperation({ summary: "Edit an education entry" })
+  @ApiResponse({ status: 200, description: "Education updated" })
+  updateEducation(@Param("id") id: string, @Req() req: any, @Body() body: EducationDto) {
+    return this.profileService.updateEducation(id, req.user.userId, body)
   }
 
   @Delete("education/:id")

@@ -244,6 +244,20 @@ export class ProfileService {
     return deleted
   }
 
+  /** Replaces one experience entry (owner only). */
+  async updateExperience(id: string, userId: string, exp: ExperienceDto) {
+    const profile = await this.getProfile(userId)
+    const row = await this.prisma.workExperience.findUnique({ where: { id } })
+    if (!row || row.profileId !== profile.id) throw new NotFoundException("Experience not found")
+    const updated = await this.prisma.workExperience.update({
+      where: { id },
+      data: experienceData(exp),
+    })
+    await this.matching.invalidate(userId)
+    await this.embeddings?.embedProfileSoon(userId)
+    return updated
+  }
+
   async addEducation(userId: string, edu: EducationDto) {
     const profile = await this.getProfile(userId)
     const created = await this.prisma.education.create({
@@ -262,6 +276,20 @@ export class ProfileService {
     await this.matching.invalidate(userId)
     await this.embeddings?.embedProfileSoon(userId)
     return deleted
+  }
+
+  /** Replaces one education entry (owner only). */
+  async updateEducation(id: string, userId: string, edu: EducationDto) {
+    const profile = await this.getProfile(userId)
+    const row = await this.prisma.education.findUnique({ where: { id } })
+    if (!row || row.profileId !== profile.id) throw new NotFoundException("Education not found")
+    const updated = await this.prisma.education.update({
+      where: { id },
+      data: educationData(edu),
+    })
+    await this.matching.invalidate(userId)
+    await this.embeddings?.embedProfileSoon(userId)
+    return updated
   }
 
   /**

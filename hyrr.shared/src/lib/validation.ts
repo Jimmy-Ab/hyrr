@@ -287,6 +287,10 @@ export const profileBasicsSchema = z.object({
   skills: z.array(z.string()).max(50, "At most 50 skills"),
   languages: z.array(z.string()).max(20, "At most 20 languages"),
   preferredLocations: z.array(z.string()).max(10, "At most 10 locations"),
+  interests: z
+    .array(z.string().max(64, "Each preferred category must be a category id"))
+    .max(10, "Pick at most 10 preferred categories")
+    .optional(),
 })
 
 export const jobBasicsSchema = z.object({

@@ -1,4 +1,9 @@
-import { registerDecorator, ValidateIf, ValidationArguments, ValidationOptions } from "class-validator"
+import {
+  registerDecorator,
+  ValidateIf,
+  ValidationArguments,
+  ValidationOptions,
+} from "class-validator"
 
 /**
  * Structured form values shared by job postings and seeker profiles. The frontend mirrors these

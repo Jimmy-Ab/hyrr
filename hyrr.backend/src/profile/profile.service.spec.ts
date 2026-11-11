@@ -29,6 +29,28 @@ describe("ProfileService", () => {
     service = module.get<ProfileService>(ProfileService)
   })
 
+  it("edits an owned experience / education entry and rejects someone else's", async () => {
+    prismaMock.seekerProfile.findUnique.mockResolvedValue({ id: "p1", userId: "u1" })
+    prismaMock.workExperience.findUnique.mockResolvedValue({ id: "x1", profileId: "p1" })
+    prismaMock.workExperience.update.mockResolvedValue({ id: "x1", role: "Lead" })
+    const exp = { role: "Lead", company: "Acme", startDate: "2022-01", current: true }
+    await expect(service.updateExperience("x1", "u1", exp as any)).resolves.toMatchObject({
+      role: "Lead",
+    })
+    expect(prismaMock.workExperience.update.mock.calls[0][0].where).toEqual({ id: "x1" })
+
+    prismaMock.workExperience.findUnique.mockResolvedValue({ id: "x2", profileId: "other" })
+    await expect(service.updateExperience("x2", "u1", exp as any)).rejects.toThrow(
+      "Experience not found"
+    )
+
+    prismaMock.education.findUnique.mockResolvedValue({ id: "e1", profileId: "other" })
+    await expect(
+      service.updateEducation("e1", "u1", { school: "MIT", degree: "BSc", startYear: 2015 } as any)
+    ).rejects.toThrow("Education not found")
+    expect(prismaMock.education.update).not.toHaveBeenCalled()
+  })
+
   it("should retrieve a seeker profile", async () => {
     prismaMock.seekerProfile.findUnique.mockResolvedValue({
       id: "profile-1",

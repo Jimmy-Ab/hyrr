@@ -1100,6 +1100,58 @@ test("discover: the Hyrr job list scrolls on its own and loads every page once",
   expect(new Set(titles).size).toBe(25)
 })
 
+test("profile: experience and education entries edit in place; preferred categories persist", async ({
+  page,
+}) => {
+  const seeker = await createUser("SEEKER", "Rahel")
+  await setSeekerProfile(seeker.email, { title: "Developer", skills: ["Go"] })
+  await api(
+    "POST",
+    "/profile/experience",
+    { role: "Developer", company: "Acme", startDate: "2021-03", current: true },
+    seeker.token
+  )
+  await api(
+    "POST",
+    "/profile/education",
+    { school: "AAU", degree: "BSc", startYear: 2015, endYear: 2019 },
+    seeker.token
+  )
+  const [category] = await api<{ id: string; name: string }[]>("GET", "/jobs/categories")
+
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await login(page, SEEKER_URL, seeker.email)
+  await page.goto(`${SEEKER_URL}/profile`)
+
+  await page.getByRole("button", { name: "Edit Developer" }).click()
+  await page.locator("#pf-exp-role").fill("Senior Developer")
+  await page.getByRole("button", { name: "Save changes" }).click()
+  await expect(page.getByText("Senior Developer", { exact: true })).toBeVisible()
+
+  await page.getByRole("button", { name: "Edit BSc" }).click()
+  await page.locator("#pf-edu-degree").fill("MSc")
+  await page.getByRole("button", { name: "Save changes" }).click()
+  await expect(page.getByRole("button", { name: "Edit MSc" })).toBeAttached()
+
+  await page
+    .getByRole("group", { name: "Preferred categories" })
+    .getByRole("button", { name: category.name, exact: true })
+    .click()
+  await page.getByRole("button", { name: "Save Profile" }).click()
+  await expect(page.getByText("Profile saved").first()).toBeVisible()
+
+  await page.reload()
+  await expect(page.getByText("Senior Developer", { exact: true })).toBeVisible()
+  await expect(page.getByRole("button", { name: "Edit MSc" })).toBeAttached()
+  await expect(
+    page
+      .getByRole("group", { name: "Preferred categories" })
+      .getByRole("button", { name: category.name, exact: true })
+  ).toHaveAttribute("aria-pressed", "true")
+  const profile = await api("GET", "/profile", undefined, seeker.token)
+  expect(profile.interests.map((c: any) => c.id)).toEqual([category.id])
+})
+
 test("pricing: all prices and switches come from the server; recruiters load them at startup", async ({
   page,
   browser,

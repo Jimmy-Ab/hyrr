@@ -956,6 +956,8 @@ export interface ProfileUpdateInput {
   visibility?: string
   skills?: string[]
   languages?: string[]
+  /** Preferred job category ids (replaces the stored set). */
+  interests?: string[]
   preferredLocations?: string[]
   experiences?: {
     role: string

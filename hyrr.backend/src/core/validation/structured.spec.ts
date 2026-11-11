@@ -164,4 +164,13 @@ describe("profile validation", () => {
       })
     ).toEqual([])
   })
+  it("bounds preferred categories (interests) like the zod schema", () => {
+    expect(errors(UpdateProfileDto, { interests: ["c1", "c2"] })).toEqual([])
+    expect(
+      errors(UpdateProfileDto, { interests: Array.from({ length: 11 }, (_, i) => `c${i}`) })
+    ).toContain("Pick at most 10 preferred categories")
+    expect(errors(UpdateProfileDto, { interests: [42] })).toContain(
+      "Each preferred category must be a category id"
+    )
+  })
 })
