@@ -4,6 +4,7 @@ import { CacheService } from "../cache/cache.service"
 import { EmbeddingsService } from "../embeddings/embeddings.service"
 import { jobFiltersKey, type JobFilters } from "../jobs/dtos/job-filters.dto"
 import { hyrrJobFilterWhere } from "../jobs/job-filters"
+import { seekerLanguageKeys } from "../jobs/job-languages"
 import { PUBLIC_COMPANY_SELECT } from "../jobs/public-company"
 import { PrismaService } from "../prisma/prisma.service"
 import { MatchTab } from "./dtos/matching-query.dto"
@@ -41,6 +42,15 @@ export class MatchingService {
     filters: JobFilters = {}
   ) {
     const cursor = decodeMatchCursor(rawCursor)
+    if (filters.matchLanguages) {
+      // Seeker languages from the profile; none on the profile = no language filter.
+      const own = await this.prisma.seekerProfile.findUnique({
+        where: { userId },
+        select: { languages: true },
+      })
+      const keys = seekerLanguageKeys(own?.languages)
+      filters = { ...filters, languages: keys.length ? keys : undefined }
+    }
     const filterWhere = hyrrJobFilterWhere(filters)
     const fKey = filterWhere.length ? jobFiltersKey(filters) : ""
     if (tab === "for-you")

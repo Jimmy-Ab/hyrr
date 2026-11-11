@@ -10,6 +10,8 @@ export interface JobFilterInput {
   salary?: SalaryRangeValue | null
   /** Days: 1, 3, 7, 14 or 30. */
   postedWithin?: number
+  /** Only Hyrr jobs in a language from the seeker's profile (web jobs have no language data). */
+  matchLanguages?: boolean
 }
 
 export const POSTED_WITHIN_OPTIONS = [
@@ -28,6 +30,7 @@ export function jobFilterParams(f: JobFilterInput | undefined): Record<string, s
   if (f.remote) out.remote = "true"
   if (f.type) out.type = f.type
   if (f.postedWithin) out.postedWithin = String(f.postedWithin)
+  if (f.matchLanguages) out.matchLanguages = "true"
   const s = f.salary
   if (s && (s.min != null || s.max != null)) {
     if (s.min != null) out.salaryMin = String(s.min)

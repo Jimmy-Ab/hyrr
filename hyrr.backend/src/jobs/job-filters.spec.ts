@@ -1,6 +1,6 @@
-import "reflect-metadata"
 import { plainToInstance } from "class-transformer"
 import { validateSync } from "class-validator"
+import "reflect-metadata"
 import { JobFiltersDto, toJobFilters } from "./dtos/job-filters.dto"
 import { hyrrJobFilterWhere, webJobFilterWhere } from "./job-filters"
 
@@ -74,5 +74,31 @@ describe("job filters", () => {
     )
     // Unknown category: nothing matches.
     expect(webJobFilterWhere({ categoryId: "nope" }, null)).toEqual([{ id: { in: [] } }])
+  })
+})
+
+describe("job languages", () => {
+  const { normalizeJobLanguages, seekerLanguageKeys } = jest.requireActual("./job-languages")
+
+  it("normalises job languages and defaults to English", () => {
+    expect(normalizeJobLanguages([" english ", "AMHARIC", "English"])).toEqual([
+      "English",
+      "Amharic",
+    ])
+    expect(normalizeJobLanguages([])).toEqual(["English"])
+    expect(normalizeJobLanguages(undefined)).toEqual(["English"])
+  })
+
+  it("turns free-text profile languages into match keys", () => {
+    expect(seekerLanguageKeys(["English (native)", "brazilian portuguese"])).toEqual(
+      expect.arrayContaining(["English", "Brazilian Portuguese", "Portuguese"])
+    )
+    expect(seekerLanguageKeys([])).toEqual([])
+  })
+
+  it("filters Hyrr jobs to any shared language", () => {
+    expect(hyrrJobFilterWhere({ languages: ["English", "Amharic"] })).toEqual([
+      { languages: { hasSome: ["English", "Amharic"] } },
+    ])
   })
 })

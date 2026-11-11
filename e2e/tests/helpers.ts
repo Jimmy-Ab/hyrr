@@ -119,12 +119,17 @@ export async function detachFromCompany(email: string) {
 
 export async function setSeekerProfile(
   email: string,
-  data: { title: string; skills: string[]; location?: string }
+  data: { title: string; skills: string[]; location?: string; languages?: string[] }
 ) {
   const user = await prisma.user.findUniqueOrThrow({ where: { email } })
   await prisma.seekerProfile.update({
     where: { userId: user.id },
-    data: { title: data.title, skills: data.skills, location: data.location ?? "Nairobi" },
+    data: {
+      title: data.title,
+      skills: data.skills,
+      location: data.location ?? "Nairobi",
+      ...(data.languages ? { languages: data.languages } : {}),
+    },
   })
 }
 

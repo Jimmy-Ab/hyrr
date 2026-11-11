@@ -57,6 +57,7 @@ import {
   Flag,
   Globe,
   History,
+  Languages,
   MailWarning,
   MapPin,
   RefreshCw,
@@ -183,8 +184,16 @@ function DiscoverHyrr() {
   const [remoteOnly, setRemoteOnly] = useState(false)
   // Category, salary and recency (server-side); type and remote come from the controls above.
   const [extraFilters, setExtraFilters] = useState<JobFilterInput>(() => {
-    const { categoryId, salary, postedWithin } = useJobStore.getState().matchFilters
-    return { categoryId, salary, postedWithin }
+    const st = useJobStore.getState()
+    const { categoryId, salary, postedWithin, matchLanguages } = st.matchFilters
+    return {
+      categoryId,
+      salary,
+      postedWithin,
+      // On by default when the profile lists languages (kept as chosen afterwards).
+      matchLanguages:
+        matchLanguages ?? ((st.seekerProfile?.languages?.length ?? 0) > 0 || undefined),
+    }
   })
   const serverFilters: JobFilterInput = {
     ...extraFilters,
@@ -721,7 +730,7 @@ function DiscoverHyrr() {
           </div>
         </div>
         <div className="mt-3">
-          <JobFilterBar id="hyrr" value={extraFilters} onChange={setExtraFilters} />
+          <JobFilterBar id="hyrr" value={extraFilters} onChange={setExtraFilters} showLanguages />
         </div>
       </Card>
 
@@ -951,6 +960,12 @@ function DiscoverHyrr() {
                       <DollarSign className="w-3.5 h-3.5" />
                       {selectedJob.salary}
                     </span>
+                    {!!selectedJob.languages?.length && (
+                      <span className="flex items-center gap-1" data-testid="job-languages">
+                        <Languages className="w-3.5 h-3.5" aria-hidden="true" />
+                        {selectedJob.languages.join(", ")}
+                      </span>
+                    )}
                     <span className="flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5" />
                       Posted {selectedJob.posted}

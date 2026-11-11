@@ -1,6 +1,8 @@
 import { ApiPropertyOptional } from "@nestjs/swagger"
 import { EmploymentType, JobStatus } from "@prisma/client"
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsEnum,
@@ -57,6 +59,16 @@ export class UpdateJobDto extends JobSalaryFields {
   @IsArray()
   @IsString({ each: true })
   skills?: string[]
+
+  @ApiPropertyOptional({ example: ["English", "Amharic"], type: [String] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1, { message: "Add at least one language" })
+  @ArrayMaxSize(5, { message: "At most 5 languages" })
+  @IsString({ each: true })
+  @IsNotEmpty({ each: true, message: "Languages can't be empty" })
+  @MaxLength(40, { each: true, message: "Each language must be at most 40 characters" })
+  languages?: string[]
 
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()

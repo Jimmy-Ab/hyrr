@@ -13,6 +13,7 @@ export function hyrrJobFilterWhere(f: JobFilters): Prisma.JobWhereInput[] {
   if (f.categoryId) and.push({ categoryId: f.categoryId })
   if (f.remote) and.push({ OR: [{ remote: true }, { type: EmploymentType.REMOTE }] })
   if (f.type) and.push({ type: f.type })
+  if (f.languages?.length) and.push({ languages: { hasSome: f.languages } })
   if (f.postedWithin) {
     const from = since(f.postedWithin)
     and.push({

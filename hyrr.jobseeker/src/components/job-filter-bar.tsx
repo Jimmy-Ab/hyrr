@@ -56,11 +56,14 @@ export function JobFilterBar({
   value,
   onChange,
   showType = false,
+  showLanguages = false,
 }: {
   id: string
   value: JobFilterInput
   onChange: (next: JobFilterInput) => void
   showType?: boolean
+  /** Hyrr jobs only: web providers send no language data. */
+  showLanguages?: boolean
 }) {
   const categories = useJobCategories()
   const [salaryOpen, setSalaryOpen] = useState(false)
@@ -150,6 +153,23 @@ export function JobFilterBar({
           {salaryOn ? "Salary filter on" : "Salary"}
           <ChevronDown className="h-3.5 w-3.5" aria-hidden />
         </Button>
+        {showLanguages && (
+          <button
+            type="button"
+            aria-pressed={!!value.matchLanguages}
+            onClick={() =>
+              onChange({ ...value, matchLanguages: !value.matchLanguages || undefined })
+            }
+            title="Only jobs in a language from your profile"
+            className={`h-9 rounded-xl border px-3 text-[13px] font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+              value.matchLanguages
+                ? "border-primary-border bg-primary-light text-primary"
+                : "border-bg-border bg-bg-secondary text-txt-body hover:bg-bg-hover"
+            }`}
+          >
+            Match my languages
+          </button>
+        )}
         {active && (
           <Button
             type="button"
@@ -158,7 +178,8 @@ export function JobFilterBar({
             onClick={() => {
               setSalary(emptySalaryRange("USD"))
               setErrors({})
-              onChange({})
+              // Language matching is a standing preference with its own toggle: keep it.
+              onChange(value.matchLanguages ? { matchLanguages: true } : {})
             }}
             className="gap-1"
           >

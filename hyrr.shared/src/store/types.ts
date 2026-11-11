@@ -31,6 +31,8 @@ export interface Job {
   color: "purple" | "blue" | "green" | "orange"
   description: string
   requirements: string[]
+  /** Working languages (defaults to English) */
+  languages: string[]
   /** The posting company passed domain verification */
   companyVerified: boolean
   remote?: boolean
@@ -222,6 +224,7 @@ export interface JobUpdatePatch {
   salaryPeriod: SalaryPeriodCode | null
   employmentType: string
   requirements: string[]
+  languages: string[]
 }
 
 export interface ScreeningAnswerInput {
@@ -273,6 +276,8 @@ export interface PublicJob {
   remote?: boolean
   /** Job category name (when the API includes it). */
   category?: string
+  /** Working languages (Hyrr jobs; English when not stated). */
+  languages?: string[]
   /** Profile match (only on /matching/jobs results) */
   match?: JobMatch
 }
@@ -1215,6 +1220,8 @@ export interface JobState {
     description: string
     requirements: string[]
     skills: string[]
+    /** 1–5 working languages; the server defaults to English. */
+    languages?: string[]
     benefits?: string[]
     categoryId: string
     remote?: boolean

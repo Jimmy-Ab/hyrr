@@ -25,6 +25,7 @@ import { CreateJobDto } from "./dtos/create-job.dto"
 import { UpdateJobDto } from "./dtos/update-job.dto"
 import { computeFunnelAnalytics } from "./funnel-analytics"
 import { evaluateJobContent, JobContent } from "./job-content-policy"
+import { normalizeJobLanguages } from "./job-languages"
 import { assessJobRisk, type RiskInput } from "./job-risk"
 import { PUBLIC_COMPANY_SELECT } from "./public-company"
 import { PUBLIC_JOB_WHERE } from "./public-job"
@@ -276,6 +277,7 @@ export class JobsService {
           description: dto.description,
           requirements: dto.requirements ?? [],
           skills: dto.skills,
+          languages: normalizeJobLanguages(dto.languages),
           benefits: dto.benefits ?? [],
           // `featured` is bought via POST /jobs/:id/feature; the DTO flag is ignored.
           featured: false,
@@ -359,6 +361,7 @@ export class JobsService {
 
     const { salaryMin, salaryMax, salaryCurrency, salaryPeriod, employmentType, ...rest } = dto
     const data: Prisma.JobUncheckedUpdateInput = { ...rest }
+    if (rest.languages !== undefined) data.languages = normalizeJobLanguages(rest.languages)
     if (actor.role !== "ADMIN" && current.status === JobStatus.FLAGGED) delete data.status
     if (employmentType && !rest.type) data.type = employmentType
     // The DTO guarantees all four salary fields arrive together (or all null to clear).

@@ -61,6 +61,11 @@ export class JobFiltersDto {
   @Type(() => Number)
   @IsIn(POSTED_WITHIN_DAYS as readonly number[], { message: "Pick how recent the jobs should be" })
   postedWithin?: number
+
+  /** "true": only jobs in a language from the seeker's profile (Hyrr jobs; web jobs ignore it). */
+  @IsOptional()
+  @IsBooleanString({ message: "Match my languages must be true or false" })
+  matchLanguages?: "true" | "false"
 }
 
 /** Parsed filters with defaults removed (undefined = not filtered). */
@@ -70,6 +75,9 @@ export type JobFilters = {
   type?: EmploymentType
   salary?: { min?: number; max?: number; currency: string; period: SalaryPeriod }
   postedWithin?: number
+  matchLanguages?: boolean
+  /** Resolved from the seeker's profile when matchLanguages is on (server side only). */
+  languages?: string[]
 }
 
 export function toJobFilters(dto: JobFiltersDto): JobFilters {
@@ -88,6 +96,7 @@ export function toJobFilters(dto: JobFiltersDto): JobFilters {
           }
         : undefined,
     postedWithin: dto.postedWithin,
+    matchLanguages: dto.matchLanguages === "true" ? true : undefined,
   }
 }
 

@@ -345,6 +345,18 @@ export const jobBasicsSchema = z.object({
     .max(200, "At most 200 characters"),
   location: z.string().trim().min(2, "Location is required").max(200, "At most 200 characters"),
   categoryId: z.string().min(1, "Choose a category"),
+  /** Same rules and messages as CreateJobDto/UpdateJobDto.languages. */
+  languages: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(1, "Languages can't be empty")
+        .max(40, "Each language must be at most 40 characters")
+    )
+    .min(1, "Add at least one language")
+    .max(5, "At most 5 languages")
+    .optional(),
 })
 
 // ─── Error helpers ───────────────────────────────────────────────────────────

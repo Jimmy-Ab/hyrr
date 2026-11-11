@@ -108,6 +108,27 @@ describe("MatchingService", () => {
     ])
   })
 
+  it("match my languages: filters by the profile's languages; none on the profile = no filter", async () => {
+    prisma.seekerProfile.findUnique.mockResolvedValue({
+      title: "React Developer",
+      languages: ["English (native)", "amharic"],
+      skills: [],
+      interests: [],
+      experiences: [],
+      educations: [],
+    })
+    await service.getMatchedJobs("u1", "all", 3, undefined, { matchLanguages: true })
+    const and = prisma.job.findMany.mock.calls[0][0].where.AND
+    expect(and).toEqual([
+      { languages: { hasSome: expect.arrayContaining(["English", "Amharic"]) } },
+    ])
+
+    prisma.job.findMany.mockClear()
+    prisma.seekerProfile.findUnique.mockResolvedValue({ languages: [], skills: [], interests: [] })
+    await service.getMatchedJobs("u2", "all", 3, undefined, { matchLanguages: true })
+    expect(prisma.job.findMany.mock.calls[0][0].where.AND).toBeUndefined()
+  })
+
   it("rejects a forged cursor with INVALID_CURSOR", async () => {
     await expect(service.getMatchedJobs("u1", "all", 3, "not-a-cursor")).rejects.toMatchObject({
       errorCode: "INVALID_CURSOR",

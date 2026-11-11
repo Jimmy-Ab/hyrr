@@ -1285,6 +1285,43 @@ test("LinkedIn import: guided PDF export, PDF only, then the same CV import pipe
   await expect(dialog.getByRole("alert")).toBeVisible({ timeout: 15_000 })
 })
 
+test("languages: jobs default to English; Match my languages keeps jobs in the seeker's languages", async ({
+  page,
+}) => {
+  const rec = await createUser("RECRUITER", "Tsion")
+  const tag = uid()
+  await createActiveJobs(rec.email, 1, `Lang ${tag} Amharic`, { languages: ["Amharic"] })
+  await createActiveJobs(rec.email, 1, `Lang ${tag} English`) // column default: English
+  const seeker = await createUser("SEEKER", "Kidus")
+  await setSeekerProfile(seeker.email, {
+    title: "Support agent",
+    skills: ["Support"],
+    languages: ["amharic (native)"],
+  })
+
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await login(page, SEEKER_URL, seeker.email)
+  await page.goto(`${SEEKER_URL}/discover`)
+  await page
+    .getByRole("tab", { name: "All jobs" })
+    .or(page.getByRole("button", { name: "All jobs" }))
+    .first()
+    .click()
+  const list = page.getByTestId("hyrr-job-list")
+  const toggle = page.getByRole("button", { name: "Match my languages" })
+  if ((await toggle.getAttribute("aria-pressed")) !== "true") await toggle.click()
+  await expect(toggle).toHaveAttribute("aria-pressed", "true")
+  await expect(list.getByText(`Lang ${tag} Amharic 01`)).toBeVisible()
+  await expect(list.getByText(`Lang ${tag} English 01`)).toHaveCount(0)
+  await list.getByText(`Lang ${tag} Amharic 01`).click()
+  await expect(page.getByTestId("job-languages")).toHaveText("Amharic")
+
+  await toggle.click()
+  await expect(list.getByText(`Lang ${tag} English 01`)).toBeVisible()
+  await list.getByText(`Lang ${tag} English 01`).click()
+  await expect(page.getByTestId("job-languages")).toHaveText("English")
+})
+
 test("pricing: all prices and switches come from the server; recruiters load them at startup", async ({
   page,
   browser,

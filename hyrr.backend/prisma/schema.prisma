@@ -315,6 +315,8 @@ model Job {
   description   String      @db.Text
   requirements  String[]
   skills        String[]
+  /// Working languages (normalised names, e.g. "English"); existing jobs default to English
+  languages     String[]    @default(["English"])
   benefits      String[]
   featured      Boolean     @default(false) // currently featured (kept in sync with featuredUntil)
   featuredUntil DateTime?
