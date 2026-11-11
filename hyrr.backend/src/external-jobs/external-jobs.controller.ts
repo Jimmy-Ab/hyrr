@@ -14,6 +14,8 @@ import { ApiBearerAuth, ApiTags } from "@nestjs/swagger"
 import { Roles } from "../auth/decorators/roles.decorator"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { RolesGuard } from "../auth/guards/roles.guard"
+import { toJobFilters } from "../jobs/dtos/job-filters.dto"
+import { ExternalJobsQueryDto } from "./dtos/external-jobs-query.dto"
 import { ExternalJobsService } from "./external-jobs.service"
 
 const uuid = new ParseUUIDPipe({ version: undefined })
@@ -27,17 +29,13 @@ export class ExternalJobsController {
 
   @Get()
   @Roles("SEEKER")
-  list(
-    @Req() req: any,
-    @Query("q") q?: string,
-    @Query("remote") remote?: string,
-    @Query("cursor") cursor?: string
-  ) {
+  list(@Req() req: any, @Query() query: ExternalJobsQueryDto) {
     return this.external.list(
       req.user.userId,
-      q?.slice(0, 200),
-      remote === "true",
-      cursor || undefined
+      query.q,
+      query.remote === "true",
+      query.cursor || undefined,
+      toJobFilters(query)
     )
   }
 

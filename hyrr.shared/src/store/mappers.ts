@@ -249,6 +249,7 @@ export function mapPublicJob(pj: any): PublicJob {
     location: pj.location || "",
     type: employmentTypeLabel(pj.type),
     salary: pj.salary || "Competitive",
+    category: typeof pj.category?.name === "string" ? pj.category.name : undefined,
     posted: new Date(pj.createdAt || Date.now()).toLocaleDateString(),
     description: pj.description || "",
     requirements: pj.requirements || [],

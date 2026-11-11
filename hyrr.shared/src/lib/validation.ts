@@ -191,6 +191,50 @@ export const salaryRangeSchema = z
       })
   })
 
+/**
+ * Discover salary filter: min and/or max (same messages as JobFiltersDto); currency and period
+ * are required once a bound is set.
+ */
+export const salaryFilterSchema = z
+  .object({
+    min: z.number().nullable(),
+    max: z.number().nullable(),
+    currency: z.string(),
+    period: z.enum(SALARY_PERIODS),
+  })
+  .superRefine((v, ctx) => {
+    if (v.min == null && v.max == null) return
+    for (const [key, label] of [
+      ["min", "Minimum"],
+      ["max", "Maximum"],
+    ] as const) {
+      const n = v[key]
+      if (n == null) continue
+      if (!Number.isInteger(n))
+        ctx.addIssue({
+          code: "custom",
+          path: [key],
+          message: `${label} salary must be a whole number`,
+        })
+      else if (n < 0)
+        ctx.addIssue({ code: "custom", path: [key], message: `${label} salary can't be negative` })
+      else if (n > SALARY_MAX_VALUE)
+        ctx.addIssue({ code: "custom", path: [key], message: `${label} salary is too large` })
+    }
+    if (!(CURRENCIES as readonly string[]).includes(v.currency))
+      ctx.addIssue({
+        code: "custom",
+        path: ["currency"],
+        message: "Pick a currency for the salary filter",
+      })
+    if (v.min != null && v.max != null && v.max < v.min)
+      ctx.addIssue({
+        code: "custom",
+        path: ["max"],
+        message: "Maximum must be at least the minimum",
+      })
+  })
+
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/
 
 export const experienceSchema = z

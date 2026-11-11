@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger"
 import { Roles } from "../auth/decorators/roles.decorator"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { RolesGuard } from "../auth/guards/roles.guard"
+import { toJobFilters } from "../jobs/dtos/job-filters.dto"
 import { MatchingQueryDto } from "./dtos/matching-query.dto"
 import { MatchingService } from "./matching.service"
 
@@ -21,7 +22,8 @@ export class MatchingController {
       req.user.userId,
       query.tab ?? "for-you",
       query.limit ?? 50,
-      query.cursor
+      query.cursor,
+      toJobFilters(query)
     )
   }
 }

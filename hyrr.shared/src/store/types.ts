@@ -16,6 +16,7 @@ import type {
   SeekerView,
   UserTheme,
 } from "../lib/contracts"
+import type { JobFilterInput } from "../lib/job-filters"
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -270,6 +271,8 @@ export interface PublicJob {
   benefits: string[]
   featured?: boolean
   remote?: boolean
+  /** Job category name (when the API includes it). */
+  category?: string
   /** Profile match (only on /matching/jobs results) */
   match?: JobMatch
 }
@@ -1323,7 +1326,8 @@ export interface JobState {
   fetchWebJobs: (
     q?: string,
     remote?: boolean,
-    cursor?: string
+    cursor?: string,
+    filters?: JobFilterInput
   ) => Promise<{ items: WebJob[]; nextCursor: string | null }>
   /** Charges the external apply cost once; returns the original posting URL. */
   applyWebJob: (id: string) => Promise<{ url: string; charged: number; alreadyApplied: boolean }>
@@ -1423,7 +1427,10 @@ export interface JobState {
   profileMissing: string[]
   /** No skills and no title: matches are meaningless */
   thinProfile: boolean
-  fetchMatchedJobs: (tab: MatchTab) => Promise<void>
+  /** Loads page one of a tab; `filters` replaces the active Discover filters (kept otherwise). */
+  fetchMatchedJobs: (tab: MatchTab, filters?: JobFilterInput) => Promise<void>
+  /** Discover filters applied server-side to the matched list. */
+  matchFilters: JobFilterInput
   /** Cursor of the next matched-jobs page; null = no more pages. */
   matchedJobsCursor: string | null
   matchedJobsLoadingMore: boolean

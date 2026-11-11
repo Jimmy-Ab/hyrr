@@ -1,6 +1,7 @@
 import type { StateCreator } from "zustand"
 import { apiFetch } from "../../lib/api"
 import { employmentTypeCode, type JobType } from "../../lib/contracts"
+import { jobFilterParams } from "../../lib/job-filters"
 import {
   mapAlert,
   mapCvSuggestions,
@@ -33,6 +34,7 @@ export type SeekerToolsSlice = Pick<
   | "matchedJobsCursor"
   | "matchedJobsLoadingMore"
   | "fetchMoreMatchedJobs"
+  | "matchFilters"
   | "refreshProfileStrength"
   | "alerts"
   | "alertsLoading"
@@ -74,16 +76,22 @@ export const createSeekerToolsSlice: StateCreator<JobState, [], [], SeekerToolsS
   matchedJobsLoading: false,
   matchedJobsCursor: null,
   matchedJobsLoadingMore: false,
+  matchFilters: {},
   profileStrength: 0,
   profileMissing: [],
   thinProfile: false,
 
-  fetchMatchedJobs: async (tab) => {
+  fetchMatchedJobs: async (tab, filters) => {
     const seq = ++matchSeq
-    set({ matchTab: tab, matchedJobsLoading: true })
+    const active = filters ?? get().matchFilters
+    set({ matchTab: tab, matchedJobsLoading: true, matchFilters: active })
     try {
       const res = await apiFetch(
-        `/matching/jobs?tab=${encodeURIComponent(tab)}&limit=${MATCH_PAGE_SIZE}`
+        `/matching/jobs?${new URLSearchParams({
+          tab,
+          limit: String(MATCH_PAGE_SIZE),
+          ...jobFilterParams(active),
+        })}`
       )
       if (seq !== matchSeq) return
       set({
@@ -108,6 +116,7 @@ export const createSeekerToolsSlice: StateCreator<JobState, [], [], SeekerToolsS
       matchedJobsLoadingMore,
       matchedJobsLoading,
       matchTab,
+      matchFilters,
     } = get()
     // One request at a time, and nothing past the last page.
     if (!cursor || matchedJobsLoadingMore || matchedJobsLoading) return
@@ -115,7 +124,12 @@ export const createSeekerToolsSlice: StateCreator<JobState, [], [], SeekerToolsS
     set({ matchedJobsLoadingMore: true })
     try {
       const res = await apiFetch(
-        `/matching/jobs?${new URLSearchParams({ tab: matchTab, limit: String(MATCH_PAGE_SIZE), cursor })}`
+        `/matching/jobs?${new URLSearchParams({
+          tab: matchTab,
+          limit: String(MATCH_PAGE_SIZE),
+          cursor,
+          ...jobFilterParams(matchFilters),
+        })}`
       )
       // The tab changed (or was reloaded) meanwhile: drop this page.
       if (seq !== matchSeq) return

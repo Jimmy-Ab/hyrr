@@ -3,7 +3,9 @@ import { Prisma } from "@prisma/client"
 import { PricingService } from "../billing/pricing.service"
 import { WalletService } from "../billing/wallet.service"
 import { AppException } from "../core/exceptions/app-exception"
+import type { JobFilters } from "../jobs/dtos/job-filters.dto"
 import { evaluateJobContent } from "../jobs/job-content-policy"
+import { webJobFilterWhere } from "../jobs/job-filters"
 import { PrismaService } from "../prisma/prisma.service"
 import { providers, type ExternalJobInput, type Provider } from "./providers"
 
@@ -93,11 +95,27 @@ export class ExternalJobsService {
     return report
   }
 
-  async list(userId: string, q?: string, remote?: boolean, cursor?: string) {
+  async list(
+    userId: string,
+    q?: string,
+    remote?: boolean,
+    cursor?: string,
+    filters: JobFilters = {}
+  ) {
     const terms = (q ?? "").trim()
+    const categoryName = filters.categoryId
+      ? (
+          await this.prisma.jobCategory.findUnique({
+            where: { id: filters.categoryId },
+            select: { name: true },
+          })
+        )?.name
+      : null
+    const filterWhere = webJobFilterWhere(filters, categoryName)
     const where: Prisma.ExternalJobWhereInput = {
       active: true,
       ...(remote ? { remote: true } : {}),
+      ...(filterWhere.length ? { AND: filterWhere } : {}),
       ...(terms
         ? {
             OR: [

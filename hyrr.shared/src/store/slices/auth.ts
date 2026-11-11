@@ -96,6 +96,7 @@ const emptyWorkspace = {
   searchQuery: "",
   matchedJobs: [] as PublicJob[],
   matchedJobsCursor: null,
+  matchFilters: {},
   matchedJobsLoadingMore: false,
   matchTab: "for-you" as const,
   profileStrength: 0,

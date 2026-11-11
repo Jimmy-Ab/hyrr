@@ -26,15 +26,19 @@ import {
   RichTextRenderer,
   VerifiedBadge,
   creditSuffix,
+  employmentTypeCode,
   errorMessage,
   insufficientCreditsDetails,
   isApiError,
   isInsufficientCredits,
+  jobFiltersKey,
   takePendingJob,
   useJobStore,
   useToast,
+  type JobFilterInput,
   type JobMatch,
   type JobReportReason,
+  type JobType,
   type MatchTab,
   type PublicJob,
   type SavedSearchItem,
@@ -64,6 +68,8 @@ import {
 } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { CvTailorButton } from "../components/cv-tailor"
+import { JobCardMeta } from "../components/job-card-meta"
+import { JobFilterBar } from "../components/job-filter-bar"
 import { WebJobs } from "../components/web-jobs"
 
 const colorBg: Record<string, string> = {
@@ -174,12 +180,28 @@ function DiscoverHyrr() {
   })
   const [locationFilter, setLocationFilter] = useState("")
   const [remoteOnly, setRemoteOnly] = useState(false)
+  // Category, salary and recency (server-side); type and remote come from the controls above.
+  const [extraFilters, setExtraFilters] = useState<JobFilterInput>(() => {
+    const { categoryId, salary, postedWithin } = useJobStore.getState().matchFilters
+    return { categoryId, salary, postedWithin }
+  })
+  const serverFilters: JobFilterInput = {
+    ...extraFilters,
+    remote: remoteOnly || undefined,
+    type:
+      discoverTypeFilter && discoverTypeFilter !== "All"
+        ? employmentTypeCode(discoverTypeFilter as JobType)
+        : undefined,
+  }
+  const serverFiltersRef = useRef(serverFilters)
+  serverFiltersRef.current = serverFilters
+  const filtersKey = jobFiltersKey(serverFilters)
 
   const loadMatches = useCallback(
     async (tab: MatchTab) => {
       setMatchError(null)
       try {
-        await fetchMatchedJobs(tab)
+        await fetchMatchedJobs(tab, serverFiltersRef.current)
         setLoadedTab(tab)
       } catch (err) {
         if (useJobStore.getState().matchTab === tab) {
@@ -194,6 +216,16 @@ function DiscoverHyrr() {
     void loadMatches(useJobStore.getState().matchTab)
     fetchSavedSearches().catch((e) => console.warn("Failed to load saved searches.", e))
   }, [loadMatches, fetchSavedSearches])
+
+  // Filters changed: reload page one of the current tab with them.
+  const firstFilters = useRef(true)
+  useEffect(() => {
+    if (firstFilters.current) {
+      firstFilters.current = false
+      return
+    }
+    void loadMatches(useJobStore.getState().matchTab)
+  }, [filtersKey, loadMatches])
 
   const switchTab = (tab: MatchTab) => {
     if (tab === matchTab && !matchError) return
@@ -671,6 +703,9 @@ function DiscoverHyrr() {
             ))}
           </div>
         </div>
+        <div className="mt-3">
+          <JobFilterBar id="hyrr" value={extraFilters} onChange={setExtraFilters} />
+        </div>
       </Card>
 
       {/* Split Pane */}
@@ -802,6 +837,11 @@ function DiscoverHyrr() {
                         </span>
                         <span className="text-[12px] font-semibold text-primary">{job.salary}</span>
                       </div>
+                      <JobCardMeta
+                        remote={!!job.remote || job.type === "Remote"}
+                        category={job.category}
+                        skills={job.skills}
+                      />
                       {job.match && (
                         <div className="mt-2 flex flex-col gap-1.5">
                           <MatchBadge match={job.match} />

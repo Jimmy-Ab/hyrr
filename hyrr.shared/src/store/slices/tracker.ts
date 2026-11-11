@@ -1,5 +1,6 @@
 import type { StateCreator } from "zustand"
 import { apiFetch } from "../../lib/api"
+import { jobFilterParams } from "../../lib/job-filters"
 import { toError } from "../mappers"
 import type { ExternalApplication, JobState } from "../types"
 
@@ -40,8 +41,8 @@ const map = (e: any): ExternalApplication => ({
 export const createTrackerSlice: StateCreator<JobState, [], [], TrackerSlice> = (set, get) => ({
   externalApplications: [],
 
-  fetchWebJobs: (q, remote, cursor) => {
-    const params = new URLSearchParams()
+  fetchWebJobs: (q, remote, cursor, filters) => {
+    const params = new URLSearchParams(jobFilterParams(filters))
     if (q?.trim()) params.set("q", q.trim())
     if (remote) params.set("remote", "true")
     if (cursor) params.set("cursor", cursor)

@@ -7,12 +7,16 @@ import {
   PageHeader,
   creditSuffix,
   errorMessage,
+  jobFiltersKey,
   useJobStore,
   useToast,
+  type JobFilterInput,
   type WebJob,
 } from "hyrr.shared"
 import { ExternalLink, Globe, Loader2, MapPin, Search } from "lucide-react"
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
+import { JobCardMeta } from "./job-card-meta"
+import { JobFilterBar } from "./job-filter-bar"
 
 const SOURCE_LABEL: Record<WebJob["source"], { name: string; site: string }> = {
   ADZUNA: { name: "Adzuna", site: "https://www.adzuna.com" },
@@ -71,6 +75,8 @@ export function WebJobs() {
   const [applying, setApplying] = useState(false)
 
   const listRef = useRef<HTMLUListElement>(null)
+  const [filters, setFilters] = useState<JobFilterInput>({})
+  const filtersKey = jobFiltersKey(filters)
   const [loadingMore, setLoadingMore] = useState(false)
   const [moreError, setMoreError] = useState<string | null>(null)
   // Bumped by every fresh search: a late "more" page from an older search is dropped.
@@ -90,7 +96,12 @@ export function WebJobs() {
         setError(null)
       }
       try {
-        const page = await fetchWebJobs(q, remote, more ? (cursor ?? undefined) : undefined)
+        const page = await fetchWebJobs(
+          q,
+          remote,
+          more ? (cursor ?? undefined) : undefined,
+          filters
+        )
         if (seq !== searchSeq.current) return
         setJobs((list) => {
           if (!more) return page.items
@@ -114,14 +125,14 @@ export function WebJobs() {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [fetchWebJobs, q, remote, cursor]
+    [fetchWebJobs, q, remote, cursor, filters]
   )
 
   useEffect(() => {
     void load()
-    // Refetch when the remote filter changes; the search box submits explicitly.
+    // Refetch when the remote toggle or a filter changes; the search box submits explicitly.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [remote])
+  }, [remote, filtersKey])
 
   const selected = jobs.find((j) => j.id === selectedId) ?? null
 
@@ -187,6 +198,7 @@ export function WebJobs() {
           Search
         </Button>
       </form>
+      <JobFilterBar id="web" value={filters} onChange={setFilters} showType />
 
       {error ? (
         <Card role="alert" className="p-8 text-center text-[13px] text-sec-red">
@@ -227,8 +239,10 @@ export function WebJobs() {
                       </span>
                     )}
                     <span>via {SOURCE_LABEL[j.source].name}</span>
+                    {salary(j) && <span className="font-semibold text-primary">{salary(j)}</span>}
                     {j.applied && <span className="font-semibold text-sec-green">Applied</span>}
                   </p>
+                  <JobCardMeta remote={j.remote} category={j.category} />
                 </button>
               </li>
             ))}

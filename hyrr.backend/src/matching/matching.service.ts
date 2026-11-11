@@ -1,7 +1,9 @@
 import { Injectable, Logger, Optional } from "@nestjs/common"
-import { JobStatus } from "@prisma/client"
+import { JobStatus, Prisma } from "@prisma/client"
 import { CacheService } from "../cache/cache.service"
 import { EmbeddingsService } from "../embeddings/embeddings.service"
+import { jobFiltersKey, type JobFilters } from "../jobs/dtos/job-filters.dto"
+import { hyrrJobFilterWhere } from "../jobs/job-filters"
 import { PUBLIC_COMPANY_SELECT } from "../jobs/public-company"
 import { PrismaService } from "../prisma/prisma.service"
 import { MatchTab } from "./dtos/matching-query.dto"
@@ -35,13 +37,22 @@ export class MatchingService {
     userId: string,
     tab: MatchTab = "for-you",
     limit = DEFAULT_LIMIT,
-    rawCursor?: string
+    rawCursor?: string,
+    filters: JobFilters = {}
   ) {
     const cursor = decodeMatchCursor(rawCursor)
+    const filterWhere = hyrrJobFilterWhere(filters)
+    const fKey = filterWhere.length ? jobFiltersKey(filters) : ""
     if (tab === "for-you")
-      return this.forYouPage(userId, limit, cursor && "o" in cursor ? cursor.o : 0)
+      return this.forYouPage(
+        userId,
+        limit,
+        cursor && "o" in cursor ? cursor.o : 0,
+        filterWhere,
+        fKey
+      )
 
-    const key = matchingCacheKey(userId, tab, limit, rawCursor ?? "")
+    const key = matchingCacheKey(userId, tab, limit, `${rawCursor ?? ""}${fKey ? `|${fKey}` : ""}`)
     const cached = await this.cache.get<any>(key)
     if (cached) return cached
 
@@ -50,15 +61,18 @@ export class MatchingService {
     const after = cursor && "t" in cursor ? cursor : null
     // Keyset page (newest first); one extra row tells whether another page exists.
     const rows = await this.prisma.job.findMany({
-      where: after
-        ? {
-            status: JobStatus.ACTIVE,
-            OR: [
-              { createdAt: { lt: new Date(after.t) } },
-              { createdAt: new Date(after.t), id: { lt: after.i } },
-            ],
-          }
-        : { status: JobStatus.ACTIVE },
+      where: {
+        status: JobStatus.ACTIVE,
+        ...(filterWhere.length ? { AND: filterWhere } : {}),
+        ...(after
+          ? {
+              OR: [
+                { createdAt: { lt: new Date(after.t) } },
+                { createdAt: new Date(after.t), id: { lt: after.i } },
+              ],
+            }
+          : {}),
+      },
       include: { company: { select: PUBLIC_COMPANY_SELECT }, category: true },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: limit + 1,
@@ -85,14 +99,22 @@ export class MatchingService {
    * "For you": the whole ranked list (newest CANDIDATE_POOL jobs, minus own applications, score
    * >= FOR_YOU_MIN_SCORE) is computed once and cached, so every page slices the same order.
    */
-  private async forYouPage(userId: string, limit: number, offset: number) {
-    const key = matchingCacheKey(userId, "for-you", 0)
+  private async forYouPage(
+    userId: string,
+    limit: number,
+    offset: number,
+    filterWhere: Prisma.JobWhereInput[] = [],
+    fKey = ""
+  ) {
+    const key = matchingCacheKey(userId, "for-you", 0, fKey)
     let ranked = await this.cache.get<any>(key)
     if (!ranked) {
       const profile = await this.loadProfile(userId)
       const { profileStrength, missing } = computeProfileStrength(profile)
       const jobs = await this.prisma.job.findMany({
-        where: { status: JobStatus.ACTIVE },
+        where: filterWhere.length
+          ? { status: JobStatus.ACTIVE, AND: filterWhere }
+          : { status: JobStatus.ACTIVE },
         include: { company: { select: PUBLIC_COMPANY_SELECT }, category: true },
         orderBy: { createdAt: "desc" },
         take: CANDIDATE_POOL,

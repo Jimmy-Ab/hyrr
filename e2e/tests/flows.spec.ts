@@ -1152,6 +1152,57 @@ test("profile: experience and education entries edit in place; preferred categor
   expect(profile.interests.map((c: any) => c.id)).toEqual([category.id])
 })
 
+test("discover filters: category and salary narrow the list server-side; cards show skills, salary, remote and category", async ({
+  page,
+}) => {
+  const rec = await createUser("RECRUITER", "Mekdes")
+  const cats = await api<{ id: string; name: string }[]>("GET", "/jobs/categories")
+  const [a, b] = [cats[0], cats[1]]
+  const tag = uid()
+  await createActiveJobs(rec.email, 1, `E2E Filter A ${tag}`, {
+    categoryId: a.id,
+    remote: true,
+    skills: ["Go", "Postgres", "Docker", "Kubernetes"],
+    salaryMin: 90000,
+    salaryMax: 120000,
+    salaryCurrency: "USD",
+    salaryPeriod: "YEAR",
+    salary: "USD 90,000 – 120,000 / year",
+  })
+  await createActiveJobs(rec.email, 1, `E2E Filter B ${tag}`, { categoryId: b.id })
+  const seeker = await createUser("SEEKER", "Abebe")
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await login(page, SEEKER_URL, seeker.email)
+  await page.goto(`${SEEKER_URL}/discover`)
+  await page
+    .getByRole("tab", { name: "All jobs" })
+    .or(page.getByRole("button", { name: "All jobs" }))
+    .first()
+    .click()
+  const list = page.getByTestId("hyrr-job-list")
+  await expect(list.getByText(`E2E Filter B ${tag} 01`)).toBeVisible()
+
+  await page.locator("#hyrr-category").selectOption(a.id)
+  const cardA = list.getByRole("button", { name: new RegExp(`E2E Filter A ${tag}`) })
+  await expect(cardA).toBeVisible()
+  await expect(list.getByText(`E2E Filter B ${tag} 01`)).toHaveCount(0)
+  await expect(
+    cardA.getByTestId("job-card-meta").getByText("Remote", { exact: true })
+  ).toBeVisible()
+  await expect(cardA.getByText(a.name)).toBeVisible()
+  await expect(cardA.getByRole("list", { name: "Key skills" })).toContainText("Go")
+  await expect(cardA.getByText("+1")).toBeVisible()
+  await expect(cardA.getByText(/USD 90,000/)).toBeVisible()
+
+  // Salary filter: a minimum above the range hides the job; errors stay inline.
+  await page.getByRole("button", { name: "Salary", exact: true }).click()
+  await page.locator("#hyrr-salary").fill("200000")
+  await page.getByRole("button", { name: "Apply salary" }).click()
+  await expect(list.getByText(`E2E Filter A ${tag} 01`)).toHaveCount(0)
+  await page.getByRole("button", { name: "Clear filters" }).click()
+  await expect(list.getByText(`E2E Filter B ${tag} 01`)).toBeVisible()
+})
+
 test("pricing: all prices and switches come from the server; recruiters load them at startup", async ({
   page,
   browser,
