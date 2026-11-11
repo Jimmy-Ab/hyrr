@@ -19,6 +19,7 @@ const job = (over: Partial<ExternalJobInput> = {}): ExternalJobInput => ({
   sourceId: "1",
   title: "Backend Engineer",
   company: "Acme",
+  companyLogo: null,
   location: "Remote",
   remote: true,
   description: "Build APIs.",
@@ -78,7 +79,21 @@ describe("provider mappers", () => {
         url: "https://remotive.com/x",
         candidate_required_location: "Europe",
       })
-    ).toMatchObject({ source: "REMOTIVE", remote: true, location: "Europe" })
+    ).toMatchObject({ source: "REMOTIVE", remote: true, location: "Europe", companyLogo: null })
+    // Logos: Remotive's own https URL only; anything else is dropped (initials avatar).
+    const withLogo = (company_logo: unknown) =>
+      mapRemotive({
+        id: 9,
+        title: "PM",
+        company_name: "Y",
+        url: "https://remotive.com/y",
+        company_logo,
+      })
+    expect(withLogo("https://remotive.com/logo.png")?.companyLogo).toBe(
+      "https://remotive.com/logo.png"
+    )
+    expect(withLogo("http://insecure.example/logo.png")?.companyLogo).toBeNull()
+    expect(withLogo("javascript:alert(1)")?.companyLogo).toBeNull()
     expect(
       mapArbeitnow({
         slug: "dev-berlin",
@@ -122,6 +137,17 @@ describe("ExternalJobsService", () => {
       { getConfig: jest.fn().mockResolvedValue({ externalApplyCost: 1 }) } as any
     )
     prisma.externalJob.findMany.mockResolvedValue([])
+  })
+
+  it("list never sends the posting URL (Apply is the only way to the original posting)", async () => {
+    prisma.externalJob.findMany.mockResolvedValue([
+      { ...job(), id: "e1", applies: [] },
+      { ...job({ sourceId: "2" }), id: "e2", applies: [{ id: "a" }] },
+    ])
+    const page = await service.list("u1")
+    expect(page.items).toHaveLength(2)
+    expect(page.items.every((j: any) => !("url" in j))).toBe(true)
+    expect(page.items.map((j: any) => j.applied)).toEqual([false, true])
   })
 
   const provider = (source: any, jobs: ExternalJobInput[] | Error, enabled = true): Provider => ({

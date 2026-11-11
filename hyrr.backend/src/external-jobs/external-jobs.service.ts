@@ -135,7 +135,11 @@ export class ExternalJobsService {
     })
     const page = rows.slice(0, PAGE)
     return {
-      items: page.map(({ applies, ...job }) => ({ ...job, applied: applies.length > 0 })),
+      // No posting URL in the list: Apply (POST :id/apply) is the only way to the original posting.
+      items: page.map(({ applies, url: _url, ...job }) => ({
+        ...job,
+        applied: applies.length > 0,
+      })),
       nextCursor: rows.length > PAGE ? page[page.length - 1].id : null,
     }
   }

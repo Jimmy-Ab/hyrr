@@ -6,6 +6,8 @@ export type ExternalJobInput = {
   sourceId: string
   title: string
   company: string
+  /** Provider-supplied logo (https only); null = initials avatar in the app. */
+  companyLogo: string | null
   location: string | null
   remote: boolean
   description: string | null
@@ -42,6 +44,10 @@ export function plainText(html: unknown, max = DESCRIPTION_MAX): string | null {
 }
 
 const httpUrl = (v: unknown) => (typeof v === "string" && /^https?:\/\//i.test(v) ? v : null)
+
+/** Image URLs: https only (no mixed content), bounded length. */
+const httpsUrl = (v: unknown) =>
+  typeof v === "string" && v.length <= 500 && /^https:\/\/[^\s]+$/i.test(v) ? v : null
 const int = (v: unknown) => {
   const n = typeof v === "string" ? Number(v.replace(/[^\d.]/g, "")) : v
   return typeof n === "number" && Number.isFinite(n) && n > 0 ? Math.round(n) : null
@@ -87,6 +93,7 @@ export function mapAdzuna(raw: any, country: string): ExternalJobInput | null {
     sourceId: String(raw?.id ?? ""),
     title: str(raw?.title) ?? "",
     company: str(raw?.company?.display_name) ?? "",
+    companyLogo: null,
     location: str(raw?.location?.display_name),
     remote: isRemote(raw?.title, raw?.location?.display_name),
     description: plainText(raw?.description),
@@ -108,6 +115,7 @@ export function mapJooble(raw: any): ExternalJobInput | null {
     sourceId: String(raw?.id ?? ""),
     title: str(raw?.title) ?? "",
     company: str(raw?.company) ?? "",
+    companyLogo: null,
     location: str(raw?.location),
     remote: isRemote(raw?.title, raw?.location, raw?.type),
     description: plainText(raw?.snippet),
@@ -129,6 +137,8 @@ export function mapRemotive(raw: any): ExternalJobInput | null {
     sourceId: String(raw?.id ?? ""),
     title: str(raw?.title) ?? "",
     company: str(raw?.company_name) ?? "",
+    // Remotive is the only provider with a logo field; served from its own CDN (https only).
+    companyLogo: httpsUrl(raw?.company_logo ?? raw?.company_logo_url),
     location: str(raw?.candidate_required_location) ?? "Remote",
     remote: true,
     description: plainText(raw?.description),
@@ -150,6 +160,7 @@ export function mapArbeitnow(raw: any): ExternalJobInput | null {
     sourceId: String(raw?.slug ?? ""),
     title: str(raw?.title) ?? "",
     company: str(raw?.company_name) ?? "",
+    companyLogo: null,
     location: str(raw?.location),
     remote: raw?.remote === true || isRemote(raw?.location),
     description: plainText(raw?.description),

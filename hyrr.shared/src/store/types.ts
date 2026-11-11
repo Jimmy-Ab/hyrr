@@ -615,10 +615,12 @@ export interface WebJob {
   source: "ADZUNA" | "JOOBLE" | "REMOTIVE" | "ARBEITNOW"
   title: string
   company: string
+  /** Provider logo (Remotive only); null = initials avatar. */
+  companyLogo?: string | null
   location?: string | null
   remote: boolean
   description?: string | null
-  url: string
+  // No posting URL: the list never exposes it; POST /external-jobs/:id/apply returns it.
   salaryMin?: number | null
   salaryMax?: number | null
   salaryCurrency?: string | null

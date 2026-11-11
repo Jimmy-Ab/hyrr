@@ -1,4 +1,5 @@
 import {
+  Avatar,
   Button,
   Card,
   EmptyState,
@@ -18,19 +19,41 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { JobCardMeta } from "./job-card-meta"
 import { JobFilterBar } from "./job-filter-bar"
 
-const SOURCE_LABEL: Record<WebJob["source"], { name: string; site: string }> = {
-  ADZUNA: { name: "Adzuna", site: "https://www.adzuna.com" },
-  JOOBLE: { name: "Jooble", site: "https://jooble.org" },
-  REMOTIVE: { name: "Remotive", site: "https://remotive.com" },
-  ARBEITNOW: { name: "Arbeitnow", site: "https://www.arbeitnow.com" },
-}
-
-const host = (url: string) => {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "")
-  } catch {
-    return "the original site"
-  }
+/**
+ * Attribution only where the provider's terms require it (one small line in the detail pane):
+ * - Remotive: "mention Remotive as a source" (the link back is the Apply target itself).
+ * - Adzuna: "Jobs by Adzuna", linking to Adzuna.
+ * Jooble and Arbeitnow publish no attribution requirement, so nothing is shown for them.
+ */
+function SourceAttribution({ source }: { source: WebJob["source"] }) {
+  if (source === "REMOTIVE")
+    return (
+      <p className="mt-6 text-[12px] text-txt-caption" data-testid="source-attribution">
+        Listing from{" "}
+        <a
+          href="https://remotive.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-semibold text-primary hover:underline"
+        >
+          Remotive
+        </a>
+      </p>
+    )
+  if (source === "ADZUNA")
+    return (
+      <p className="mt-6 text-[12px] text-txt-caption" data-testid="source-attribution">
+        <a
+          href="https://www.adzuna.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-semibold text-primary hover:underline"
+        >
+          Jobs by Adzuna
+        </a>
+      </p>
+    )
+  return null
 }
 
 const salary = (j: WebJob) => {
@@ -229,8 +252,13 @@ export function WebJobs() {
                       : "border-bg-border/60 bg-bg-secondary/60 hover:bg-bg-secondary"
                   }`}
                 >
-                  <p className="truncate text-[13.5px] font-bold text-txt-heading">{j.title}</p>
-                  <p className="truncate text-[13px] text-txt-body">{j.company}</p>
+                  <div className="flex items-start gap-3">
+                    <Avatar name={j.company} src={j.companyLogo} size={36} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[13.5px] font-bold text-txt-heading">{j.title}</p>
+                      <p className="truncate text-[13px] text-txt-body">{j.company}</p>
+                    </div>
+                  </div>
                   <p className="mt-1.5 flex flex-wrap items-center gap-x-2 text-[12px] text-txt-caption">
                     {j.location && (
                       <span className="flex items-center gap-0.5">
@@ -238,7 +266,6 @@ export function WebJobs() {
                         {j.location}
                       </span>
                     )}
-                    <span>via {SOURCE_LABEL[j.source].name}</span>
                     {salary(j) && <span className="font-semibold text-primary">{salary(j)}</span>}
                     {j.applied && <span className="font-semibold text-sec-green">Applied</span>}
                   </p>
@@ -288,9 +315,7 @@ export function WebJobs() {
                     ) : (
                       <ExternalLink className="h-4 w-4" />
                     )}
-                    {selected.applied
-                      ? `Open on ${host(selected.url)}`
-                      : `Apply on ${host(selected.url)}${creditSuffix(cost)}`}
+                    {selected.applied ? "Open the posting" : `Apply${creditSuffix(cost)}`}
                   </Button>
                   {!selected.applied && (
                     <span className="text-[11.5px] text-txt-caption">
@@ -308,17 +333,9 @@ export function WebJobs() {
                   The full description is on the original posting.
                 </p>
               )}
-              <p className="mt-6 text-[12px] text-txt-caption">
-                Listing provided by{" "}
-                <a
-                  href={SOURCE_LABEL[selected.source].site}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-semibold text-primary hover:underline"
-                >
-                  {SOURCE_LABEL[selected.source].name}
-                </a>
-                . Hyrr doesn't review external postings; apply with the usual care.
+              <SourceAttribution source={selected.source} />
+              <p className="mt-2 text-[12px] text-txt-caption">
+                Hyrr doesn't review external postings; apply with the usual care.
               </p>
             </Card>
           )}

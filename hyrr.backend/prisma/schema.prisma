@@ -749,6 +749,8 @@ model ExternalJob {
   sourceId       String
   title          String
   company        String
+  /// Company logo URL supplied by the provider (https only; null when the provider has none)
+  companyLogo    String?
   location       String?
   remote         Boolean           @default(false)
   description    String?           @db.Text

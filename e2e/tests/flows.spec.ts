@@ -971,11 +971,24 @@ test("jobs from the web: apply charges once, opens the posting and auto-tracks i
   await page.locator("#web-q").fill(title)
   await page.getByRole("button", { name: "Search", exact: true }).click()
   await page.getByText(title, { exact: true }).first().click()
-  await expect(page.getByText(/Listing provided by/)).toBeVisible()
+  // Remotive requires naming the source: one small line; no "via", no raw posting URL anywhere.
+  await expect(page.getByTestId("source-attribution")).toHaveText("Listing from Remotive")
+  await expect(page.getByText(/^via /)).toHaveCount(0)
+  await expect(page.getByText(postingUrl)).toHaveCount(0)
+  expect(await page.content()).not.toContain("posting=")
+  // No logo from the provider: initials avatar.
+  await expect(page.getByText("G", { exact: true }).first()).toBeVisible()
+  const listed = await api(
+    "GET",
+    `/external-jobs?q=${encodeURIComponent(title)}`,
+    undefined,
+    seeker.token
+  )
+  expect(listed.items[0]).not.toHaveProperty("url")
 
   const [posting] = await Promise.all([
     context.waitForEvent("page"),
-    page.getByRole("button", { name: /^Apply on localhost · 1 credit$/ }).click(),
+    page.getByRole("button", { name: /^Apply · 1 credit$/ }).click(),
   ])
   await expect.poll(() => posting.url()).toContain("/terms?posting=")
   await expect(page.getByText("Opened the application").first()).toBeVisible()
@@ -986,7 +999,7 @@ test("jobs from the web: apply charges once, opens the posting and auto-tracks i
   // Reopening is free.
   const [again] = await Promise.all([
     context.waitForEvent("page"),
-    page.getByRole("button", { name: /^Open on localhost$/ }).click(),
+    page.getByRole("button", { name: "Open the posting" }).click(),
   ])
   await expect.poll(() => again.url()).toContain("/terms?posting=")
   expect(await seekerBalance(seeker.email)).toBe(before - 1)
