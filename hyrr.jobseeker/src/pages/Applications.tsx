@@ -1,9 +1,9 @@
 import {
-  AnimatedNumber,
   APPLICATION_STATUS,
   APPLICATION_STATUS_COLUMNS,
   APPLICATION_STATUS_LABEL,
   Badge,
+  Button,
   Card,
   ConfirmDialog,
   DropdownMenu,
@@ -11,6 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
+  EmptyState,
   errorMessage,
   formatDateTime,
   PageHeader,
@@ -159,14 +160,14 @@ function JobColumn({
       </div>
 
       {/* Cards */}
-      <div className="flex flex-col gap-3 p-3 flex-1 min-h-[480px]">
+      <div className="flex flex-col gap-3 p-3 flex-1 min-h-[240px]">
         {items.map((app) => (
           <JobCard key={app.id} application={app} onRequestRemove={onRequestRemove} />
         ))}
         {items.length === 0 && (
           <div className="flex flex-col items-center justify-center flex-1 gap-2 text-txt-disabled">
-            <LayoutList className="w-8 h-8 opacity-30" />
-            <p className="text-[13px] font-medium">No jobs here</p>
+            <LayoutList className="w-6 h-6 opacity-30" aria-hidden="true" />
+            <p className="text-[12.5px] font-medium">Nothing here yet</p>
           </div>
         )}
       </div>
@@ -376,7 +377,7 @@ function JobCard({
 
 // ─── Kanban Board ─────────────────────────────────────────────────────────────
 export function ApplicationsBoard() {
-  const { jobApplications, withdrawApplication } = useJobStore()
+  const { jobApplications, withdrawApplication, setCandidateActiveView } = useJobStore()
   const { toast } = useToast()
   const [pending, setPending] = useState<JobApplication | null>(null)
 
@@ -424,40 +425,28 @@ export function ApplicationsBoard() {
       <OutreachInvitations />
       <PendingInterviewInvites />
 
-      {/* Stats strip */}
-      <div className="stagger grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4">
-        {columns.map((col) => {
-          const count = jobApplications.filter((a) => columnOf(a) === col.id).length
-          return (
-            <Card
+      {/* Kanban board (each column header carries its count) */}
+      {jobApplications.length === 0 ? (
+        <EmptyState
+          icon={LayoutList}
+          tone="blue"
+          title="No applications yet"
+          description="Save jobs or apply from Discover and track every step here, from saved to offer."
+          action={<Button onClick={() => setCandidateActiveView("Discover")}>Discover jobs</Button>}
+        />
+      ) : (
+        <div className="-mx-1 flex gap-4 overflow-x-auto px-1 pb-4 pt-1 custom-scrollbar-none">
+          {columns.map((col) => (
+            <JobColumn
               key={col.id}
-              hoverEffect
-              className={`tone-card group ${toneClass(stageTone(col.id))} p-3.5 flex flex-col items-center rounded-xl`}
-            >
-              <span className="tone-wash" aria-hidden="true" />
-              <span className="relative text-[22px] font-bold tabular-nums text-[var(--tone-fg)]">
-                <AnimatedNumber value={count} />
-              </span>
-              <span className="relative text-[12.5px] text-txt-caption font-medium mt-0.5 text-center">
-                {col.title}
-              </span>
-            </Card>
-          )
-        })}
-      </div>
-
-      {/* Kanban board */}
-      <div className="flex gap-4 overflow-x-auto pb-6 pt-1 custom-scrollbar-none min-h-[600px]">
-        {columns.map((col) => (
-          <JobColumn
-            key={col.id}
-            id={col.id}
-            title={col.title}
-            items={jobApplications.filter((a) => columnOf(a) === col.id)}
-            onRequestRemove={setPending}
-          />
-        ))}
-      </div>
+              id={col.id}
+              title={col.title}
+              items={jobApplications.filter((a) => columnOf(a) === col.id)}
+              onRequestRemove={setPending}
+            />
+          ))}
+        </div>
+      )}
 
       <ExternalTracker />
 

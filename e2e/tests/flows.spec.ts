@@ -1322,6 +1322,41 @@ test("languages: jobs default to English; Match my languages keeps jobs in the s
   await expect(page.getByTestId("job-languages")).toHaveText("English")
 })
 
+test("seeker pages: one page header each and no horizontal overflow at 375px and 1440px", async ({
+  page,
+}) => {
+  test.setTimeout(120_000)
+  const seeker = await createUser("SEEKER", "Liya")
+  await login(page, SEEKER_URL, seeker.email)
+  const views = [
+    "dashboard",
+    "discover",
+    "alerts",
+    "applications",
+    "notifications",
+    "calendar",
+    "documents",
+    "momentum",
+    "profile",
+    "settings",
+  ]
+  for (const width of [375, 1440]) {
+    await page.setViewportSize({ width, height: 900 })
+    for (const v of views) {
+      await page.goto(`${SEEKER_URL}/${v}`)
+      await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1)
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+      )
+      expect(overflow, `${v} at ${width}px scrolls sideways`).toBeLessThanOrEqual(0)
+    }
+  }
+  // No applications yet: one clear empty state that leads to Discover.
+  await page.goto(`${SEEKER_URL}/applications`)
+  await page.getByRole("button", { name: "Discover jobs" }).click()
+  await expect(page).toHaveURL(/\/discover/)
+})
+
 test("pricing: all prices and switches come from the server; recruiters load them at startup", async ({
   page,
   browser,
@@ -1387,7 +1422,9 @@ test("skill badge: a seeker passes a timed test and gets Verified", async ({ pag
   const sets = dialog.locator("fieldset")
   await expect(sets).toHaveCount(10)
   await dialog.getByRole("button", { name: "Report question 1", exact: true }).click()
-  await expect(dialog.getByRole("button", { name: "Report question 1", exact: true })).toHaveText("Reported")
+  await expect(dialog.getByRole("button", { name: "Report question 1", exact: true })).toHaveText(
+    "Reported"
+  )
   for (let i = 0; i < 10; i++) {
     const legend = (await sets.nth(i).locator("legend").innerText()).replace(/^\d+\.\s*/, "")
     await sets.nth(i).getByText(key.get(legend)!, { exact: true }).click()

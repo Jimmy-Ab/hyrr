@@ -387,25 +387,27 @@ export function AlertsPage() {
 
   return (
     <div className="flex flex-col gap-5 animate-in fade-in duration-200">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <PageHeader
-          icon={BellRing}
-          tone="amber"
-          title="Job Alerts"
-          subtitle="Get new jobs that match your criteria by e-mail and in your notifications."
-        />
-        <div className="flex flex-col items-end gap-1">
+      <PageHeader
+        icon={BellRing}
+        tone="amber"
+        title="Job Alerts"
+        subtitle={
+          <>
+            Get new jobs that match your criteria by e-mail and in your notifications.
+            {loaded && !error && (
+              <span className={`ml-1.5 ${atLimit ? "text-sec-orange" : "text-txt-caption"}`}>
+                {alerts.length} of {MAX_ALERTS} alerts{atLimit ? " (limit reached)" : ""}.
+              </span>
+            )}
+          </>
+        }
+        actions={
           <Button size="sm" onClick={openCreate} disabled={atLimit || !!error}>
             <Plus className="h-4 w-4" aria-hidden="true" />
             New alert
           </Button>
-          {loaded && !error && (
-            <span className={`text-[12px] ${atLimit ? "text-sec-orange" : "text-txt-caption"}`}>
-              {alerts.length} of {MAX_ALERTS} alerts{atLimit ? " (limit reached)" : ""}
-            </span>
-          )}
-        </div>
-      </div>
+        }
+      />
 
       {!loaded ? (
         <div className="flex flex-col gap-3" aria-busy="true" aria-label="Loading alerts">

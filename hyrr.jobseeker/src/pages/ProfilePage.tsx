@@ -1,5 +1,4 @@
 import {
-  AnimatedNumber,
   apiFetch,
   Button,
   Card,
@@ -9,15 +8,16 @@ import {
   experienceSchema,
   FieldError,
   fieldErrorsOf,
-  IconTile,
   Input,
   isSalaryRangeEmpty,
   MonthRangeInput,
+  PageHeader,
   PROFILE_VISIBILITY,
   profileBasicsSchema,
   SalaryRangeInput,
   salaryRangeSchema,
   scopeErrors,
+  StatCard,
   useJobStore,
   useToast,
   validate,
@@ -31,7 +31,6 @@ import {
   Briefcase,
   Calendar,
   Camera,
-  CheckCircle2,
   ChevronRight,
   Clock,
   Code2,
@@ -53,6 +52,7 @@ import {
   Settings,
   Sparkles,
   Trash2,
+  UserRound,
   X,
 } from "lucide-react"
 import React, { useEffect, useRef, useState } from "react"
@@ -167,7 +167,7 @@ function SectionTitle({
 ══════════════════════════════════════════════════════════════ */
 export function ProfilePage() {
   const { toast } = useToast()
-  const { documents, setCandidateActiveView, updateProfile, profileStrength } = useJobStore()
+  const { documents, setCandidateActiveView, updateProfile } = useJobStore()
   const aiOn = useAiAvailable()
   // Which import dialog is open: a CV, or the PDF LinkedIn exports.
   const [cvImport, setCvImport] = useState<false | "cv" | "linkedin">(false)
@@ -668,135 +668,92 @@ export function ProfilePage() {
       />
 
       {/* ── Page Header ──────────────────────────────────── */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-[28px] font-extrabold tracking-tight text-txt-title">My Profile</h1>
-          <p className="text-[13px] text-txt-caption font-medium mt-0.5">
-            Build your professional identity and let top opportunities find you.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-3">
-          {!aiOn && (
-            <div className="basis-full flex justify-end">
-              <AiUnavailableNote id="cv-import-ai-off" />
+      <div className="flex flex-col gap-2">
+        <PageHeader
+          icon={UserRound}
+          tone="violet"
+          title="My Profile"
+          subtitle="Build your professional identity and let top opportunities find you."
+          actions={
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
+              {isDirty && (
+                <span
+                  role="status"
+                  className="col-span-2 text-[12.5px] font-semibold text-sec-orange sm:mr-1"
+                >
+                  Unsaved changes
+                </span>
+              )}
+              <Button
+                variant="secondary"
+                onClick={() => setCvImport("cv")}
+                disabled={!aiOn}
+                title={aiOn ? undefined : AI_UNAVAILABLE_MESSAGE}
+                aria-describedby={aiOn ? undefined : "cv-import-ai-off"}
+                className="gap-2 cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+                Import from CV
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => setCvImport("linkedin")}
+                disabled={!aiOn}
+                title={aiOn ? undefined : AI_UNAVAILABLE_MESSAGE}
+                aria-describedby={aiOn ? undefined : "cv-import-ai-off"}
+                aria-label="Import your LinkedIn profile"
+                className="gap-2 cursor-pointer"
+              >
+                <FileUp className="w-3.5 h-3.5" aria-hidden="true" />
+                <span className="sm:hidden">Import LinkedIn</span>
+                <span className="hidden sm:inline">Import your LinkedIn profile</span>
+              </Button>
+              <Button
+                onClick={handleSaveAll}
+                disabled={saving || !isDirty}
+                className="col-span-2 gap-2 cursor-pointer font-bold"
+              >
+                {saving ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Save className="w-3.5 h-3.5" />
+                )}
+                {saving ? "Saving…" : "Save Profile"}
+              </Button>
             </div>
-          )}
-          {isDirty && (
-            <span role="status" className="text-[13px] font-semibold text-sec-orange">
-              Unsaved changes
-            </span>
-          )}
-          <Button
-            variant="secondary"
-            onClick={() => setCvImport("cv")}
-            disabled={!aiOn}
-            title={aiOn ? undefined : AI_UNAVAILABLE_MESSAGE}
-            aria-describedby={aiOn ? undefined : "cv-import-ai-off"}
-            className="gap-2 cursor-pointer"
-          >
-            <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
-            Import from CV
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => setCvImport("linkedin")}
-            disabled={!aiOn}
-            title={aiOn ? undefined : AI_UNAVAILABLE_MESSAGE}
-            aria-describedby={aiOn ? undefined : "cv-import-ai-off"}
-            className="gap-2 cursor-pointer"
-          >
-            <FileUp className="w-3.5 h-3.5" aria-hidden="true" />
-            Import your LinkedIn profile
-          </Button>
-          <Button
-            onClick={handleSaveAll}
-            disabled={saving || !isDirty}
-            className="gap-2 cursor-pointer font-bold"
-          >
-            {saving ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Save className="w-3.5 h-3.5" />
-            )}
-            {saving ? "Saving…" : "Save Profile"}
-          </Button>
-        </div>
+          }
+        />
+        {!aiOn && <AiUnavailableNote id="cv-import-ai-off" />}
       </div>
 
-      {/* ── Stats Row ────────────────────────────────────── */}
-      <div className="stagger grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Profile Completeness */}
-        <Card hoverEffect className="tone-card tone-violet group p-4 flex items-center gap-3">
-          <IconTile icon={CheckCircle2} tone="violet" />
-          <div className="flex-1 min-w-0">
-            <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider">
-              Profile Strength
-            </p>
-            <p className="text-[19px] font-black text-txt-title leading-none mt-0.5">
-              {profileStrength}%
-            </p>
-            <div className="w-full h-1.5 bg-bg-border rounded-full overflow-hidden mt-1.5">
-              <div
-                className="h-full rounded-full transition-all duration-700"
-                style={{
-                  width: `${profileStrength}%`,
-                  background: "linear-gradient(90deg, var(--tone-fg), #3b7bf0)",
-                }}
-              />
-            </div>
-            <p className="text-[11.5px] text-txt-caption mt-1">
-              {profileStrength >= 100 ? "Looking great!" : "Keep going! Add more details."}
-            </p>
-          </div>
-        </Card>
-
-        {/* Skills */}
-        <Card hoverEffect className="tone-card tone-blue group p-4 flex items-center gap-3">
-          <IconTile icon={Code2} tone="blue" />
-          <div>
-            <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider">
-              Skills Listed
-            </p>
-            <p className="text-[22px] font-black text-txt-title leading-none mt-0.5">
-              <AnimatedNumber value={skills.length} />
-            </p>
-            <p className="text-[11.5px] text-txt-caption">proficiencies</p>
-          </div>
-        </Card>
-
-        {/* Work History */}
-        <Card hoverEffect className="tone-card tone-emerald group p-4 flex items-center gap-3">
-          <IconTile icon={Briefcase} tone="emerald" />
-          <div>
-            <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider">
-              Work History
-            </p>
-            <p className="text-[22px] font-black text-txt-title leading-none mt-0.5">
-              <AnimatedNumber value={experience.length} />
-            </p>
-            <p className="text-[11.5px] text-txt-caption">recorded positions</p>
-          </div>
-        </Card>
-
-        {/* Resume */}
-        <Card hoverEffect className="tone-card tone-amber group p-4 flex items-center gap-3">
-          <IconTile icon={FileText} tone="amber" />
-          <div>
-            <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider">
-              Resume
-            </p>
-            <p className="text-[22px] font-black text-txt-title leading-none mt-0.5">
-              {activeResume ? 1 : 0}
-            </p>
-            <p className="text-[11.5px] text-txt-caption">
-              {activeResume ? "active resume" : "no resume yet"}
-            </p>
-          </div>
-        </Card>
+      {/* ── Stats Row (strength lives in the card beside the profile) ───── */}
+      <div className="stagger grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+        <StatCard
+          title="Skills"
+          value={skills.length}
+          caption="on your profile"
+          icon={Code2}
+          tone="blue"
+        />
+        <StatCard
+          title="Work history"
+          value={experience.length}
+          caption="positions"
+          icon={Briefcase}
+          tone="emerald"
+        />
+        <StatCard
+          title="Resume"
+          value={activeResume ? "Active" : "None"}
+          caption={activeResume ? activeResume.name : "Upload one in Documents"}
+          icon={FileText}
+          tone="amber"
+          className="col-span-2 sm:col-span-1"
+        />
       </div>
 
       {/* ── Main 3-column grid ───────────────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-[260px_1fr_260px] gap-5 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-[260px_1fr_300px] gap-5 items-start">
         {/* ══════════════ LEFT: Profile Card + Checklist ══════════════ */}
         <div className="space-y-4">
           {/* Profile Card */}

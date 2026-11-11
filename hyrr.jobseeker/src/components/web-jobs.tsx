@@ -15,7 +15,7 @@ import {
   type WebJob,
 } from "hyrr.shared"
 import { ExternalLink, Globe, Loader2, MapPin, RefreshCw, Search } from "lucide-react"
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react"
 import { JobCardMeta } from "./job-card-meta"
 import { JobFilterBar } from "./job-filter-bar"
 
@@ -80,7 +80,7 @@ const ago = (iso?: string | null) => {
  * Jobs from licensed job APIs. Applying charges the external apply cost once, adds the job to the
  * seeker's tracker and opens the original posting in a new tab.
  */
-export function WebJobs() {
+export function WebJobs({ sourceSwitch }: { sourceSwitch?: ReactNode }) {
   const fetchWebJobs = useJobStore((s) => s.fetchWebJobs)
   const applyWebJob = useJobStore((s) => s.applyWebJob)
   const pricing = useJobStore((s) => s.pricing)
@@ -198,44 +198,69 @@ export function WebJobs() {
         tone="teal"
         title="Jobs from the web"
         subtitle="Openings from trusted job sites, best matches for your profile first."
-        actions={
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => void load(false, true)}
-            disabled={loading}
-            className="gap-1.5"
-            title="Re-rank these jobs for your current profile"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden />
-            Refresh
-          </Button>
-        }
+        actions={sourceSwitch}
       />
-      <form onSubmit={submit} className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-txt-caption" />
-          <label htmlFor="web-q" className="sr-only">
-            Search jobs from the web
-          </label>
-          <Input
-            id="web-q"
-            className="pl-10"
-            placeholder="Title, company or location"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
+      <Card className="relative z-10 border-bg-border/60 p-4">
+        <form onSubmit={submit} className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-txt-caption" />
+            <label htmlFor="web-q" className="sr-only">
+              Search jobs from the web
+            </label>
+            <Input
+              id="web-q"
+              className="h-10 pl-10"
+              placeholder="Title, company or location"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:flex">
+            <Button type="submit" disabled={loading} className="h-10 gap-1.5">
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Search className="h-4 w-4" />
+              )}
+              Search
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void load(false, true)}
+              disabled={loading}
+              className="h-10 gap-1.5"
+              title="Re-rank these jobs for your current profile"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden />
+              Refresh
+            </Button>
+          </div>
+        </form>
+        <div className="mt-3">
+          <JobFilterBar
+            id="web"
+            value={filters}
+            onChange={setFilters}
+            showType
+            leading={
+              <button
+                type="button"
+                aria-pressed={remote}
+                onClick={() => setRemote((v) => !v)}
+                className={`flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-input border px-3 text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                  remote
+                    ? "border-primary-border bg-primary-light text-primary"
+                    : "border-bg-border bg-bg-primary text-txt-body hover:bg-bg-hover"
+                }`}
+              >
+                <Globe className="h-4 w-4" aria-hidden />
+                Remote
+              </button>
+            }
           />
         </div>
-        <label className="flex items-center gap-2 text-[13px] text-txt-body cursor-pointer">
-          <input type="checkbox" checked={remote} onChange={(e) => setRemote(e.target.checked)} />
-          Remote only
-        </label>
-        <Button type="submit" disabled={loading} className="gap-1.5">
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-          Search
-        </Button>
-      </form>
-      <JobFilterBar id="web" value={filters} onChange={setFilters} showType />
+      </Card>
 
       {error ? (
         <Card role="alert" className="p-8 text-center text-[13px] text-sec-red">

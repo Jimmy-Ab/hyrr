@@ -68,7 +68,7 @@ import {
   UserPen,
   Zap,
 } from "lucide-react"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { CvTailorButton } from "../components/cv-tailor"
 import { JobCardMeta } from "../components/job-card-meta"
 import { JobFilterBar } from "../components/job-filter-bar"
@@ -138,7 +138,7 @@ function JobSkeleton() {
   )
 }
 
-function DiscoverHyrr() {
+function DiscoverHyrr({ sourceSwitch }: { sourceSwitch?: ReactNode }) {
   const {
     publicJobs,
     publicJobsLoading,
@@ -567,22 +567,7 @@ function DiscoverHyrr() {
         title="Discover Jobs"
         subtitle={`Find your next opportunity from ${publicJobs.length} open roles.`}
         className="relative z-10"
-        actions={
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => void loadMatches(matchTab, { refresh: true })}
-            disabled={matchedJobsLoading}
-            className="gap-1.5"
-            title="Re-rank jobs for your current profile"
-          >
-            <RefreshCw
-              className={`h-4 w-4 ${matchedJobsLoading ? "animate-spin" : ""}`}
-              aria-hidden="true"
-            />
-            Refresh
-          </Button>
-        }
+        actions={sourceSwitch}
       />
 
       {/* For you / All jobs + saved searches */}
@@ -614,12 +599,28 @@ function DiscoverHyrr() {
             </button>
           ))}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void loadMatches(matchTab, { refresh: true })}
+            disabled={matchedJobsLoading}
+            className="gap-1.5"
+            title="Re-rank jobs for your current profile"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${matchedJobsLoading ? "animate-spin" : ""}`}
+              aria-hidden="true"
+            />
+            Refresh
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="secondary" size="sm">
                 <History className="h-4 w-4" aria-hidden="true" />
-                Saved searches{savedSearches.length > 0 ? ` (${savedSearches.length})` : ""}
+                <span className="sm:hidden">Saved</span>
+                <span className="hidden sm:inline">Saved searches</span>
+                {savedSearches.length > 0 ? ` (${savedSearches.length})` : ""}
                 <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
               </Button>
             </DropdownMenuTrigger>
@@ -652,7 +653,8 @@ function DiscoverHyrr() {
           </DropdownMenu>
           <Button variant="secondary" size="sm" onClick={openSaveSearch}>
             <BookmarkPlus className="h-4 w-4" aria-hidden="true" />
-            Save this search
+            <span className="sm:hidden">Save</span>
+            <span className="hidden sm:inline">Save this search</span>
           </Button>
         </div>
       </div>
@@ -687,7 +689,7 @@ function DiscoverHyrr() {
               className="w-full h-10 pl-10 pr-4 rounded-input border border-bg-border bg-bg-primary text-[13px] text-txt-heading placeholder:text-txt-caption focus:outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/15 transition-all"
             />
           </div>
-          <div className="relative sm:w-44">
+          <div className="relative sm:w-56">
             <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-txt-caption pointer-events-none" />
             <input
               type="text"
@@ -698,39 +700,53 @@ function DiscoverHyrr() {
               className="w-full h-10 pl-10 pr-3 rounded-input border border-bg-border bg-bg-primary text-[13px] text-txt-heading placeholder:text-txt-caption focus:outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/15 transition-all"
             />
           </div>
-          <button
-            type="button"
-            aria-pressed={remoteOnly}
-            onClick={() => setRemoteOnly((v) => !v)}
-            className={`h-10 shrink-0 rounded-input border px-3 text-[13px] font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
-              remoteOnly
-                ? "border-primary bg-primary-light text-primary"
-                : "border-bg-border bg-bg-primary text-txt-body hover:bg-bg-hover"
-            }`}
-          >
-            <Globe className="h-4 w-4" aria-hidden="true" />
-            Remote
-          </button>
-          <div className="flex gap-1 bg-bg-primary p-1 border border-bg-border rounded-[13px] shrink-0 overflow-x-auto custom-scrollbar-none">
-            {JOB_TYPES.map((t) => (
-              <button
-                key={t}
-                type="button"
-                aria-pressed={discoverTypeFilter === t}
-                onClick={() => setDiscoverTypeFilter(t)}
-                className={`shrink-0 whitespace-nowrap px-3 py-1.5 rounded-[10px] text-[13px] font-bold cursor-pointer transition-all ${
-                  discoverTypeFilter === t
-                    ? "bg-primary text-white shadow-[0_2px_8px_rgba(108,99,255,0.35)]"
-                    : "text-txt-body hover:bg-bg-hover hover:text-txt-heading font-semibold"
-                }`}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
         </div>
         <div className="mt-3">
-          <JobFilterBar id="hyrr" value={extraFilters} onChange={setExtraFilters} showLanguages />
+          <JobFilterBar
+            id="hyrr"
+            value={extraFilters}
+            onChange={setExtraFilters}
+            showLanguages
+            leading={
+              <>
+                <button
+                  type="button"
+                  aria-pressed={remoteOnly}
+                  onClick={() => setRemoteOnly((v) => !v)}
+                  className={`h-10 shrink-0 rounded-input border px-3 text-[13px] font-semibold transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                    remoteOnly
+                      ? "border-primary-border bg-primary-light text-primary"
+                      : "border-bg-border bg-bg-primary text-txt-body hover:bg-bg-hover"
+                  }`}
+                >
+                  <Globe className="h-4 w-4" aria-hidden="true" />
+                  Remote
+                </button>
+                <div
+                  role="group"
+                  aria-label="Employment type"
+                  className="flex h-10 max-w-full shrink-0 items-center gap-0.5 overflow-x-auto rounded-input border border-bg-border bg-bg-primary p-1 custom-scrollbar-none"
+                >
+                  {/* "Remote" has its own toggle; the chips cover the employment types. */}
+                  {JOB_TYPES.filter((t) => t !== "Remote").map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      aria-pressed={discoverTypeFilter === t}
+                      onClick={() => setDiscoverTypeFilter(t)}
+                      className={`h-full shrink-0 whitespace-nowrap rounded-[9px] px-3 text-[13px] font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                        discoverTypeFilter === t
+                          ? "bg-primary text-white shadow-button"
+                          : "text-txt-body hover:bg-bg-hover hover:text-txt-heading"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </>
+            }
+          />
         </div>
       </Card>
 
@@ -1453,22 +1469,22 @@ export function DiscoverJobs() {
   // The server switches web jobs off: hide the source entirely.
   const webJobsOn = useJobStore((s) => s.pricing?.features.webJobs !== false)
   const showWeb = webJobsOn && source === "web"
-  return (
-    <div className="flex flex-col gap-4">
-      {webJobsOn && (
-        <FilterChips<"hyrr" | "web">
-          id="discover-source"
-          label="Job source"
-          value={source}
-          onChange={setSource}
-          className="self-start"
-          options={[
-            { value: "hyrr", label: "Hyrr jobs" },
-            { value: "web", label: "From the web", tone: "teal" },
-          ]}
-        />
-      )}
-      {showWeb ? <WebJobs /> : <DiscoverHyrr />}
-    </div>
+  // The source switch sits in the page header of whichever list is shown.
+  const sourceSwitch = webJobsOn ? (
+    <FilterChips<"hyrr" | "web">
+      id="discover-source"
+      label="Job source"
+      value={source}
+      onChange={setSource}
+      options={[
+        { value: "hyrr", label: "Hyrr jobs" },
+        { value: "web", label: "From the web", tone: "teal" },
+      ]}
+    />
+  ) : undefined
+  return showWeb ? (
+    <WebJobs sourceSwitch={sourceSwitch} />
+  ) : (
+    <DiscoverHyrr sourceSwitch={sourceSwitch} />
   )
 }

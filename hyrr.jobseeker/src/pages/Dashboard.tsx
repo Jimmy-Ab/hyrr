@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   Card,
+  EmptyState,
   PageHeader,
   StatCard,
   VerifiedBadge,
@@ -119,19 +120,20 @@ export function CandidateDashboard() {
       <div className="ambient-glow-2" />
 
       {/* Greeting */}
-      <div className="relative z-10">
-        <PageHeader icon={Home} tone="violet" title={`${greeting}, ${firstName} 👋`} />
-        <p className="text-body text-txt-body mt-1 font-medium sm:pl-[62px]">
-          You have {inProcess} active application{inProcess !== 1 ? "s" : ""} in progress
-          {offers > 0
+      <PageHeader
+        icon={Home}
+        tone="violet"
+        className="relative z-10"
+        title={`${greeting}, ${firstName}`}
+        subtitle={`You have ${inProcess} active application${inProcess !== 1 ? "s" : ""} in progress${
+          offers > 0
             ? ` and ${offers} offer${offers !== 1 ? "s" : ""} waiting for your decision`
-            : ""}
-          .
-        </p>
-      </div>
+            : ""
+        }.`}
+      />
 
       {/* Stats Grid */}
-      <div className="stagger grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 relative z-10">
+      <div className="stagger grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-5 relative z-10">
         {stats.map((stat) => (
           <StatCard
             key={stat.title}
@@ -160,7 +162,7 @@ export function CandidateDashboard() {
             </div>
             <button
               onClick={() => setCandidateActiveView("Applications")}
-              className="flex items-center gap-1 text-[13px] text-primary hover:text-primary-hover font-bold transition-all cursor-pointer hover:translate-x-1"
+              className="flex shrink-0 items-center gap-1 whitespace-nowrap text-[13px] text-primary hover:text-primary-hover font-bold transition-all cursor-pointer hover:translate-x-1"
             >
               <span>View Board</span>
               <ArrowUpRight className="w-4 h-4" />
@@ -212,23 +214,18 @@ export function CandidateDashboard() {
                 </button>
               ))
             ) : (
-              <div className="flex flex-col items-center justify-center py-10 gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-primary-light flex items-center justify-center">
-                  <Briefcase className="w-6 h-6 text-primary" />
-                </div>
-                <div className="text-center">
-                  <p className="text-[14px] font-semibold text-txt-heading">No activity yet</p>
-                  <p className="text-[13px] text-txt-caption mt-1">
-                    Start applying to jobs and your activity will appear here.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setCandidateActiveView("Discover")}
-                  className="text-[13.5px] font-bold text-primary hover:text-primary-hover transition-colors cursor-pointer"
-                >
-                  Browse open positions →
-                </button>
-              </div>
+              <EmptyState
+                icon={Briefcase}
+                tone="violet"
+                title="No activity yet"
+                description="Start applying to jobs and your activity will appear here."
+                className="min-h-[220px] border-0 bg-transparent"
+                action={
+                  <Button size="sm" onClick={() => setCandidateActiveView("Discover")}>
+                    Browse open positions
+                  </Button>
+                }
+              />
             )}
           </div>
         </Card>

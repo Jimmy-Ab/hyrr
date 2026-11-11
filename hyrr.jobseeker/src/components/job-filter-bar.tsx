@@ -11,7 +11,7 @@ import {
   type SalaryRangeValue,
 } from "hyrr.shared"
 import { ChevronDown, X } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 
 export type JobCategoryOption = { id: string; name: string }
 
@@ -47,8 +47,9 @@ export const WEB_TYPE_OPTIONS = [
   { value: "CONTRACT", label: "Contract" },
 ] as const
 
+/** One control height (40px) and radius for every filter control, so the toolbar lines up. */
 const selectClass =
-  "h-9 rounded-xl border border-bg-border bg-bg-secondary px-3 text-[13px] text-txt-body focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+  "h-10 min-w-0 rounded-input border border-bg-border bg-bg-primary px-3 text-[13px] font-medium text-txt-body cursor-pointer transition-colors hover:bg-bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
 
 /** Category, (type), posted within and a structured salary range for a Discover list. */
 export function JobFilterBar({
@@ -57,6 +58,7 @@ export function JobFilterBar({
   onChange,
   showType = false,
   showLanguages = false,
+  leading,
 }: {
   id: string
   value: JobFilterInput
@@ -64,6 +66,8 @@ export function JobFilterBar({
   showType?: boolean
   /** Hyrr jobs only: web providers send no language data. */
   showLanguages?: boolean
+  /** Controls rendered first in the same row (e.g. Remote and type chips). */
+  leading?: ReactNode
 }) {
   const categories = useJobCategories()
   const [salaryOpen, setSalaryOpen] = useState(false)
@@ -84,6 +88,7 @@ export function JobFilterBar({
   return (
     <div className="flex flex-col gap-2" data-testid={`${id}-filters`}>
       <div className="flex flex-wrap items-center gap-2">
+        {leading}
         <label htmlFor={`${id}-category`} className="sr-only">
           Category
         </label>
@@ -148,7 +153,7 @@ export function JobFilterBar({
           aria-expanded={salaryOpen}
           aria-controls={`${id}-salary-panel`}
           onClick={() => setSalaryOpen((o) => !o)}
-          className="gap-1"
+          className="h-10 gap-1 rounded-input"
         >
           {salaryOn ? "Salary filter on" : "Salary"}
           <ChevronDown className="h-3.5 w-3.5" aria-hidden />
@@ -161,7 +166,7 @@ export function JobFilterBar({
               onChange({ ...value, matchLanguages: !value.matchLanguages || undefined })
             }
             title="Only jobs in a language from your profile"
-            className={`h-9 rounded-xl border px-3 text-[13px] font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+            className={`h-10 rounded-input border px-3 text-[13px] font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
               value.matchLanguages
                 ? "border-primary-border bg-primary-light text-primary"
                 : "border-bg-border bg-bg-secondary text-txt-body hover:bg-bg-hover"
@@ -175,13 +180,13 @@ export function JobFilterBar({
             type="button"
             size="sm"
             variant="ghost"
+            className="h-10 gap-1 rounded-input"
             onClick={() => {
               setSalary(emptySalaryRange("USD"))
               setErrors({})
               // Language matching is a standing preference with its own toggle: keep it.
               onChange(value.matchLanguages ? { matchLanguages: true } : {})
             }}
-            className="gap-1"
           >
             <X className="h-3.5 w-3.5" aria-hidden /> Clear filters
           </Button>
