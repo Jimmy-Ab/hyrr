@@ -170,12 +170,22 @@ export const createBillingSlice: StateCreator<JobState, [], [], BillingSlice> = 
       creditPackages: (Array.isArray(packages) ? packages : []).map(mapPackage),
       plans: (Array.isArray(plans) ? plans : []).map(mapPlan),
       billingProviders: { stripe: !!providers?.stripe, chapa: !!providers?.chapa },
+      // The server is the only source of prices: no client-side defaults.
       pricing: {
-        publishBase: num(pricing?.publishBase, 10),
-        featureCost: num(pricing?.featureCost, 25),
-        featureDays: num(pricing?.featureDays, 14) || 14,
-        aiRerunCost: num(pricing?.aiRerunCost, 2),
-        applyCost: num(pricing?.applyCost, 1),
+        publishBase: num(pricing?.publishBase),
+        featureCost: num(pricing?.featureCost),
+        featureDays: num(pricing?.featureDays),
+        aiRerunCost: num(pricing?.aiRerunCost),
+        applyCost: num(pricing?.applyCost),
+        outreachCost: num(pricing?.outreachCost),
+        externalApplyCost: num(pricing?.externalApplyCost),
+        resumeTailorCost: num(pricing?.resumeTailorCost),
+        mockInterviewCost: num(pricing?.mockInterviewCost),
+        negotiationAdviceCost: num(pricing?.negotiationAdviceCost),
+        features: {
+          ai: pricing?.features?.ai !== false,
+          webJobs: pricing?.features?.webJobs !== false,
+        },
       },
     })
   },

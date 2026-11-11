@@ -7,12 +7,15 @@ import {
   DialogTitle,
   FieldError,
   TonePill,
+  creditSuffix,
   errorMessage,
   useJobStore,
   type MockInterview,
 } from "hyrr.shared"
 import { Check, GraduationCap, Loader2, Mic, X } from "lucide-react"
 import { useEffect, useState } from "react"
+import { useAiAvailable } from "../lib/ai-availability"
+import { AiUnavailableNote } from "./ai-unavailable"
 
 const STAR = ["situation", "task", "action", "result"] as const
 const READINESS = {
@@ -54,7 +57,8 @@ export function MockInterviewButton({ jobId, jobTitle }: { jobId: string; jobTit
   const fetchMockInterviews = useJobStore((s) => s.fetchMockInterviews)
   const startMockInterview = useJobStore((s) => s.startMockInterview)
   const answerMockQuestion = useJobStore((s) => s.answerMockQuestion)
-  const cost = useJobStore((s) => s.pricing?.mockInterviewCost ?? 3)
+  const cost = useJobStore((s) => s.pricing?.mockInterviewCost)
+  const aiOn = useAiAvailable()
   const [open, setOpen] = useState(false)
   const [session, setSession] = useState<MockInterview | null>(null)
   const [loading, setLoading] = useState(false)
@@ -123,14 +127,15 @@ export function MockInterviewButton({ jobId, jobTitle }: { jobId: string; jobTit
                   Answer in writing and get feedback on each one using the STAR method (Situation,
                   Task, Action, Result), then a readiness summary.
                 </p>
-                <Button onClick={start} disabled={busy} className="gap-1.5">
+                <Button onClick={start} disabled={busy || !aiOn} className="gap-1.5">
                   {busy ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Mic className="h-4 w-4" />
                   )}
-                  Start · {cost} credits
+                  Start{creditSuffix(cost)}
                 </Button>
+                {!aiOn && <AiUnavailableNote />}
               </div>
             ) : (
               <>
@@ -168,11 +173,12 @@ export function MockInterviewButton({ jobId, jobTitle }: { jobId: string; jobTit
                             placeholder="Situation… Task… Action… Result…"
                             className="w-full rounded-input border border-bg-border bg-bg-secondary px-3 py-2 text-[13px] text-txt-heading"
                           />
-                          <div className="flex justify-end">
-                            <Button onClick={submit} disabled={busy} className="gap-1.5">
+                          <div className="flex flex-col items-end gap-1.5">
+                            <Button onClick={submit} disabled={busy || !aiOn} className="gap-1.5">
                               {busy && <Loader2 className="h-4 w-4 animate-spin" />}
                               Get feedback
                             </Button>
+                            {!aiOn && <AiUnavailableNote />}
                           </div>
                         </>
                       )}
@@ -199,9 +205,10 @@ export function MockInterviewButton({ jobId, jobTitle }: { jobId: string; jobTit
                         Work on: {session.summary.improvements.join("; ")}
                       </p>
                     )}
-                    <Button size="sm" variant="secondary" onClick={start} disabled={busy}>
-                      New practice · {cost} credits
+                    <Button size="sm" variant="secondary" onClick={start} disabled={busy || !aiOn}>
+                      New practice{creditSuffix(cost)}
                     </Button>
+                    {!aiOn && <AiUnavailableNote />}
                   </section>
                 )}
               </>

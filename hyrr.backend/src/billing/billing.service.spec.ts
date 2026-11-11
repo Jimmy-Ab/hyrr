@@ -99,6 +99,29 @@ describe("BillingService", () => {
 
   const balance = () => db.creditWallet.rows.find((w: any) => w.companyId === "co-1").balance
 
+  describe("pricing", () => {
+    it("returns all ten prices and the AI / web-jobs feature flags", async () => {
+      for (const k of ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_AI_API_KEY"])
+        delete process.env[k]
+      delete process.env.EXTERNAL_JOBS_ENABLED
+      const off = await service.getPricing()
+      expect(Object.keys(off).filter((k) => k !== "features")).toHaveLength(10)
+      expect(off).toMatchObject({
+        applyCost: 1,
+        outreachCost: 5,
+        externalApplyCost: 1,
+        resumeTailorCost: 2,
+        mockInterviewCost: 3,
+        negotiationAdviceCost: 1,
+        features: { ai: false, webJobs: false },
+      })
+
+      process.env.OPENAI_API_KEY = "sk-proj-unit-test-key-0123456789abcdef"
+      process.env.EXTERNAL_JOBS_ENABLED = "true"
+      expect((await service.getPricing()).features).toEqual({ ai: true, webJobs: true })
+    })
+  })
+
   describe("checkout", () => {
     it("creates a PENDING payment and a Stripe Checkout session (payment mode, USD)", async () => {
       const create = jest.spyOn(stripe, "createCheckoutSession").mockResolvedValue({

@@ -16,6 +16,19 @@ export function money(cents: number | null | undefined, currency = "USD") {
   return currency.toUpperCase() === "USD" ? `$${value}` : `${currency.toUpperCase()} ${value}`
 }
 
+/** "3 credits" / "1 credit". */
+export function credits(n: number): string {
+  return `${n.toLocaleString()} credit${Math.abs(n) === 1 ? "" : "s"}`
+}
+
+/**
+ * " · 3 credits" for action labels, or "" while the price isn't loaded yet: prices come only from
+ * `GET /billing/pricing`, never from a client-side guess.
+ */
+export function creditSuffix(cost: number | null | undefined): string {
+  return typeof cost === "number" ? ` · ${credits(cost)}` : ""
+}
+
 export const pct = (v: number | null | undefined, digits = 0) =>
   v == null || !Number.isFinite(v) ? "—" : `${(v * 100).toFixed(digits)}%`
 

@@ -372,7 +372,7 @@ export function MomentumView({ audience = "recruiter" }: { audience?: MomentumAu
         </h1>
         <p className="text-[14px] text-txt-body mt-1">
           {seeker
-            ? `Each job application uses ${formatCredits(pricing?.applyCost ?? 1)}. Credits never expire.`
+            ? `${pricing ? `Each job application uses ${formatCredits(pricing.applyCost)}. ` : ""}Credits never expire.`
             : "Credits power publishing, featured listings and AI re-runs."}
         </p>
       </div>

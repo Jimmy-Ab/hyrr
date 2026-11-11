@@ -991,7 +991,7 @@ test("jobs from the web: apply charges once, opens the posting and auto-tracks i
   expect(await seekerBalance(seeker.email)).toBe(before - 1)
 })
 
-test("CV tailor: without an AI provider the seeker is told and nothing is charged", async ({
+test("CV tailor: without an AI provider the button is off, explained, and nothing is charged", async ({
   page,
 }) => {
   const rec = await createUser("RECRUITER", "Saba")
@@ -1022,14 +1022,14 @@ test("CV tailor: without an AI provider the seeker is told and nothing is charge
     .first()
     .click()
   await page.getByText(title).first().click()
-  await page.getByRole("button", { name: /Tailor my CV · \d+ credits/ }).click()
-  await expect(page.getByRole("dialog").getByText(/nothing was charged/)).toBeVisible({
-    timeout: 10_000,
-  })
+  // The price comes from GET /billing/pricing (2 by default), never a client-side guess.
+  const tailor = page.getByRole("button", { name: "Tailor my CV · 2 credits" })
+  await expect(tailor).toBeDisabled()
+  await expect(page.getByText(/AI tools are switched off on Hyrr right now/).first()).toBeVisible()
   expect(await seekerBalance(seeker.email)).toBe(before)
 })
 
-test("practice interview: offered on active applications; no AI provider means no charge", async ({
+test("practice interview: offered on active applications; without AI, Start is off and explained", async ({
   page,
 }) => {
   const rec = await createUser("RECRUITER", "Kebede")
@@ -1061,9 +1061,49 @@ test("practice interview: offered on active applications; no AI provider means n
   await page.goto(`${SEEKER_URL}/applications`)
   await page.getByRole("button", { name: "Practice interview" }).first().click()
   const dialog = page.getByRole("dialog")
-  await dialog.getByRole("button", { name: /^Start · \d+ credits$/ }).click()
-  await expect(dialog.getByText(/nothing was charged/)).toBeVisible({ timeout: 10_000 })
+  await expect(dialog.getByRole("button", { name: "Start · 3 credits" })).toBeDisabled()
+  await expect(dialog.getByText(/AI tools are switched off on Hyrr right now/)).toBeVisible()
   expect(await seekerBalance(seeker.email)).toBe(before)
+})
+
+test("pricing: all prices and switches come from the server; recruiters load them at startup", async ({
+  page,
+  browser,
+}) => {
+  const seeker = await createUser("SEEKER", "Selam")
+  const pricing = await api("GET", "/billing/pricing", undefined, seeker.token)
+  expect(pricing).toMatchObject({
+    applyCost: expect.any(Number),
+    outreachCost: expect.any(Number),
+    externalApplyCost: expect.any(Number),
+    resumeTailorCost: expect.any(Number),
+    mockInterviewCost: expect.any(Number),
+    negotiationAdviceCost: expect.any(Number),
+    features: { ai: false, webJobs: true },
+  })
+
+  // The recruiter app asks for the catalog while it boots (no screen has to open it first).
+  const rec = await createUser("RECRUITER", "Abel")
+  const loaded = page.waitForResponse(
+    (r) => r.url().endsWith("/api/billing/pricing") && r.status() === 200
+  )
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await login(page, RECRUITER_URL, rec.email)
+  const body = await (await loaded).json()
+  expect(body.outreachCost).toBe(pricing.outreachCost)
+
+  // Seeker: no AI chat launcher without AI; web jobs offered while the server has them on.
+  // Own context: the recruiter's session cookie would otherwise sign this tab in too.
+  const seekerPage = await (
+    await browser.newContext({ viewport: { width: 1400, height: 900 } })
+  ).newPage()
+  await login(seekerPage, SEEKER_URL, seeker.email)
+  await seekerPage.goto(`${SEEKER_URL}/discover`)
+  await expect(seekerPage.getByRole("button", { name: "From the web" })).toBeVisible()
+  await expect(seekerPage.getByText(/AI tools are switched off/)).toHaveCount(0)
+  await seekerPage.goto(`${SEEKER_URL}/profile`)
+  await expect(seekerPage.getByRole("button", { name: "Import from CV" })).toBeDisabled()
+  await expect(seekerPage.getByText(/AI tools are switched off on Hyrr right now/)).toBeVisible()
 })
 
 test("skill badge: a seeker passes a timed test and gets Verified", async ({ page }) => {

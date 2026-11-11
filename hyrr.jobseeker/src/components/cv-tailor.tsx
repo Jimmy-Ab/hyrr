@@ -5,6 +5,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  creditSuffix,
   errorMessage,
   useJobStore,
   useToast,
@@ -12,6 +13,8 @@ import {
 } from "hyrr.shared"
 import { Check, Copy, Loader2, RefreshCw, Wand2 } from "lucide-react"
 import { useEffect, useState } from "react"
+import { AI_UNAVAILABLE_MESSAGE, useAiAvailable } from "../lib/ai-availability"
+import { AiUnavailableNote } from "./ai-unavailable"
 
 function ScoreRing({ score }: { score: number }) {
   const tone =
@@ -38,7 +41,8 @@ function ScoreRing({ score }: { score: number }) {
 export function CvTailorButton({ jobId, jobTitle }: { jobId: string; jobTitle: string }) {
   const fetchCvTailoring = useJobStore((s) => s.fetchCvTailoring)
   const tailorCv = useJobStore((s) => s.tailorCv)
-  const cost = useJobStore((s) => s.pricing?.resumeTailorCost ?? 2)
+  const cost = useJobStore((s) => s.pricing?.resumeTailorCost)
+  const aiOn = useAiAvailable()
   const { toast } = useToast()
   const [saved, setSaved] = useState<CvTailoring | null>(null)
   const [open, setOpen] = useState(false)
@@ -84,11 +88,19 @@ export function CvTailorButton({ jobId, jobTitle }: { jobId: string; jobTitle: s
       <Button
         variant="secondary"
         onClick={() => (saved ? setOpen(true) : run())}
+        disabled={!saved && !aiOn}
+        title={!saved && !aiOn ? AI_UNAVAILABLE_MESSAGE : undefined}
         className="h-11 gap-1.5 px-4 cursor-pointer"
       >
         <Wand2 className="h-4 w-4" />
-        {saved ? `CV match ${saved.result.matchScore}%` : `Tailor my CV · ${cost} credits`}
+        {saved ? `CV match ${saved.result.matchScore}%` : `Tailor my CV${creditSuffix(cost)}`}
       </Button>
+      {/* Rendered inside the job's action row (flex-wrap): takes its own line. */}
+      {!saved && !aiOn && (
+        <div className="basis-full">
+          <AiUnavailableNote />
+        </div>
+      )}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent variant="sheet" className="max-w-lg overflow-y-auto">
           <DialogHeader>
@@ -183,11 +195,21 @@ export function CvTailorButton({ jobId, jobTitle }: { jobId: string; jobTitle: s
                   </section>
                 )}
                 <div className="flex items-center justify-between gap-2 border-t border-bg-border/50 pt-4">
-                  <span className="text-[12px] text-txt-caption">
-                    Updated your CV? Run it again to see the new score.
-                  </span>
-                  <Button size="sm" variant="ghost" onClick={() => run(true)} className="gap-1.5">
-                    <RefreshCw className="h-3.5 w-3.5" /> Re-run · {cost} credits
+                  {aiOn ? (
+                    <span className="text-[12px] text-txt-caption">
+                      Updated your CV? Run it again to see the new score.
+                    </span>
+                  ) : (
+                    <AiUnavailableNote />
+                  )}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => run(true)}
+                    disabled={!aiOn}
+                    className="gap-1.5"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" /> Re-run{creditSuffix(cost)}
                   </Button>
                 </div>
               </div>

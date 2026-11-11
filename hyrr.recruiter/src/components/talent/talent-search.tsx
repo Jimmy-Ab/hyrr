@@ -9,6 +9,8 @@ import {
   FieldError,
   Input,
   PageHeader,
+  creditSuffix,
+  credits,
   errorMessage,
   useJobStore,
   useToast,
@@ -39,7 +41,7 @@ function ProfileSheet({ card, onClose }: { card: TalentCard | null; onClose: () 
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const openJobs = jobs.filter((j) => j.status === "Active" && !j.removedAt)
-  const cost = pricing?.outreachCost ?? 5
+  const cost = pricing?.outreachCost
 
   useEffect(() => {
     setProfile(null)
@@ -67,7 +69,7 @@ function ProfileSheet({ card, onClose }: { card: TalentCard | null; onClose: () 
       setSent(true)
       toast(
         "Message sent",
-        `${card.name} will see it in Hyrr. ${cost} credits were used.`,
+        `${card.name} will see it in Hyrr.${cost != null ? ` ${credits(cost)} used.` : ""}`,
         "success"
       )
     } catch (err) {
@@ -151,7 +153,7 @@ function ProfileSheet({ card, onClose }: { card: TalentCard | null; onClose: () 
 
             <form onSubmit={send} className="mt-6 space-y-3 border-t border-bg-border/50 pt-5">
               <p className="text-[13px] font-semibold text-txt-heading">
-                Reach out · {cost} credits
+                Reach out{creditSuffix(cost)}
               </p>
               {sent ? (
                 <p className="rounded-xl bg-bg-hover/60 p-3 text-[13px] text-txt-body">
@@ -216,7 +218,7 @@ function ProfileSheet({ card, onClose }: { card: TalentCard | null; onClose: () 
                       ) : (
                         <Send className="h-4 w-4" />
                       )}
-                      Send · {cost} credits
+                      Send{creditSuffix(cost)}
                     </Button>
                   </div>
                 </>

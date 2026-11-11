@@ -27,4 +27,16 @@ export class RealtimeService {
       // live hints are best effort
     }
   }
+
+  /**
+   * Refresh hint for every connected client (no personal data): prices, packs and plans changed,
+   * so the apps refetch `GET /billing/pricing` and the catalog.
+   */
+  pricingUpdated() {
+    try {
+      this.server?.emit("pricing_updated", { at: new Date().toISOString() })
+    } catch {
+      // live hints are best effort
+    }
+  }
 }

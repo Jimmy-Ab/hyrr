@@ -1024,11 +1024,16 @@ export interface MomentumPricing {
   aiRerunCost: number
   /** Seeker side: credits per job application. */
   applyCost: number
-  outreachCost?: number
-  externalApplyCost?: number
-  resumeTailorCost?: number
-  mockInterviewCost?: number
-  negotiationAdviceCost?: number
+  /** Recruiter credits to message a seeker found in talent search. */
+  outreachCost: number
+  /** Seeker credits to apply to a job from the web (once per job). */
+  externalApplyCost: number
+  /** Seeker AI tools (credits per run). */
+  resumeTailorCost: number
+  mockInterviewCost: number
+  negotiationAdviceCost: number
+  /** What the platform offers right now (server-side switches). */
+  features: { ai: boolean; webJobs: boolean }
 }
 
 export type CreditTransactionType =
@@ -1039,6 +1044,9 @@ export type CreditTransactionType =
   | "JOB_FEATURE"
   | "AI_ANALYSIS"
   | "APPLICATION"
+  | "OUTREACH"
+  | "EXTERNAL_APPLY"
+  | "AI_SEEKER_TOOL"
   | "REFUND"
   | "ADJUSTMENT"
 
@@ -1050,6 +1058,9 @@ export const CREDIT_TRANSACTION_LABEL: Record<CreditTransactionType, string> = {
   JOB_FEATURE: "Job featured",
   AI_ANALYSIS: "AI analysis",
   APPLICATION: "Job application",
+  OUTREACH: "Candidate outreach",
+  EXTERNAL_APPLY: "Web job application",
+  AI_SEEKER_TOOL: "AI career tool",
   REFUND: "Refund",
   ADJUSTMENT: "Adjustment",
 }

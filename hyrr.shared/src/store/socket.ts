@@ -435,6 +435,13 @@ export function initializeSocket(set: StoreSet, get: StoreGet) {
       .fetchWallet()
       .catch(() => undefined)
   })
+  // Admin edited prices, packs or plans (admins refetch their own queries in hyrr.admin).
+  socket.on("pricing_updated", () => {
+    if (get().user?.role === "ADMIN") return
+    get()
+      .fetchBillingCatalog()
+      .catch(() => undefined)
+  })
 
   socket.on("notification", (data: any) => {
     const item = mapNotification(data || {})

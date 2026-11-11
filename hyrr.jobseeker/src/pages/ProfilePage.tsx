@@ -54,9 +54,11 @@ import {
   X,
 } from "lucide-react"
 import React, { useEffect, useRef, useState } from "react"
+import { AiUnavailableNote } from "../components/ai-unavailable"
 import { CvImportDialog, type CvSection } from "../components/profile/cv-import-dialog"
 import { ProfileStrengthCard } from "../components/profile/profile-strength"
 import { VerifiedSkills } from "../components/skill-badges"
+import { AI_UNAVAILABLE_MESSAGE, useAiAvailable } from "../lib/ai-availability"
 
 /* ══════════════════════════════════════════════════════════════
    Small reusable helpers
@@ -164,6 +166,7 @@ function SectionTitle({
 export function ProfilePage() {
   const { toast } = useToast()
   const { documents, setCandidateActiveView, updateProfile, profileStrength } = useJobStore()
+  const aiOn = useAiAvailable()
   const [cvImportOpen, setCvImportOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -631,7 +634,12 @@ export function ProfilePage() {
             Build your professional identity and let top opportunities find you.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {!aiOn && (
+            <div className="basis-full flex justify-end">
+              <AiUnavailableNote id="cv-import-ai-off" />
+            </div>
+          )}
           {isDirty && (
             <span role="status" className="text-[13px] font-semibold text-sec-orange">
               Unsaved changes
@@ -640,6 +648,9 @@ export function ProfilePage() {
           <Button
             variant="secondary"
             onClick={() => setCvImportOpen(true)}
+            disabled={!aiOn}
+            title={aiOn ? undefined : AI_UNAVAILABLE_MESSAGE}
+            aria-describedby={aiOn ? undefined : "cv-import-ai-off"}
             className="gap-2 cursor-pointer"
           >
             <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />

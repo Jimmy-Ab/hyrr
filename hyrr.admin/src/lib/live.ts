@@ -4,6 +4,7 @@ import { queryClient } from "./api"
 
 /** Admin queries that live metrics make stale (dashboard, analytics, money lists). */
 const LIVE_PATHS = /^\/(dashboard|analytics|payments|ledger|companies|users|moderation)/
+const PRICING_PATHS = /^\/(pricing|packages|plans)$/
 const THROTTLE_MS = 5000
 
 /**
@@ -41,14 +42,21 @@ export function useAdminLive(): boolean {
         setLive(!!ack?.joined)
       )
     const onDisconnect = () => setLive(false)
+    // Another admin saved prices, packs or plans.
+    const onPricing = () =>
+      void queryClient.invalidateQueries({
+        predicate: (q) => q.queryKey[0] === "admin" && PRICING_PATHS.test(String(q.queryKey[1])),
+      })
     socket.on("connect", join)
     socket.on("disconnect", onDisconnect)
     socket.on("admin_metric", onMetric)
+    socket.on("pricing_updated", onPricing)
     if (socket.connected) join()
     return () => {
       socket.off("connect", join)
       socket.off("disconnect", onDisconnect)
       socket.off("admin_metric", onMetric)
+      socket.off("pricing_updated", onPricing)
       if (timer) clearTimeout(timer)
     }
   }, [socket])

@@ -3,6 +3,7 @@ import { PaymentProvider, PaymentStatus, Prisma } from "@prisma/client"
 import { AiService } from "../ai/ai.service"
 import { MomentumConfig, PricingService } from "../billing/pricing.service"
 import { NotFoundAppException } from "../core/exceptions/app-exception"
+import { RealtimeService } from "../core/realtime/realtime.service"
 import { PrismaService } from "../prisma/prisma.service"
 import type { AdminCtx } from "./admin-moderation.service"
 import { AuditService } from "./audit.service"
@@ -43,7 +44,8 @@ export class AdminMoneyService {
     private readonly prisma: PrismaService,
     private readonly pricing: PricingService,
     private readonly audit: AuditService,
-    @Optional() private readonly ai?: AiService
+    @Optional() private readonly ai?: AiService,
+    @Optional() private readonly realtime?: RealtimeService
   ) {}
 
   // ─── Payments ────────────────────────────────────────────────────
@@ -154,6 +156,8 @@ export class AdminMoneyService {
       )
     })
     this.pricing.invalidate()
+    // After the commit: every app refetches its prices.
+    this.realtime?.pricingUpdated()
     return this.getPricing()
   }
 
@@ -167,7 +171,7 @@ export class AdminMoneyService {
   async updatePackage(id: string, dto: PackageUpdateDto, ctx: AdminCtx) {
     const before = await this.prisma.creditPackage.findUnique({ where: { id } })
     if (!before) throw new NotFoundAppException("Package not found", "PACKAGE_NOT_FOUND")
-    return this.prisma.$transaction(async (tx) => {
+    const saved = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.creditPackage.update({ where: { id }, data: { ...dto } })
       await this.audit.record(
         {
@@ -183,6 +187,8 @@ export class AdminMoneyService {
       )
       return updated
     })
+    this.realtime?.pricingUpdated()
+    return saved
   }
 
   plans() {
@@ -192,7 +198,7 @@ export class AdminMoneyService {
   async updatePlan(code: string, dto: PlanUpdateDto, ctx: AdminCtx) {
     const before = await this.prisma.plan.findUnique({ where: { code } })
     if (!before) throw new NotFoundAppException("Plan not found", "PLAN_NOT_FOUND")
-    return this.prisma.$transaction(async (tx) => {
+    const saved = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.plan.update({ where: { code }, data: { ...dto } })
       await this.audit.record(
         {
@@ -208,6 +214,8 @@ export class AdminMoneyService {
       )
       return updated
     })
+    this.realtime?.pricingUpdated()
+    return saved
   }
 }
 

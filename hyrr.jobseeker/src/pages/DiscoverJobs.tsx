@@ -24,6 +24,7 @@ import {
   PageHeader,
   RichTextRenderer,
   VerifiedBadge,
+  creditSuffix,
   errorMessage,
   insufficientCreditsDetails,
   isApiError,
@@ -158,7 +159,7 @@ function DiscoverHyrr() {
     wallet,
     pricing,
   } = useJobStore()
-  const applyCost = pricing?.applyCost ?? 1
+  const applyCost = pricing?.applyCost
   const balance = wallet?.balance ?? null
   const [noCredits, setNoCredits] = useState<{ balance: number; required: number } | null>(null)
   const { toast } = useToast()
@@ -421,7 +422,7 @@ function DiscoverHyrr() {
     } catch (err) {
       if (isInsufficientCredits(err)) {
         setNoCredits(
-          insufficientCreditsDetails(err) ?? { balance: balance ?? 0, required: applyCost }
+          insufficientCreditsDetails(err) ?? { balance: balance ?? 0, required: applyCost ?? 0 }
         )
       } else if (isApiError(err) && err.errorCode === "EMAIL_NOT_VERIFIED") {
         setApplyBlocked(true)
@@ -1209,9 +1210,7 @@ function DiscoverHyrr() {
               onClick={submitApplication}
               disabled={submitting || !!noCredits || (questions === null && !questionsError)}
             >
-              {submitting
-                ? "Submitting…"
-                : `Apply · ${applyCost} credit${applyCost === 1 ? "" : "s"}`}
+              {submitting ? "Submitting…" : `Apply${creditSuffix(applyCost)}`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1356,20 +1355,25 @@ function DiscoverHyrr() {
 /** Discover: Hyrr jobs, or jobs from the web (licensed job APIs). */
 export function DiscoverJobs() {
   const [source, setSource] = useState<"hyrr" | "web">("hyrr")
+  // The server switches web jobs off: hide the source entirely.
+  const webJobsOn = useJobStore((s) => s.pricing?.features.webJobs !== false)
+  const showWeb = webJobsOn && source === "web"
   return (
     <div className="flex flex-col gap-4">
-      <FilterChips
-        id="discover-source"
-        label="Job source"
-        value={source}
-        onChange={setSource}
-        className="self-start"
-        options={[
-          { value: "hyrr", label: "Hyrr jobs" },
-          { value: "web", label: "From the web", tone: "teal" },
-        ]}
-      />
-      {source === "hyrr" ? <DiscoverHyrr /> : <WebJobs />}
+      {webJobsOn && (
+        <FilterChips
+          id="discover-source"
+          label="Job source"
+          value={source}
+          onChange={setSource}
+          className="self-start"
+          options={[
+            { value: "hyrr", label: "Hyrr jobs" },
+            { value: "web", label: "From the web", tone: "teal" },
+          ]}
+        />
+      )}
+      {showWeb ? <WebJobs /> : <DiscoverHyrr />}
     </div>
   )
 }

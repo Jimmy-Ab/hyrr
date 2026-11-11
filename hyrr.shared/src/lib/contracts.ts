@@ -245,6 +245,8 @@ export const SYNC_SOCKET_EVENTS = {
   CALENDAR_EVENT_CONFIRMED: "calendar_event_confirmed",
   // Governance & economy
   WALLET_UPDATED: "wallet_updated",
+  /** Admin changed prices, packs or plans: refetch the billing catalog. */
+  PRICING_UPDATED: "pricing_updated",
   JOB_MODERATED: "job_moderated",
   JOB_REMOVED: "job_removed",
   COMPANY_STATUS: "company_status",

@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable, Logger, Optional } from "@nestjs/common"
 import { CompanyMemberRole, Payment, Prisma } from "@prisma/client"
 import { randomUUID } from "crypto"
+import { resolveActiveModel } from "../ai/ai.models"
 import { Actor } from "../core/access/access.service"
 import { requireCompanyWriter, resolveCompanyMembership } from "../core/access/company-membership"
 import { EmailService } from "../core/delivery/email.service"
@@ -11,6 +12,7 @@ import {
   NotFoundAppException,
 } from "../core/exceptions/app-exception"
 import { RealtimeService } from "../core/realtime/realtime.service"
+import { externalJobsEnabled } from "../external-jobs/external-jobs.service"
 import { PrismaService } from "../prisma/prisma.service"
 import { PricingService } from "./pricing.service"
 import { ChapaProvider } from "./providers/chapa.provider"
@@ -218,7 +220,12 @@ export class BillingService {
   }
 
   async getPricing() {
-    const c = await this.pricing.getConfig()
+    const [c, settings] = await Promise.all([
+      this.pricing.getConfig(),
+      this.prisma.systemSetting
+        .findUnique({ where: { id: "global-settings" }, select: { activeModel: true } })
+        .catch(() => null),
+    ])
     return {
       publishBase: c.publishBase,
       featureCost: c.featureCost,
@@ -230,6 +237,11 @@ export class BillingService {
       resumeTailorCost: c.resumeTailorCost,
       mockInterviewCost: c.mockInterviewCost,
       negotiationAdviceCost: c.negotiationAdviceCost,
+      // What the apps may offer right now: AI needs a configured provider key, web jobs the sync.
+      features: {
+        ai: !!resolveActiveModel(settings?.activeModel),
+        webJobs: externalJobsEnabled(),
+      },
     }
   }
 

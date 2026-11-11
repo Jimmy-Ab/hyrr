@@ -1,5 +1,6 @@
 import {
   Button,
+  creditSuffix,
   errorMessage,
   useJobStore,
   type NegotiationAdvice,
@@ -8,6 +9,8 @@ import {
 } from "hyrr.shared"
 import { Check, Copy, Loader2, TrendingUp } from "lucide-react"
 import { useEffect, useState } from "react"
+import { useAiAvailable } from "../lib/ai-availability"
+import { AiUnavailableNote } from "./ai-unavailable"
 
 const money = (n: number, currency: string) =>
   new Intl.NumberFormat([], { style: "currency", currency, maximumFractionDigits: 0 }).format(n)
@@ -17,7 +20,8 @@ const YEARLY = { YEAR: 1, MONTH: 12, HOUR: 2080 } as const
 export function OfferNegotiation({ offer }: { offer: Offer }) {
   const fetchSalaryBenchmark = useJobStore((s) => s.fetchSalaryBenchmark)
   const getNegotiationAdvice = useJobStore((s) => s.getNegotiationAdvice)
-  const cost = useJobStore((s) => s.pricing?.negotiationAdviceCost ?? 1)
+  const cost = useJobStore((s) => s.pricing?.negotiationAdviceCost)
+  const aiOn = useAiAvailable()
   const [bench, setBench] = useState<SalaryBenchmark | null>(null)
   const [advice, setAdvice] = useState<NegotiationAdvice["advice"] | null>(null)
   const [busy, setBusy] = useState(false)
@@ -107,10 +111,19 @@ export function OfferNegotiation({ offer }: { offer: Offer }) {
         </div>
       ) : (
         offer.status === "SENT" && (
-          <Button size="sm" variant="secondary" onClick={ask} disabled={busy} className="gap-1.5">
-            {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-            Negotiation advice · {cost} credit{cost === 1 ? "" : "s"}
-          </Button>
+          <div className="space-y-1.5">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={ask}
+              disabled={busy || !aiOn}
+              className="gap-1.5"
+            >
+              {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+              Negotiation advice{creditSuffix(cost)}
+            </Button>
+            {!aiOn && <AiUnavailableNote />}
+          </div>
         )
       )}
       {error && (

@@ -4,6 +4,7 @@ import {
   EmptyState,
   Input,
   PageHeader,
+  creditSuffix,
   errorMessage,
   useJobStore,
   useToast,
@@ -57,7 +58,7 @@ export function WebJobs() {
   const pricing = useJobStore((s) => s.pricing)
   const wallet = useJobStore((s) => s.wallet)
   const { toast } = useToast()
-  const cost = pricing?.externalApplyCost ?? 1
+  const cost = pricing?.externalApplyCost
 
   const [q, setQ] = useState("")
   const [remote, setRemote] = useState(false)
@@ -236,7 +237,7 @@ export function WebJobs() {
                     )}
                     {selected.applied
                       ? `Open on ${host(selected.url)}`
-                      : `Apply on ${host(selected.url)} · ${cost} credit${cost === 1 ? "" : "s"}`}
+                      : `Apply on ${host(selected.url)}${creditSuffix(cost)}`}
                   </Button>
                   {!selected.applied && (
                     <span className="text-[11.5px] text-txt-caption">

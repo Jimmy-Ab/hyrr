@@ -23,6 +23,7 @@ import { AlertTriangle } from "lucide-react"
 import * as React from "react"
 import { Header } from "./components/layout/header"
 import { Sidebar } from "./components/layout/sidebar"
+import { useAiAvailable } from "./lib/ai-availability"
 
 // Pages
 import { InterviewPicker } from "./components/interview-invites"
@@ -166,6 +167,7 @@ function AppContent() {
   const setAccessToken = useJobStore((s) => s.setAccessToken)
   const isInitialLoading = useJobStore((s) => s.isInitialLoading)
   const initialLoadError = useJobStore((s) => s.initialLoadError)
+  const aiOn = useAiAvailable()
 
   const pathname = useViewRouting()
   const [restoring, setRestoring] = React.useState(
@@ -287,7 +289,7 @@ function AppContent() {
       {/* Floating AI Assistant bubble */}
       <InterviewPicker />
       <OfferSheet />
-      <AiChatWidget role="SEEKER" />
+      {aiOn && <AiChatWidget role="SEEKER" />}
     </div>
   )
 }
