@@ -14,11 +14,11 @@ import {
 } from "hyrr.shared"
 import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react"
 import { useEffect, useState } from "react"
-import { errorMessage, PIPELINE_STATUSES } from "../../lib/recruiter"
+import { errorMessage, MOVABLE_STATUSES } from "../../lib/recruiter"
 import { useJobStore } from "../../store/useJobStore"
 import { useCompanyLabels } from "../labels/labels"
 
-const MOVE_TARGETS = PIPELINE_STATUSES.filter((s) => s !== "Archived")
+const MOVE_TARGETS = MOVABLE_STATUSES.filter((s) => s !== "Archived")
 const MAX_MESSAGE_LENGTH = 5000
 
 const ACTION_COPY: Record<BulkAction, { title: string; confirm: string; danger?: boolean }> = {

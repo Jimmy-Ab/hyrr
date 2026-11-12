@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import * as React from "react"
 import { errorMessage } from "../../lib/api"
+import { date as fmtDate, dateTime as fmtDateTime } from "../../lib/format"
 import {
   CREDIT_TRANSACTION_LABEL,
   type BillingPlan,
@@ -28,6 +29,7 @@ import { AnimatedNumber } from "../ui/motion"
 import { Skeleton } from "../ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table"
 import { useToast } from "../ui/toast"
+import { PageHeader } from "../ui/tone"
 
 /** "$49.00", "ETB 2,500.00" from minor units. */
 export function formatMoney(minor: number, currency = "USD"): string {
@@ -43,17 +45,13 @@ export function formatCredits(n: number): string {
 }
 
 function formatDate(iso: string | null | undefined): string {
-  if (!iso) return ""
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString(undefined, { dateStyle: "medium" })
+  const label = fmtDate(iso)
+  return label === "—" ? "" : label
 }
 
 function formatDateTime(iso: string | null | undefined): string {
-  if (!iso) return ""
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime())
-    ? ""
-    : d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+  const label = fmtDateTime(iso)
+  return label === "—" ? "" : label
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -365,17 +363,25 @@ export function MomentumView({ audience = "recruiter" }: { audience?: MomentumAu
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in duration-200 min-w-0">
-      <div>
-        <h1 className="text-[28px] font-bold tracking-tight text-txt-title flex items-center gap-2">
-          <Zap className="w-6 h-6 text-primary" aria-hidden="true" />
-          Momentum
-        </h1>
-        <p className="text-[14px] text-txt-body mt-1">
-          {seeker
-            ? `Each job application uses ${formatCredits(pricing?.applyCost ?? 1)}. Credits never expire.`
-            : "Credits power publishing, featured listings and AI re-runs."}
-        </p>
-      </div>
+      {seeker ? (
+        // Seeker app: the same page header as every other seeker page.
+        <PageHeader
+          icon={Zap}
+          tone="amber"
+          title="Momentum"
+          subtitle={`${pricing ? `Each job application uses ${formatCredits(pricing.applyCost)}. ` : ""}Credits never expire.`}
+        />
+      ) : (
+        <div>
+          <h1 className="text-[28px] font-bold tracking-tight text-txt-title flex items-center gap-2">
+            <Zap className="w-6 h-6 text-primary" aria-hidden="true" />
+            Momentum
+          </h1>
+          <p className="text-[14px] text-txt-body mt-1">
+            Credits power publishing, featured listings and AI re-runs.
+          </p>
+        </div>
+      )}
 
       {confirming && (
         <div
@@ -410,6 +416,12 @@ export function MomentumView({ audience = "recruiter" }: { audience?: MomentumAu
                 <p className="mt-1 text-[44px] leading-none font-extrabold text-txt-title tabular-nums">
                   <AnimatedNumber value={wallet.balance} />
                 </p>
+                {seeker && pricing && pricing.applyCost > 0 && (
+                  <p className="mt-2 text-[13px] text-txt-caption">
+                    Enough for {Math.floor(wallet.balance / pricing.applyCost)} job application
+                    {Math.floor(wallet.balance / pricing.applyCost) === 1 ? "" : "s"}.
+                  </p>
+                )}
               </div>
               {!seeker && (
                 <dl className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-8 text-[13px]">

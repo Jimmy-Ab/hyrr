@@ -57,6 +57,13 @@ export function ApplicationCard({ candidate, isOverlay = false, jobTitle }: Appl
   const { toast } = useToast()
   const [confirmDelete, setConfirmDelete] = useState(false)
   const withdrawn = isWithdrawn(candidate)
+  // Arrived live a moment ago (socket `candidate_applied`): fade the card in.
+  const justArrived = useJobStore(
+    (s) =>
+      s.liveEvent?.kind === "applicant" &&
+      s.liveEvent.id === candidate.id &&
+      Date.now() - s.liveEvent.at < 4000
+  )
 
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: candidate.id,
@@ -103,8 +110,8 @@ export function ApplicationCard({ candidate, isOverlay = false, jobTitle }: Appl
         {...listeners}
         aria-label={`${candidate.name}${withdrawn ? " (withdrawn)" : ""}`}
         className={`group select-none rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
-          withdrawn ? "cursor-default" : isOverlay ? "cursor-grabbing" : "cursor-grab"
-        }`}
+          justArrived ? "animate-rise" : ""
+        } ${withdrawn ? "cursor-default" : isOverlay ? "cursor-grabbing" : "cursor-grab"}`}
       >
         <Card
           onDoubleClick={() => setSelectedCandidateId(candidate.id)}

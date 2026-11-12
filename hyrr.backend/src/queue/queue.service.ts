@@ -12,8 +12,8 @@ import {
   JobHandler,
   JobOpts,
   QueueDriver,
-  QueueName,
   queueDriverName,
+  QueueName,
   QueueStatus,
   resolveOpts,
   workerEnabled,
@@ -44,7 +44,9 @@ export class QueueService implements OnApplicationBootstrap, OnModuleDestroy {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { BullmqDriver } = require("./bullmq.driver") as typeof import("./bullmq.driver")
       this.current = new BullmqDriver(this.handlers, this.logger, inline)
-      this.logger.log(`Queue driver: bullmq${workerEnabled() ? "" : " (enqueue only, QUEUE_WORKER=false)"}`)
+      this.logger.log(
+        `Queue driver: bullmq${workerEnabled() ? "" : " (enqueue only, QUEUE_WORKER=false)"}`
+      )
     } else {
       this.current = inline
       this.logger.log("Queue driver: inline (in-process)")

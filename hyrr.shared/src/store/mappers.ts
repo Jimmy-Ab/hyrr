@@ -16,6 +16,7 @@ import {
   type NotificationType,
   type UserTheme,
 } from "../lib/contracts"
+import { date as fmtDate, dateTime as fmtDateTime } from "../lib/format"
 import type {
   AlertFrequency,
   ApplicationSource,
@@ -28,11 +29,13 @@ import type {
   ConversationThread,
   CvSuggestions,
   Document,
+  InterviewInvite,
   Job,
   JobAlertItem,
   JobApplication,
   JobMatch,
   NotificationItem,
+  Offer,
   PublicJob,
   SavedSearchFilters,
   SavedSearchItem,
@@ -73,18 +76,10 @@ export function normalizeIso(value?: string): string | undefined {
   return value
 }
 
-/** Date + time label, e.g. "Nov 3, 10:42 AM" (year added when not the current year). */
+/** Date + time label, e.g. "Jan 15, 2027, 3:40 PM" ("" when invalid). */
 export function formatDateTime(value: string | number | Date): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ""
-  const sameYear = date.getFullYear() === new Date().getFullYear()
-  return date.toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    ...(sameYear ? {} : { year: "numeric" }),
-    hour: "numeric",
-    minute: "2-digit",
-  })
+  const label = fmtDateTime(value)
+  return label === "—" ? "" : label
 }
 
 /** The applicationId a MESSAGE notification points at, if any. */
@@ -124,11 +119,12 @@ export function mapJob(j: any): Job {
     title: j.title,
     location: j.location || "",
     type: j.type ? employmentTypeLabel(j.type) : "",
-    posted: "Posted " + new Date(j.createdAt || Date.now()).toLocaleDateString(),
+    posted: "Posted " + fmtDate(j.createdAt || Date.now()),
     status: mapJobStatus(j.status),
     color: j.color || j.company?.color || "purple",
     description: j.description || "",
     requirements: Array.isArray(j.requirements) ? j.requirements : [],
+    languages: Array.isArray(j.languages) && j.languages.length ? j.languages : ["English"],
     companyVerified: j.company?.verified === true,
     remote: !!j.remote,
     salary: j.salary ?? undefined,
@@ -171,7 +167,7 @@ export function mapCandidate(c: any): Candidate {
     location: c.location || "",
     coverLetter: c.coverLetter ?? undefined,
     resumeUrl: c.resumeUrl ?? undefined,
-    dateText: new Date(c.appliedAt || c.createdAt || Date.now()).toLocaleDateString(),
+    dateText: fmtDate(c.appliedAt || c.createdAt || Date.now()),
     status: applicationStatusLabel(isApplicationStatus(c.status) ? c.status : "APPLIED"),
     bookmarked: !!c.recruiterBookmarked,
     avatar: c.user?.avatar || avatarFor(name),
@@ -197,7 +193,7 @@ export function mapCandidate(c: any): Candidate {
 }
 
 export function mapApplicationSource(value: unknown): ApplicationSource {
-  return value === "GUEST" || value === "RECRUITER_ADDED" ? value : "DIRECT"
+  return value === "GUEST" || value === "RECRUITER_ADDED" || value === "OUTREACH" ? value : "DIRECT"
 }
 
 export function mapLabel(l: any): CandidateLabel {
@@ -243,10 +239,13 @@ export function mapPublicJob(pj: any): PublicJob {
     company: pj.company?.name || "Company",
     companyColor: pj.company?.color || "purple",
     companyVerified: pj.company?.verified === true,
+    companyFastResponder: pj.company?.stats?.fastResponder === true,
     location: pj.location || "",
     type: employmentTypeLabel(pj.type),
     salary: pj.salary || "Competitive",
-    posted: new Date(pj.createdAt || Date.now()).toLocaleDateString(),
+    category: typeof pj.category?.name === "string" ? pj.category.name : undefined,
+    languages: Array.isArray(pj.languages) && pj.languages.length ? pj.languages : ["English"],
+    posted: fmtDate(pj.createdAt || Date.now()),
     description: pj.description || "",
     requirements: pj.requirements || [],
     skills: pj.skills || [],
@@ -394,14 +393,14 @@ export function mapJobApplication(a: any): JobApplication {
     location: job.location || "",
     type: job.type ? employmentTypeLabel(job.type) : "",
     salary: job.salary || "Competitive",
-    appliedDate: new Date(a.appliedAt || a.createdAt || Date.now()).toLocaleDateString(),
+    appliedDate: fmtDate(a.appliedAt || a.createdAt || Date.now()),
     updatedAt: a.updatedAt || a.appliedAt || new Date().toISOString(),
     status: isApplicationStatus(a.status) ? a.status : APPLICATION_STATUS.APPLIED,
     bookmarked: !!a.seekerBookmarked,
     recruiterName: job.postedBy?.name || "Hiring Team",
     recruiterAvatar: job.postedBy?.avatar || avatarFor("Hiring Team"),
     interviewDate: a.calendarEvents?.[0]?.startTime
-      ? new Date(a.calendarEvents[0].startTime).toLocaleDateString()
+      ? fmtDate(a.calendarEvents[0].startTime)
       : undefined,
     offerAmount: a.offerAmount ?? undefined,
     tag: a.tag ?? undefined,
@@ -596,5 +595,55 @@ export function mapSeekerProfile(p: any): SeekerProfileData {
       startYear: typeof e.startYear === "number" ? e.startYear : null,
       endYear: typeof e.endYear === "number" ? e.endYear : null,
     })),
+  }
+}
+
+export function mapInterviewInvite(i: any): InterviewInvite {
+  return {
+    id: i.id,
+    applicationId: i.applicationId,
+    title: i.title,
+    durationMin: i.durationMin,
+    location: i.location ?? undefined,
+    meetingUrl: i.meetingUrl ?? undefined,
+    note: i.note ?? undefined,
+    status: i.status,
+    eventId: i.eventId ?? undefined,
+    createdAt: i.createdAt,
+    jobTitle: i.jobTitle ?? "",
+    companyName: i.companyName ?? undefined,
+    candidateName: i.candidateName ?? "",
+    organizerName: i.organizerName ?? undefined,
+    slots: (i.slots ?? []).map((s: any) => ({
+      id: s.id,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      booked: !!s.booked,
+    })),
+  }
+}
+
+export function mapOffer(o: any): Offer {
+  return {
+    id: o.id,
+    applicationId: o.applicationId,
+    jobTitle: o.jobTitle,
+    companyName: o.companyName ?? undefined,
+    candidateName: o.candidateName ?? "",
+    createdBy: o.createdBy ?? undefined,
+    baseSalary: o.baseSalary,
+    salaryCurrency: o.salaryCurrency,
+    salaryPeriod: o.salaryPeriod,
+    bonusAmount: o.bonusAmount ?? undefined,
+    equityPercentage: o.equityPercentage ?? undefined,
+    startDate: o.startDate,
+    expiresAt: o.expiresAt,
+    benefits: o.benefits ?? [],
+    message: o.message ?? undefined,
+    status: o.status,
+    signatureName: o.signatureName ?? undefined,
+    signedAt: o.signedAt ?? undefined,
+    declineReason: o.declineReason ?? undefined,
+    createdAt: o.createdAt,
   }
 }

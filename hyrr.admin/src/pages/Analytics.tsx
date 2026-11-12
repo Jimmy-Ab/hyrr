@@ -1,4 +1,14 @@
-import { Card, FilterChips, PageHeader, Skeleton, StatCard, cn } from "hyrr.shared"
+import {
+  Card,
+  FilterChips,
+  PageHeader,
+  Skeleton,
+  StatCard,
+  TonePill,
+  cn,
+  downloadCsv,
+  toneClass,
+} from "hyrr.shared"
 import { BarChart3, Clock, Gauge, Percent, Target, Users } from "lucide-react"
 import * as React from "react"
 import { BarsChart, ChartCard, RankedBars, TrendChart } from "../components/ui/charts"
@@ -562,6 +572,7 @@ export function Analytics() {
           </section>
         </div>
       )}
+      <LiquidityCard />
     </div>
   )
 }
@@ -748,5 +759,124 @@ function RetentionCard({ data }: { data: AnalyticsData }) {
         </div>
       )}
     </ChartCard>
+  )
+}
+
+type LiquidityData = {
+  by: "category" | "location"
+  rows: {
+    key: string
+    label: string
+    openJobs: number
+    activeSeekers: number
+    applications30d: number
+    ratio: number | null
+    signal: "undersupplied" | "balanced" | "oversupplied" | "no_jobs"
+  }[]
+}
+
+const SIGNAL = {
+  undersupplied: { label: "Needs seekers", tone: "amber" },
+  balanced: { label: "Balanced", tone: "emerald" },
+  oversupplied: { label: "Needs jobs", tone: "violet" },
+  no_jobs: { label: "No open jobs", tone: "slate" },
+} as const
+
+/** Supply (seekers applying, 30 days) vs demand (open jobs) per category or location. */
+function LiquidityCard() {
+  const [by, setBy] = React.useState<"category" | "location">("category")
+  const { data, error, isLoading, refetch } = useAdminQuery<LiquidityData>("/liquidity", { by })
+  const rows = data?.by === by ? data.rows : []
+  const maxRatio = Math.max(1, ...rows.map((r) => r.ratio ?? 0))
+  return (
+    <Card className="p-6">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-[16px] font-semibold text-txt-heading">Marketplace liquidity</h2>
+          <p className="text-[12.5px] text-txt-caption">
+            Applications per open job over the last 30 days. Under 3 means recruiters there need
+            more seekers; over 30 means seekers need more jobs.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <FilterChips
+            id="liquidity-by"
+            label="Group by"
+            value={by}
+            onChange={setBy}
+            options={[
+              { value: "category", label: "Category" },
+              { value: "location", label: "Location" },
+            ]}
+          />
+          <button
+            type="button"
+            disabled={!rows.length}
+            onClick={() =>
+              downloadCsv(`liquidity-by-${by}`, rows, [
+                { key: "label", label: by === "category" ? "Category" : "Location" },
+                { key: "openJobs", label: "Open jobs" },
+                { key: "activeSeekers", label: "Active seekers (30d)" },
+                { key: "applications30d", label: "Applications (30d)" },
+                { key: "ratio", label: "Applications per job" },
+                { key: "signal", label: "Signal" },
+              ])
+            }
+            className="rounded-lg border border-bg-border px-3 py-1.5 text-[12.5px] font-semibold text-txt-body hover:bg-bg-hover cursor-pointer disabled:opacity-50"
+          >
+            CSV
+          </button>
+        </div>
+      </div>
+      {error && !data ? (
+        <ErrorBlock error={error} onRetry={() => void refetch()} />
+      ) : isLoading && !rows.length ? (
+        <Skeleton className="h-40" />
+      ) : !rows.length ? (
+        <p className="text-[13px] text-txt-caption">No open jobs or applications yet.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr className="text-left text-[11.5px] uppercase tracking-wider text-txt-caption">
+                <th className="py-2 pr-3 font-semibold">
+                  {by === "category" ? "Category" : "Location"}
+                </th>
+                <th className="py-2 pr-3 text-right font-semibold">Open jobs</th>
+                <th className="py-2 pr-3 text-right font-semibold">Active seekers</th>
+                <th className="py-2 pr-3 font-semibold">Applications per job</th>
+                <th className="py-2 font-semibold">Signal</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-bg-border/60">
+              {rows.slice(0, 30).map((r) => (
+                <tr key={r.key}>
+                  <td className="py-2 pr-3 font-medium text-txt-heading">{r.label}</td>
+                  <td className="py-2 pr-3 text-right tabular-nums">{num(r.openJobs)}</td>
+                  <td className="py-2 pr-3 text-right tabular-nums">{num(r.activeSeekers)}</td>
+                  <td className="py-2 pr-3">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-28 overflow-hidden rounded-full bg-bg-border/60">
+                        <div
+                          className={cn(
+                            toneClass(SIGNAL[r.signal].tone),
+                            "h-full rounded-full bg-[var(--tone-fg)]"
+                          )}
+                          style={{ width: `${Math.min(100, ((r.ratio ?? 0) / maxRatio) * 100)}%` }}
+                        />
+                      </div>
+                      <span className="tabular-nums text-txt-body">{r.ratio ?? "—"}</span>
+                    </div>
+                  </td>
+                  <td className="py-2">
+                    <TonePill tone={SIGNAL[r.signal].tone}>{SIGNAL[r.signal].label}</TonePill>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
   )
 }

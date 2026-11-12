@@ -1,10 +1,15 @@
 import { Injectable, Logger, Optional } from "@nestjs/common"
-import { JobStatus } from "@prisma/client"
+import { JobStatus, Prisma } from "@prisma/client"
 import { CacheService } from "../cache/cache.service"
 import { EmbeddingsService } from "../embeddings/embeddings.service"
+import { jobFiltersKey, type JobFilters } from "../jobs/dtos/job-filters.dto"
+import { hyrrJobFilterWhere } from "../jobs/job-filters"
+import { seekerLanguageKeys } from "../jobs/job-languages"
 import { PUBLIC_COMPANY_SELECT } from "../jobs/public-company"
+import { toPublicJob } from "../jobs/public-job"
 import { PrismaService } from "../prisma/prisma.service"
 import { MatchTab } from "./dtos/matching-query.dto"
+import { decodeMatchCursor, encodeMatchCursor } from "./match-cursor"
 import { matchingCacheKey, matchingCachePattern } from "./matching-cache"
 import { blendMatch, computeProfileStrength, isThinProfile, scoreJobForProfile } from "./scoring"
 
@@ -30,12 +35,139 @@ export class MatchingService {
     await this.cache.delByPattern(matchingCachePattern(userId))
   }
 
-  async getMatchedJobs(userId: string, tab: MatchTab = "for-you", limit = DEFAULT_LIMIT) {
-    const key = matchingCacheKey(userId, tab, limit)
+  async getMatchedJobs(
+    userId: string,
+    tab: MatchTab = "for-you",
+    limit = DEFAULT_LIMIT,
+    rawCursor?: string,
+    filters: JobFilters = {}
+  ) {
+    const cursor = decodeMatchCursor(rawCursor)
+    if (filters.matchLanguages) {
+      // Seeker languages from the profile; none on the profile = no language filter.
+      const own = await this.prisma.seekerProfile.findUnique({
+        where: { userId },
+        select: { languages: true },
+      })
+      const keys = seekerLanguageKeys(own?.languages)
+      filters = { ...filters, languages: keys.length ? keys : undefined }
+    }
+    const filterWhere = hyrrJobFilterWhere(filters)
+    const fKey = filterWhere.length ? jobFiltersKey(filters) : ""
+    if (tab === "for-you")
+      return this.forYouPage(
+        userId,
+        limit,
+        cursor && "o" in cursor ? cursor.o : 0,
+        filterWhere,
+        fKey
+      )
+
+    const key = matchingCacheKey(userId, tab, limit, `${rawCursor ?? ""}${fKey ? `|${fKey}` : ""}`)
     const cached = await this.cache.get<any>(key)
     if (cached) return cached
 
-    const profile = await this.prisma.seekerProfile.findUnique({
+    const profile = await this.loadProfile(userId)
+    const { profileStrength, missing } = computeProfileStrength(profile)
+    const after = cursor && "t" in cursor ? cursor : null
+    // Keyset page (newest first); one extra row tells whether another page exists.
+    const rows = await this.prisma.job.findMany({
+      where: {
+        status: JobStatus.ACTIVE,
+        ...(filterWhere.length ? { AND: filterWhere } : {}),
+        ...(after
+          ? {
+              OR: [
+                { createdAt: { lt: new Date(after.t) } },
+                { createdAt: new Date(after.t), id: { lt: after.i } },
+              ],
+            }
+          : {}),
+      },
+      include: { company: { select: PUBLIC_COMPANY_SELECT }, category: true },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: limit + 1,
+    })
+    const page = rows.slice(0, limit)
+    const last = page[page.length - 1]
+    const nextCursor =
+      rows.length > limit && last
+        ? encodeMatchCursor({ t: new Date(last.createdAt).toISOString(), i: last.id })
+        : null
+
+    const result = {
+      profileStrength,
+      missing,
+      thinProfile: isThinProfile(profile),
+      jobs: await this.score(userId, page, profile),
+      nextCursor,
+    }
+    await this.cache.set(key, result, MATCH_CACHE_TTL_SECONDS)
+    return result
+  }
+
+  /**
+   * "For you": the whole ranked list (newest CANDIDATE_POOL jobs, minus own applications, score
+   * >= FOR_YOU_MIN_SCORE) is computed once and cached, so every page slices the same order.
+   */
+  private async forYouPage(
+    userId: string,
+    limit: number,
+    offset: number,
+    filterWhere: Prisma.JobWhereInput[] = [],
+    fKey = ""
+  ) {
+    const key = matchingCacheKey(userId, "for-you", 0, fKey)
+    let ranked = await this.cache.get<any>(key)
+    if (!ranked) {
+      const profile = await this.loadProfile(userId)
+      const { profileStrength, missing } = computeProfileStrength(profile)
+      const jobs = await this.prisma.job.findMany({
+        where: filterWhere.length
+          ? { status: JobStatus.ACTIVE, AND: filterWhere }
+          : { status: JobStatus.ACTIVE },
+        include: { company: { select: PUBLIC_COMPANY_SELECT }, category: true },
+        orderBy: { createdAt: "desc" },
+        take: CANDIDATE_POOL,
+      })
+      let excluded = new Set<string>()
+      if (jobs.length) {
+        // Applied, saved (SAVED bookmark) or withdrawn: any application row hides the job.
+        const own = await this.prisma.application.findMany({
+          where: { userId, jobId: { in: jobs.map((j) => j.id) } },
+          select: { jobId: true },
+        })
+        excluded = new Set(own.map((a) => a.jobId))
+      }
+      const scored = await this.score(
+        userId,
+        jobs.filter((job) => !excluded.has(job.id)),
+        profile
+      )
+      ranked = {
+        profileStrength,
+        missing,
+        thinProfile: isThinProfile(profile),
+        jobs: scored
+          .filter((job) => job.match.score >= FOR_YOU_MIN_SCORE)
+          .sort(
+            (a, b) =>
+              b.match.score - a.match.score ||
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          ),
+      }
+      await this.cache.set(key, ranked, MATCH_CACHE_TTL_SECONDS)
+    }
+    const end = offset + limit
+    return {
+      ...ranked,
+      jobs: ranked.jobs.slice(offset, end),
+      nextCursor: end < ranked.jobs.length ? encodeMatchCursor({ o: end }) : null,
+    }
+  }
+
+  private loadProfile(userId: string) {
+    return this.prisma.seekerProfile.findUnique({
       where: { userId },
       include: {
         interests: { select: { id: true } },
@@ -43,52 +175,27 @@ export class MatchingService {
         educations: { select: { id: true } },
       },
     })
-    const { profileStrength, missing } = computeProfileStrength(profile)
-    const thinProfile = isThinProfile(profile)
+  }
 
-    const jobs = await this.prisma.job.findMany({
-      where: { status: JobStatus.ACTIVE },
-      include: { company: { select: PUBLIC_COMPANY_SELECT }, category: true },
-      orderBy: { createdAt: "desc" },
-      take: tab === "all" ? limit : CANDIDATE_POOL,
-    })
-
-    let excluded = new Set<string>()
-    if (tab === "for-you" && jobs.length) {
-      // Applied, saved (SAVED bookmark) or withdrawn: any application row hides the job.
-      const own = await this.prisma.application.findMany({
-        where: { userId, jobId: { in: jobs.map((j) => j.id) } },
-        select: { jobId: true },
-      })
-      excluded = new Set(own.map((a) => a.jobId))
-    }
-
-    const candidates = jobs.filter((job) => !excluded.has(job.id))
+  /** Rule score blended with the stored embedding similarity (when embeddings are on). */
+  private async score<J extends { id: string; requirements: string[] | null }>(
+    userId: string,
+    jobs: J[],
+    profile: Awaited<ReturnType<MatchingService["loadProfile"]>>
+  ) {
     // Embedding cosine similarity (0..1) per job; empty when embeddings are off or not ready.
     const similarity = await this.similarities(
       userId,
-      candidates.map((job) => job.id)
+      jobs.map((job) => job.id)
     )
-
-    let scored = candidates.map((job) => ({
-      ...job,
-      requirements: job.requirements ?? [],
-      match: blendMatch(scoreJobForProfile(job, profile || {}), similarity.get(job.id)),
-    }))
-    if (tab === "for-you") {
-      scored = scored
-        .filter((job) => job.match.score >= FOR_YOU_MIN_SCORE)
-        .sort(
-          (a, b) =>
-            b.match.score - a.match.score ||
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        )
-        .slice(0, limit)
-    }
-
-    const result = { profileStrength, missing, thinProfile, jobs: scored }
-    await this.cache.set(key, result, MATCH_CACHE_TTL_SECONDS)
-    return result
+    // Seekers only ever get the public job shape (no risk, billing or recruiter columns).
+    return jobs.map((job) =>
+      toPublicJob({
+        ...job,
+        requirements: job.requirements ?? [],
+        match: blendMatch(scoreJobForProfile(job as any, profile || {}), similarity.get(job.id)),
+      })
+    )
   }
 
   /** Never lets an embeddings problem break matching: falls back to rule-only scores. */

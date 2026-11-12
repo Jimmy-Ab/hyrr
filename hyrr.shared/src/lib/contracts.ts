@@ -4,6 +4,7 @@
  */
 export const APPLICATION_STATUS = {
   SAVED: "SAVED",
+  SOURCED: "SOURCED",
   APPLIED: "APPLIED",
   IN_PROCESS: "IN_PROCESS",
   INTERVIEWING: "INTERVIEWING",
@@ -16,6 +17,7 @@ export type ApplicationStatusCode = (typeof APPLICATION_STATUS)[keyof typeof APP
 
 export const APPLICATION_STATUS_LABEL = {
   SAVED: "Saved",
+  SOURCED: "Reached out",
   APPLIED: "Applied",
   IN_PROCESS: "In Process",
   INTERVIEWING: "Interviewing",
@@ -218,3 +220,46 @@ export interface AiAnalysis {
 export type ConversationClosedReason = "WITHDRAWN" | "SAVED"
 export type MessageSenderType = "SEEKER" | "RECRUITER" | "ADMIN" | "SYSTEM"
 export type MessageDeliveryStatus = "sending" | "sent" | "failed"
+
+/**
+ * Real-time events shared by the three apps (socket.io). The backend emits these names;
+ * hyrr.shared/src/store/socket.ts and hyrr.admin/src/lib/live.ts listen.
+ */
+export const SYNC_SOCKET_EVENTS = {
+  // Candidate lifecycle
+  CANDIDATE_APPLIED: "candidate_applied",
+  APPLICATION_STATUS_UPDATED: "application_status_updated",
+  CANDIDATE_AI_SCORED: "candidate_ai_scored",
+  CANDIDATE_AI_STATUS: "candidate_ai_status",
+  SCORECARD_SUBMITTED: "scorecard_submitted",
+  // Offer lifecycle
+  OFFER_EXTENDED: "offer_extended",
+  OFFER_UPDATED: "offer_updated",
+  OFFER_ACCEPTED: "offer_accepted",
+  OFFER_DECLINED: "offer_declined",
+  // Talent search
+  OUTREACH_RECEIVED: "outreach_received",
+  // Scheduling
+  INTERVIEW_INVITE_RECEIVED: "interview_invite_received",
+  INTERVIEW_INVITE_UPDATED: "interview_invite_updated",
+  CALENDAR_EVENT_CONFIRMED: "calendar_event_confirmed",
+  // Governance & economy
+  WALLET_UPDATED: "wallet_updated",
+  /** Admin changed prices, packs or plans: refetch the billing catalog. */
+  PRICING_UPDATED: "pricing_updated",
+  JOB_MODERATED: "job_moderated",
+  JOB_REMOVED: "job_removed",
+  COMPANY_STATUS: "company_status",
+  COMPANY_VERIFIED: "company_verified",
+  ACCOUNT_SUSPENDED: "account_suspended",
+  // Admin live counters (admins with 2FA only)
+  ADMIN_METRIC: "admin_metric",
+  // Messaging and notifications
+  NEW_MESSAGE: "new_message",
+  MESSAGES_READ: "messages_read",
+  UNREAD_UPDATE: "unread_update",
+  USER_TYPING: "user_typing",
+  NOTIFICATION: "notification",
+} as const
+
+export type SyncSocketEvent = (typeof SYNC_SOCKET_EVENTS)[keyof typeof SYNC_SOCKET_EVENTS]

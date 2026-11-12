@@ -1,9 +1,9 @@
 import {
-  AnimatedNumber,
   APPLICATION_STATUS,
   APPLICATION_STATUS_COLUMNS,
   APPLICATION_STATUS_LABEL,
   Badge,
+  Button,
   Card,
   ConfirmDialog,
   DropdownMenu,
@@ -11,6 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
+  EmptyState,
   errorMessage,
   formatDateTime,
   PageHeader,
@@ -35,6 +36,11 @@ import {
   User,
 } from "lucide-react"
 import { useId, useState } from "react"
+import { ExternalTracker } from "../components/external-tracker"
+import { PendingInterviewInvites } from "../components/interview-invites"
+import { MockInterviewButton } from "../components/mock-interview"
+import { openOfferSheet } from "../components/offer-sheet"
+import { OutreachInvitations } from "../components/outreach"
 
 // ─── Stage timeline ───────────────────────────────────────────────────────────
 function ApplicationTimeline({ applicationId }: { applicationId: string }) {
@@ -154,14 +160,14 @@ function JobColumn({
       </div>
 
       {/* Cards */}
-      <div className="flex flex-col gap-3 p-3 flex-1 min-h-[480px]">
+      <div className="flex flex-col gap-3 p-3 flex-1 min-h-[240px]">
         {items.map((app) => (
           <JobCard key={app.id} application={app} onRequestRemove={onRequestRemove} />
         ))}
         {items.length === 0 && (
           <div className="flex flex-col items-center justify-center flex-1 gap-2 text-txt-disabled">
-            <LayoutList className="w-8 h-8 opacity-30" />
-            <p className="text-[13px] font-medium">No jobs here</p>
+            <LayoutList className="w-6 h-6 opacity-30" aria-hidden="true" />
+            <p className="text-[12.5px] font-medium">Nothing here yet</p>
           </div>
         )}
       </div>
@@ -186,6 +192,18 @@ function JobCard({
 }) {
   const { setCandidateActiveView, openConversation } = useJobStore()
   const { toast } = useToast()
+  const liveOffer = useJobStore((st) =>
+    st.offers.find(
+      (o) => o.applicationId === application.id && (o.status === "SENT" || o.status === "ACCEPTED")
+    )
+  )
+  // Moved by the recruiter a moment ago (live `application_status_updated`).
+  const justMoved = useJobStore(
+    (st) =>
+      st.liveEvent?.kind === "status" &&
+      st.liveEvent.id === application.id &&
+      Date.now() - st.liveEvent.at < 4000
+  )
 
   const isSaved = application.status === APPLICATION_STATUS.SAVED
   const isWithdrawn = application.status === APPLICATION_STATUS.WITHDRAWN
@@ -200,8 +218,12 @@ function JobCard({
           : ("secondary" as const)
 
   return (
-    <div className="group select-none outline-none">
-      <Card className="p-4 relative border border-bg-border/60 bg-bg-secondary transition-all hover:shadow-card-hover hover:border-bg-border/90">
+    <div className={`group select-none outline-none ${justMoved ? "animate-rise" : ""}`}>
+      <Card
+        className={`p-4 relative border bg-bg-secondary transition-all hover:shadow-card-hover hover:border-bg-border/90 ${
+          justMoved ? "border-primary/50 ring-2 ring-primary/15" : "border-bg-border/60"
+        }`}
+      >
         <div className="flex items-start justify-between gap-2">
           {/* Company Logo + Info */}
           <div className="flex min-w-0 gap-3">
@@ -218,6 +240,30 @@ function JobCard({
                 {application.company}
                 {application.companyVerified && <VerifiedBadge focusable={false} />}
               </p>
+              {application.jobRemoved && (
+                <p className="mt-1 text-[11.5px] font-semibold text-sec-red">No longer available</p>
+              )}
+              {(application.status === "APPLIED" ||
+                application.status === "IN_PROCESS" ||
+                application.status === "INTERVIEWING") &&
+                !application.jobRemoved && (
+                  <div className="mt-2" onPointerDown={(e) => e.stopPropagation()}>
+                    <MockInterviewButton
+                      jobId={application.publicJobId}
+                      jobTitle={application.title}
+                    />
+                  </div>
+                )}
+              {liveOffer && (
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => openOfferSheet(liveOffer.id)}
+                  className="mt-2 inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-[12px] font-semibold text-white hover:bg-primary/90 cursor-pointer"
+                >
+                  🎉 {liveOffer.status === "SENT" ? "Review offer" : "View offer"}
+                </button>
+              )}
             </div>
           </div>
 
@@ -331,7 +377,7 @@ function JobCard({
 
 // ─── Kanban Board ─────────────────────────────────────────────────────────────
 export function ApplicationsBoard() {
-  const { jobApplications, withdrawApplication } = useJobStore()
+  const { jobApplications, withdrawApplication, setCandidateActiveView } = useJobStore()
   const { toast } = useToast()
   const [pending, setPending] = useState<JobApplication | null>(null)
 
@@ -376,40 +422,33 @@ export function ApplicationsBoard() {
         subtitle="Track every application from saved to offer."
       />
 
-      {/* Stats strip */}
-      <div className="stagger grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4">
-        {columns.map((col) => {
-          const count = jobApplications.filter((a) => columnOf(a) === col.id).length
-          return (
-            <Card
-              key={col.id}
-              hoverEffect
-              className={`tone-card group ${toneClass(stageTone(col.id))} p-3.5 flex flex-col items-center rounded-xl`}
-            >
-              <span className="tone-wash" aria-hidden="true" />
-              <span className="relative text-[22px] font-bold tabular-nums text-[var(--tone-fg)]">
-                <AnimatedNumber value={count} />
-              </span>
-              <span className="relative text-[12.5px] text-txt-caption font-medium mt-0.5 text-center">
-                {col.title}
-              </span>
-            </Card>
-          )
-        })}
-      </div>
+      <OutreachInvitations />
+      <PendingInterviewInvites />
 
-      {/* Kanban board */}
-      <div className="flex gap-4 overflow-x-auto pb-6 pt-1 custom-scrollbar-none min-h-[600px]">
-        {columns.map((col) => (
-          <JobColumn
-            key={col.id}
-            id={col.id}
-            title={col.title}
-            items={jobApplications.filter((a) => columnOf(a) === col.id)}
-            onRequestRemove={setPending}
-          />
-        ))}
-      </div>
+      {/* Kanban board (each column header carries its count) */}
+      {jobApplications.length === 0 ? (
+        <EmptyState
+          icon={LayoutList}
+          tone="blue"
+          title="No applications yet"
+          description="Save jobs or apply from Discover and track every step here, from saved to offer."
+          action={<Button onClick={() => setCandidateActiveView("Discover")}>Discover jobs</Button>}
+        />
+      ) : (
+        <div className="-mx-1 flex gap-4 overflow-x-auto px-1 pb-4 pt-1 custom-scrollbar-none">
+          {columns.map((col) => (
+            <JobColumn
+              key={col.id}
+              id={col.id}
+              title={col.title}
+              items={jobApplications.filter((a) => columnOf(a) === col.id)}
+              onRequestRemove={setPending}
+            />
+          ))}
+        </div>
+      )}
+
+      <ExternalTracker />
 
       <ConfirmDialog
         open={!!pending}

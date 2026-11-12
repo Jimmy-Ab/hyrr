@@ -73,6 +73,79 @@ export function LoadMore({
   )
 }
 
+/**
+ * Bottom of an infinite list: loads the next page when it scrolls into view of `rootRef` (the
+ * list's own scroll container; the viewport when omitted). Shows a loading row while fetching,
+ * a quiet end-of-list line when there is nothing more, and a retry button after a failure.
+ */
+export function InfiniteSentinel({
+  hasMore,
+  loading,
+  onMore,
+  rootRef,
+  count,
+  endLabel = "You've reached the end",
+  error,
+}: {
+  hasMore: boolean
+  loading: boolean
+  onMore: () => void
+  rootRef?: React.RefObject<HTMLElement | null>
+  /** Items shown; the end line is hidden for an empty list (its empty state says enough). */
+  count: number
+  endLabel?: string
+  error?: string | null
+}) {
+  const ref = React.useRef<HTMLDivElement>(null)
+  const onMoreRef = React.useRef(onMore)
+  onMoreRef.current = onMore
+  React.useEffect(() => {
+    const el = ref.current
+    if (!el || !hasMore || loading || error || typeof IntersectionObserver === "undefined") return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) onMoreRef.current()
+      },
+      { root: rootRef?.current ?? null, rootMargin: "240px 0px" }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [hasMore, loading, error, rootRef])
+
+  if (error)
+    return (
+      <div
+        role="alert"
+        className="flex items-center justify-center gap-2 py-4 text-[12px] text-txt-caption"
+      >
+        {error}
+        <Button size="sm" variant="secondary" onClick={onMore}>
+          Retry
+        </Button>
+      </div>
+    )
+  if (loading)
+    return (
+      <div
+        role="status"
+        className="flex items-center justify-center gap-2 py-4 text-[12px] text-txt-caption"
+      >
+        <span
+          className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary border-t-transparent"
+          aria-hidden
+        />
+        Loading more…
+      </div>
+    )
+  if (!hasMore)
+    return count > 0 ? (
+      <p className="py-4 text-center text-[12px] text-txt-caption" data-testid="list-end">
+        {endLabel}
+      </p>
+    ) : null
+  return <div ref={ref} aria-hidden className="h-px w-full" />
+}
+
 /** ▲ 12% / ▼ 4% badge. `goodWhenUp=false` flips the colours (e.g. failures). */
 export function Delta({
   current,

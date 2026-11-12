@@ -17,20 +17,29 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
   EmptyState,
+  FilterChips,
+  InfiniteSentinel,
   Input,
   JOB_REPORT_REASONS,
   JOB_TYPES,
+  MatchScore,
   PageHeader,
   RichTextRenderer,
   VerifiedBadge,
+  creditSuffix,
+  employmentTypeCode,
   errorMessage,
   insufficientCreditsDetails,
   isApiError,
   isInsufficientCredits,
+  jobFiltersKey,
+  takePendingJob,
   useJobStore,
   useToast,
+  type JobFilterInput,
   type JobMatch,
   type JobReportReason,
+  type JobType,
   type MatchTab,
   type PublicJob,
   type SavedSearchItem,
@@ -49,8 +58,10 @@ import {
   Flag,
   Globe,
   History,
+  Languages,
   MailWarning,
   MapPin,
+  RefreshCw,
   Search,
   Sparkles,
   Star,
@@ -58,7 +69,12 @@ import {
   UserPen,
   Zap,
 } from "lucide-react"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
+import { CvTailorButton } from "../components/cv-tailor"
+import { JobCardMeta } from "../components/job-card-meta"
+import { JobFilterBar } from "../components/job-filter-bar"
+import { WebJobs } from "../components/web-jobs"
+import { useFillHeight } from "../lib/use-fill-height"
 
 const colorBg: Record<string, string> = {
   purple: "bg-primary text-white",
@@ -72,21 +88,13 @@ const MATCH_TABS: { id: MatchTab; label: string }[] = [
   { id: "all", label: "All jobs" },
 ]
 
-function matchTone(score: number) {
-  if (score >= 75) return "text-sec-green bg-sec-green/10 border-sec-green/25"
-  if (score >= 50) return "text-primary bg-primary-light border-primary-border/40"
-  return "text-txt-caption bg-bg-primary border-bg-border"
-}
-
 function MatchBadge({ match }: { match: JobMatch }) {
   return (
-    <span
-      className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold ${matchTone(match.score)}`}
+    <MatchScore
+      score={match.score}
       title={`${match.score}% match with your profile`}
-    >
-      <Sparkles className="h-3 w-3" aria-hidden="true" />
-      {match.score}% match
-    </span>
+      className="self-start"
+    />
   )
 }
 
@@ -124,7 +132,7 @@ function JobSkeleton() {
   )
 }
 
-export function DiscoverJobs() {
+function DiscoverHyrr({ sourceSwitch }: { sourceSwitch?: ReactNode }) {
   const {
     publicJobs,
     publicJobsLoading,
@@ -154,7 +162,7 @@ export function DiscoverJobs() {
     wallet,
     pricing,
   } = useJobStore()
-  const applyCost = pricing?.applyCost ?? 1
+  const applyCost = pricing?.applyCost
   const balance = wallet?.balance ?? null
   const [noCredits, setNoCredits] = useState<{ balance: number; required: number } | null>(null)
   const { toast } = useToast()
@@ -168,12 +176,36 @@ export function DiscoverJobs() {
   })
   const [locationFilter, setLocationFilter] = useState("")
   const [remoteOnly, setRemoteOnly] = useState(false)
+  // Category, salary and recency (server-side); type and remote come from the controls above.
+  const [extraFilters, setExtraFilters] = useState<JobFilterInput>(() => {
+    const st = useJobStore.getState()
+    const { categoryId, salary, postedWithin, matchLanguages } = st.matchFilters
+    return {
+      categoryId,
+      salary,
+      postedWithin,
+      // On by default when the profile lists languages (kept as chosen afterwards).
+      matchLanguages:
+        matchLanguages ?? ((st.seekerProfile?.languages?.length ?? 0) > 0 || undefined),
+    }
+  })
+  const serverFilters: JobFilterInput = {
+    ...extraFilters,
+    remote: remoteOnly || undefined,
+    type:
+      discoverTypeFilter && discoverTypeFilter !== "All"
+        ? employmentTypeCode(discoverTypeFilter as JobType)
+        : undefined,
+  }
+  const serverFiltersRef = useRef(serverFilters)
+  serverFiltersRef.current = serverFilters
+  const filtersKey = jobFiltersKey(serverFilters)
 
   const loadMatches = useCallback(
-    async (tab: MatchTab) => {
+    async (tab: MatchTab, opts?: { refresh?: boolean }) => {
       setMatchError(null)
       try {
-        await fetchMatchedJobs(tab)
+        await fetchMatchedJobs(tab, serverFiltersRef.current, opts)
         setLoadedTab(tab)
       } catch (err) {
         if (useJobStore.getState().matchTab === tab) {
@@ -188,6 +220,16 @@ export function DiscoverJobs() {
     void loadMatches(useJobStore.getState().matchTab)
     fetchSavedSearches().catch((e) => console.warn("Failed to load saved searches.", e))
   }, [loadMatches, fetchSavedSearches])
+
+  // Filters changed: reload page one of the current tab with them.
+  const firstFilters = useRef(true)
+  useEffect(() => {
+    if (firstFilters.current) {
+      firstFilters.current = false
+      return
+    }
+    void loadMatches(useJobStore.getState().matchTab)
+  }, [filtersKey, loadMatches])
 
   const switchTab = (tab: MatchTab) => {
     if (tab === matchTab && !matchError) return
@@ -296,6 +338,17 @@ export function DiscoverJobs() {
   const [reporting, setReporting] = useState(false)
   const [reportedIds, setReportedIds] = useState<Set<string>>(() => new Set())
   const detailRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  // Wide screens: list + detail fill from where they start to the bottom of the screen.
+  const { ref: splitRef, height: splitHeight } = useFillHeight()
+  const matchedJobsCursor = useJobStore((s) => s.matchedJobsCursor)
+  const matchedJobsLoadingMore = useJobStore((s) => s.matchedJobsLoadingMore)
+  const fetchMoreMatchedJobs = useJobStore((s) => s.fetchMoreMatchedJobs)
+  const [moreError, setMoreError] = useState<string | null>(null)
+  const loadMore = useCallback(() => {
+    setMoreError(null)
+    fetchMoreMatchedJobs().catch((err) => setMoreError(errorMessage(err)))
+  }, [fetchMoreMatchedJobs])
 
   const resumes = documents.filter((d) => d.type === "resume")
 
@@ -321,9 +374,27 @@ export function DiscoverJobs() {
     return matchType && matchSearch && matchLocation && matchRemote
   })
 
+  // Arriving from a public job page (/jobs/<id> → Apply on Hyrr): open that job.
+  const pendingTried = useRef(false)
+  useEffect(() => {
+    if (listLoading) return
+    const pending = takePendingJob(true)
+    if (!pending) return
+    const job = filtered.find((j) => j.id === pending)
+    if (job) {
+      takePendingJob()
+      setSelectedJob(job)
+    } else if (!pendingTried.current && matchTab !== "all") {
+      pendingTried.current = true
+      void loadMatches("all")
+    } else takePendingJob()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listLoading, filtered.map((j) => j.id).join(",")])
+
   // Keep the selection inside the visible list (tab switches and filters change it).
   useEffect(() => {
     if (listLoading) return
+    if (takePendingJob(true)) return
     if (!selectedJob || !filtered.some((j) => j.id === selectedJob.id)) {
       setSelectedJob(filtered[0] ?? null)
     } else {
@@ -356,6 +427,9 @@ export function DiscoverJobs() {
     // On narrow screens the detail pane is below the list.
     if (window.matchMedia?.("(max-width: 1023px)").matches) {
       requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: "smooth" }))
+    } else {
+      // Wide screens: the detail pane scrolls on its own; start each job at its top.
+      requestAnimationFrame(() => detailRef.current?.scrollTo({ top: 0 }))
     }
   }
 
@@ -399,7 +473,7 @@ export function DiscoverJobs() {
     } catch (err) {
       if (isInsufficientCredits(err)) {
         setNoCredits(
-          insufficientCreditsDetails(err) ?? { balance: balance ?? 0, required: applyCost }
+          insufficientCreditsDetails(err) ?? { balance: balance ?? 0, required: applyCost ?? 0 }
         )
       } else if (isApiError(err) && err.errorCode === "EMAIL_NOT_VERIFIED") {
         setApplyBlocked(true)
@@ -492,6 +566,7 @@ export function DiscoverJobs() {
         title="Discover Jobs"
         subtitle={`Find your next opportunity from ${publicJobs.length} open roles.`}
         className="relative z-10"
+        actions={sourceSwitch}
       />
 
       {/* For you / All jobs + saved searches */}
@@ -523,12 +598,28 @@ export function DiscoverJobs() {
             </button>
           ))}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void loadMatches(matchTab, { refresh: true })}
+            disabled={matchedJobsLoading}
+            className="gap-1.5"
+            title="Re-rank jobs for your current profile"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${matchedJobsLoading ? "animate-spin" : ""}`}
+              aria-hidden="true"
+            />
+            Refresh
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="secondary" size="sm">
                 <History className="h-4 w-4" aria-hidden="true" />
-                Saved searches{savedSearches.length > 0 ? ` (${savedSearches.length})` : ""}
+                <span className="sm:hidden">Saved</span>
+                <span className="hidden sm:inline">Saved searches</span>
+                {savedSearches.length > 0 ? ` (${savedSearches.length})` : ""}
                 <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
               </Button>
             </DropdownMenuTrigger>
@@ -561,7 +652,8 @@ export function DiscoverJobs() {
           </DropdownMenu>
           <Button variant="secondary" size="sm" onClick={openSaveSearch}>
             <BookmarkPlus className="h-4 w-4" aria-hidden="true" />
-            Save this search
+            <span className="sm:hidden">Save</span>
+            <span className="hidden sm:inline">Save this search</span>
           </Button>
         </div>
       </div>
@@ -596,7 +688,7 @@ export function DiscoverJobs() {
               className="w-full h-10 pl-10 pr-4 rounded-input border border-bg-border bg-bg-primary text-[13px] text-txt-heading placeholder:text-txt-caption focus:outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/15 transition-all"
             />
           </div>
-          <div className="relative sm:w-44">
+          <div className="relative sm:w-56">
             <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-txt-caption pointer-events-none" />
             <input
               type="text"
@@ -607,48 +699,74 @@ export function DiscoverJobs() {
               className="w-full h-10 pl-10 pr-3 rounded-input border border-bg-border bg-bg-primary text-[13px] text-txt-heading placeholder:text-txt-caption focus:outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/15 transition-all"
             />
           </div>
-          <button
-            type="button"
-            aria-pressed={remoteOnly}
-            onClick={() => setRemoteOnly((v) => !v)}
-            className={`h-10 shrink-0 rounded-input border px-3 text-[13px] font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
-              remoteOnly
-                ? "border-primary bg-primary-light text-primary"
-                : "border-bg-border bg-bg-primary text-txt-body hover:bg-bg-hover"
-            }`}
-          >
-            <Globe className="h-4 w-4" aria-hidden="true" />
-            Remote
-          </button>
-          <div className="flex gap-1 bg-bg-primary p-1 border border-bg-border rounded-[13px] shrink-0 overflow-x-auto custom-scrollbar-none">
-            {JOB_TYPES.map((t) => (
-              <button
-                key={t}
-                type="button"
-                aria-pressed={discoverTypeFilter === t}
-                onClick={() => setDiscoverTypeFilter(t)}
-                className={`shrink-0 whitespace-nowrap px-3 py-1.5 rounded-[10px] text-[13px] font-bold cursor-pointer transition-all ${
-                  discoverTypeFilter === t
-                    ? "bg-primary text-white shadow-[0_2px_8px_rgba(108,99,255,0.35)]"
-                    : "text-txt-body hover:bg-bg-hover hover:text-txt-heading font-semibold"
-                }`}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
+        </div>
+        <div className="mt-3">
+          <JobFilterBar
+            id="hyrr"
+            value={extraFilters}
+            onChange={setExtraFilters}
+            showLanguages
+            leading={
+              <>
+                <button
+                  type="button"
+                  aria-pressed={remoteOnly}
+                  onClick={() => setRemoteOnly((v) => !v)}
+                  className={`h-10 shrink-0 rounded-input border px-3 text-[13px] font-semibold transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                    remoteOnly
+                      ? "border-primary-border bg-primary-light text-primary"
+                      : "border-bg-border bg-bg-primary text-txt-body hover:bg-bg-hover"
+                  }`}
+                >
+                  <Globe className="h-4 w-4" aria-hidden="true" />
+                  Remote
+                </button>
+                <div
+                  role="group"
+                  aria-label="Employment type"
+                  className="flex h-10 max-w-full shrink-0 items-center gap-0.5 overflow-x-auto rounded-input border border-bg-border bg-bg-primary p-1 custom-scrollbar-none"
+                >
+                  {/* "Remote" has its own toggle; the chips cover the employment types. */}
+                  {JOB_TYPES.filter((t) => t !== "Remote").map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      aria-pressed={discoverTypeFilter === t}
+                      onClick={() => setDiscoverTypeFilter(t)}
+                      className={`h-full shrink-0 whitespace-nowrap rounded-[9px] px-3 text-[13px] font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                        discoverTypeFilter === t
+                          ? "bg-primary text-white shadow-button"
+                          : "text-txt-body hover:bg-bg-hover hover:text-txt-heading"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </>
+            }
+          />
         </div>
       </Card>
 
       {/* Split Pane */}
-      <div className="flex flex-col lg:flex-row gap-5 flex-1 min-w-0">
+      {/* Wide screens: list and detail are two equal-height panes that each scroll on their own
+          (data-lenis-prevent keeps the page's smooth scroller from taking the wheel). */}
+      <div
+        ref={splitRef}
+        style={splitHeight ? { height: splitHeight } : undefined}
+        className="flex flex-col lg:flex-row lg:items-stretch lg:sticky lg:top-5 gap-5 flex-1 min-w-0 lg:flex-none lg:min-h-0 lg:overflow-hidden"
+      >
         {/* Job List */}
         {/* Narrow list beside the detail pane; full width (centred empty/error states) when the
             list has nothing to show and no detail pane is rendered. */}
         <div
+          ref={listRef}
+          data-testid="hyrr-job-list"
+          data-lenis-prevent
           className={`w-full flex flex-col gap-3 ${
             selectedJob || listLoading || filtered.length > 0
-              ? "lg:w-[360px] shrink-0"
+              ? "lg:w-[360px] shrink-0 max-h-[70dvh] lg:max-h-none lg:h-full overflow-y-auto overscroll-contain pr-1 -mr-1"
               : "lg:flex-1 lg:items-center"
           }`}
         >
@@ -751,6 +869,14 @@ export function DiscoverJobs() {
                       <p className="text-[13px] text-txt-body mt-0.5 flex items-center gap-1 min-w-0">
                         <span className="truncate">{job.company}</span>
                         {job.companyVerified && <VerifiedBadge focusable={false} />}
+                        {job.companyFastResponder && (
+                          <span
+                            title="This company usually replies to applicants within 2 days"
+                            className="shrink-0 text-[11px] font-semibold text-sec-green"
+                          >
+                            ⚡ Fast responder
+                          </span>
+                        )}
                       </p>
                       <div className="flex items-center gap-2 mt-2 flex-wrap">
                         <span className="text-[12px] text-txt-caption flex items-center gap-0.5">
@@ -759,6 +885,11 @@ export function DiscoverJobs() {
                         </span>
                         <span className="text-[12px] font-semibold text-primary">{job.salary}</span>
                       </div>
+                      <JobCardMeta
+                        remote={!!job.remote || job.type === "Remote"}
+                        category={job.category}
+                        skills={job.skills}
+                      />
                       {job.match && (
                         <div className="mt-2 flex flex-col gap-1.5">
                           <MatchBadge match={job.match} />
@@ -793,12 +924,28 @@ export function DiscoverJobs() {
               )
             })
           )}
+          {!listLoading && !matchError && !useFallback && (
+            <InfiniteSentinel
+              rootRef={listRef}
+              count={filtered.length}
+              hasMore={!!matchedJobsCursor}
+              loading={matchedJobsLoadingMore}
+              error={moreError}
+              onMore={loadMore}
+              endLabel="That's every job for now"
+            />
+          )}
         </div>
 
         {/* Job Detail */}
         {selectedJob && (
-          <div className="flex-1 min-w-0 scroll-mt-4" ref={detailRef}>
-            <Card className="p-5 sm:p-8 lg:sticky lg:top-0">
+          <div
+            ref={detailRef}
+            data-testid="hyrr-job-detail"
+            data-lenis-prevent
+            className="flex-1 min-w-0 scroll-mt-4 rounded-card lg:h-full lg:overflow-y-auto lg:overscroll-contain"
+          >
+            <Card className="p-5 sm:p-8">
               {/* Header */}
               <div className="flex items-start gap-4 sm:gap-5 pb-6 border-b border-bg-border/40">
                 <div
@@ -840,6 +987,12 @@ export function DiscoverJobs() {
                       <DollarSign className="w-3.5 h-3.5" />
                       {selectedJob.salary}
                     </span>
+                    {!!selectedJob.languages?.length && (
+                      <span className="flex items-center gap-1" data-testid="job-languages">
+                        <Languages className="w-3.5 h-3.5" aria-hidden="true" />
+                        {selectedJob.languages.join(", ")}
+                      </span>
+                    )}
                     <span className="flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5" />
                       Posted {selectedJob.posted}
@@ -933,6 +1086,7 @@ export function DiscoverJobs() {
                       ? "✓ Applied"
                       : "Apply Now"}
                 </Button>
+                <CvTailorButton jobId={selectedJob.id} jobTitle={selectedJob.title} />
                 {!isApplied(selectedJob.id) && (
                   <Button
                     variant="secondary"
@@ -1178,9 +1332,7 @@ export function DiscoverJobs() {
               onClick={submitApplication}
               disabled={submitting || !!noCredits || (questions === null && !questionsError)}
             >
-              {submitting
-                ? "Submitting…"
-                : `Apply · ${applyCost} credit${applyCost === 1 ? "" : "s"}`}
+              {submitting ? "Submitting…" : `Apply${creditSuffix(applyCost)}`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1319,5 +1471,31 @@ export function DiscoverJobs() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+/** Discover: Hyrr jobs, or jobs from the web (licensed job APIs). */
+export function DiscoverJobs() {
+  const [source, setSource] = useState<"hyrr" | "web">("hyrr")
+  // The server switches web jobs off: hide the source entirely.
+  const webJobsOn = useJobStore((s) => s.pricing?.features.webJobs !== false)
+  const showWeb = webJobsOn && source === "web"
+  // The source switch sits in the page header of whichever list is shown.
+  const sourceSwitch = webJobsOn ? (
+    <FilterChips<"hyrr" | "web">
+      id="discover-source"
+      label="Job source"
+      value={source}
+      onChange={setSource}
+      options={[
+        { value: "hyrr", label: "Hyrr jobs" },
+        { value: "web", label: "From the web", tone: "teal" },
+      ]}
+    />
+  ) : undefined
+  return showWeb ? (
+    <WebJobs sourceSwitch={sourceSwitch} />
+  ) : (
+    <DiscoverHyrr sourceSwitch={sourceSwitch} />
   )
 }

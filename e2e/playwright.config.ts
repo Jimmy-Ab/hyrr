@@ -56,6 +56,13 @@ export default defineConfig({
         CHAPA_SECRET_KEY: "",
         TURNSTILE_SECRET_KEY: "",
         MEILI_HOST: "",
+        // Web jobs on (the Discover "From the web" source) but no provider: no outbound calls.
+        EXTERNAL_JOBS_ENABLED: "true",
+        REMOTIVE_ENABLED: "false",
+        ARBEITNOW_ENABLED: "false",
+        ADZUNA_APP_ID: "",
+        ADZUNA_APP_KEY: "",
+        JOOBLE_API_KEY: "",
         SENTRY_DSN: "",
         UPLOAD_DIR: "/tmp/hyrr-e2e-uploads",
       },

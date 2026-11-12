@@ -3,6 +3,8 @@ import {
   Button,
   Card,
   ConfirmDialog,
+  date,
+  dateTime,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -32,6 +34,7 @@ import {
   X,
 } from "lucide-react"
 import { useState } from "react"
+import { PendingInterviewInvites } from "../components/interview-invites"
 
 const formatTime = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
@@ -51,11 +54,7 @@ function EventDetails({
 }) {
   const e = event
   const when = e
-    ? `${new Date(e.startTime).toLocaleDateString([], {
-        weekday: "long",
-        month: "long",
-        day: "numeric",
-      })}, ${formatTime(e.startTime)}${e.endTime ? ` – ${formatTime(e.endTime)}` : ""}`
+    ? `${date(e.startTime)}, ${formatTime(e.startTime)}${e.endTime ? ` – ${formatTime(e.endTime)}` : ""}`
     : ""
   const row = "flex items-start gap-3 text-[13.5px] text-txt-body"
   return (
@@ -374,6 +373,8 @@ export function CandidateCalendar() {
         }
       />
 
+      <PendingInterviewInvites />
+
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Calendar grid */}
         <Card className="xl:col-span-2 p-6">
@@ -425,11 +426,7 @@ export function CandidateCalendar() {
               if (day === null) return <div key={`empty-${idx}`} />
               const dayEvts = eventsByDay[day] || []
               const isToday = isCurrentMonth && day === today.getDate()
-              const dateLabel = new Date(year, month, day).toLocaleDateString([], {
-                weekday: "long",
-                month: "long",
-                day: "numeric",
-              })
+              const dateLabel = date(new Date(year, month, day))
 
               return (
                 <div
@@ -518,12 +515,7 @@ export function CandidateCalendar() {
                 upcoming.map((e) => {
                   const type = e.type
                   const label = e.title
-                  const timeStr = new Date(e.startTime).toLocaleString([], {
-                    month: "short",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })
+                  const timeStr = dateTime(e.startTime)
 
                   return (
                     <div

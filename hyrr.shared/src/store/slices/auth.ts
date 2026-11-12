@@ -35,6 +35,7 @@ export type AuthSlice = Pick<
   | "authLoading"
   | "authError"
   | "socket"
+  | "liveEvent"
   | "mfaPending"
   | "loginUser"
   | "verifyTwoFactorLogin"
@@ -54,7 +55,6 @@ export type AuthSlice = Pick<
   | "logout"
   | "signedOutReason"
   | "signOutWithReason"
-  | "clearSignedOutReason"
   | "loadAccount"
   | "deleteAccount"
   | "setAccessToken"
@@ -94,6 +94,9 @@ const emptyWorkspace = {
   initialLoadError: null,
   searchQuery: "",
   matchedJobs: [] as PublicJob[],
+  matchedJobsCursor: null,
+  matchFilters: {},
+  matchedJobsLoadingMore: false,
   matchTab: "for-you" as const,
   profileStrength: 0,
   profileMissing: [] as string[],
@@ -149,6 +152,7 @@ export const createAuthSlice: StateCreator<JobState, [], [], AuthSlice> = (set, 
   authLoading: false,
   authError: null,
   socket: null,
+  liveEvent: null,
   mfaPending: null,
   signedOutReason: null,
 
@@ -156,8 +160,6 @@ export const createAuthSlice: StateCreator<JobState, [], [], AuthSlice> = (set, 
     await get().logout()
     set({ signedOutReason: reason })
   },
-  clearSignedOutReason: () => set({ signedOutReason: null }),
-
   loadAccount: async () => {
     const me = await apiFetch("/auth/me")
     if (!me) return

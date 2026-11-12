@@ -28,6 +28,7 @@ Roles: `SEEKER`, `RECRUITER`, `ADMIN`; company roles `OWNER | RECRUITER | HIRING
 - **Messaging**: per-user state lives in `ConversationState` (`lastReadAt`, `clearedAt`); the legacy `deletedBy*` columns are unused. Sends are idempotent on `(senderId, clientId)`.
 - **Momentum credits**: `WalletService` (`src/billing/wallet.service.ts`) is the only way to change a balance. A wallet belongs to a company (recruiters) or a user (seekers): pass `{ companyId }` or `{ userId }`. Debit inside the action's transaction so a 402 `INSUFFICIENT_CREDITS` writes nothing.
 - **Companies and teams**: `TeamService` (`src/team`) owns company setup, invites (hashed one-time links, 7 days; open invites count as seats), domain join requests, ownership transfer and leaving. Recruiters can have **no company** (`/auth/me` `company: null`): the recruiter app then shows "Set up your company". Never add members directly.
+- **Real-time**: emit after the DB commit, never inside a transaction. Rooms: `user_<id>`, `company_<id>`, `chat_<applicationId>`, `admin` (ADMIN + 2FA). Use `MessagesGateway` (`emitToCompany`, `emitApplicationUpdate`, `emitToUsers`) or, from modules that can't import it, `RealtimeService.adminMetric` (core, global). Add event names to `SYNC_SOCKET_EVENTS` in `hyrr.shared/src/lib/contracts.ts`; seeker events never carry recruiter-only data.
 - **Background work**: enqueue with `QueueService.add` (`src/queue`), never fire-and-forget; it runs on BullMQ with Redis and in-process without.
 - **AI**: provider picked by `resolveActiveModel()` (`src/ai/ai.models.ts`) from configured keys; placeholder keys (`sk-...`) count as unset. Never write `aiScore = 0` on failure.
 - **UI**: use design tokens (`text-txt-*`, `bg-bg-*`, `border-bg-border`, `primary`), shared components from `hyrr.shared`, no hard-coded `bg-white`/hex colours (dark mode). See the `hyrr-ui` skill.
@@ -44,3 +45,4 @@ Roles: `SEEKER`, `RECRUITER`, `ADMIN`; company roles `OWNER | RECRUITER | HIRING
 - Big changes: write a short contract (payload shapes, store API) first, then split work by file ownership.
 - Verify with the `hyrr-verify` skill before claiming done; run a live smoke test (`hyrr-smoke`) for API/socket flows.
 - Plans and decisions in progress: `~/.claude/plans/` and the memory directory.
+- Product roadmap & 3-app real-time sync spec: [ROADMAP.md](./ROADMAP.md).

@@ -8,6 +8,8 @@ import {
   DialogHeader,
   DialogTitle,
   PageHeader,
+  date,
+  dateTime,
   eventTone,
   toIsoFromLocal,
   toneClass,
@@ -54,14 +56,7 @@ const toDateStr = (y: number, m: number, d: number) => `${y}-${pad(m + 1)}-${pad
 
 const formatTime = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-const formatDateTime = (iso: string) =>
-  new Date(iso).toLocaleString([], {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
+const formatDateTime = (iso: string) => dateTime(iso)
 
 function AddEventDialog({
   open,
@@ -521,11 +516,7 @@ export function CalendarPage() {
               const dayEvts = eventsByDay[day] || []
               const isToday = isCurrentMonth && day === today.getDate()
               const dateStr = toDateStr(year, month, day)
-              const dateLabel = new Date(year, month, day).toLocaleDateString([], {
-                weekday: "long",
-                month: "long",
-                day: "numeric",
-              })
+              const dateLabel = date(new Date(year, month, day))
 
               return (
                 <div
@@ -668,14 +659,7 @@ export function CalendarPage() {
       <Dialog open={!!dayEventsDate} onOpenChange={(o) => !o && setDayEventsDate(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>
-              {dayEventsDate &&
-                new Date(`${dayEventsDate}T00:00`).toLocaleDateString([], {
-                  weekday: "long",
-                  month: "long",
-                  day: "numeric",
-                })}
-            </DialogTitle>
+            <DialogTitle>{dayEventsDate && date(`${dayEventsDate}T00:00`)}</DialogTitle>
             <DialogDescription>
               {dayEvents.length} event{dayEvents.length === 1 ? "" : "s"}
             </DialogDescription>

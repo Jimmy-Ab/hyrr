@@ -62,6 +62,16 @@ export class CreateJobDto extends JobSalaryFields {
   @MaxLength(60, { each: true, message: "Each skill must be at most 60 characters" })
   skills: string[]
 
+  @ApiPropertyOptional({ example: ["English", "Amharic"], type: [String] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1, { message: "Add at least one language" })
+  @ArrayMaxSize(5, { message: "At most 5 languages" })
+  @IsString({ each: true })
+  @IsNotEmpty({ each: true, message: "Languages can't be empty" })
+  @MaxLength(40, { each: true, message: "Each language must be at most 40 characters" })
+  languages?: string[]
+
   @ApiPropertyOptional({ example: ["Unlimited PTO", "Equity"], type: [String] })
   @IsOptional()
   @IsArray()

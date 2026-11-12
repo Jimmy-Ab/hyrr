@@ -1,0 +1,176 @@
+import type { StateCreator } from "zustand"
+import { apiFetch } from "../../lib/api"
+import { jobFilterParams } from "../../lib/job-filters"
+import { toError } from "../mappers"
+import type { ExternalApplication, JobState } from "../types"
+
+export type TrackerSlice = Pick<
+  JobState,
+  | "externalApplications"
+  | "fetchExternalApplications"
+  | "addExternalApplication"
+  | "updateExternalApplication"
+  | "removeExternalApplication"
+  | "fetchWebJobs"
+  | "applyWebJob"
+  | "fetchCvTailoring"
+  | "tailorCv"
+  | "fetchSalaryBenchmark"
+  | "getNegotiationAdvice"
+  | "fetchSkillOverview"
+  | "startSkillTest"
+  | "submitSkillTest"
+  | "reportSkillQuestion"
+  | "fetchMockInterviews"
+  | "startMockInterview"
+  | "answerMockQuestion"
+>
+
+const map = (e: any): ExternalApplication => ({
+  id: e.id,
+  company: e.company,
+  title: e.title,
+  url: e.url ?? undefined,
+  location: e.location ?? undefined,
+  stage: e.stage,
+  notes: e.notes ?? undefined,
+  appliedAt: e.appliedAt ?? undefined,
+  updatedAt: e.updatedAt,
+})
+
+/** Seeker's tracker for jobs applied to outside Hyrr (free, private). */
+export const createTrackerSlice: StateCreator<JobState, [], [], TrackerSlice> = (set, get) => ({
+  externalApplications: [],
+
+  fetchWebJobs: (q, remote, cursor, filters, refresh) => {
+    const params = new URLSearchParams(jobFilterParams(filters))
+    if (q?.trim()) params.set("q", q.trim())
+    if (remote) params.set("remote", "true")
+    if (cursor) params.set("cursor", cursor)
+    if (refresh && !cursor) params.set("refresh", "true")
+    return apiFetch(`/external-jobs?${params.toString()}`)
+  },
+
+  fetchCvTailoring: async (jobId) => {
+    try {
+      return await apiFetch(`/seeker-ai/tailor/${jobId}`)
+    } catch (err: any) {
+      if (err?.status === 404) return null
+      throw err
+    }
+  },
+
+  tailorCv: async (jobId, rerun) => {
+    const res = await apiFetch("/seeker-ai/tailor", {
+      method: "POST",
+      body: JSON.stringify({ jobId, ...(rerun ? { rerun: true } : {}) }),
+    })
+    if (res?.charged)
+      void get()
+        .fetchWallet()
+        .catch(() => undefined)
+    return res
+  },
+
+  fetchSalaryBenchmark: (title, currency) =>
+    apiFetch(`/seeker-ai/salary-benchmark?${new URLSearchParams({ title, currency }).toString()}`),
+
+  getNegotiationAdvice: async (offerId) => {
+    const res = await apiFetch(`/seeker-ai/offers/${offerId}/negotiation`, { method: "POST" })
+    void get()
+      .fetchWallet()
+      .catch(() => undefined)
+    return res
+  },
+
+  fetchSkillOverview: () => apiFetch("/seeker-ai/skills"),
+
+  startSkillTest: (skill) =>
+    apiFetch("/seeker-ai/skills/tests", { method: "POST", body: JSON.stringify({ skill }) }),
+
+  reportSkillQuestion: (questionId, reason) =>
+    apiFetch(`/seeker-ai/skills/questions/${encodeURIComponent(questionId)}/report`, {
+      method: "POST",
+      body: JSON.stringify(reason ? { reason } : {}),
+    }),
+
+  submitSkillTest: (id, answers) =>
+    apiFetch(`/seeker-ai/skills/tests/${id}/submit`, {
+      method: "POST",
+      body: JSON.stringify({ answers }),
+    }),
+
+  fetchMockInterviews: () => apiFetch("/seeker-ai/mock-interviews"),
+
+  startMockInterview: async (jobId) => {
+    const res = await apiFetch("/seeker-ai/mock-interviews", {
+      method: "POST",
+      body: JSON.stringify({ jobId }),
+    })
+    void get()
+      .fetchWallet()
+      .catch(() => undefined)
+    return res
+  },
+
+  answerMockQuestion: (id, index, answer) =>
+    apiFetch(`/seeker-ai/mock-interviews/${id}/answers`, {
+      method: "POST",
+      body: JSON.stringify({ index, answer }),
+    }),
+
+  applyWebJob: async (id) => {
+    const res = await apiFetch(`/external-jobs/${id}/apply`, { method: "POST" })
+    // Credits were spent and the job was added to the tracker.
+    void get()
+      .fetchWallet()
+      .catch(() => undefined)
+    void get()
+      .fetchExternalApplications()
+      .catch(() => undefined)
+    return res
+  },
+
+  fetchExternalApplications: async () => {
+    set({ externalApplications: ((await apiFetch("/external-applications")) || []).map(map) })
+  },
+
+  addExternalApplication: async (input) => {
+    const created = map(
+      await apiFetch("/external-applications", { method: "POST", body: JSON.stringify(input) })
+    )
+    set((state) => ({ externalApplications: [created, ...state.externalApplications] }))
+  },
+
+  updateExternalApplication: async (id, patch) => {
+    const previous = get().externalApplications
+    set({
+      externalApplications: previous.map((e) => (e.id === id ? { ...e, ...patch } : e)),
+    })
+    try {
+      const saved = map(
+        await apiFetch(`/external-applications/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify(patch),
+        })
+      )
+      set((state) => ({
+        externalApplications: state.externalApplications.map((e) => (e.id === id ? saved : e)),
+      }))
+    } catch (err) {
+      set({ externalApplications: previous })
+      throw toError(err, "Could not update")
+    }
+  },
+
+  removeExternalApplication: async (id) => {
+    const previous = get().externalApplications
+    set({ externalApplications: previous.filter((e) => e.id !== id) })
+    try {
+      await apiFetch(`/external-applications/${id}`, { method: "DELETE" })
+    } catch (err) {
+      set({ externalApplications: previous })
+      throw toError(err, "Could not remove")
+    }
+  },
+})

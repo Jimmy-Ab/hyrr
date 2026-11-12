@@ -10,6 +10,7 @@ import { DocType, JobStatus } from "@prisma/client"
 import { CacheService } from "../cache/cache.service"
 import { AppException } from "../core/exceptions/app-exception"
 import { PUBLIC_COMPANY_SELECT } from "../jobs/public-company"
+import { toPublicJob } from "../jobs/public-job"
 import { MessagesGateway } from "../messages/messages.gateway"
 import { PrismaService } from "../prisma/prisma.service"
 import { CvTextService } from "../uploads/cv-text.service"
@@ -263,6 +264,34 @@ export class AiService implements OnModuleInit {
     }
   }
 
+  /**
+   * Runs a structured prompt with the active model. 503 AI_DISABLED without a provider key,
+   * 502 AI_FAILED (user-safe message) when the model fails or returns invalid output.
+   */
+  async structured<T>(systemPrompt: string, prompt: string, schema: any, name: string) {
+    const resolved = await this.resolveModel()
+    if (!resolved)
+      throw new AppException(
+        "AI isn't available right now. Please try again later.",
+        HttpStatus.SERVICE_UNAVAILABLE,
+        "AI_DISABLED"
+      )
+    try {
+      const result = await this.factory
+        .getAdapter(resolved.model)
+        .structured<T>(resolved.model, systemPrompt, prompt, schema, name)
+      return { result, model: resolved.model }
+    } catch (err) {
+      this.logger.warn(`${name} failed (${resolved.model}): ${(err as Error)?.message || err}`)
+      throw new AppException(userSafeAiError(err), HttpStatus.BAD_GATEWAY, "AI_FAILED")
+    }
+  }
+
+  /** Text of the seeker's active CV (most recent active RESUME), or null with a reason. */
+  seekerCvText(userId: string) {
+    return this.loadCv({ resumeUrl: null, userId })
+  }
+
   /** Conversational assistant using the configured active model. Falls back to canned tips. */
   async chat(message: string, history: ChatTurn[], role: ChatRole): Promise<string> {
     const systemPrompt = CHAT_SYSTEM_PROMPTS[role] || CHAT_SYSTEM_PROMPTS.SEEKER
@@ -316,7 +345,8 @@ export class AiService implements OnModuleInit {
   async getFeaturedJobsForSeeker(userId: string): Promise<any[]> {
     const cacheKey = `ai:featured-jobs:${userId}`
     const cached = await this.cache.get<any[]>(cacheKey)
-    if (cached) return cached
+    // Seekers get the public job shape only (no risk, billing or recruiter columns).
+    if (cached) return cached.map((job) => toPublicJob(job))
 
     const profile = await this.prisma.seekerProfile.findUnique({
       where: { userId },
@@ -341,8 +371,9 @@ export class AiService implements OnModuleInit {
         include: { company: { select: PUBLIC_COMPANY_SELECT }, category: true },
         take: FEATURED_RESULT_COUNT,
       })
-      await this.cache.set(cacheKey, featured, FEATURED_CACHE_TTL_SECONDS)
-      return featured
+      const publicFeatured = featured.map((job) => toPublicJob(job))
+      await this.cache.set(cacheKey, publicFeatured, FEATURED_CACHE_TTL_SECONDS)
+      return publicFeatured
     }
 
     // Cheap local pre-rank by skill overlap so only the most promising jobs hit the LLM.
@@ -365,7 +396,7 @@ export class AiService implements OnModuleInit {
       // AI disabled: skill-overlap ranking only.
       const result = ranked
         .slice(0, FEATURED_RESULT_COUNT)
-        .map((job) => ({ ...job, aiMatchScore: null, aiMatchSummary: null }))
+        .map((job) => toPublicJob({ ...job, aiMatchScore: null, aiMatchSummary: null }))
       await this.cache.set(cacheKey, result, FEATURED_FAILURE_TTL_SECONDS)
       return result
     }
@@ -404,7 +435,9 @@ export class AiService implements OnModuleInit {
     const result = [
       ...scored.sort((a, b) => (b.aiMatchScore ?? -1) - (a.aiMatchScore ?? -1)),
       ...unscored.map((job) => ({ ...job, aiMatchScore: null, aiMatchSummary: null })),
-    ].slice(0, FEATURED_RESULT_COUNT)
+    ]
+      .slice(0, FEATURED_RESULT_COUNT)
+      .map((job) => toPublicJob(job))
 
     await this.cache.set(
       cacheKey,
@@ -436,7 +469,7 @@ export class AiService implements OnModuleInit {
     return settings
   }
 
-  /** GET /ai/settings: stored settings plus what is actually used at runtime. */
+  /** GET /admin/ai: stored settings plus what is actually used at runtime. */
   async getSettingsView() {
     const settings = await this.getSettings()
     const resolved = resolveActiveModel(settings.activeModel)

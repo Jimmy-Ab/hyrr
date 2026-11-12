@@ -1,19 +1,13 @@
 import { Button } from "hyrr.shared"
 import { Plus } from "lucide-react"
-import { JobStatusBadge } from "../components/jobs/job-status-badge"
 import { JobFilter, PipelineViewSwitch, useApplicantCounts } from "../components/jobs/job-filter"
+import { JobStatusBadge } from "../components/jobs/job-status-badge"
 import { KanbanBoard } from "../components/kanban/kanban-board"
 import { LabelFilterSelect } from "../components/labels/labels"
 import { useJobStore } from "../store/useJobStore"
 
 export function Applications() {
-  const {
-    jobs,
-    candidates,
-    selectedJobId,
-    setAddCandidateOpen,
-    setAddJobOpen,
-  } = useJobStore()
+  const { jobs, candidates, selectedJobId, setAddCandidateOpen, setAddJobOpen } = useJobStore()
   const { counts, total } = useApplicantCounts()
 
   // No (or an unknown) selection means "All jobs": the board shows every candidate.

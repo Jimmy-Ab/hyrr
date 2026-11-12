@@ -56,7 +56,7 @@ const labelCls = "text-[12px] font-semibold text-txt-heading uppercase tracking-
 const tagCls =
   "inline-flex items-center gap-1 text-[11.5px] font-bold px-2.5 py-1 rounded-full transition-colors"
 
-function TagInput({
+export function TagInput({
   id,
   tags,
   onAdd,
@@ -226,6 +226,8 @@ export function AddJobDialog() {
   // Step 3 – Skills, Requirements, Benefits
   const [skills, setSkills] = useState<string[]>([])
   const [requirements, setRequirements] = useState<string[]>([])
+  // Working languages; jobs default to English.
+  const [languages, setLanguages] = useState<string[]>(["English"])
   const [benefits, setBenefits] = useState<string[]>([])
   const [questions, setQuestions] = useState<DraftQuestion[]>([])
 
@@ -260,6 +262,7 @@ export function AddJobDialog() {
     setCreditError(null)
     setDescription("")
     setSkills([])
+    setLanguages(["English"])
     setRequirements([])
     setBenefits([])
     setQuestions([])
@@ -288,6 +291,7 @@ export function AddJobDialog() {
     const out: FieldErrors = {}
     if (skills.length === 0) out.skills = "Add at least one required skill"
     if (requirements.length === 0) out.requirements = "Add at least one requirement"
+    Object.assign(out, validate(jobBasicsSchema.pick({ languages: true }), { languages }))
     return out
   }
 
@@ -339,6 +343,7 @@ export function AddJobDialog() {
     description,
     requirements,
     skills,
+    languages,
     benefits,
     categoryId,
     remote,
@@ -651,6 +656,25 @@ export function AddJobDialog() {
                   placeholder="e.g. React, TypeScript…"
                 />
                 <FieldError id="job-skills-error" message={errors.skills} />
+              </div>
+              <div>
+                <label htmlFor="job-languages" className={labelCls}>
+                  Languages *
+                </label>
+                <p className="text-[11.5px] text-txt-caption mb-2">
+                  Languages the job is done in (1–5). Seekers can filter by their own languages.
+                </p>
+                <TagInput
+                  id="job-languages"
+                  tags={languages}
+                  onAdd={(v) =>
+                    !languages.some((l) => l.toLowerCase() === v.toLowerCase()) &&
+                    setLanguages([...languages, v])
+                  }
+                  onRemove={(v) => setLanguages(languages.filter((l) => l !== v))}
+                  placeholder="e.g. English, Amharic…"
+                />
+                <FieldError id="job-languages-error" message={errors.languages} />
               </div>
               <div>
                 <label htmlFor="job-requirements" className={labelCls}>

@@ -18,6 +18,7 @@ import type { Response } from "express"
 import { AiService } from "../ai/ai.service"
 import { UpdateAiSettingsDto } from "../ai/dtos/ai.dto"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
+import { ExternalJobsService } from "../external-jobs/external-jobs.service"
 import { AdminCompaniesService } from "./admin-companies.service"
 import { AdminCtx, AdminModerationService } from "./admin-moderation.service"
 import { AdminMoneyService } from "./admin-money.service"
@@ -62,7 +63,8 @@ export class AdminController {
     private readonly money: AdminMoneyService,
     private readonly system: AdminSystemService,
     private readonly audit: AuditService,
-    private readonly ai: AiService
+    private readonly ai: AiService,
+    private readonly externalJobs: ExternalJobsService
   ) {}
 
   // ─── Dashboard & analytics ───────────────────────────────────────
@@ -76,6 +78,21 @@ export class AdminController {
   @ApiOperation({ summary: "Series, marketplace health, breakdowns, money and cohorts" })
   analytics(@Query() q: AnalyticsQueryDto) {
     return this.stats.analytics(new Date(q.from), new Date(q.to), q.interval)
+  }
+
+  @Get("ai-usage")
+  @ApiOperation({ summary: "AI calls, failures, latency, estimated cost and recruiter feedback" })
+  aiUsage(@Query("days") days?: string) {
+    const n = Number(days)
+    return this.stats.aiUsage(Number.isFinite(n) && n >= 1 && n <= 90 ? Math.round(n) : 30)
+  }
+
+  @Get("liquidity")
+  @ApiOperation({
+    summary: "Supply (active applicants) vs demand (open jobs) per category or location",
+  })
+  liquidity(@Query("by") by?: string) {
+    return this.stats.liquidity(by === "location" ? "location" : "category")
   }
 
   // ─── Moderation ──────────────────────────────────────────────────
@@ -149,7 +166,11 @@ export class AdminController {
   // ─── Companies ───────────────────────────────────────────────────
   @Get("companies")
   companiesList(@Query() q: CompaniesQueryDto) {
-    return this.companies.list({ q: q.q || undefined, status: q.status }, q.cursor, q.limit)
+    return this.companies.list(
+      { q: q.q || undefined, status: q.status, ghosting: q.ghosting === "true" },
+      q.cursor,
+      q.limit
+    )
   }
 
   @Get("companies/:id")
@@ -235,7 +256,7 @@ export class AdminController {
 
   // ─── AI & system ─────────────────────────────────────────────────
   @Get("ai")
-  @ApiOperation({ summary: "AI settings (same payload as GET /ai/settings)" })
+  @ApiOperation({ summary: "AI settings: stored values plus what is used at runtime" })
   aiSettings() {
     return this.ai.getSettingsView()
   }
@@ -262,6 +283,30 @@ export class AdminController {
       severity: "warning",
     })
     return this.ai.getSettingsView()
+  }
+
+  @Get("external-jobs")
+  @ApiOperation({ summary: "Jobs from the web: providers configured, active count, last sync" })
+  externalJobsStatus() {
+    return this.externalJobs.status()
+  }
+
+  @Post("external-jobs/sync")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Fetch jobs from the configured licensed APIs now (audited)" })
+  async syncExternalJobs(@Req() req: any) {
+    const report = await this.externalJobs.sync()
+    const ctx = ctxOf(req)
+    await this.audit.record({
+      actorId: ctx.actorId,
+      action: "external_jobs.sync",
+      target: "external-jobs",
+      details: "Synced jobs from the web",
+      meta: { report },
+      ip: ctx.ip,
+      severity: "info",
+    })
+    return report
   }
 
   @Get("system")

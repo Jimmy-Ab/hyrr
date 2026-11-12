@@ -29,7 +29,7 @@ import {
 } from "../core/exceptions/app-exception"
 import { CaptchaService } from "../core/security/captcha.service"
 import { PUBLIC_COMPANY_SELECT } from "../jobs/public-company"
-import { PUBLIC_JOB_WHERE } from "../jobs/public-job"
+import { PUBLIC_JOB_OMIT, PUBLIC_JOB_WHERE } from "../jobs/public-job"
 import { MessagesGateway } from "../messages/messages.gateway"
 import { MessagesService } from "../messages/messages.service"
 import { NotificationsService } from "../notifications/notifications.service"
@@ -72,6 +72,7 @@ export const SEEKER_APPLICATION_FIELDS = {
 } satisfies Prisma.ApplicationSelect
 
 const SEEKER_JOB_INCLUDE = {
+  omit: PUBLIC_JOB_OMIT,
   include: {
     company: { select: PUBLIC_COMPANY_SELECT },
     category: true,
@@ -106,6 +107,7 @@ const STATUS_TAGS: Partial<Record<ApplicationStatus, string>> = {
 
 export const STATUS_LABELS: Record<ApplicationStatus, string> = {
   SAVED: "Saved",
+  SOURCED: "Reached out",
   APPLIED: "Applied",
   IN_PROCESS: "In Process",
   INTERVIEWING: "Interviewing",
@@ -215,6 +217,9 @@ export class ApplicationsService implements OnModuleInit {
         answer: a.answer,
       })),
     }
+    // Unanswered outreach: no contact details or CV until the seeker says they're interested.
+    if (candidate.status === "SOURCED")
+      Object.assign(candidate, { email: "", phone: null, resumeUrl: null })
     return this.signResume(candidate) as T
   }
 
@@ -373,10 +378,20 @@ export class ApplicationsService implements OnModuleInit {
         NotificationType.APPLICATION,
         NotificationAction.APPLICATIONS
       )
+      // Acknowledgement for the applicant (in-app + e-mail per their preferences).
+      if (isNew && actorId && actorId !== job.recruiterId)
+        await this.notificationsService.createNotification(
+          actorId,
+          `✓ Your application for ${job.title} was sent. We'll let you know as soon as the team responds.`,
+          NotificationType.APPLICATION,
+          NotificationAction.APPLICATIONS,
+          applicationId
+        )
     } catch (err: any) {
       // The application itself is committed; side effects must not fail the request.
       this.logger.warn(`Post-apply side effects failed for ${applicationId}: ${err?.message}`)
     }
+    if (isNew) await this.emitApplied(applicationId)
     this.scoreInBackground(applicationId)
   }
 
@@ -546,7 +561,56 @@ export class ApplicationsService implements OnModuleInit {
       return created
     })
     this.scoreInBackground(app.id)
-    return this.toCandidate(app)
+    const candidate = this.toCandidate(app)
+    if (app.job?.companyId)
+      this.messagesGateway?.emitToCompany(app.job.companyId, "candidate_applied", {
+        candidate,
+        actorId: actor.userId,
+      })
+    return candidate
+  }
+
+  /** Recruiter feedback on the AI analysis of a candidate (one vote per recruiter, editable). */
+  async aiFeedback(id: string, helpful: boolean, actor: Actor) {
+    if (actor.role !== "RECRUITER")
+      throw new ForbiddenAppException("Only the hiring team can rate AI analyses")
+    await this.access.applicationFor(actor, id, "view")
+    await this.prisma.aiFeedback.upsert({
+      where: { applicationId_userId: { applicationId: id, userId: actor.userId } },
+      create: { applicationId: id, userId: actor.userId, helpful },
+      update: { helpful },
+    })
+    return { applicationId: id, helpful }
+  }
+
+  /** Recruiter-side candidate payload (same shape as GET /applications/candidates). */
+  async candidatePayload(applicationId: string) {
+    const app = await this.prisma.application.findUnique({
+      where: { id: applicationId },
+      include: RECRUITER_CANDIDATE_INCLUDE,
+    })
+    return app ? this.toCandidate(app) : null
+  }
+
+  /** Live kanban card for the hiring team + admin counter (after commit, never fails the apply). */
+  private async emitApplied(applicationId: string) {
+    if (!this.messagesGateway) return
+    try {
+      const app = await this.prisma.application.findUnique({
+        where: { id: applicationId },
+        include: RECRUITER_CANDIDATE_INCLUDE,
+      })
+      if (!app) return
+      this.messagesGateway.emitToCompany(
+        app.job.companyId,
+        "candidate_applied",
+        { candidate: this.toCandidate(app) },
+        [app.job.recruiterId]
+      )
+      this.messagesGateway.emitAdminMetric("application", { jobId: app.jobId })
+    } catch (err: any) {
+      this.logger.warn(`Live applicant event failed for ${applicationId}: ${err?.message}`)
+    }
   }
 
   // ─── Seeker: save a job without applying ─────────────────────────
@@ -695,6 +759,18 @@ export class ApplicationsService implements OnModuleInit {
       (status !== undefined || rest.offerAmount !== undefined)
     )
       throw withdrawnConflict()
+    // Outreach: the seeker answers first (Interested → APPLIED); the team may only archive it.
+    if (
+      current.status === ApplicationStatus.SOURCED &&
+      status !== undefined &&
+      status !== ApplicationStatus.SOURCED &&
+      status !== ApplicationStatus.ARCHIVED
+    )
+      throw new AppException(
+        "Waiting for the candidate to answer your message. You can move them once they're interested.",
+        HttpStatus.CONFLICT,
+        "AWAITING_CANDIDATE"
+      )
 
     const statusChanged = status !== undefined && status !== current.status
     const data: Prisma.ApplicationUpdateInput = { ...rest }
@@ -735,12 +811,16 @@ export class ApplicationsService implements OnModuleInit {
           NotificationAction.APPLICATIONS
         )
         .catch((err) => this.logger.warn(`Status notification failed: ${err?.message}`))
-      this.messagesGateway?.emitApplicationUpdate(app.userId, {
-        applicationId: id,
-        status,
-        tag: app.tag,
-      })
-    } else if (statusChanged && app.email && this.email) {
+    }
+    if (statusChanged) {
+      // Seeker's board + every teammate's kanban (the mover's client ignores its own echo).
+      this.messagesGateway?.emitApplicationUpdate(
+        app.userId,
+        { applicationId: id, status, tag: app.tag, actorId: actor.userId },
+        app.job.companyId
+      )
+    }
+    if (statusChanged && !app.userId && app.email && this.email) {
       // Guest applicant (no account): the status change is delivered by e-mail only.
       const content = applicationStatus({
         name: app.name,

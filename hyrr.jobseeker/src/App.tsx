@@ -12,17 +12,22 @@ import {
   Skeleton,
   ToastProvider,
   apiFetch,
+  applicationStatusLabel,
   isPublicRoute,
   resolvePublicRoute,
   useJobStore,
   useSmoothScroll,
+  useToast,
 } from "hyrr.shared"
 import { AlertTriangle } from "lucide-react"
 import * as React from "react"
 import { Header } from "./components/layout/header"
 import { Sidebar } from "./components/layout/sidebar"
+import { useAiAvailable } from "./lib/ai-availability"
 
 // Pages
+import { InterviewPicker } from "./components/interview-invites"
+import { OfferSheet } from "./components/offer-sheet"
 import { AlertsPage } from "./pages/Alerts"
 import { ApplicationsBoard } from "./pages/Applications"
 import { CandidateCalendar } from "./pages/CalendarPage"
@@ -32,6 +37,7 @@ import { Documents } from "./pages/Documents"
 import { CandidateMessages } from "./pages/Messages"
 import { NotificationsPage } from "./pages/Notifications"
 import { ProfilePage } from "./pages/ProfilePage"
+import { PublicJobPage } from "./pages/PublicJobPage"
 import { SettingsPage } from "./pages/Settings"
 
 const VIEW_PATHS: Record<SeekerView, string> = {
@@ -128,7 +134,32 @@ function LoadError({ message, onRetry }: { message: string; onRetry: () => void 
   )
 }
 
+/** Live updates from recruiters and moderation, as toasts. */
+function useLiveSeekerToasts() {
+  const liveEvent = useJobStore((s) => s.liveEvent)
+  const { toast } = useToast()
+  React.useEffect(() => {
+    if (liveEvent?.kind === "status")
+      toast(
+        "Application updated",
+        `${liveEvent.title}: ${applicationStatusLabel(liveEvent.status)}`,
+        "info"
+      )
+    else if (liveEvent?.kind === "outreach")
+      toast(
+        `${liveEvent.companyName} reached out`,
+        `About ${liveEvent.jobTitle}. Answer on your Applications page.`,
+        "info"
+      )
+    else if (liveEvent?.kind === "interview_booked")
+      toast("Interview confirmed", `${liveEvent.title} is in your calendar.`, "success")
+    else if (liveEvent?.kind === "job_removed")
+      toast("Job no longer available", `${liveEvent.title} was removed by Hyrr.`, "info")
+  }, [liveEvent, toast])
+}
+
 function AppContent() {
+  useLiveSeekerToasts()
   const candidateActiveView = useJobStore((s) => s.candidateActiveView)
   const fetchInitialData = useJobStore((s) => s.fetchInitialData)
   const isAuthenticated = useJobStore((s) => s.isAuthenticated)
@@ -136,6 +167,7 @@ function AppContent() {
   const setAccessToken = useJobStore((s) => s.setAccessToken)
   const isInitialLoading = useJobStore((s) => s.isInitialLoading)
   const initialLoadError = useJobStore((s) => s.initialLoadError)
+  const aiOn = useAiAvailable()
 
   const pathname = useViewRouting()
   const [restoring, setRestoring] = React.useState(
@@ -255,12 +287,23 @@ function AppContent() {
       </div>
 
       {/* Floating AI Assistant bubble */}
-      <AiChatWidget role="SEEKER" />
+      <InterviewPicker />
+      <OfferSheet />
+      {aiOn && <AiChatWidget role="SEEKER" />}
     </div>
   )
 }
 
+/** Public job pages (/jobs/<id>) render without the app shell or a session. */
+const PUBLIC_JOB_ID = /^\/jobs\/([0-9a-f-]{36})\/?$/i.exec(window.location.pathname)?.[1] ?? null
+
 function App() {
+  if (PUBLIC_JOB_ID)
+    return (
+      <ToastProvider>
+        <PublicJobPage id={PUBLIC_JOB_ID} />
+      </ToastProvider>
+    )
   return (
     <ToastProvider>
       <AppContent />

@@ -12,6 +12,14 @@ export type MomentumConfig = {
   signupBonus: number
   /** Seeker side: credits per application and the new-seeker welcome bonus. */
   applyCost: number
+  /** Recruiter credits to message a seeker found in talent search (outreach). */
+  outreachCost: number
+  /** Seeker credits to open (apply to) a job from the web, once per job. */
+  externalApplyCost: number
+  /** Seeker AI tools (credits per run; refunded when the AI fails). */
+  resumeTailorCost: number
+  mockInterviewCost: number
+  negotiationAdviceCost: number
   seekerSignupBonus: number
 }
 
@@ -42,6 +50,11 @@ const DEFAULTS: MomentumConfig = {
   aiRerunCost: 2,
   signupBonus: 20,
   applyCost: 1,
+  outreachCost: 5,
+  externalApplyCost: 1,
+  resumeTailorCost: 2,
+  mockInterviewCost: 3,
+  negotiationAdviceCost: 1,
   seekerSignupBonus: 10,
 }
 
@@ -97,6 +110,11 @@ export class PricingService {
       aiRerunCost: num(env.MOMENTUM_AI_RERUN_COST, DEFAULTS.aiRerunCost),
       signupBonus: num(env.MOMENTUM_SIGNUP_BONUS, DEFAULTS.signupBonus),
       applyCost: num(env.MOMENTUM_APPLY_COST, DEFAULTS.applyCost),
+      outreachCost: num(env.MOMENTUM_OUTREACH_COST, DEFAULTS.outreachCost),
+      externalApplyCost: num(env.MOMENTUM_EXTERNAL_APPLY_COST, DEFAULTS.externalApplyCost),
+      resumeTailorCost: num(env.MOMENTUM_RESUME_TAILOR_COST, DEFAULTS.resumeTailorCost),
+      mockInterviewCost: num(env.MOMENTUM_MOCK_INTERVIEW_COST, DEFAULTS.mockInterviewCost),
+      negotiationAdviceCost: num(env.MOMENTUM_NEGOTIATION_ADVICE_COST, DEFAULTS.negotiationAdviceCost),
       seekerSignupBonus: num(env.MOMENTUM_SEEKER_SIGNUP_BONUS, DEFAULTS.seekerSignupBonus),
     }
     try {
@@ -119,6 +137,11 @@ export class PricingService {
           aiRerunCost: num(o.aiRerunCost, config.aiRerunCost),
           signupBonus: num(o.signupBonus, config.signupBonus),
           applyCost: num(o.applyCost, config.applyCost),
+          outreachCost: num(o.outreachCost, config.outreachCost),
+          externalApplyCost: num(o.externalApplyCost, config.externalApplyCost),
+          resumeTailorCost: num(o.resumeTailorCost, config.resumeTailorCost),
+          mockInterviewCost: num(o.mockInterviewCost, config.mockInterviewCost),
+          negotiationAdviceCost: num(o.negotiationAdviceCost, config.negotiationAdviceCost),
           seekerSignupBonus: num(o.seekerSignupBonus, config.seekerSignupBonus),
         }
       }

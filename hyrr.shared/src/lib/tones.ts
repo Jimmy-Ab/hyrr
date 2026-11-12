@@ -76,8 +76,16 @@ const DOCUMENT_TONE: Record<string, Tone> = {
 export const documentTone = (type?: string | null): Tone => DOCUMENT_TONE[type ?? ""] ?? "slate"
 
 /** AI match score bands. */
+/** Match score bands used everywhere (seeker job matches and recruiter candidate scores). */
+export const MATCH_THRESHOLDS = { high: 70, medium: 40 } as const
+export type MatchLevel = "high" | "medium" | "low"
+export const matchLevel = (score: number): MatchLevel =>
+  score >= MATCH_THRESHOLDS.high ? "high" : score >= MATCH_THRESHOLDS.medium ? "medium" : "low"
+const MATCH_LEVEL_TONE: Record<MatchLevel, Tone> = { high: "emerald", medium: "amber", low: "rose" }
+
+/** High (>= 70) green, medium (40-69) yellow, low (< 40) red; slate when not scored. */
 export const scoreTone = (score?: number | null): Tone =>
-  score == null ? "slate" : score >= 75 ? "emerald" : score >= 50 ? "amber" : "rose"
+  score == null ? "slate" : MATCH_LEVEL_TONE[matchLevel(score)]
 
 /** Job colour field (purple | blue | green | orange) → tone. */
 const JOB_COLOR_TONE: Record<string, Tone> = {

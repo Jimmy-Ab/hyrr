@@ -60,6 +60,9 @@ const loadRecruiter = async (set: StoreSet, get: StoreGet) => {
       .fetchWallet()
       .catch((e) => console.warn("Failed to load Momentum wallet.", e)),
     get()
+      .fetchBillingCatalog()
+      .catch((e) => console.warn("Failed to load Momentum pricing.", e)),
+    get()
       .loadAccount()
       .catch((e) => console.warn("Failed to load account status.", e)),
     get().fetchConversations(),
@@ -101,6 +104,15 @@ const loadSeeker = async (set: StoreSet, get: StoreGet) => {
       recommendations,
       profile,
       loadSettings(set),
+      get()
+        .fetchExternalApplications()
+        .catch((e) => console.warn("Failed to load tracked jobs.", e)),
+      get()
+        .fetchOffers()
+        .catch((e) => console.warn("Failed to load offers.", e)),
+      get()
+        .fetchInterviewInvites()
+        .catch((e) => console.warn("Failed to load interview invites.", e)),
       get().fetchEvents(),
       get().fetchDocuments(),
       get()

@@ -43,9 +43,9 @@ describe("candidate analysis parsing", () => {
   })
 
   it("derives the recommendation from the score when missing", () => {
-    expect(normalizeAnalysis({ ...good, score: 30, recommendation: undefined }).recommendation).toBe(
-      "NOT_A_FIT"
-    )
+    expect(
+      normalizeAnalysis({ ...good, score: 30, recommendation: undefined }).recommendation
+    ).toBe("NOT_A_FIT")
   })
 
   it("rejects output without a numeric score", () => {
@@ -85,9 +85,9 @@ describe("candidate analysis parsing", () => {
       })),
       invoke: jest.fn(),
     }
-    await expect(
-      new FakeAdapter(fake).analyzeCandidate("m", "sys", 0.2, "prompt")
-    ).rejects.toThrow("bad key")
+    await expect(new FakeAdapter(fake).analyzeCandidate("m", "sys", 0.2, "prompt")).rejects.toThrow(
+      "bad key"
+    )
     expect(fake.invoke).not.toHaveBeenCalled()
   })
 })

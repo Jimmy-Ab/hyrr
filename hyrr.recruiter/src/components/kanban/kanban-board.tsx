@@ -59,6 +59,20 @@ export function KanbanBoard({ jobId }: { jobId?: string }) {
     const targetStatus = String(over.id) as Candidate["status"]
     const candidate = candidates.find((c) => c.id === candidateId)
     if (!candidate || isWithdrawn(candidate) || candidate.status === targetStatus) return
+    // Outreach: the candidate answers first; the team can only archive it.
+    if (
+      targetStatus === "Reached out" ||
+      (candidate.status === "Reached out" && targetStatus !== "Archived")
+    ) {
+      toast(
+        "Waiting for the candidate",
+        candidate.status === "Reached out"
+          ? `${candidate.name} moves to Applied once they say they're interested.`
+          : "Use Talent search to reach out to someone.",
+        "info"
+      )
+      return
+    }
 
     try {
       await moveCandidate(candidateId, targetStatus)
@@ -82,7 +96,12 @@ export function KanbanBoard({ jobId }: { jobId?: string }) {
       }}
     >
       <div className="flex gap-4 md:gap-6 overflow-x-auto pb-6 pt-2 min-h-[520px]">
-        {PIPELINE_STATUSES.map((status) => (
+        {PIPELINE_STATUSES.filter(
+          // "Reached out" only shows while it has cards.
+          (status) =>
+            status !== "Reached out" ||
+            filteredCandidates.some((c) => columnForStatus(c.status) === status)
+        ).map((status) => (
           <KanbanColumn
             key={status}
             id={status}

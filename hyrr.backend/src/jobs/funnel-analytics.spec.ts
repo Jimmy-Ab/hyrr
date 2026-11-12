@@ -57,7 +57,7 @@ describe("computeFunnelAnalytics (R7)", () => {
   })
 
   it("splits by source and per job (current status)", () => {
-    expect(result.bySource).toEqual({ DIRECT: 3, GUEST: 1, RECRUITER_ADDED: 1 })
+    expect(result.bySource).toEqual({ DIRECT: 3, GUEST: 1, RECRUITER_ADDED: 1, OUTREACH: 0 })
     expect(result.perJob).toEqual([
       { jobId: "j1", title: "Backend", applicants: 3, inProcess: 0, interviewing: 0, offers: 2 },
       { jobId: "j2", title: "Frontend", applicants: 2, inProcess: 0, interviewing: 0, offers: 0 },

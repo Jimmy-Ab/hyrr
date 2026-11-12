@@ -3,7 +3,14 @@
  * Every interpolated value is HTML-escaped; URLs are additionally restricted to http(s).
  */
 
-export type EmailContent = { subject: string; html: string; text: string }
+export type EmailAttachment = { filename: string; content: string; contentType: string }
+export type EmailContent = {
+  subject: string
+  html: string
+  text: string
+  /** Small text attachments only (e.g. an .ics invite); they travel through the e-mail queue. */
+  attachments?: EmailAttachment[]
+}
 export type RecipientRole = "SEEKER" | "RECRUITER" | "ADMIN" | string | null | undefined
 
 const BRAND = "Hyrr"

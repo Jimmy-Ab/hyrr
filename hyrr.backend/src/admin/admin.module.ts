@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common"
 import { AiModule } from "../ai/ai.module"
+import { ExternalJobsModule } from "../external-jobs/external-jobs.module"
 import { HealthService } from "../health/health.service"
 import { MessagesModule } from "../messages/messages.module"
 import { AdminCompaniesService } from "./admin-companies.service"
@@ -17,7 +18,7 @@ import { AuditService } from "./audit.service"
  * core services are global modules; HealthService is provided here for the dashboard health line.
  */
 @Module({
-  imports: [AiModule, MessagesModule],
+  imports: [AiModule, MessagesModule, ExternalJobsModule],
   controllers: [AdminController],
   providers: [
     AdminGuard,

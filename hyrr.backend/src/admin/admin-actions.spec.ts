@@ -377,10 +377,18 @@ describe("AdminMoneyService", () => {
     invalidate: jest.fn(),
   }
   const ai = { getSettings: jest.fn().mockResolvedValue({}) }
+  const realtime = { pricingUpdated: jest.fn() }
   beforeEach(() => {
     m = setup()
     pricing.invalidate.mockClear()
-    service = new AdminMoneyService(m.prisma, pricing as any, m.audit as any, ai as any)
+    realtime.pricingUpdated.mockClear()
+    service = new AdminMoneyService(
+      m.prisma,
+      pricing as any,
+      m.audit as any,
+      ai as any,
+      realtime as any
+    )
   })
 
   it("merges a partial pricing edit into momentumConfig, invalidates and audits", async () => {
@@ -437,6 +445,26 @@ describe("AdminMoneyService", () => {
     await expect(service.updatePlan("NOPE", {} as any, ctx)).rejects.toMatchObject({
       errorCode: "PLAN_NOT_FOUND",
     })
+  })
+
+  it("broadcasts pricing_updated after price, package and plan saves commit, not on a 404", async () => {
+    m.prisma.systemSetting.findUnique.mockResolvedValue({ momentumConfig: {} })
+    await service.updatePricing({ applyCost: 2 } as any, ctx)
+    expect(realtime.pricingUpdated).toHaveBeenCalledTimes(1)
+
+    m.prisma.creditPackage.findUnique.mockResolvedValue({ id: "p1", name: "S", code: "S" })
+    m.prisma.creditPackage.update.mockResolvedValue({ id: "p1", credits: 20 })
+    await service.updatePackage("p1", { credits: 20 } as any, ctx)
+    expect(realtime.pricingUpdated).toHaveBeenCalledTimes(2)
+
+    m.prisma.plan.findUnique.mockResolvedValue({ code: "PRO", name: "Pro" })
+    m.prisma.plan.update.mockResolvedValue({ code: "PRO" })
+    await service.updatePlan("PRO", { name: "Pro+" } as any, ctx)
+    expect(realtime.pricingUpdated).toHaveBeenCalledTimes(3)
+
+    m.prisma.plan.findUnique.mockResolvedValue(null)
+    await expect(service.updatePlan("NOPE", {} as any, ctx)).rejects.toBeDefined()
+    expect(realtime.pricingUpdated).toHaveBeenCalledTimes(3)
   })
 })
 

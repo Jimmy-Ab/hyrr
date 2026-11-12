@@ -5,7 +5,12 @@ import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { RolesGuard } from "../auth/guards/roles.guard"
 import { AlertsService } from "./alerts.service"
 import { CreateAlertDto, UpdateAlertDto } from "./dtos/alert.dto"
+import {
+  CreateExternalApplicationDto,
+  UpdateExternalApplicationDto,
+} from "./dtos/external-application.dto"
 import { CreateSavedSearchDto, UpdateSavedSearchDto } from "./dtos/saved-search.dto"
+import { ExternalApplicationsService } from "./external-applications.service"
 import { SavedSearchesService } from "./saved-searches.service"
 
 @ApiTags("Job alerts")
@@ -77,5 +82,37 @@ export class SavedSearchesController {
   @ApiOperation({ summary: "Delete a saved search" })
   remove(@Req() req: any, @Param("id") id: string) {
     return this.searches.remove(req.user.userId, id)
+  }
+}
+
+@ApiTags("External job tracker")
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Controller("external-applications")
+export class ExternalApplicationsController {
+  constructor(private readonly external: ExternalApplicationsService) {}
+
+  @Get()
+  @Roles("SEEKER")
+  list(@Req() req: any) {
+    return this.external.list(req.user.userId)
+  }
+
+  @Post()
+  @Roles("SEEKER")
+  create(@Req() req: any, @Body() body: CreateExternalApplicationDto) {
+    return this.external.create(req.user.userId, body)
+  }
+
+  @Patch(":id")
+  @Roles("SEEKER")
+  update(@Req() req: any, @Param("id") id: string, @Body() body: UpdateExternalApplicationDto) {
+    return this.external.update(req.user.userId, id, body)
+  }
+
+  @Delete(":id")
+  @Roles("SEEKER")
+  remove(@Req() req: any, @Param("id") id: string) {
+    return this.external.remove(req.user.userId, id)
   }
 }

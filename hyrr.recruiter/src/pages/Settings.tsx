@@ -1,6 +1,10 @@
 import {
   AccountSecuritySettings,
+  API_ORIGIN,
   Card,
+  newApplicantSoundEnabled,
+  playChime,
+  setNewApplicantSound,
   useToast,
   VerifiedBadge,
   type TeamMember,
@@ -114,6 +118,10 @@ export function Settings() {
 
       <LabelsManager />
 
+      <LiveSoundSetting />
+
+      <CareersWidgetSetting />
+
       <Card className="p-6 rounded-2xl border border-bg-border/60 bg-bg-card">
         <section aria-labelledby="settings-appearance">
           <h2 id="settings-appearance" className="text-[16px] font-semibold text-txt-heading">
@@ -154,5 +162,87 @@ export function Settings() {
 
       <AccountSecuritySettings />
     </div>
+  )
+}
+
+/** "Sound for new applicants": off by default, remembered in this browser only. */
+function LiveSoundSetting() {
+  const [on, setOn] = React.useState(() => newApplicantSoundEnabled())
+  const toggle = () => {
+    const next = !on
+    setOn(next)
+    setNewApplicantSound(next)
+    if (next) playChime()
+  }
+  return (
+    <Card className="p-6 rounded-2xl border border-bg-border/60 bg-bg-card">
+      <section className="flex items-center justify-between gap-4">
+        <div>
+          <h2 id="settings-live-sound" className="text-[16px] font-semibold text-txt-heading">
+            Sound for new applicants
+          </h2>
+          <p className="text-[13px] text-txt-caption mt-1">
+            Play a short chime when someone applies while Hyrr is open. Saved on this browser.
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={on}
+          aria-labelledby="settings-live-sound"
+          onClick={toggle}
+          className={`relative h-6 w-11 shrink-0 rounded-full transition-colors cursor-pointer ${
+            on ? "bg-primary" : "bg-bg-border"
+          }`}
+        >
+          <span
+            className={`absolute top-0.5 h-5 w-5 rounded-full bg-bg-secondary shadow transition-transform ${
+              on ? "translate-x-[22px]" : "translate-x-0.5"
+            }`}
+          />
+        </button>
+      </section>
+    </Card>
+  )
+}
+
+/** Copy-paste snippet that lists the company's open jobs on its own website. */
+function CareersWidgetSetting() {
+  const companyId = useJobStore((s) => s.user?.company?.id)
+  const [copied, setCopied] = React.useState(false)
+  if (!companyId) return null
+  const snippet = `<div id="hyrr-jobs"></div>\n<script src="${API_ORIGIN}/api/public/companies/${companyId}/jobs.js" async></script>`
+  return (
+    <Card className="p-6 rounded-2xl border border-bg-border/60 bg-bg-card">
+      <section aria-labelledby="settings-careers-widget" className="space-y-3">
+        <div>
+          <h2 id="settings-careers-widget" className="text-[16px] font-semibold text-txt-heading">
+            Careers widget
+          </h2>
+          <p className="text-[13px] text-txt-caption mt-1">
+            Paste this on your website to list your open jobs. Each job links to its public Hyrr
+            page, which Google for Jobs can index.
+          </p>
+        </div>
+        <pre className="overflow-x-auto rounded-xl bg-bg-hover/60 p-3 text-[12px] text-txt-heading">
+          {snippet}
+        </pre>
+        <button
+          type="button"
+          onClick={() =>
+            navigator.clipboard
+              .writeText(snippet)
+              .then(() => {
+                setCopied(true)
+                setTimeout(() => setCopied(false), 1500)
+              })
+              .catch(() => undefined)
+          }
+          className="rounded-lg border border-bg-border px-3 py-1.5 text-[12.5px] font-semibold text-txt-body hover:bg-bg-hover cursor-pointer"
+        >
+          {copied ? "Copied" : "Copy snippet"}
+        </button>
+      </section>
+    </Card>
   )
 }

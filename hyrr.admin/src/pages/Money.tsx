@@ -363,6 +363,36 @@ const PRICING_FIELDS: {
     hint: "Seeker credits per application",
     suffix: "credits",
   },
+  {
+    key: "outreachCost",
+    label: "Outreach cost",
+    hint: "Recruiter credits to contact a seeker from talent search",
+    suffix: "credits",
+  },
+  {
+    key: "externalApplyCost",
+    label: "External apply cost",
+    hint: "Seeker credits to open a job from the web (once per job)",
+    suffix: "credits",
+  },
+  {
+    key: "resumeTailorCost",
+    label: "Resume tailor cost",
+    hint: "Seeker credits per CV tailoring for a job",
+    suffix: "credits",
+  },
+  {
+    key: "mockInterviewCost",
+    label: "Mock interview cost",
+    hint: "Seeker credits per AI practice interview",
+    suffix: "credits",
+  },
+  {
+    key: "negotiationAdviceCost",
+    label: "Negotiation advice cost",
+    hint: "Seeker credits per AI offer-negotiation advice",
+    suffix: "credits",
+  },
   { key: "signupBonus", label: "Recruiter signup bonus", hint: "New companies", suffix: "credits" },
   {
     key: "seekerSignupBonus",
@@ -404,6 +434,11 @@ function Pricing() {
     aiRerunCost: toNum(values.aiRerunCost ?? ""),
     signupBonus: toNum(values.signupBonus ?? ""),
     applyCost: toNum(values.applyCost ?? ""),
+    outreachCost: toNum(values.outreachCost ?? ""),
+    externalApplyCost: toNum(values.externalApplyCost ?? ""),
+    resumeTailorCost: toNum(values.resumeTailorCost ?? ""),
+    mockInterviewCost: toNum(values.mockInterviewCost ?? ""),
+    negotiationAdviceCost: toNum(values.negotiationAdviceCost ?? ""),
     seekerSignupBonus: toNum(values.seekerSignupBonus ?? ""),
   }
   const dirty = !!data && PRICING_FIELDS.some((f) => String(getPath(data, f.key)) !== values[f.key])

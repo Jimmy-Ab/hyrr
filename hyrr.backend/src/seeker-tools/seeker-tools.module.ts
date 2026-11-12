@@ -3,8 +3,13 @@ import { ScheduleModule } from "@nestjs/schedule"
 import { MessagesModule } from "../messages/messages.module"
 import { AlertsScheduler } from "./alerts.scheduler"
 import { AlertsService } from "./alerts.service"
+import { ExternalApplicationsService } from "./external-applications.service"
 import { SavedSearchesService } from "./saved-searches.service"
-import { AlertsController, SavedSearchesController } from "./seeker-tools.controller"
+import {
+  AlertsController,
+  ExternalApplicationsController,
+  SavedSearchesController,
+} from "./seeker-tools.controller"
 
 /**
  * Job alerts (CRUD, INSTANT fan-out, DAILY/WEEKLY digests) and saved searches.
@@ -14,8 +19,8 @@ import { AlertsController, SavedSearchesController } from "./seeker-tools.contro
 @Global()
 @Module({
   imports: [ScheduleModule.forRoot(), MessagesModule],
-  controllers: [AlertsController, SavedSearchesController],
-  providers: [AlertsService, AlertsScheduler, SavedSearchesService],
+  controllers: [AlertsController, SavedSearchesController, ExternalApplicationsController],
+  providers: [AlertsService, AlertsScheduler, SavedSearchesService, ExternalApplicationsService],
   exports: [AlertsService],
 })
 export class SeekerToolsModule {}

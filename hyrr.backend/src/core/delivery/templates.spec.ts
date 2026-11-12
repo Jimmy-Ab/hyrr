@@ -2,6 +2,7 @@ import {
   appUrl,
   applicationStatus,
   escapeHtml,
+  interviewScheduled,
   jobAlertDigest,
   newMessage,
   notification,
@@ -9,7 +10,6 @@ import {
   paymentReceipt,
   resetPassword,
   verifyEmail,
-  interviewScheduled,
 } from "./templates"
 
 describe("e-mail templates", () => {
@@ -47,7 +47,10 @@ describe("e-mail templates", () => {
       applicationStatus({ name: "A", jobTitle: "Dev", companyName: "Acme", statusLabel: "Offer" }),
       interviewScheduled({ name: "A", jobTitle: "Dev", startTime: new Date(0), location: "HQ" }),
       newMessage({ name: "A", fromName: "Acme", jobTitle: "Dev", excerpt: "Hi" }),
-      jobAlertDigest({ name: "A", jobs: [{ title: "Dev", company: "Acme", location: "Berlin", url: "https://x.io" }] }),
+      jobAlertDigest({
+        name: "A",
+        jobs: [{ title: "Dev", company: "Acme", location: "Berlin", url: "https://x.io" }],
+      }),
       paymentReceipt({ name: "A", amount: "€10", description: "Boost" }),
       notification({ title: "Something happened" }),
     ]
@@ -63,7 +66,9 @@ describe("e-mail templates", () => {
   it("appUrl picks the app by recipient role", () => {
     process.env.FRONTEND_URL = "https://jobs.example.com/"
     process.env.RECRUITER_APP_URL = "https://hire.example.com"
-    expect(appUrl("SEEKER", "/verify-email?token=1")).toBe("https://jobs.example.com/verify-email?token=1")
+    expect(appUrl("SEEKER", "/verify-email?token=1")).toBe(
+      "https://jobs.example.com/verify-email?token=1"
+    )
     expect(appUrl("RECRUITER", "settings")).toBe("https://hire.example.com/settings")
   })
 })

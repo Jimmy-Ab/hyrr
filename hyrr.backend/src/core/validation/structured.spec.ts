@@ -146,6 +146,19 @@ describe("profile validation", () => {
       expect.arrayContaining(["School is required", "End year can't be before the start year"])
     )
   })
+  it("profile headline and location: empty clears, one character is too short", () => {
+    expect(errors(UpdateProfileDto, { title: "", location: "" })).toEqual([])
+    expect(errors(UpdateProfileDto, { title: "Accountant", location: "Addis Ababa" })).toEqual([])
+    expect(errors(UpdateProfileDto, { title: "A", location: "B" })).toEqual(
+      expect.arrayContaining(["Add a headline, e.g. Frontend Developer", "Add your city or region"])
+    )
+  })
+  it("profile links explain an invalid URL", () => {
+    expect(errors(UpdateProfileDto, { website: "not a link" })).toContain(
+      "Enter a valid link, e.g. https://example.com"
+    )
+    expect(errors(UpdateProfileDto, { github: "https://github.com/hyrr" })).toEqual([])
+  })
   it("validates the expected salary range like the job one", () => {
     expect(
       errors(UpdateProfileDto, {
@@ -163,5 +176,14 @@ describe("profile validation", () => {
         expectedSalaryPeriod: null,
       })
     ).toEqual([])
+  })
+  it("bounds preferred categories (interests) like the zod schema", () => {
+    expect(errors(UpdateProfileDto, { interests: ["c1", "c2"] })).toEqual([])
+    expect(
+      errors(UpdateProfileDto, { interests: Array.from({ length: 11 }, (_, i) => `c${i}`) })
+    ).toContain("Pick at most 10 preferred categories")
+    expect(errors(UpdateProfileDto, { interests: [42] })).toContain(
+      "Each preferred category must be a category id"
+    )
   })
 })

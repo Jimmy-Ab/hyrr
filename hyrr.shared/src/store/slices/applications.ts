@@ -9,12 +9,10 @@ export type ApplicationsSlice = Pick<
   JobState,
   | "jobApplications"
   | "seekerDashboard"
-  | "fetchSeekerDashboard"
   | "fetchApplications"
   | "applyToJob"
   | "applyFromDiscover"
   | "saveJobFromDiscover"
-  | "toggleJobBookmark"
   | "withdrawApplication"
 >
 
@@ -47,15 +45,6 @@ export const createApplicationsSlice: StateCreator<JobState, [], [], Application
   seekerDashboard: null,
   jobApplications: [],
 
-  fetchSeekerDashboard: async () => {
-    try {
-      const dashboard = await apiFetch("/dashboard/seeker")
-      set({ seekerDashboard: dashboard })
-    } catch (e) {
-      console.warn("Failed to load seeker dashboard.", e)
-    }
-  },
-
   // ── Seeker actions ─────────────────────────────────────────────────────────
 
   fetchApplications: async () => {
@@ -87,27 +76,6 @@ export const createApplicationsSlice: StateCreator<JobState, [], [], Application
       await get().fetchApplications()
     } catch (e) {
       console.warn("Saved, but failed to refresh applications.", e)
-    }
-  },
-
-  toggleJobBookmark: async (id) => {
-    const app = get().jobApplications.find((a) => a.id === id)
-    if (!app) return
-    const setFlag = (value: boolean) =>
-      set((state) => ({
-        jobApplications: state.jobApplications.map((a) =>
-          a.id === id ? { ...a, bookmarked: value } : a
-        ),
-      }))
-    setFlag(!app.bookmarked)
-    try {
-      await apiFetch(`/applications/${id}`, {
-        method: "PUT",
-        body: JSON.stringify({ seekerBookmarked: !app.bookmarked }),
-      })
-    } catch (err) {
-      setFlag(app.bookmarked)
-      throw toError(err, "Failed to update bookmark")
     }
   },
 

@@ -5,15 +5,16 @@ import {
   backoffDelay,
   emptyCounts,
   HandlerRegistry,
-  QueueDriver,
   QUEUE_NAMES,
+  QueueDriver,
   QueueName,
   QueueStatus,
   REPEAT_OPTS,
   ResolvedJobOpts,
 } from "./queue.types"
 
-type Timer = { kind: "timeout"; handle: NodeJS.Timeout } | { kind: "immediate"; handle: NodeJS.Immediate }
+type Timer =
+  { kind: "timeout"; handle: NodeJS.Timeout } | { kind: "immediate"; handle: NodeJS.Immediate }
 
 /**
  * In-process driver (no Redis): jobs run on `setImmediate` / after their delay, with the same

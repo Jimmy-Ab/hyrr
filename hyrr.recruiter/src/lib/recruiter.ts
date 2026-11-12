@@ -1,4 +1,4 @@
-import { isApiError, type Candidate, type Job, type TeamMember } from "hyrr.shared"
+import { date, dateTime, isApiError, type Candidate, type Job, type TeamMember } from "hyrr.shared"
 import { useJobStore } from "../store/useJobStore"
 
 // ─── Views <-> URL paths ──────────────────────────────────────────────────────
@@ -37,6 +37,7 @@ export function pathToView(pathname: string): RecruiterView | null {
 
 /** Ordered kanban columns. WITHDRAWN cards are rendered in the Archived column. */
 export const PIPELINE_STATUSES = [
+  "Reached out",
   "Applied",
   "In Process",
   "Interviewing",
@@ -44,6 +45,8 @@ export const PIPELINE_STATUSES = [
   "Archived",
 ] as const
 export type PipelineStatus = (typeof PIPELINE_STATUSES)[number]
+/** Stages the team can move a candidate into ("Reached out" is set by outreach only). */
+export const MOVABLE_STATUSES = PIPELINE_STATUSES.filter((s) => s !== "Reached out")
 
 export const WITHDRAWN_STATUS = "Withdrawn"
 
@@ -172,10 +175,8 @@ export function relativeTime(iso: string | Date | null | undefined): string {
 }
 
 export function formatDateTime(iso: string | null | undefined): string {
-  if (!iso) return ""
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ""
-  return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+  const label = dateTime(iso)
+  return label === "—" ? "" : label
 }
 
 // ─── Momentum (credits) ───────────────────────────────────────────────────────
@@ -194,10 +195,8 @@ export function formatCredits(n: number): string {
 }
 
 export function formatDate(iso: string | null | undefined): string {
-  if (!iso) return ""
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ""
-  return d.toLocaleDateString(undefined, { dateStyle: "medium" })
+  const label = date(iso)
+  return label === "—" ? "" : label
 }
 
 /** true while the job's paid feature window is open. */

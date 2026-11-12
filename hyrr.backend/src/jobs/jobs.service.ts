@@ -1,5 +1,11 @@
 import { HttpStatus, Injectable, Logger, Optional } from "@nestjs/common"
-import { ApplicationStatus, EmploymentType, JobStatus, Prisma } from "@prisma/client"
+import {
+  ApplicationStatus,
+  EmploymentType,
+  JobStatus,
+  NotificationType,
+  Prisma,
+} from "@prisma/client"
 import { assertEmailVerified, requireVerifiedEmail } from "../auth/email-verification"
 import { PricingService, PublishCostInput } from "../billing/pricing.service"
 import { WalletService } from "../billing/wallet.service"
@@ -13,13 +19,16 @@ import { MessagesGateway } from "../messages/messages.gateway"
 import { NotificationsService } from "../notifications/notifications.service"
 import { PrismaService } from "../prisma/prisma.service"
 import { SearchService } from "../search/search.service"
+import { roleTerms, summarise, yearlyMid } from "../seeker-ai/salary-benchmark"
 import { AlertsService } from "../seeker-tools/alerts.service"
 import { CreateJobDto } from "./dtos/create-job.dto"
 import { UpdateJobDto } from "./dtos/update-job.dto"
 import { computeFunnelAnalytics } from "./funnel-analytics"
 import { evaluateJobContent, JobContent } from "./job-content-policy"
+import { normalizeJobLanguages } from "./job-languages"
+import { assessJobRisk, type RiskInput } from "./job-risk"
 import { PUBLIC_COMPANY_SELECT } from "./public-company"
-import { PUBLIC_JOB_WHERE } from "./public-job"
+import { PUBLIC_JOB_WHERE, toPublicJob } from "./public-job"
 
 const JOB_COLORS = ["purple", "blue", "green", "orange"] as const
 const PUBLIC_JOBS_CACHE_KEY = "jobs:public"
@@ -47,7 +56,17 @@ export const FEATURE_DAY_OPTIONS = [7, 14, 30] as const
 const DAY_MS = 24 * 60 * 60 * 1000
 
 const APPLICANT_COUNT = {
-  _count: { select: { applications: { where: { status: { not: ApplicationStatus.SAVED } } } } },
+  _count: {
+    select: {
+      applications: {
+        where: {
+          status: {
+            notIn: [ApplicationStatus.SAVED, ApplicationStatus.SOURCED] as ApplicationStatus[],
+          },
+        },
+      },
+    },
+  },
 } as const
 
 /** Structured salary columns + their generated display text (all null clears the range). */
@@ -148,6 +167,52 @@ export class JobsService {
       )
   }
 
+  /** Risk score for a job about to go live (see job-risk.ts). */
+  private async assessRisk(companyId: string, job: RiskInput & { salaryCurrency?: string | null }) {
+    const terms = roleTerms(job.title)
+    const [company, recent, similar] = await Promise.all([
+      this.prisma.company.findUnique({
+        where: { id: companyId },
+        select: { joinedAt: true, verified: true },
+      }),
+      this.prisma.job.count({
+        where: { companyId, publishedAt: { gte: new Date(Date.now() - 86_400_000) } },
+      }),
+      job.salaryCurrency && terms.length
+        ? this.prisma.job.findMany({
+            where: {
+              AND: terms.map((t) => ({ title: { contains: t, mode: "insensitive" as const } })),
+              salaryCurrency: job.salaryCurrency,
+              status: { in: [JobStatus.ACTIVE, JobStatus.CLOSED] },
+            },
+            select: { salaryMin: true, salaryMax: true, salaryPeriod: true },
+            take: 2000,
+          })
+        : Promise.resolve([]),
+    ])
+    const market = summarise((similar ?? []).map(yearlyMid).filter((v): v is number => !!v))
+    return assessJobRisk(job, {
+      marketMedianYearly: market.p50,
+      companyAgeDays: company?.joinedAt
+        ? (Date.now() - company.joinedAt.getTime()) / 86_400_000
+        : 0,
+      companyVerified: !!company?.verified,
+      companyJobsLast24h: (recent ?? 0) + 1,
+    })
+  }
+
+  private async tellUnderReview(recruiterId: string, jobId: string, title: string) {
+    try {
+      await this.notifications.createNotification(
+        recruiterId,
+        `"${title}" is being reviewed by Hyrr before it goes live. This usually takes less than a day.`,
+        NotificationType.SYSTEM
+      )
+    } catch (err: any) {
+      this.logger.warn(`Review notice failed for ${jobId}: ${err?.message}`)
+    }
+  }
+
   // ─── Recruiter: create a job ──────────────────────────────────────
   async createJob(recruiterId: string, dto: CreateJobDto) {
     const user = await this.prisma.user.findUnique({ where: { id: recruiterId } })
@@ -158,8 +223,15 @@ export class JobsService {
     const count = await this.prisma.job.count({ where: { recruiterId } })
     const color = JOB_COLORS[count % JOB_COLORS.length]
 
-    let companyId = user?.companyId ?? null
-    if (companyId) {
+    const companyId = user?.companyId ?? null
+    // Companies are created at sign-up or on "Set up your company" (TeamService), never here.
+    if (!companyId)
+      throw new AppException(
+        "Set up your company before posting jobs.",
+        HttpStatus.FORBIDDEN,
+        "COMPANY_REQUIRED"
+      )
+    {
       const scope = await this.access.companyScope(recruiterId)
       if (scope.suspendedCompanyIds?.includes(companyId)) throw companySuspended()
       if (!scope.manageCompanyIds.includes(companyId)) {
@@ -173,6 +245,17 @@ export class JobsService {
 
     // Price + config are read before the transaction (cached, outside the row locks).
     const publishing = status === JobStatus.ACTIVE
+    // Grey-area scam signals: enough of them send the job to moderation instead of live.
+    const risk = publishing
+      ? await this.assessRisk(companyId, {
+          title: dto.title,
+          description: dto.description,
+          salaryMin: dto.salaryMin,
+          salaryMax: dto.salaryMax,
+          salaryPeriod: dto.salaryPeriod,
+          salaryCurrency: dto.salaryCurrency,
+        })
+      : null
     const cost = publishing
       ? await this.pricing.publishCost({
           remote: dto.remote ?? false,
@@ -182,12 +265,9 @@ export class JobsService {
           categoryId: dto.categoryId,
         })
       : 0
-    const signupBonus = companyId ? 0 : (await this.pricing.getConfig()).signupBonus
-
     // One transaction: auto-created company (+ sign-up bonus), the job and its publish charge.
     // 402 INSUFFICIENT_CREDITS rolls everything back, so nothing is written.
     const job = await this.prisma.$transaction(async (tx) => {
-      if (!companyId) companyId = await this.createCompanyFor(tx, recruiterId, user, signupBonus)
       const created = await tx.job.create({
         data: {
           title: dto.title,
@@ -197,6 +277,7 @@ export class JobsService {
           description: dto.description,
           requirements: dto.requirements ?? [],
           skills: dto.skills,
+          languages: normalizeJobLanguages(dto.languages),
           benefits: dto.benefits ?? [],
           // `featured` is bought via POST /jobs/:id/feature; the DTO flag is ignored.
           featured: false,
@@ -205,7 +286,8 @@ export class JobsService {
           companyId,
           recruiterId,
           categoryId: dto.categoryId,
-          status,
+          status: risk?.flagged ? JobStatus.FLAGGED : status,
+          ...(risk ? { riskScore: risk.score, riskReasons: risk.reasons } : {}),
           ...(publishing ? { publishedAt: new Date(), momentumCost: cost } : {}),
         },
         include: { company: true, category: true },
@@ -228,48 +310,15 @@ export class JobsService {
     // Invalidate cached public listings
     await this.cache.delByPattern("jobs:public*")
     this.afterJobChange(job.id, { index: job.status === JobStatus.ACTIVE, embed: true })
+    if (job.status === JobStatus.ACTIVE)
+      this.messagesGateway?.emitAdminMetric("job_published", { jobId: job.id })
+    if (risk?.flagged) await this.tellUnderReview(recruiterId, job.id, job.title)
     // Alerts never block job creation (drafts are not announced)
     if (job.status === JobStatus.ACTIVE)
       this.alerts
         ?.onJobPublished(job.id)
         .catch((err) => this.logger.warn(`Job alert fan-out failed for ${job.id}: ${err?.message}`))
     return this.withRequirements(job)
-  }
-
-  /** Company + OWNER membership for a recruiter without one, plus its wallet and sign-up bonus. */
-  private async createCompanyFor(
-    tx: Prisma.TransactionClient,
-    recruiterId: string,
-    user: { name?: string | null } | null,
-    signupBonus: number
-  ): Promise<string> {
-    const company = await tx.company.create({
-      data: {
-        name: user?.name ? `${user.name}'s Company` : "Hyrr Hiring Co",
-        logo: user?.name ? user.name.charAt(0).toUpperCase() : "H",
-        country: "United States",
-      },
-    })
-    if (user) {
-      await tx.user.update({ where: { id: recruiterId }, data: { companyId: company.id } })
-      await tx.companyMember.create({
-        data: { companyId: company.id, userId: recruiterId, role: "OWNER" },
-      })
-    }
-    await this.wallet.ensureWallet(company.id, tx)
-    if (signupBonus > 0)
-      await this.wallet.credit(
-        {
-          companyId: company.id,
-          amount: signupBonus,
-          type: "SIGNUP_BONUS",
-          referenceId: company.id,
-          actorId: user ? recruiterId : null,
-          note: "Welcome bonus",
-        },
-        tx
-      )
-    return company.id
   }
 
   // ─── Recruiter: update / close a job ─────────────────────────────
@@ -312,6 +361,7 @@ export class JobsService {
 
     const { salaryMin, salaryMax, salaryCurrency, salaryPeriod, employmentType, ...rest } = dto
     const data: Prisma.JobUncheckedUpdateInput = { ...rest }
+    if (rest.languages !== undefined) data.languages = normalizeJobLanguages(rest.languages)
     if (actor.role !== "ADMIN" && current.status === JobStatus.FLAGGED) delete data.status
     if (employmentType && !rest.type) data.type = employmentType
     // The DTO guarantees all four salary fields arrive together (or all null to clear).
@@ -335,6 +385,22 @@ export class JobsService {
             categoryId: (data.categoryId as string | undefined) ?? current.categoryId,
           })
         : 0
+
+    // First publication goes through the same risk check as new jobs.
+    let risk: Awaited<ReturnType<JobsService["assessRisk"]>> | null = null
+    if (firstPublish && !isAdmin) {
+      risk = await this.assessRisk(current.companyId, {
+        title: (data.title as string | undefined) ?? current.title,
+        description: (data.description as string | undefined) ?? current.description,
+        salaryMin: (data.salaryMin as number | null | undefined) ?? current.salaryMin,
+        salaryMax: salaryMax !== undefined ? salaryMax : current.salaryMax,
+        salaryPeriod: salaryMax !== undefined ? salaryPeriod : current.salaryPeriod,
+        salaryCurrency: salaryMax !== undefined ? salaryCurrency : current.salaryCurrency,
+      })
+      data.riskScore = risk.score
+      data.riskReasons = risk.reasons
+      if (risk.flagged) data.status = JobStatus.FLAGGED
+    }
 
     let published = false
     const job = await this.prisma.$transaction(async (tx) => {
@@ -374,6 +440,9 @@ export class JobsService {
       index: job.status === JobStatus.ACTIVE || current.status === JobStatus.ACTIVE,
       embed: EMBEDDED_FIELDS.some((f) => data[f] !== undefined),
     })
+    if (published && job.status === JobStatus.ACTIVE)
+      this.messagesGateway?.emitAdminMetric("job_published", { jobId: job.id })
+    if (risk?.flagged) await this.tellUnderReview(current.recruiterId, job.id, job.title)
     // The first publication is announced like a newly created job (reopening is not).
     if (published && job.status === JobStatus.ACTIVE)
       this.alerts
@@ -516,7 +585,11 @@ export class JobsService {
     const cacheKey = `${PUBLIC_JOBS_CACHE_KEY}:${q}:${type || ""}:${categorySlug || ""}:${remote ?? ""}:${limit}:${offset}`
 
     const cached = await this.cache.get<PublicJobsPage>(cacheKey)
-    if (cached && Array.isArray(cached.items)) return cached
+    if (cached && Array.isArray(cached.items))
+      return {
+        ...cached,
+        items: cached.items.map((job) => toPublicJob(job)) as typeof cached.items,
+      }
 
     const include = { company: { select: PUBLIC_COMPANY_SELECT }, category: true }
     let result: PublicJobsPage | null = null
@@ -549,6 +622,11 @@ export class JobsService {
     if (!result)
       result = await this.searchPublicJobsPostgres(q, type, categorySlug, remote, limit, offset)
 
+    // Public listing: internal columns (risk, billing, recruiter) never leave the server.
+    result = {
+      ...result,
+      items: result.items.map((job) => toPublicJob(job)) as typeof result.items,
+    }
     await this.cache.set(cacheKey, result, 120) // 2-minute TTL
     return result
   }
@@ -627,7 +705,7 @@ export class JobsService {
       },
     })
     if (!job) throw new NotFoundAppException("Job not found", "JOB_NOT_FOUND")
-    return this.withRequirements(job)
+    return toPublicJob(this.withRequirements(job))
   }
 
   // ─── Shared: get all categories ──────────────────────────────────
@@ -646,7 +724,10 @@ export class JobsService {
     const totalJobs = await this.prisma.job.count({ where: jobScope })
 
     const applications = await this.prisma.application.findMany({
-      where: { job: jobScope, status: { not: ApplicationStatus.SAVED } },
+      where: {
+        job: jobScope,
+        status: { notIn: [ApplicationStatus.SAVED, ApplicationStatus.SOURCED] },
+      },
       select: {
         id: true,
         jobId: true,

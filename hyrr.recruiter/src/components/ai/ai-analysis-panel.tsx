@@ -1,9 +1,13 @@
 import {
   AI_RECOMMENDATION_LABEL,
+  apiFetch,
   Badge,
   Button,
   ConfirmDialog,
   insufficientCreditsDetails,
+  matchLevel,
+  scoreTone,
+  toneClass,
   useToast,
   type Candidate,
 } from "hyrr.shared"
@@ -30,13 +34,11 @@ function ScoreRing({ score }: { score: number }) {
   const radius = 30
   const circumference = 2 * Math.PI * radius
   const clamped = Math.max(0, Math.min(100, score))
-  const color =
-    clamped >= 75 ? "text-sec-green" : clamped >= 50 ? "text-sec-orange" : "text-sec-red"
   return (
     <div
-      className="relative w-[76px] h-[76px] shrink-0"
+      className={`relative w-[76px] h-[76px] shrink-0 ${toneClass(scoreTone(clamped))}`}
       role="img"
-      aria-label={`AI match score ${clamped} out of 100`}
+      aria-label={`AI match score ${clamped} out of 100, ${matchLevel(clamped)}`}
     >
       <svg viewBox="0 0 76 76" className="w-full h-full -rotate-90">
         <circle cx="38" cy="38" r={radius} strokeWidth="7" className="stroke-bg-border fill-none" />
@@ -48,10 +50,10 @@ function ScoreRing({ score }: { score: number }) {
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={circumference * (1 - clamped / 100)}
-          className={`fill-none stroke-current transition-[stroke-dashoffset] duration-700 ${color}`}
+          className="fill-none stroke-[var(--tone-fg)] transition-[stroke-dashoffset] duration-700"
         />
       </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-[19px] font-extrabold text-txt-heading">
+      <span className="absolute inset-0 flex items-center justify-center text-[19px] font-extrabold tabular-nums text-[var(--tone-fg)]">
         {clamped}
       </span>
     </div>
@@ -282,6 +284,7 @@ export function AiAnalysisPanel({ candidate }: { candidate: Candidate }) {
                 )}
               </p>
             )}
+            <AiFeedbackButtons applicationId={candidate.id} />
           </div>
         </div>
         <div className="shrink-0">{runButton(pending ? "Analyzing…" : "Re-run analysis")}</div>
@@ -352,6 +355,40 @@ export function AiAnalysisPanel({ candidate }: { candidate: Candidate }) {
           </p>
         </div>
       )}
+    </div>
+  )
+}
+
+/** Was this analysis helpful? (admins track the rate over time to spot model drift) */
+function AiFeedbackButtons({ applicationId }: { applicationId: string }) {
+  const [vote, setVote] = useState<boolean | null>(null)
+  const send = async (helpful: boolean) => {
+    const previous = vote
+    setVote(helpful)
+    try {
+      await apiFetch(`/applications/${applicationId}/ai-feedback`, {
+        method: "POST",
+        body: JSON.stringify({ helpful }),
+      })
+    } catch {
+      setVote(previous)
+    }
+  }
+  return (
+    <div className="mt-1.5 flex items-center gap-1 text-[11.5px] text-txt-caption">
+      <span>{vote === null ? "Was this helpful?" : "Thanks for the feedback"}</span>
+      {[true, false].map((helpful) => (
+        <button
+          key={String(helpful)}
+          type="button"
+          aria-pressed={vote === helpful}
+          aria-label={helpful ? "Helpful" : "Not helpful"}
+          onClick={() => send(helpful)}
+          className={`rounded-full px-1.5 py-0.5 cursor-pointer hover:bg-bg-hover ${vote === helpful ? "bg-primary/10 text-primary" : ""}`}
+        >
+          {helpful ? "👍" : "👎"}
+        </button>
+      ))}
     </div>
   )
 }

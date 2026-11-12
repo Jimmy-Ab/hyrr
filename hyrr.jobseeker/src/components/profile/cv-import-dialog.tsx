@@ -47,9 +47,20 @@ interface CvImportDialogProps {
   onOpenChange: (open: boolean) => void
   /** Receives only the sections the seeker kept checked. */
   onApply: (suggestions: CvSuggestions, sections: Set<CvSection>) => void
+  /**
+   * "linkedin": guided import of the PDF LinkedIn exports (Profile → More → Save to PDF). Same
+   * upload + AI extraction as a CV; no scraping, no LinkedIn API, no OAuth.
+   */
+  variant?: "cv" | "linkedin"
 }
 
-export function CvImportDialog({ open, onOpenChange, onApply }: CvImportDialogProps) {
+export function CvImportDialog({
+  open,
+  onOpenChange,
+  onApply,
+  variant = "cv",
+}: CvImportDialogProps) {
+  const linkedin = variant === "linkedin"
   const documents = useJobStore((s) => s.documents)
   const importProfileFromCv = useJobStore((s) => s.importProfileFromCv)
   const resumes = documents.filter((d) => d.type === "resume")
@@ -65,7 +76,7 @@ export function CvImportDialog({ open, onOpenChange, onApply }: CvImportDialogPr
   useEffect(() => {
     if (!open) return
     const active = resumes.find((d) => d.active) ?? resumes[0]
-    setSource(active?.id ?? "upload")
+    setSource(linkedin ? "upload" : (active?.id ?? "upload"))
     setFile(null)
     setError(null)
     setSuggestions(null)
@@ -76,8 +87,10 @@ export function CvImportDialog({ open, onOpenChange, onApply }: CvImportDialogPr
   const pickFile = (f: File | undefined) => {
     if (!f) return
     const ext = f.name.split(".").pop()?.toLowerCase() ?? ""
-    if (!["pdf", "doc", "docx"].includes(ext)) {
-      setError("Choose a PDF or Word document.")
+    if (linkedin ? ext !== "pdf" : !["pdf", "doc", "docx"].includes(ext)) {
+      setError(
+        linkedin ? "Choose the PDF you saved from LinkedIn." : "Choose a PDF or Word document."
+      )
       return
     }
     if (f.size > MAX_UPLOAD_BYTES) {
@@ -209,18 +222,44 @@ export function CvImportDialog({ open, onOpenChange, onApply }: CvImportDialogPr
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
-            {suggestions ? "Review suggestions" : "Import from CV"}
+            {suggestions
+              ? "Review suggestions"
+              : linkedin
+                ? "Import your LinkedIn profile"
+                : "Import from CV"}
           </DialogTitle>
           <DialogDescription>
             {suggestions
               ? "Choose what to copy into your profile. Nothing is saved until you press Save Profile."
-              : "We'll read your CV and suggest profile details for you to review."}
+              : linkedin
+                ? "Save your LinkedIn profile as a PDF, upload it here, and review what we found."
+                : "We'll read your CV and suggest profile details for you to review."}
           </DialogDescription>
         </DialogHeader>
 
         {!suggestions ? (
           <div className="mt-4 flex flex-col gap-3">
-            <fieldset className="flex flex-col gap-2">
+            {linkedin && (
+              <ol
+                aria-label="How to save your LinkedIn profile as a PDF"
+                className="flex flex-col gap-2 rounded-2xl border border-bg-border bg-bg-secondary p-4 text-[13px] text-txt-body"
+              >
+                {[
+                  "Open LinkedIn and sign in.",
+                  "Go to your profile (Me → View profile).",
+                  "Select More (or Resources) under your name.",
+                  "Select Save to PDF. LinkedIn downloads the file.",
+                ].map((step, i) => (
+                  <li key={step} className="flex gap-2.5">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary-light text-[11px] font-bold text-primary">
+                      {i + 1}
+                    </span>
+                    {step}
+                  </li>
+                ))}
+              </ol>
+            )}
+            <fieldset className={linkedin ? "hidden" : "flex flex-col gap-2"}>
               <legend className="mb-1 text-[13px] font-semibold text-txt-heading">Which CV?</legend>
               {resumes.map((d) => (
                 <label
@@ -266,9 +305,9 @@ export function CvImportDialog({ open, onOpenChange, onApply }: CvImportDialogPr
                 <input
                   ref={fileRef}
                   type="file"
-                  accept={ACCEPT}
+                  accept={linkedin ? ".pdf" : ACCEPT}
                   className="sr-only"
-                  aria-label="CV file"
+                  aria-label={linkedin ? "LinkedIn PDF" : "CV file"}
                   onChange={(e) => {
                     pickFile(e.target.files?.[0])
                     e.target.value = ""
@@ -283,7 +322,11 @@ export function CvImportDialog({ open, onOpenChange, onApply }: CvImportDialogPr
                   Choose file
                 </Button>
                 <span className="min-w-0 truncate text-[12.5px] text-txt-caption">
-                  {file ? file.name : "PDF or Word, up to 10 MB"}
+                  {file
+                    ? file.name
+                    : linkedin
+                      ? "The LinkedIn PDF, up to 10 MB"
+                      : "PDF or Word, up to 10 MB"}
                 </span>
               </div>
             )}
@@ -338,7 +381,13 @@ export function CvImportDialog({ open, onOpenChange, onApply }: CvImportDialogPr
               disabled={busy || !source || (source === "upload" && !file)}
             >
               {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
-              {busy ? "Reading your CV…" : "Read CV"}
+              {busy
+                ? linkedin
+                  ? "Reading your LinkedIn PDF…"
+                  : "Reading your CV…"
+                : linkedin
+                  ? "Read PDF"
+                  : "Read CV"}
             </Button>
           )}
         </DialogFooter>

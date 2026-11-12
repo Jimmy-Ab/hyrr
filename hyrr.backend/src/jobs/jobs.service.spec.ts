@@ -339,6 +339,19 @@ describe("JobsService", () => {
       })
     })
 
+    it("a posting with enough scam signals goes to moderation (FLAGGED) with its reasons", async () => {
+      await service.createJob("rec-1", {
+        ...dto,
+        description: "Earn $300 per day! Message us at t.me/jobsnow or hr@gmail.com",
+      })
+      const data = prismaMock.job.create.mock.calls[0][0].data
+      expect(data.status).toBe("FLAGGED")
+      expect(data.riskScore).toBeGreaterThanOrEqual(3)
+      expect(data.riskReasons).toEqual(
+        expect.arrayContaining([expect.stringMatching(/link shortener/)])
+      )
+    })
+
     it("publishing on create charges publishCost once and records publishedAt + momentumCost", async () => {
       const job: any = await service.createJob("rec-1", dto)
       expect(pricing.publishCost).toHaveBeenCalledWith({
@@ -398,33 +411,18 @@ describe("JobsService", () => {
       expect(cache.delByPattern).not.toHaveBeenCalled()
     })
 
-    it("auto-created company gets wallet + sign-up bonus in the same transaction", async () => {
+    it("a recruiter without a company must set one up first (no auto-created company)", async () => {
       prismaMock.user.findUnique.mockResolvedValue({
         id: "rec-1",
         name: "Rec",
         companyId: null,
         emailVerifiedAt: new Date(),
       })
-      prismaMock.company.create.mockResolvedValue({ id: "co-new" })
-      await service.createJob("rec-1", dto)
-      expect(prismaMock.$transaction).toHaveBeenCalledTimes(1)
-      expect(wallet.credit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          companyId: "co-new",
-          amount: 20,
-          type: "SIGNUP_BONUS",
-          referenceId: "co-new",
-        }),
-        prismaMock
-      )
-      expect(wallet.debit).toHaveBeenCalledWith(
-        expect.objectContaining({ companyId: "co-new", type: "JOB_PUBLISH" }),
-        prismaMock
-      )
-      // bonus is credited before the publish charge
-      expect(wallet.credit.mock.invocationCallOrder[0]).toBeLessThan(
-        wallet.debit.mock.invocationCallOrder[0]
-      )
+      await expect(service.createJob("rec-1", dto)).rejects.toMatchObject({
+        errorCode: "COMPANY_REQUIRED",
+      })
+      expect(prismaMock.company.create).not.toHaveBeenCalled()
+      expect(prismaMock.$transaction).not.toHaveBeenCalled()
     })
 
     it("DRAFT → ACTIVE charges once (atomic claim on publishedAt = null)", async () => {

@@ -23,6 +23,13 @@ import { SeekerToolsModule } from "./seeker-tools/seeker-tools.module"
 import { SettingsModule } from "./settings/settings.module"
 import { TalentModule } from "./talent/talent.module"
 import { TeamModule } from "./team/team.module"
+import { ScorecardsModule } from "./scorecards/scorecards.module"
+import { OffersModule } from "./offers/offers.module"
+import { TalentSearchModule } from "./talent-search/talent-search.module"
+import { ExternalJobsModule } from "./external-jobs/external-jobs.module"
+import { SeekerAiModule } from "./seeker-ai/seeker-ai.module"
+import { ResponsivenessModule } from "./responsiveness/responsiveness.module"
+import { PublicSiteModule } from "./public-site/public-site.module"
 
 import { CoreModule } from "./core/core.module"
 import { SecurityModule } from "./core/security/security.module"
@@ -65,6 +72,13 @@ import { UploadsModule } from "./uploads/uploads.module"
     SettingsModule,
     TalentModule,
     TeamModule,
+    ScorecardsModule,
+    OffersModule,
+    TalentSearchModule,
+    ExternalJobsModule,
+    SeekerAiModule,
+    ResponsivenessModule,
+    PublicSiteModule,
     AdminModule,
   ],
 })

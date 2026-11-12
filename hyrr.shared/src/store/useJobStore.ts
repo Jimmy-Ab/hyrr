@@ -14,7 +14,9 @@ import { createNotificationsSlice } from "./slices/notifications"
 import { createPipelineSlice } from "./slices/pipeline"
 import { createSeekerToolsSlice } from "./slices/seekerTools"
 import { createSettingsSlice } from "./slices/settings"
+import { createTalentSlice } from "./slices/talent"
 import { createTeamSlice } from "./slices/team"
+import { createTrackerSlice } from "./slices/tracker"
 import { createUiSlice } from "./slices/ui"
 import type { JobState } from "./types"
 
@@ -35,6 +37,8 @@ export const useJobStore = create<JobState>()((...a) => ({
   ...createJobsSlice(...a),
   ...createCandidatesSlice(...a),
   ...createTeamSlice(...a),
+  ...createTalentSlice(...a),
+  ...createTrackerSlice(...a),
   ...createNotificationsSlice(...a),
   ...createApplicationsSlice(...a),
   ...createDiscoverSlice(...a),

@@ -191,6 +191,50 @@ export const salaryRangeSchema = z
       })
   })
 
+/**
+ * Discover salary filter: min and/or max (same messages as JobFiltersDto); currency and period
+ * are required once a bound is set.
+ */
+export const salaryFilterSchema = z
+  .object({
+    min: z.number().nullable(),
+    max: z.number().nullable(),
+    currency: z.string(),
+    period: z.enum(SALARY_PERIODS),
+  })
+  .superRefine((v, ctx) => {
+    if (v.min == null && v.max == null) return
+    for (const [key, label] of [
+      ["min", "Minimum"],
+      ["max", "Maximum"],
+    ] as const) {
+      const n = v[key]
+      if (n == null) continue
+      if (!Number.isInteger(n))
+        ctx.addIssue({
+          code: "custom",
+          path: [key],
+          message: `${label} salary must be a whole number`,
+        })
+      else if (n < 0)
+        ctx.addIssue({ code: "custom", path: [key], message: `${label} salary can't be negative` })
+      else if (n > SALARY_MAX_VALUE)
+        ctx.addIssue({ code: "custom", path: [key], message: `${label} salary is too large` })
+    }
+    if (!(CURRENCIES as readonly string[]).includes(v.currency))
+      ctx.addIssue({
+        code: "custom",
+        path: ["currency"],
+        message: "Pick a currency for the salary filter",
+      })
+    if (v.min != null && v.max != null && v.max < v.min)
+      ctx.addIssue({
+        code: "custom",
+        path: ["max"],
+        message: "Maximum must be at least the minimum",
+      })
+  })
+
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/
 
 export const experienceSchema = z
@@ -255,7 +299,7 @@ export type EducationInput = z.infer<typeof educationSchema>
 const optionalUrl = z
   .string()
   .trim()
-  .max(500, "At most 500 characters")
+  .max(500, "Link must be at most 500 characters")
   .refine((v) => !v || /^(https?:\/\/)?[\w.-]+\.[a-z]{2,}(\/\S*)?$/i.test(v), {
     message: "Enter a valid link, e.g. https://example.com",
   })
@@ -267,13 +311,17 @@ export const profileBasicsSchema = z.object({
     .string()
     .trim()
     .min(2, "Name must be at least 2 characters")
-    .max(120, "At most 120 characters"),
+    .max(120, "Name must be at most 120 characters"),
   title: z
     .string()
     .trim()
     .min(2, "Add a headline, e.g. Frontend Developer")
-    .max(120, "At most 120 characters"),
-  location: z.string().trim().min(2, "Add your city or region").max(160, "At most 160 characters"),
+    .max(120, "Headline must be at most 120 characters"),
+  location: z
+    .string()
+    .trim()
+    .min(2, "Add your city or region")
+    .max(160, "Location must be at most 160 characters"),
   phone: z
     .string()
     .trim()
@@ -287,6 +335,10 @@ export const profileBasicsSchema = z.object({
   skills: z.array(z.string()).max(50, "At most 50 skills"),
   languages: z.array(z.string()).max(20, "At most 20 languages"),
   preferredLocations: z.array(z.string()).max(10, "At most 10 locations"),
+  interests: z
+    .array(z.string().max(64, "Each preferred category must be a category id"))
+    .max(10, "Pick at most 10 preferred categories")
+    .optional(),
 })
 
 export const jobBasicsSchema = z.object({
@@ -297,6 +349,18 @@ export const jobBasicsSchema = z.object({
     .max(200, "At most 200 characters"),
   location: z.string().trim().min(2, "Location is required").max(200, "At most 200 characters"),
   categoryId: z.string().min(1, "Choose a category"),
+  /** Same rules and messages as CreateJobDto/UpdateJobDto.languages. */
+  languages: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(1, "Languages can't be empty")
+        .max(40, "Each language must be at most 40 characters")
+    )
+    .min(1, "Add at least one language")
+    .max(5, "At most 5 languages")
+    .optional(),
 })
 
 // ─── Error helpers ───────────────────────────────────────────────────────────
@@ -343,12 +407,12 @@ export const reasonSchema = z.object({
   reason: z
     .string()
     .trim()
-    .min(3, "Give a reason of at least 3 characters")
-    .max(500, "Keep the reason under 500 characters"),
+    .min(3, "Reason must be at least 3 characters")
+    .max(500, "Reason can be at most 500 characters"),
 })
 
 export const noteSchema = z.object({
-  note: z.string().trim().max(500, "Keep the note under 500 characters").optional(),
+  note: z.string().trim().max(500, "Note can be at most 500 characters").optional(),
 })
 
 export const creditAdjustmentSchema = z.object({
@@ -372,3 +436,122 @@ export const companySetupSchema = z.object({
   website: optionalUrl,
 })
 export type CompanySetupInput = z.infer<typeof companySetupSchema>
+
+// ─── Interview times offered to the candidate ───
+
+export const INTERVIEW_DURATIONS = [15, 30, 45, 60, 90, 120] as const
+
+export const interviewInviteSchema = z.object({
+  title: z
+    .string()
+    .trim()
+    .min(2, "Give the interview a title")
+    .max(120, "The title can be at most 120 characters"),
+  durationMin: z.number().refine((v) => (INTERVIEW_DURATIONS as readonly number[]).includes(v), {
+    message: "Duration must be 15, 30, 45, 60, 90 or 120 minutes",
+  }),
+  slots: z
+    .array(
+      z
+        .string()
+        .refine((v) => !Number.isNaN(Date.parse(v)), "Pick a date and time")
+        .refine(
+          (v) => Date.parse(v) >= Date.now() + 15 * 60_000,
+          "Pick a time at least 15 minutes from now"
+        )
+    )
+    .min(1, "Offer at least one time")
+    .max(10, "Offer at most 10 times"),
+  location: z.string().trim().max(200, "Location can be at most 200 characters").optional(),
+  meetingUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .refine((v) => !v || /^https?:\/\/\S+\.\S+/i.test(v), {
+      message: "Enter a valid meeting link, e.g. https://meet.google.com/…",
+    })
+    .optional(),
+  note: z.string().trim().max(1000, "The note can be at most 1000 characters").optional(),
+})
+
+// ─── Interview scorecards ───
+
+export const scorecardSchema = z.object({
+  recommendation: z.enum(["STRONG_YES", "YES", "NEUTRAL", "NO", "STRONG_NO"], {
+    message: "Choose a recommendation",
+  }),
+  overallNotes: z
+    .string()
+    .trim()
+    .min(10, "Write at least a sentence of overall feedback")
+    .max(4000, "Overall feedback can be at most 4000 characters"),
+  ratings: z
+    .array(
+      z.object({
+        competency: z.string(),
+        score: z.number().int().min(1, "Rate this from 1 to 5").max(5, "Rate this from 1 to 5"),
+        notes: z.string().max(1000, "Notes can be at most 1000 characters").optional(),
+      })
+    )
+    .min(1),
+})
+
+// ─── Job offers ───
+
+export const offerSchema = z
+  .object({
+    baseSalary: z
+      .number({ message: "Enter the base salary" })
+      .int("Base salary must be a whole number")
+      .min(1, "Base salary must be more than 0")
+      .max(SALARY_MAX_VALUE, "Base salary is too large"),
+    salaryCurrency: z.enum(CURRENCIES, { message: "Choose a supported currency" }),
+    salaryPeriod: z.enum(SALARY_PERIODS, { message: "Choose per year, month or hour" }),
+    bonusAmount: z
+      .number()
+      .int("Bonus must be a whole number")
+      .min(0, "Bonus can't be negative")
+      .optional(),
+    equityPercentage: z
+      .number()
+      .min(0, "Equity can't be negative")
+      .max(100, "Equity is a percentage (0–100)")
+      .optional(),
+    startDate: z.string().min(1, "Choose a start date"),
+    expiresAt: z.string().min(1, "Choose when the offer expires"),
+    benefits: z
+      .array(z.string().trim().max(80, "Each benefit can be at most 80 characters"))
+      .max(15)
+      .optional(),
+    message: z.string().max(4000, "The message can be at most 4000 characters").optional(),
+  })
+  .refine((o) => Date.parse(o.expiresAt) >= Date.now() + 3_600_000, {
+    path: ["expiresAt"],
+    message: "Give the candidate at least an hour to respond",
+  })
+  .refine((o) => Date.parse(o.expiresAt) <= Date.now() + 60 * 86_400_000, {
+    path: ["expiresAt"],
+    message: "An offer can stay open for at most 60 days",
+  })
+
+export const acceptOfferSchema = z.object({
+  signatureName: z.string().trim().min(2, "Type your full name to sign").max(120),
+  agree: z.literal(true, { message: "Confirm that you accept the terms" }),
+})
+
+// ─── External job tracker ───
+
+export const externalApplicationSchema = z.object({
+  company: z.string().trim().min(1, "Enter the company").max(120),
+  title: z.string().trim().min(1, "Enter the job title").max(160),
+  url: z
+    .string()
+    .trim()
+    .max(500)
+    .refine((v) => !v || /^https?:\/\/\S+\.\S+/i.test(v), {
+      message: "Enter a valid link, e.g. https://…",
+    })
+    .optional(),
+  location: z.string().trim().max(120).optional(),
+  notes: z.string().max(2000, "Notes can be at most 2000 characters").optional(),
+})

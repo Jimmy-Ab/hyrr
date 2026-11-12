@@ -16,6 +16,7 @@ import type {
   SeekerView,
   UserTheme,
 } from "../lib/contracts"
+import type { JobFilterInput } from "../lib/job-filters"
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -30,6 +31,8 @@ export interface Job {
   color: "purple" | "blue" | "green" | "orange"
   description: string
   requirements: string[]
+  /** Working languages (defaults to English) */
+  languages: string[]
   /** The posting company passed domain verification */
   companyVerified: boolean
   remote?: boolean
@@ -131,12 +134,13 @@ export interface Candidate {
   screeningAnswers: { questionId: string; question: string; answer: string }[]
 }
 
-export type ApplicationSource = "DIRECT" | "GUEST" | "RECRUITER_ADDED"
+export type ApplicationSource = "DIRECT" | "GUEST" | "RECRUITER_ADDED" | "OUTREACH"
 
 export const APPLICATION_SOURCE_LABEL: Record<ApplicationSource, string> = {
   DIRECT: "Applied directly",
   GUEST: "Guest application",
   RECRUITER_ADDED: "Added by recruiter",
+  OUTREACH: "Talent search outreach",
 }
 
 export interface NewCandidateInput {
@@ -220,6 +224,7 @@ export interface JobUpdatePatch {
   salaryPeriod: SalaryPeriodCode | null
   employmentType: string
   requirements: string[]
+  languages: string[]
 }
 
 export interface ScreeningAnswerInput {
@@ -257,6 +262,8 @@ export interface PublicJob {
   company: string
   companyColor: "purple" | "blue" | "green" | "orange"
   companyVerified: boolean
+  /** Company answers applicants quickly (nightly responsiveness stats). */
+  companyFastResponder?: boolean
   location: string
   type: JobType
   salary: string
@@ -267,6 +274,10 @@ export interface PublicJob {
   benefits: string[]
   featured?: boolean
   remote?: boolean
+  /** Job category name (when the API includes it). */
+  category?: string
+  /** Working languages (Hyrr jobs; English when not stated). */
+  languages?: string[]
   /** Profile match (only on /matching/jobs results) */
   match?: JobMatch
 }
@@ -519,7 +530,35 @@ export interface JobApplication {
   offerAmount?: string
   notes?: string
   tag?: string
+  /** The job was removed by Hyrr moderation (live `job_removed`). */
+  jobRemoved?: boolean
 }
+
+/** Latest live event for toasts/sounds in the apps (set by store/socket.ts). */
+export type LiveEvent =
+  | { kind: "applicant"; id: string; name: string; jobTitle: string; at: number }
+  | { kind: "status"; id: string; status: ApplicationStatusCode; title: string; at: number }
+  | { kind: "job_removed"; jobId: string; title: string; at: number }
+  | { kind: "scorecard"; applicationId: string; at: number }
+  | { kind: "outreach"; applicationId: string; companyName: string; jobTitle: string; at: number }
+  | { kind: "offer"; id: string; jobTitle: string; companyName?: string; at: number }
+  | {
+      kind: "offer_answered"
+      id: string
+      accepted: boolean
+      name: string
+      jobTitle: string
+      at: number
+    }
+  | { kind: "interview_invite"; id: string; jobTitle: string; companyName?: string; at: number }
+  | {
+      kind: "interview_booked"
+      id: string
+      title: string
+      who: string
+      startTime: string
+      at: number
+    }
 
 export interface CalendarEvent {
   id: string
@@ -536,6 +575,293 @@ export interface CalendarEvent {
   jobTitle?: string
   /** Recruiter who scheduled it, when it wasn't created by the viewer (seeker calendar). */
   organizerName?: string
+}
+
+export interface InterviewSlot {
+  id: string
+  startTime: string
+  endTime: string
+  booked: boolean
+}
+
+export interface InterviewInvite {
+  id: string
+  applicationId: string
+  title: string
+  durationMin: number
+  location?: string
+  meetingUrl?: string
+  note?: string
+  /** EXPIRED = still open but every offered time has passed. */
+  status: "OPEN" | "BOOKED" | "CANCELED" | "EXPIRED"
+  eventId?: string
+  createdAt: string
+  jobTitle: string
+  companyName?: string
+  candidateName: string
+  organizerName?: string
+  slots: InterviewSlot[]
+}
+
+export interface NewInterviewInvite {
+  applicationId: string
+  title: string
+  durationMin: number
+  /** ISO start times */
+  slots: string[]
+  location?: string
+  meetingUrl?: string
+  note?: string
+}
+
+/** A job aggregated from a licensed job API (Adzuna, Jooble, Remotive, Arbeitnow). */
+export interface WebJob {
+  id: string
+  source: "ADZUNA" | "JOOBLE" | "REMOTIVE" | "ARBEITNOW"
+  title: string
+  company: string
+  /** Provider logo (Remotive only); null = initials avatar. */
+  companyLogo?: string | null
+  location?: string | null
+  remote: boolean
+  description?: string | null
+  // No posting URL: the list never exposes it; POST /external-jobs/:id/apply returns it.
+  /** Profile match (keyword scoring); null when not ranked. */
+  match?: JobMatch | null
+  salaryMin?: number | null
+  salaryMax?: number | null
+  salaryCurrency?: string | null
+  employmentType?: string | null
+  category?: string | null
+  postedAt?: string | null
+  applied: boolean
+}
+
+/** AI comparison of the seeker's CV with a job (Discover → Tailor my CV). */
+export interface CvTailoring {
+  jobId: string
+  result: {
+    matchScore: number
+    summary: string
+    strengths: string[]
+    missingKeywords: string[]
+    skillGaps: string[]
+    bulletSuggestions: { original: string | null; improved: string }[]
+  }
+  cvUsed: boolean
+  createdAt: string
+  charged?: number
+  cached?: boolean
+}
+
+export interface MockInterview {
+  id: string
+  jobId?: string | null
+  jobTitle: string
+  company?: string | null
+  status: "IN_PROGRESS" | "COMPLETED"
+  questions: { question: string; kind: "technical" | "behavioral"; tip: string }[]
+  answers: {
+    index: number
+    answer: string
+    score: number
+    feedback: string
+    star: { situation: boolean; task: boolean; action: boolean; result: boolean }
+    betterAnswer: string
+  }[]
+  summary: {
+    overall: number
+    readiness: "ready" | "almost" | "needs_practice"
+    strengths: string[]
+    improvements: string[]
+  } | null
+  createdAt: string
+  charged?: number
+}
+
+export interface SalaryBenchmark {
+  title: string
+  currency: string
+  samples: number
+  enoughData: boolean
+  p25: number | null
+  p50: number | null
+  p75: number | null
+}
+
+export interface NegotiationAdvice {
+  benchmark: SalaryBenchmark
+  advice: {
+    assessment: string
+    counterOffer: { baseSalary: number; rationale: string }
+    talkingPoints: string[]
+    emailDraft: string
+  }
+  charged: number
+}
+
+export interface SkillOverviewItem {
+  skill: string
+  /** Listed on the seeker's profile (otherwise one of the always-available skills). */
+  onProfile: boolean
+  /** false = can't be tested (see reason); null = checked when the test starts. */
+  testable: boolean | null
+  reason: string | null
+  /** Test level from the seeker's experience. */
+  level: "BEGINNER" | "INTERMEDIATE" | "ADVANCED"
+  verified: boolean
+  validUntil: string | null
+  lastScore: number | null
+  /** Set when a failed test can only be retaken later. */
+  retryAt: string | null
+}
+
+export interface SkillTest {
+  id: string
+  skill: string
+  expiresAt: string
+  passPercent: number
+  questions: { id: string; question: string; options: string[] }[]
+}
+
+export interface SkillTestResult {
+  id: string
+  skill: string
+  score: number
+  correct: number
+  total: number
+  passed: boolean
+  late: boolean
+  validUntil: string | null
+}
+
+export type ExternalStage = "BOOKMARKED" | "APPLIED" | "INTERVIEWING" | "OFFER" | "REJECTED"
+
+/** A job the seeker tracks outside Hyrr. */
+export interface ExternalApplication {
+  id: string
+  company: string
+  title: string
+  url?: string
+  location?: string
+  stage: ExternalStage
+  notes?: string
+  appliedAt?: string
+  updatedAt: string
+}
+
+export type ExternalApplicationInput = Partial<Omit<ExternalApplication, "id" | "updatedAt">> & {
+  company?: string
+  title?: string
+}
+
+export interface TalentCard {
+  id: string
+  name: string
+  avatar?: string | null
+  title: string
+  location: string
+  skills: string[]
+  headline: string | null
+  yearsExperience: number
+  /** Skills with a valid "Verified" badge (skill test passed). */
+  verifiedSkills?: string[]
+  relevance: number
+  existingJobIds: string[]
+}
+
+export interface TalentProfile extends Omit<TalentCard, "relevance" | "existingJobIds"> {
+  bio?: string | null
+  experiences: {
+    role: string
+    company: string
+    startDate?: string | null
+    endDate?: string | null
+    current: boolean
+  }[]
+  educations: {
+    school: string
+    degree: string
+    startYear?: number | null
+    endYear?: number | null
+  }[]
+}
+
+export interface TalentVisibility {
+  open: boolean
+  since?: string | null
+  blockedCompanies: { id: string; name: string }[]
+}
+
+export interface Offer {
+  id: string
+  applicationId: string
+  jobTitle: string
+  companyName?: string
+  candidateName: string
+  createdBy?: string
+  baseSalary: number
+  salaryCurrency: string
+  salaryPeriod: "YEAR" | "MONTH" | "HOUR"
+  bonusAmount?: number
+  equityPercentage?: number
+  startDate: string
+  expiresAt: string
+  benefits: string[]
+  message?: string
+  status: "SENT" | "ACCEPTED" | "DECLINED" | "WITHDRAWN" | "EXPIRED"
+  signatureName?: string
+  signedAt?: string
+  declineReason?: string
+  createdAt: string
+}
+
+export interface OfferInput {
+  applicationId: string
+  jobTitle?: string
+  baseSalary: number
+  salaryCurrency: string
+  salaryPeriod: "YEAR" | "MONTH" | "HOUR"
+  bonusAmount?: number
+  equityPercentage?: number
+  /** ISO dates */
+  startDate: string
+  expiresAt: string
+  benefits?: string[]
+  message?: string
+}
+
+export type ScorecardRecommendation = "STRONG_YES" | "YES" | "NEUTRAL" | "NO" | "STRONG_NO"
+
+export interface Scorecard {
+  id: string
+  interviewer: { id: string; name: string; avatar?: string | null }
+  recommendation: ScorecardRecommendation
+  overallNotes: string
+  submittedAt: string
+  ratings: { competency: string; score: number; notes?: string | null }[]
+}
+
+/** GET /scorecards/applications/:id (blind until you submit your own). */
+export interface ScorecardView {
+  competencies: string[]
+  canSubmit: boolean
+  mine: Scorecard | null
+  submittedCount: number
+  locked: boolean
+  others: Scorecard[]
+  debrief: {
+    perCompetency: { competency: string; average: number | null; count: number }[]
+    recommendations: Record<ScorecardRecommendation, number>
+    consensus: "HIRE" | "NO_HIRE" | "MIXED" | null
+    overallAverage: number | null
+  } | null
+}
+
+export interface ScorecardInput {
+  recommendation: ScorecardRecommendation
+  overallNotes: string
+  ratings: { competency: string; score: number; notes?: string }[]
 }
 
 export interface Document {
@@ -649,6 +975,8 @@ export interface ProfileUpdateInput {
   visibility?: string
   skills?: string[]
   languages?: string[]
+  /** Preferred job category ids (replaces the stored set). */
+  interests?: string[]
   preferredLocations?: string[]
   experiences?: {
     role: string
@@ -717,6 +1045,16 @@ export interface MomentumPricing {
   aiRerunCost: number
   /** Seeker side: credits per job application. */
   applyCost: number
+  /** Recruiter credits to message a seeker found in talent search. */
+  outreachCost: number
+  /** Seeker credits to apply to a job from the web (once per job). */
+  externalApplyCost: number
+  /** Seeker AI tools (credits per run). */
+  resumeTailorCost: number
+  mockInterviewCost: number
+  negotiationAdviceCost: number
+  /** What the platform offers right now (server-side switches). */
+  features: { ai: boolean; webJobs: boolean }
 }
 
 export type CreditTransactionType =
@@ -727,6 +1065,9 @@ export type CreditTransactionType =
   | "JOB_FEATURE"
   | "AI_ANALYSIS"
   | "APPLICATION"
+  | "OUTREACH"
+  | "EXTERNAL_APPLY"
+  | "AI_SEEKER_TOOL"
   | "REFUND"
   | "ADJUSTMENT"
 
@@ -738,6 +1079,9 @@ export const CREDIT_TRANSACTION_LABEL: Record<CreditTransactionType, string> = {
   JOB_FEATURE: "Job featured",
   AI_ANALYSIS: "AI analysis",
   APPLICATION: "Job application",
+  OUTREACH: "Candidate outreach",
+  EXTERNAL_APPLY: "Web job application",
+  AI_SEEKER_TOOL: "AI career tool",
   REFUND: "Refund",
   ADJUSTMENT: "Adjustment",
 }
@@ -819,6 +1163,7 @@ export interface JobState {
   authLoading: boolean
   authError: string | null
   socket: Socket | null
+  liveEvent: LiveEvent | null
 
   // ── Auth actions ─────────────────────────────────────────────────────────
   /** Set while a password login waits for the second factor. */
@@ -859,7 +1204,6 @@ export interface JobState {
   /** Why the user was signed out (e.g. suspension), shown on the sign-in page. */
   signedOutReason: string | null
   signOutWithReason: (reason: string) => Promise<void>
-  clearSignedOutReason: () => void
   /** Reloads company status + support e-mail from /auth/me. */
   loadAccount: () => Promise<void>
   /** Swaps the access token (login, restore, silent refresh). Never loads workspace data. */
@@ -882,6 +1226,8 @@ export interface JobState {
     description: string
     requirements: string[]
     skills: string[]
+    /** 1–5 working languages; the server defaults to English. */
+    languages?: string[]
     benefits?: string[]
     categoryId: string
     remote?: boolean
@@ -901,14 +1247,11 @@ export interface JobState {
   clearNotifications: () => Promise<void>
   deleteCandidate: (candidateId: string) => Promise<void>
   setActiveView: (view: RecruiterView) => void
-  setCareerSelectedJobId: (jobId: string) => void
   applyToJob: (jobId: string, input?: ApplyInput) => Promise<void>
-  setWorkspaceName: (name: string) => void
   setAddCandidateOpen: (open: boolean, col?: Candidate["status"]) => void
   setAddJobOpen: (open: boolean) => void
   setSelectedCandidateId: (id: string | null) => void
   fetchInitialData: (options?: { force?: boolean }) => Promise<void>
-  fetchSeekerDashboard: () => Promise<void>
 
   // ── Team ─────────────────────────────────────────────────────────────────
   fetchTeam: () => Promise<void>
@@ -951,7 +1294,6 @@ export interface JobState {
   seekerProfile: SeekerProfileData | null
   setCandidateActiveView: (view: SeekerView) => void
   fetchApplications: () => Promise<void>
-  toggleJobBookmark: (id: string) => Promise<void>
   applyFromDiscover: (publicJobId: string, input?: ApplyInput) => Promise<void>
   saveJobFromDiscover: (publicJobId: string) => Promise<void>
   withdrawApplication: (applicationId: string) => Promise<void>
@@ -965,6 +1307,84 @@ export interface JobState {
   fetchEvents: () => Promise<void>
   createEvent: (data: Omit<CalendarEvent, "id">) => Promise<void>
   deleteEvent: (id: string) => Promise<void>
+
+  // ── Interview invites (candidate picks a time) ──────────────────────────
+  /** Seeker: their open/booked invites. Recruiter: invites of applications opened in the sheet. */
+  interviewInvites: InterviewInvite[]
+  fetchInterviewInvites: (applicationId?: string) => Promise<void>
+  createInterviewInvite: (input: NewInterviewInvite) => Promise<InterviewInvite>
+  bookInterviewSlot: (inviteId: string, slotId: string) => Promise<void>
+  cancelInterviewInvite: (inviteId: string) => Promise<void>
+  /** Socket: insert or replace an invite (and its booked event). */
+  upsertInterviewInvite: (invite: any, event?: any) => void
+
+  // ── Seeker AI tools ──────────────────────────────────────────────────────
+  /** Saved tailoring for a job, or null. */
+  fetchCvTailoring: (jobId: string) => Promise<CvTailoring | null>
+  /** Runs (or reopens) CV tailoring; charges resumeTailorCost unless saved, refunded if AI fails. */
+  tailorCv: (jobId: string, rerun?: boolean) => Promise<CvTailoring>
+
+  fetchSalaryBenchmark: (title: string, currency: string) => Promise<SalaryBenchmark>
+  /** Charges negotiationAdviceCost (refunded if the AI fails). */
+  getNegotiationAdvice: (offerId: string) => Promise<NegotiationAdvice>
+  fetchSkillOverview: () => Promise<SkillOverviewItem[]>
+  startSkillTest: (skill: string) => Promise<SkillTest>
+  submitSkillTest: (id: string, answers: number[]) => Promise<SkillTestResult>
+  /** "Report this question"; three reports take it out of the bank. */
+  reportSkillQuestion: (
+    questionId: string,
+    reason?: string
+  ) => Promise<{ reported: boolean; alreadyReported: boolean }>
+  fetchMockInterviews: () => Promise<MockInterview[]>
+  /** Charges mockInterviewCost (refunded if question generation fails). */
+  startMockInterview: (jobId: string) => Promise<MockInterview>
+  answerMockQuestion: (id: string, index: number, answer: string) => Promise<MockInterview>
+
+  // ── Jobs from the web (seekers) ─────────────────────────────────────────
+  fetchWebJobs: (
+    q?: string,
+    remote?: boolean,
+    cursor?: string,
+    filters?: JobFilterInput,
+    refresh?: boolean
+  ) => Promise<{ items: WebJob[]; nextCursor: string | null }>
+  /** Charges the external apply cost once; returns the original posting URL. */
+  applyWebJob: (id: string) => Promise<{ url: string; charged: number; alreadyApplied: boolean }>
+
+  // ── External job tracker (seekers) ───────────────────────────────────────
+  externalApplications: ExternalApplication[]
+  fetchExternalApplications: () => Promise<void>
+  addExternalApplication: (
+    input: ExternalApplicationInput & { company: string; title: string }
+  ) => Promise<void>
+  updateExternalApplication: (id: string, patch: ExternalApplicationInput) => Promise<void>
+  removeExternalApplication: (id: string) => Promise<void>
+
+  // ── Talent search (recruiters) and outreach answers (seekers) ───────────
+  searchTalent: (q?: string, location?: string) => Promise<{ total: number; results: TalentCard[] }>
+  fetchTalentProfile: (seekerId: string) => Promise<TalentProfile>
+  /** Debits the company's outreach cost and adds a "Reached out" card. */
+  reachOut: (seekerId: string, jobId: string, message: string) => Promise<void>
+  talentVisibility: TalentVisibility | null
+  fetchTalentVisibility: () => Promise<void>
+  setTalentVisibility: (open: boolean) => Promise<void>
+  unblockCompany: (companyId: string) => Promise<void>
+  respondToOutreach: (applicationId: string, interested: boolean) => Promise<void>
+  blockOutreachCompany: (applicationId: string) => Promise<void>
+
+  // ── Offers ───────────────────────────────────────────────────────────────
+  /** Seeker: their offers. Recruiter: offers of applications opened in the panel. */
+  offers: Offer[]
+  fetchOffers: (applicationId?: string) => Promise<void>
+  sendOffer: (input: OfferInput) => Promise<Offer>
+  acceptOffer: (offerId: string, signatureName: string) => Promise<void>
+  declineOffer: (offerId: string, reason?: string) => Promise<void>
+  withdrawOffer: (offerId: string) => Promise<void>
+  upsertOffer: (raw: any) => void
+
+  // ── Scorecards (hiring team only) ────────────────────────────────────────
+  fetchScorecards: (applicationId: string) => Promise<ScorecardView>
+  submitScorecard: (applicationId: string, input: ScorecardInput) => Promise<ScorecardView>
 
   // ── Documents ────────────────────────────────────────────────────────────
   documents: Document[]
@@ -988,14 +1408,10 @@ export interface JobState {
   openConversation: (applicationId: string) => Promise<void>
   /** Closes the open thread and leaves its room. */
   leaveConversation: () => void
-  /** @deprecated alias of openConversation */
-  fetchMessages: (applicationId: string) => Promise<void>
   sendMessage: (applicationId: string, text: string) => Promise<void>
   retryMessage: (applicationId: string, clientId: string) => Promise<void>
   sendTyping: (applicationId: string, isTyping: boolean) => void
   markConversationRead: (applicationId: string) => Promise<void>
-  /** @deprecated thin alias: id → openConversation, null → leaveConversation */
-  setActiveConversation: (id: string | null) => void
   deleteConversation: (applicationId: string) => Promise<void>
   unreadMessageCount: number
   fetchUnreadCount: () => Promise<void>
@@ -1025,7 +1441,19 @@ export interface JobState {
   profileMissing: string[]
   /** No skills and no title: matches are meaningless */
   thinProfile: boolean
-  fetchMatchedJobs: (tab: MatchTab) => Promise<void>
+  /** Loads page one of a tab; `filters` replaces the active Discover filters (kept otherwise). */
+  fetchMatchedJobs: (
+    tab: MatchTab,
+    filters?: JobFilterInput,
+    opts?: { refresh?: boolean }
+  ) => Promise<void>
+  /** Discover filters applied server-side to the matched list. */
+  matchFilters: JobFilterInput
+  /** Cursor of the next matched-jobs page; null = no more pages. */
+  matchedJobsCursor: string | null
+  matchedJobsLoadingMore: boolean
+  /** Appends the next page of the current tab (no-op while loading or at the end). */
+  fetchMoreMatchedJobs: () => Promise<void>
   /** Reloads profileStrength / profileMissing from GET /profile. */
   refreshProfileStrength: () => Promise<void>
   alerts: JobAlertItem[]
@@ -1037,7 +1465,6 @@ export interface JobState {
   savedSearches: SavedSearchItem[]
   fetchSavedSearches: () => Promise<void>
   createSavedSearch: (input: SavedSearchInput) => Promise<SavedSearchItem>
-  updateSavedSearch: (id: string, patch: Partial<SavedSearchInput>) => Promise<void>
   deleteSavedSearch: (id: string) => Promise<void>
   /** Never writes the profile: returns suggestions for the seeker to review. */
   importProfileFromCv: (input: { documentId?: string; url?: string }) => Promise<CvSuggestions>

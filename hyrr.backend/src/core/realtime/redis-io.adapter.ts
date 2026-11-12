@@ -8,7 +8,10 @@ import { redisOptions } from "../redis/redis-options"
 const READY_TIMEOUT_MS = 3_000
 
 /** Resolves true once the client is ready, false after `ms` (the client keeps reconnecting). */
-export function waitForReady(client: Pick<Redis, "status" | "once" | "off">, ms = READY_TIMEOUT_MS) {
+export function waitForReady(
+  client: Pick<Redis, "status" | "once" | "off">,
+  ms = READY_TIMEOUT_MS
+) {
   if (client.status === "ready") return Promise.resolve(true)
   return new Promise<boolean>((resolve) => {
     const onReady = () => {

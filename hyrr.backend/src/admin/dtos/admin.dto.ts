@@ -92,6 +92,11 @@ export class CompaniesQueryDto extends PageQueryDto {
   @IsOptional()
   @IsIn(Object.values(CompanyStatus), { message: "Status must be VERIFIED, PENDING or SUSPENDED" })
   status?: CompanyStatus
+
+  /** "true": companies ignoring most applicants (ghost rate > 80%, 10+ applications). */
+  @IsOptional()
+  @IsIn(["true", "false"])
+  ghosting?: string
 }
 
 export class PaymentsQueryDto extends PageQueryDto {
@@ -261,6 +266,36 @@ export class PricingDto {
   @Min(0, costMsg("Apply cost"))
   @Max(COST_MAX, costMsg("Apply cost"))
   applyCost?: number
+
+  @IsOptional()
+  @IsInt(costMsg("Outreach cost"))
+  @Min(0, costMsg("Outreach cost"))
+  @Max(COST_MAX, costMsg("Outreach cost"))
+  outreachCost?: number
+
+  @IsOptional()
+  @IsInt(costMsg("External apply cost"))
+  @Min(0, costMsg("External apply cost"))
+  @Max(COST_MAX, costMsg("External apply cost"))
+  externalApplyCost?: number
+
+  @IsOptional()
+  @IsInt(costMsg("Resume tailor cost"))
+  @Min(0, costMsg("Resume tailor cost"))
+  @Max(COST_MAX, costMsg("Resume tailor cost"))
+  resumeTailorCost?: number
+
+  @IsOptional()
+  @IsInt(costMsg("Mock interview cost"))
+  @Min(0, costMsg("Mock interview cost"))
+  @Max(COST_MAX, costMsg("Mock interview cost"))
+  mockInterviewCost?: number
+
+  @IsOptional()
+  @IsInt(costMsg("Negotiation advice cost"))
+  @Min(0, costMsg("Negotiation advice cost"))
+  @Max(COST_MAX, costMsg("Negotiation advice cost"))
+  negotiationAdviceCost?: number
 
   @IsOptional()
   @IsInt(costMsg("Seeker sign-up bonus"))

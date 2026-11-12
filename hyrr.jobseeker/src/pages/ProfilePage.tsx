@@ -1,23 +1,24 @@
 import {
-  AnimatedNumber,
   apiFetch,
   Button,
   Card,
+  date,
   educationSchema,
   emptySalaryRange,
   errorMessage,
   experienceSchema,
   FieldError,
   fieldErrorsOf,
-  IconTile,
   Input,
   isSalaryRangeEmpty,
   MonthRangeInput,
+  PageHeader,
   PROFILE_VISIBILITY,
   profileBasicsSchema,
   SalaryRangeInput,
   salaryRangeSchema,
   scopeErrors,
+  StatCard,
   useJobStore,
   useToast,
   validate,
@@ -31,7 +32,6 @@ import {
   Briefcase,
   Calendar,
   Camera,
-  CheckCircle2,
   ChevronRight,
   Clock,
   Code2,
@@ -39,23 +39,29 @@ import {
   Download,
   ExternalLink,
   FileText,
+  FileUp,
   Globe,
   GraduationCap,
   Heart,
   Loader2,
   Mail,
   MapPin,
+  Pencil,
   Phone,
   Plus,
   Save,
   Settings,
   Sparkles,
   Trash2,
+  UserRound,
   X,
 } from "lucide-react"
 import React, { useEffect, useRef, useState } from "react"
+import { AiUnavailableNote } from "../components/ai-unavailable"
 import { CvImportDialog, type CvSection } from "../components/profile/cv-import-dialog"
 import { ProfileStrengthCard } from "../components/profile/profile-strength"
+import { VerifiedSkills } from "../components/skill-badges"
+import { AI_UNAVAILABLE_MESSAGE, useAiAvailable } from "../lib/ai-availability"
 
 /* ══════════════════════════════════════════════════════════════
    Small reusable helpers
@@ -162,8 +168,10 @@ function SectionTitle({
 ══════════════════════════════════════════════════════════════ */
 export function ProfilePage() {
   const { toast } = useToast()
-  const { documents, setCandidateActiveView, updateProfile, profileStrength } = useJobStore()
-  const [cvImportOpen, setCvImportOpen] = useState(false)
+  const { documents, setCandidateActiveView, updateProfile } = useJobStore()
+  const aiOn = useAiAvailable()
+  // Which import dialog is open: a CV, or the PDF LinkedIn exports.
+  const [cvImport, setCvImport] = useState<false | "cv" | "linkedin">(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   /* ── Loading / saving flags ─────────────────────────────── */
@@ -173,6 +181,9 @@ export function ProfilePage() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [addingExp, setAddingExp] = useState(false)
   const [addingEdu, setAddingEdu] = useState(false)
+  // Saved entry being edited in the add form (null = adding a new one).
+  const [editingExpId, setEditingExpId] = useState<string | null>(null)
+  const [editingEduId, setEditingEduId] = useState<string | null>(null)
   const [deletingExpId, setDeletingExpId] = useState<string | null>(null)
   const [deletingEduId, setDeletingEduId] = useState<string | null>(null)
 
@@ -207,6 +218,20 @@ export function ProfilePage() {
   const [education, setEducation] = useState<any[]>([])
   const [skills, setSkills] = useState<string[]>([])
   const [languages, setLanguages] = useState<string[]>([])
+  const [interests, setInterests] = useState<string[]>([])
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([])
+  useEffect(() => {
+    apiFetch("/jobs/categories")
+      .then((list) =>
+        setCategories(
+          (Array.isArray(list) ? list : []).map((c: any) => ({
+            id: String(c.id),
+            name: String(c.name),
+          }))
+        )
+      )
+      .catch(() => undefined)
+  }, [])
 
   /* ── Add-form states ────────────────────────────────────── */
   const [showExpForm, setShowExpForm] = useState(false)
@@ -271,6 +296,8 @@ export function ProfilePage() {
       }
       const loadedSkills: string[] = data.skills || []
       const loadedLanguages: string[] = data.languages || []
+      const loadedInterests: string[] = (data.interests || []).map((c: any) => String(c.id))
+      setInterests(loadedInterests)
       setProfile(loadedProfile)
       setPrefs(loadedPrefs)
       setExperience((data.experiences || []).map(toExperienceRow))
@@ -283,6 +310,7 @@ export function ProfilePage() {
           prefs: loadedPrefs,
           skills: loadedSkills,
           languages: loadedLanguages,
+          interests: loadedInterests,
         })
       )
     } catch (err) {
@@ -333,7 +361,7 @@ export function ProfilePage() {
   /* ═══════════════════════════════════════════════════════════
      One save for everything editable on this page
   ═══════════════════════════════════════════════════════════ */
-  const editableSnapshot = JSON.stringify({ profile, prefs, skills, languages })
+  const editableSnapshot = JSON.stringify({ profile, prefs, skills, languages, interests })
   // Entries imported from a CV have no id until the profile is saved.
   const hasPendingEntries = experience.some((e) => !e.id) || education.some((e) => !e.id)
   const isDirty =
@@ -422,6 +450,7 @@ export function ProfilePage() {
         ...profile,
         skills,
         languages,
+        interests,
         preferredLocations: prefs.preferredLocations,
       }),
       ...validate(salaryRangeSchema, prefs.salary, "salary"),
@@ -469,6 +498,7 @@ export function ProfilePage() {
         visibility: prefs.visibility,
         skills,
         languages,
+        interests,
         // Imported entries are only persisted by sending the full lists (server replaces them).
         ...(hasPendingEntries
           ? {
@@ -519,18 +549,26 @@ export function ProfilePage() {
     if (Object.keys(found).length) return
     setAddingExp(true)
     try {
-      const created = await apiFetch("/profile/experience", {
-        method: "POST",
-        body: JSON.stringify(input),
-      })
-      setExperience((prev) => [...prev, toExperienceRow(created)])
+      const saved = await apiFetch(
+        editingExpId ? `/profile/experience/${editingExpId}` : "/profile/experience",
+        { method: editingExpId ? "PUT" : "POST", body: JSON.stringify(input) }
+      )
+      const row = toExperienceRow(saved)
+      setExperience((prev) =>
+        editingExpId ? prev.map((x) => (x.id === editingExpId ? row : x)) : [...prev, row]
+      )
+      toast(
+        editingExpId ? "Experience updated" : "Experience Added",
+        `${expForm.role} at ${expForm.company} ${editingExpId ? "saved" : "added"}.`,
+        "success"
+      )
       setExpForm(EMPTY_EXP)
+      setEditingExpId(null)
       setShowExpForm(false)
-      toast("Experience Added", `${expForm.role} at ${expForm.company} added.`, "success")
     } catch (err: any) {
       const server = fieldErrorsOf(err)
       if (Object.keys(server).length) setErrors((e) => ({ ...e, ...prefixed(server, "exp") }))
-      else toast("Error", err?.message || "Failed to add experience.", "error")
+      else toast("Error", err?.message || "Failed to save experience.", "error")
     } finally {
       setAddingExp(false)
     }
@@ -559,18 +597,26 @@ export function ProfilePage() {
     if (Object.keys(found).length) return
     setAddingEdu(true)
     try {
-      const created = await apiFetch("/profile/education", {
-        method: "POST",
-        body: JSON.stringify(input),
-      })
-      setEducation((prev) => [...prev, toEducationRow(created)])
+      const saved = await apiFetch(
+        editingEduId ? `/profile/education/${editingEduId}` : "/profile/education",
+        { method: editingEduId ? "PUT" : "POST", body: JSON.stringify(input) }
+      )
+      const row = toEducationRow(saved)
+      setEducation((prev) =>
+        editingEduId ? prev.map((x) => (x.id === editingEduId ? row : x)) : [...prev, row]
+      )
+      toast(
+        editingEduId ? "Education updated" : "Education Added",
+        `${eduForm.degree} at ${eduForm.school} ${editingEduId ? "saved" : "added"}.`,
+        "success"
+      )
       setEduForm(EMPTY_EDU)
+      setEditingEduId(null)
       setShowEduForm(false)
-      toast("Education Added", `${eduForm.degree} at ${eduForm.school} added.`, "success")
     } catch (err: any) {
       const server = fieldErrorsOf(err)
       if (Object.keys(server).length) setErrors((e) => ({ ...e, ...prefixed(server, "edu") }))
-      else toast("Error", err?.message || "Failed to add education.", "error")
+      else toast("Error", err?.message || "Failed to save education.", "error")
     } finally {
       setAddingEdu(false)
     }
@@ -623,116 +669,92 @@ export function ProfilePage() {
       />
 
       {/* ── Page Header ──────────────────────────────────── */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-[28px] font-extrabold tracking-tight text-txt-title">My Profile</h1>
-          <p className="text-[13px] text-txt-caption font-medium mt-0.5">
-            Build your professional identity and let top opportunities find you.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {isDirty && (
-            <span role="status" className="text-[13px] font-semibold text-sec-orange">
-              Unsaved changes
-            </span>
-          )}
-          <Button
-            variant="secondary"
-            onClick={() => setCvImportOpen(true)}
-            className="gap-2 cursor-pointer"
-          >
-            <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
-            Import from CV
-          </Button>
-          <Button
-            onClick={handleSaveAll}
-            disabled={saving || !isDirty}
-            className="gap-2 cursor-pointer font-bold"
-          >
-            {saving ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Save className="w-3.5 h-3.5" />
-            )}
-            {saving ? "Saving…" : "Save Profile"}
-          </Button>
-        </div>
+      <div className="flex flex-col gap-2">
+        <PageHeader
+          icon={UserRound}
+          tone="violet"
+          title="My Profile"
+          subtitle="Build your professional identity and let top opportunities find you."
+          actions={
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
+              {isDirty && (
+                <span
+                  role="status"
+                  className="col-span-2 text-[12.5px] font-semibold text-sec-orange sm:mr-1"
+                >
+                  Unsaved changes
+                </span>
+              )}
+              <Button
+                variant="secondary"
+                onClick={() => setCvImport("cv")}
+                disabled={!aiOn}
+                title={aiOn ? undefined : AI_UNAVAILABLE_MESSAGE}
+                aria-describedby={aiOn ? undefined : "cv-import-ai-off"}
+                className="gap-2 cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+                Import from CV
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => setCvImport("linkedin")}
+                disabled={!aiOn}
+                title={aiOn ? undefined : AI_UNAVAILABLE_MESSAGE}
+                aria-describedby={aiOn ? undefined : "cv-import-ai-off"}
+                aria-label="Import your LinkedIn profile"
+                className="gap-2 cursor-pointer"
+              >
+                <FileUp className="w-3.5 h-3.5" aria-hidden="true" />
+                <span className="sm:hidden">Import LinkedIn</span>
+                <span className="hidden sm:inline">Import your LinkedIn profile</span>
+              </Button>
+              <Button
+                onClick={handleSaveAll}
+                disabled={saving || !isDirty}
+                className="col-span-2 gap-2 cursor-pointer font-bold"
+              >
+                {saving ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Save className="w-3.5 h-3.5" />
+                )}
+                {saving ? "Saving…" : "Save Profile"}
+              </Button>
+            </div>
+          }
+        />
+        {!aiOn && <AiUnavailableNote id="cv-import-ai-off" />}
       </div>
 
-      {/* ── Stats Row ────────────────────────────────────── */}
-      <div className="stagger grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Profile Completeness */}
-        <Card hoverEffect className="tone-card tone-violet group p-4 flex items-center gap-3">
-          <IconTile icon={CheckCircle2} tone="violet" />
-          <div className="flex-1 min-w-0">
-            <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider">
-              Profile Strength
-            </p>
-            <p className="text-[19px] font-black text-txt-title leading-none mt-0.5">
-              {profileStrength}%
-            </p>
-            <div className="w-full h-1.5 bg-bg-border rounded-full overflow-hidden mt-1.5">
-              <div
-                className="h-full rounded-full transition-all duration-700"
-                style={{
-                  width: `${profileStrength}%`,
-                  background: "linear-gradient(90deg, var(--tone-fg), #3b7bf0)",
-                }}
-              />
-            </div>
-            <p className="text-[11.5px] text-txt-caption mt-1">
-              {profileStrength >= 100 ? "Looking great!" : "Keep going! Add more details."}
-            </p>
-          </div>
-        </Card>
-
-        {/* Skills */}
-        <Card hoverEffect className="tone-card tone-blue group p-4 flex items-center gap-3">
-          <IconTile icon={Code2} tone="blue" />
-          <div>
-            <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider">
-              Skills Listed
-            </p>
-            <p className="text-[22px] font-black text-txt-title leading-none mt-0.5">
-              <AnimatedNumber value={skills.length} />
-            </p>
-            <p className="text-[11.5px] text-txt-caption">proficiencies</p>
-          </div>
-        </Card>
-
-        {/* Work History */}
-        <Card hoverEffect className="tone-card tone-emerald group p-4 flex items-center gap-3">
-          <IconTile icon={Briefcase} tone="emerald" />
-          <div>
-            <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider">
-              Work History
-            </p>
-            <p className="text-[22px] font-black text-txt-title leading-none mt-0.5">
-              <AnimatedNumber value={experience.length} />
-            </p>
-            <p className="text-[11.5px] text-txt-caption">recorded positions</p>
-          </div>
-        </Card>
-
-        {/* Resume */}
-        <Card hoverEffect className="tone-card tone-amber group p-4 flex items-center gap-3">
-          <IconTile icon={FileText} tone="amber" />
-          <div>
-            <p className="text-[11.5px] font-bold text-txt-caption uppercase tracking-wider">
-              Resume
-            </p>
-            <p className="text-[22px] font-black text-txt-title leading-none mt-0.5">
-              {activeResume ? 1 : 0}
-            </p>
-            <p className="text-[11.5px] text-txt-caption">
-              {activeResume ? "active resume" : "no resume yet"}
-            </p>
-          </div>
-        </Card>
+      {/* ── Stats Row (strength lives in the card beside the profile) ───── */}
+      <div className="stagger grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+        <StatCard
+          title="Skills"
+          value={skills.length}
+          caption="on your profile"
+          icon={Code2}
+          tone="blue"
+        />
+        <StatCard
+          title="Work history"
+          value={experience.length}
+          caption="positions"
+          icon={Briefcase}
+          tone="emerald"
+        />
+        <StatCard
+          title="Resume"
+          value={activeResume ? "Active" : "None"}
+          caption={activeResume ? activeResume.name : "Upload one in Documents"}
+          icon={FileText}
+          tone="amber"
+          className="col-span-2 sm:col-span-1"
+        />
       </div>
 
       {/* ── Main 3-column grid ───────────────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-[260px_1fr_260px] gap-5 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-[260px_1fr_300px] gap-5 items-start">
         {/* ══════════════ LEFT: Profile Card + Checklist ══════════════ */}
         <div className="space-y-4">
           {/* Profile Card */}
@@ -931,23 +953,47 @@ export function ProfilePage() {
                             </div>
                           )}
                         </div>
-                        <button
-                          onClick={() =>
-                            exp.id
-                              ? handleDeleteExperience(exp.id)
-                              : setExperience((prev) => prev.filter((x) => x !== exp))
-                          }
-                          disabled={!!exp.id && deletingExpId === exp.id}
-                          aria-label={`Remove ${exp.role}`}
-                          className="p-1.5 rounded-lg hover:bg-bg-hover text-txt-caption hover:text-sec-red opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all cursor-pointer shrink-0"
-                          title="Remove"
-                        >
-                          {deletingExpId === exp.id ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-3.5 h-3.5" />
+                        <div className="flex shrink-0">
+                          {exp.id && (
+                            <button
+                              onClick={() => {
+                                setExpForm({
+                                  role: exp.role || "",
+                                  company: exp.company || "",
+                                  startDate: exp.startDate || "",
+                                  endDate: exp.endDate ?? null,
+                                  current: !!exp.current,
+                                  desc: exp.desc || "",
+                                })
+                                setEditingExpId(exp.id)
+                                setErrors((e) => withoutPrefix(e, "exp"))
+                                setShowExpForm(true)
+                              }}
+                              aria-label={`Edit ${exp.role}`}
+                              title="Edit"
+                              className="p-1.5 rounded-lg hover:bg-bg-hover text-txt-caption hover:text-primary opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all cursor-pointer"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
                           )}
-                        </button>
+                          <button
+                            onClick={() =>
+                              exp.id
+                                ? handleDeleteExperience(exp.id)
+                                : setExperience((prev) => prev.filter((x) => x !== exp))
+                            }
+                            disabled={!!exp.id && deletingExpId === exp.id}
+                            aria-label={`Remove ${exp.role}`}
+                            className="p-1.5 rounded-lg hover:bg-bg-hover text-txt-caption hover:text-sec-red opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all cursor-pointer shrink-0"
+                            title="Remove"
+                          >
+                            {deletingExpId === exp.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1031,6 +1077,7 @@ export function ProfilePage() {
                     onClick={() => {
                       setShowExpForm(false)
                       setExpForm(EMPTY_EXP)
+                      setEditingExpId(null)
                       setErrors((e) => withoutPrefix(e, "exp"))
                     }}
                     className="px-3 py-1.5 rounded-[10px] text-[13px] font-semibold text-txt-caption hover:bg-bg-hover transition-colors cursor-pointer"
@@ -1045,10 +1092,12 @@ export function ProfilePage() {
                   >
                     {addingExp ? (
                       <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : editingExpId ? (
+                      <Save className="w-3 h-3" />
                     ) : (
                       <Plus className="w-3 h-3" />
                     )}
-                    Add Experience
+                    {editingExpId ? "Save changes" : "Add Experience"}
                   </Button>
                 </div>
               </div>
@@ -1102,23 +1151,45 @@ export function ProfilePage() {
                             </div>
                           )}
                         </div>
-                        <button
-                          onClick={() =>
-                            edu.id
-                              ? handleDeleteEducation(edu.id)
-                              : setEducation((prev) => prev.filter((x) => x !== edu))
-                          }
-                          disabled={!!edu.id && deletingEduId === edu.id}
-                          aria-label={`Remove ${edu.degree}`}
-                          className="p-1.5 rounded-lg hover:bg-bg-hover text-txt-caption hover:text-sec-red opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all cursor-pointer shrink-0"
-                          title="Remove"
-                        >
-                          {deletingEduId === edu.id ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-3.5 h-3.5" />
+                        <div className="flex shrink-0">
+                          {edu.id && (
+                            <button
+                              onClick={() => {
+                                setEduForm({
+                                  school: edu.school || "",
+                                  degree: edu.degree || "",
+                                  startYear: edu.startYear ?? null,
+                                  endYear: edu.endYear ?? null,
+                                })
+                                setEditingEduId(edu.id)
+                                setErrors((e) => withoutPrefix(e, "edu"))
+                                setShowEduForm(true)
+                              }}
+                              aria-label={`Edit ${edu.degree}`}
+                              title="Edit"
+                              className="p-1.5 rounded-lg hover:bg-bg-hover text-txt-caption hover:text-primary opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all cursor-pointer"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
                           )}
-                        </button>
+                          <button
+                            onClick={() =>
+                              edu.id
+                                ? handleDeleteEducation(edu.id)
+                                : setEducation((prev) => prev.filter((x) => x !== edu))
+                            }
+                            disabled={!!edu.id && deletingEduId === edu.id}
+                            aria-label={`Remove ${edu.degree}`}
+                            className="p-1.5 rounded-lg hover:bg-bg-hover text-txt-caption hover:text-sec-red opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all cursor-pointer shrink-0"
+                            title="Remove"
+                          >
+                            {deletingEduId === edu.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1187,6 +1258,7 @@ export function ProfilePage() {
                     onClick={() => {
                       setShowEduForm(false)
                       setEduForm(EMPTY_EDU)
+                      setEditingEduId(null)
                       setErrors((e) => withoutPrefix(e, "edu"))
                     }}
                     className="px-3 py-1.5 rounded-[10px] text-[13px] font-semibold text-txt-caption hover:bg-bg-hover transition-colors cursor-pointer"
@@ -1201,10 +1273,12 @@ export function ProfilePage() {
                   >
                     {addingEdu ? (
                       <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : editingEduId ? (
+                      <Save className="w-3 h-3" />
                     ) : (
                       <Plus className="w-3 h-3" />
                     )}
-                    Add Education
+                    {editingEduId ? "Save changes" : "Add Education"}
                   </Button>
                 </div>
               </div>
@@ -1358,6 +1432,54 @@ export function ProfilePage() {
               </div>
             </Card>
 
+            {/* Preferred categories (matching boosts jobs in these fields) */}
+            <Card className="p-5 flex flex-col gap-3" data-field="interests" tabIndex={-1}>
+              <SectionTitle
+                icon={<Briefcase className="w-4 h-4" />}
+                title="Preferred categories"
+                badge={`${interests.length}/10`}
+              />
+              <p className="text-[12px] text-txt-caption">
+                Jobs in these fields rank higher in Discover.
+              </p>
+              {categories.length === 0 ? (
+                <p className="text-[12px] text-txt-caption">Loading categories…</p>
+              ) : (
+                <div
+                  role="group"
+                  aria-label="Preferred categories"
+                  aria-describedby={errors.interests ? "pf-interests-error" : undefined}
+                  className="flex flex-wrap gap-1.5"
+                >
+                  {categories.map((c) => {
+                    const on = interests.includes(c.id)
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        aria-pressed={on}
+                        disabled={!on && interests.length >= 10}
+                        onClick={() => {
+                          setInterests((cur) =>
+                            on ? cur.filter((id) => id !== c.id) : [...cur, c.id]
+                          )
+                          clearError("interests")
+                        }}
+                        className={`rounded-full border px-2.5 py-1 text-[12px] font-semibold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                          on
+                            ? "border-primary-border bg-primary-light text-primary"
+                            : "border-bg-border text-txt-body hover:bg-bg-hover"
+                        }`}
+                      >
+                        {c.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+              <FieldError id="pf-interests-error" message={errors.interests} />
+            </Card>
+
             {/* Active Resume */}
             <Card className="p-5 flex flex-col gap-3">
               <SectionTitle icon={<FileText className="w-4 h-4" />} title="Active Resume" />
@@ -1377,8 +1499,7 @@ export function ProfilePage() {
                           {activeResume.name}
                         </p>
                         <p className="text-[11.5px] text-txt-caption">
-                          {activeResume.size} · Updated{" "}
-                          {new Date(activeResume.createdAt).toLocaleDateString()}
+                          {activeResume.size} · Updated {date(activeResume.createdAt)}
                         </p>
                       </div>
                     </div>
@@ -1722,10 +1843,13 @@ export function ProfilePage() {
         </div>
       </div>
       <CvImportDialog
-        open={cvImportOpen}
-        onOpenChange={setCvImportOpen}
+        open={!!cvImport}
+        variant={cvImport || "cv"}
+        onOpenChange={(o) => !o && setCvImport(false)}
         onApply={applyCvSuggestions}
       />
+
+      <VerifiedSkills />
     </div>
   )
 }

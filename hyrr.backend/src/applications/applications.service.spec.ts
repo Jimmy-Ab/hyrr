@@ -240,7 +240,9 @@ describe("ApplicationsService", () => {
         email: "james@example.com",
       })
 
-      const select = prismaMock.application.findUnique.mock.calls[0][0].select
+      // The seeker response read (the live recruiter event reads with `include`, not `select`).
+      const select = prismaMock.application.findUnique.mock.calls.find((c: any) => c[0].select)![0]
+        .select
       expect(Object.keys(select).filter((k) => /^ai/i.test(k))).toEqual([])
       expect(Object.keys(SEEKER_APPLICATION_FIELDS).filter((k) => /^ai/i.test(k))).toEqual([])
     })

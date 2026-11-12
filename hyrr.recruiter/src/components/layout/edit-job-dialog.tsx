@@ -43,6 +43,7 @@ import {
   toScreeningQuestions,
   type DraftQuestion,
 } from "../jobs/screening-questions-editor"
+import { TagInput } from "./add-job-dialog"
 
 const labelCls = "text-[12px] font-semibold text-txt-heading uppercase tracking-wider block mb-1.5"
 const selectCls =
@@ -65,6 +66,7 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
   const [salaryTouched, setSalaryTouched] = useState(false)
   const [errors, setErrors] = useState<FieldErrors>({})
   const [requirements, setRequirements] = useState<string[]>([])
+  const [languages, setLanguages] = useState<string[]>(["English"])
   const [draftReq, setDraftReq] = useState("")
   const [saving, setSaving] = useState(false)
   const [savingDraft, setSavingDraft] = useState(false)
@@ -107,6 +109,7 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
       )
       setDescription(job.description)
       setRequirements(job.requirements ?? [])
+      setLanguages(job.languages?.length ? job.languages : ["English"])
       setSalary(
         job.salaryMin != null && job.salaryMax != null
           ? {
@@ -139,6 +142,7 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
     employmentType: employmentTypeCode(type),
     description,
     requirements,
+    languages,
     // Only send the range when it was edited (an untouched legacy free-text salary is kept).
     ...(salaryTouched
       ? isSalaryRangeEmpty(salary)
@@ -163,6 +167,7 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
         title,
         location: location || "Remote",
         categoryId: job?.categoryId || "-",
+        languages,
       }),
       ...(salaryTouched ? validate(salaryRangeSchema, salary, "salary") : {}),
       ...(text.length < 20 ? { description: "Description must be at least 20 characters" } : {}),
@@ -402,6 +407,25 @@ export function EditJobDialog({ job, onOpenChange }: EditJobDialogProps) {
               </Button>
             </div>
             <FieldError id="edit-job-requirements-error" message={errors.requirements} />
+          </div>
+          <div>
+            <label htmlFor="edit-job-languages" className={labelCls}>
+              Languages *
+            </label>
+            <p className="text-[11.5px] text-txt-caption mb-2">
+              Languages the job is done in (1–5). Seekers can filter by their own languages.
+            </p>
+            <TagInput
+              id="edit-job-languages"
+              tags={languages}
+              onAdd={(v) =>
+                !languages.some((l) => l.toLowerCase() === v.toLowerCase()) &&
+                setLanguages([...languages, v])
+              }
+              onRemove={(v) => setLanguages(languages.filter((l) => l !== v))}
+              placeholder="e.g. English, Amharic…"
+            />
+            <FieldError id="edit-job-languages-error" message={errors.languages} />
           </div>
 
           <div>

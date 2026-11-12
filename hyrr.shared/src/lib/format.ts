@@ -16,6 +16,19 @@ export function money(cents: number | null | undefined, currency = "USD") {
   return currency.toUpperCase() === "USD" ? `$${value}` : `${currency.toUpperCase()} ${value}`
 }
 
+/** "3 credits" / "1 credit". */
+export function credits(n: number): string {
+  return `${n.toLocaleString()} credit${Math.abs(n) === 1 ? "" : "s"}`
+}
+
+/**
+ * " · 3 credits" for action labels, or "" while the price isn't loaded yet: prices come only from
+ * `GET /billing/pricing`, never from a client-side guess.
+ */
+export function creditSuffix(cost: number | null | undefined): string {
+  return typeof cost === "number" ? ` · ${credits(cost)}` : ""
+}
+
 export const pct = (v: number | null | undefined, digits = 0) =>
   v == null || !Number.isFinite(v) ? "—" : `${(v * 100).toFixed(digits)}%`
 
@@ -38,13 +51,33 @@ const dateTimeFmt = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
   year: "numeric",
-  hour: "2-digit",
+  hour: "numeric",
   minute: "2-digit",
 })
+const timeFmt = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" })
 
-export const date = (iso: string | null | undefined) => (iso ? dateFmt.format(new Date(iso)) : "—")
-export const dateTime = (iso: string | null | undefined) =>
-  iso ? dateTimeFmt.format(new Date(iso)) : "—"
+type DateInput = string | number | Date | null | undefined
+const toDate = (v: DateInput) => {
+  if (v == null || v === "") return null
+  const d = v instanceof Date ? v : new Date(v)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+/** The one calendar-date format of the apps: "Jan 15, 2027" ("—" when missing). */
+export const date = (v: DateInput) => {
+  const d = toDate(v)
+  return d ? dateFmt.format(d) : "—"
+}
+/** "Jan 15, 2027, 3:40 PM" ("—" when missing). */
+export const dateTime = (v: DateInput) => {
+  const d = toDate(v)
+  return d ? dateTimeFmt.format(d) : "—"
+}
+/** "3:40 PM" ("" when missing). */
+export const time = (v: DateInput) => {
+  const d = toDate(v)
+  return d ? timeFmt.format(d) : ""
+}
 
 /** "3 min ago", "2 d ago", falls back to the date after 30 days. */
 export function ago(iso: string | null | undefined) {

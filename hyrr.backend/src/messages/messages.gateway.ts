@@ -1,10 +1,11 @@
-import { Inject, Logger, forwardRef } from "@nestjs/common"
+import { Inject, Logger, Optional, forwardRef } from "@nestjs/common"
 import { JwtService } from "@nestjs/jwt"
 import {
   ConnectedSocket,
   MessageBody,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
@@ -16,6 +17,11 @@ import { verifyAccessTokenForSession } from "../auth/jwt.config"
 import { AccessService, Actor } from "../core/access/access.service"
 import { getAllowedOrigins } from "../core/config/origins"
 import { normalizeException } from "../core/filters/all-exceptions.filter"
+import {
+  ADMIN_ROOM,
+  RealtimeService,
+  type AdminMetricKind,
+} from "../core/realtime/realtime.service"
 import { PrismaService } from "../prisma/prisma.service"
 import { CreateMessageDto } from "./dtos/create-message.dto"
 import { MessagesService } from "./messages.service"
@@ -60,7 +66,7 @@ const errorAck = (err: any) => {
   },
   namespace: "/",
 })
-export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class MessagesGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(MessagesGateway.name)
 
   @WebSocketServer()
@@ -70,8 +76,13 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
     private jwtService: JwtService,
     @Inject(forwardRef(() => MessagesService)) private messagesService: MessagesService,
     private access: AccessService,
-    private prisma: PrismaService
+    private prisma: PrismaService,
+    @Optional() private realtime?: RealtimeService
   ) {}
+
+  afterInit(server: Server) {
+    this.realtime?.attach(server)
+  }
 
   private actorOf(client: Socket): Actor {
     return {
@@ -113,6 +124,14 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
         const { companyIds } = await this.access.companyScope(payload.sub)
         for (const companyId of companyIds) client.join(`company_${companyId}`)
       }
+      // Admin live metrics: only admins with 2FA (same rule as AdminGuard).
+      if (payload.role === "ADMIN") {
+        const admin = await this.prisma.user.findUnique({
+          where: { id: payload.sub },
+          select: { role: true, twoFactorEnabled: true },
+        })
+        if (admin?.role === "ADMIN" && admin.twoFactorEnabled) client.join(ADMIN_ROOM)
+      }
 
       client.emit("connected", { userId: payload.sub, role: payload.role })
     } catch {
@@ -125,6 +144,20 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
   }
 
   // ─── Chat Room Join / Leave ───────────────────────────────────────
+  /** Admin app (re)joins the live-metrics room, e.g. right after turning on 2FA. */
+  @SubscribeMessage("join_admin")
+  async handleJoinAdmin(@ConnectedSocket() client: Socket) {
+    const userId = (client as any).userId
+    if (!userId) return { joined: false }
+    const admin = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true, twoFactorEnabled: true },
+    })
+    const ok = admin?.role === "ADMIN" && admin.twoFactorEnabled
+    if (ok) client.join(ADMIN_ROOM)
+    return { joined: !!ok }
+  }
+
   @SubscribeMessage("join_chat")
   async handleJoinChat(@MessageBody() data: ChatPayload, @ConnectedSocket() client: Socket) {
     const applicationId = chatId(data)
@@ -249,8 +282,38 @@ export class MessagesGateway implements OnGatewayConnection, OnGatewayDisconnect
     }
   }
 
-  emitApplicationUpdate(seekerUserId: string, data: Record<string, any>) {
-    this.server?.to(`user_${seekerUserId}`).emit("application_status_updated", data)
+  /** Status change to the seeker and (live kanban) to the hiring team. */
+  emitApplicationUpdate(
+    seekerUserId: string | null,
+    data: Record<string, any>,
+    companyId?: string | null
+  ) {
+    if (!this.server) return
+    const rooms = [
+      ...(seekerUserId ? [`user_${seekerUserId}`] : []),
+      ...(companyId ? [`company_${companyId}`] : []),
+    ]
+    if (rooms.length) this.server.to(rooms).emit("application_status_updated", data)
+  }
+
+  /** Every socket of the company's hiring team (plus extra users, e.g. the job poster). */
+  emitToCompany(
+    companyId: string,
+    event: string,
+    data: Record<string, any>,
+    extraUserIds: string[] = []
+  ) {
+    if (!this.server) return
+    this.server
+      .to([`company_${companyId}`, ...extraUserIds.map((id) => `user_${id}`)])
+      .emit(event, data)
+  }
+
+  /** Live counters for signed-in admins with 2FA (dashboard refresh hints, no personal data). */
+  emitAdminMetric(kind: AdminMetricKind, data: Record<string, any> = {}) {
+    this.server
+      ?.to(ADMIN_ROOM)
+      .emit("admin_metric", { kind, at: new Date().toISOString(), ...data })
   }
 
   /** candidate_ai_scored to every recruiter of the company (+ the job poster), once per socket. */

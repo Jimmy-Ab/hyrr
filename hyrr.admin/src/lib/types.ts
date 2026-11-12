@@ -107,6 +107,8 @@ export type ModerationItem = {
     title: string
     status: string
     publishedAt: string | null
+    /** Automatic grey-area checks at publish (job-risk.ts). */
+    riskReasons?: string[]
     company: { id: string; name: string; verified: boolean; status: string }
   }
   reports: {
@@ -128,6 +130,8 @@ export type ModerationDetail = {
     createdAt?: string | null
     company?: { id: string; name: string; verified?: boolean; status?: string } | null
     recruiter?: { id: string; name: string; email: string } | null
+    riskScore?: number | null
+    riskReasons?: string[]
     [key: string]: unknown
   }
   reports: {
@@ -196,6 +200,14 @@ export type AdminCompany = {
   liveJobs: number
   balance: number
   plan: string | null
+  /** Nightly responsiveness stats (null until the first run). */
+  stats?: {
+    fastResponder: boolean
+    medianFirstResponseHours: number | null
+    reviewRate30d: number | null
+    ghostRate30d: number | null
+    applications30d: number
+  } | null
 }
 
 export type LedgerRow = {
@@ -260,6 +272,11 @@ export type MomentumConfig = {
   aiRerunCost: number
   signupBonus: number
   applyCost: number
+  outreachCost: number
+  externalApplyCost: number
+  resumeTailorCost: number
+  mockInterviewCost: number
+  negotiationAdviceCost: number
   seekerSignupBonus: number
   source?: Record<string, "defaults" | "env" | "settings">
 }

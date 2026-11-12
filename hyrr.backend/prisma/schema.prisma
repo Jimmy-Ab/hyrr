@@ -34,6 +34,7 @@ enum JobStatus {
 
 enum ApplicationStatus {
   SAVED
+  SOURCED   // a recruiter reached out from talent search; the seeker hasn't answered yet
   APPLIED
   IN_PROCESS
   INTERVIEWING
@@ -75,6 +76,7 @@ enum ApplicationSource {
   DIRECT          // a signed-in job seeker applied
   GUEST           // applied without an account
   RECRUITER_ADDED // added manually by the hiring team
+  OUTREACH        // a recruiter contacted an opted-in seeker from talent search
 }
 
 enum AlertFrequency {
@@ -145,6 +147,16 @@ model User {
   calendarEvents CalendarEvent[]
   companyMemberships CompanyMember[]
   invitesSent        CompanyInvite[]      @relation("InviteSender")
+  interviewInvites   InterviewInvite[]    @relation("InterviewInviteCreator")
+  scorecards         Scorecard[]
+  offersCreated      Offer[]              @relation("OfferCreator")
+  companyBlocks      CompanyBlock[]
+  externalApplications ExternalApplication[]
+  externalJobApplies ExternalJobApply[]
+  resumeTailorings   ResumeTailoring[]
+  mockInterviews     MockInterview[]
+  skillAssessments   SkillAssessment[]
+  aiFeedback         AiFeedback[]
   joinRequests       CompanyJoinRequest[] @relation("JoinRequester")
   joinDecisions      CompanyJoinRequest[] @relation("JoinDecider")
   conversationStates ConversationState[]
@@ -177,6 +189,8 @@ model Company {
   teamMembers CompanyMember[]
   invites      CompanyInvite[]
   joinRequests CompanyJoinRequest[]
+  blockedBy    CompanyBlock[]
+  stats        CompanyStats?
   jobs        Job[]
   wallet       CreditWallet?
   transactions CreditTransaction[]
@@ -207,6 +221,9 @@ model SeekerProfile {
   availability       String?    // e.g. "2 weeks notice"
   preferredLocations String[]
   visibility         String     @default("public") // public, private
+  /// Opt-in: recruiters can find this profile in talent search and reach out (off by default)
+  openToRecruiters   Boolean    @default(false)
+  openToRecruitersAt DateTime?
   skills             String[]
   languages          String[]
   phone              String?
@@ -298,12 +315,20 @@ model Job {
   description   String      @db.Text
   requirements  String[]
   skills        String[]
+  /// Working languages (normalised names, e.g. "English"); existing jobs default to English
+  languages     String[]    @default(["English"])
   benefits      String[]
   featured      Boolean     @default(false) // currently featured (kept in sync with featuredUntil)
   featuredUntil DateTime?
   /// Set when an admin removes the job (moderation); the recruiter can't reopen it.
   removedAt     DateTime?
   removedReason String?
+  /// Scorecard criteria for this job; empty = the default four
+  scorecardCompetencies String[] @default([])
+  /// Grey-area scam signals found at publish (job-risk.ts); >= threshold → FLAGGED for review
+  riskScore     Int?
+  riskReasons   String[] @default([])
+  resumeTailorings ResumeTailoring[]
   publishedAt   DateTime? // first time the job went live (publishing is charged once)
   remote        Boolean     @default(false)
   momentumCost  Int         @default(0) // Momentum credits charged when it was published
@@ -358,6 +383,10 @@ model Application {
   // Relations
   messages           Message[]
   calendarEvents     CalendarEvent[]
+  interviewInvites   InterviewInvite[]
+  scorecards         Scorecard[]
+  offers             Offer[]
+  aiFeedback         AiFeedback[]
   labels             ApplicationLabel[]
   recruiterNotes     ApplicationNote[]
   answers            ScreeningAnswer[]
@@ -565,6 +594,339 @@ model CompanyJoinRequest {
   @@index([userId, status])
 }
 
+enum InterviewInviteStatus {
+  OPEN
+  BOOKED
+  CANCELED
+}
+
+/// Recruiter offers interview times; the candidate books one in the seeker app.
+model InterviewInvite {
+  id            String                @id @default(uuid())
+  applicationId String
+  application   Application           @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  createdById   String?
+  createdBy     User?                 @relation("InterviewInviteCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  title         String
+  durationMin   Int
+  location      String?
+  meetingUrl    String?
+  note          String?               @db.Text
+  status        InterviewInviteStatus @default(OPEN)
+  /// CalendarEvent created when the candidate books a slot
+  eventId       String?               @unique
+  createdAt     DateTime              @default(now())
+  slots         InterviewSlot[]
+  @@index([applicationId, status])
+}
+
+model InterviewSlot {
+  id        String          @id @default(uuid())
+  inviteId  String
+  invite    InterviewInvite @relation(fields: [inviteId], references: [id], onDelete: Cascade)
+  startTime DateTime
+  endTime   DateTime
+  bookedAt  DateTime?
+  @@index([inviteId])
+}
+
+enum ScorecardRecommendation {
+  STRONG_YES
+  YES
+  NEUTRAL
+  NO
+  STRONG_NO
+}
+
+/// One interviewer's structured evaluation of an application (blind until they submit).
+model Scorecard {
+  id             String                  @id @default(uuid())
+  applicationId  String
+  application    Application             @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  interviewerId  String
+  interviewer    User                    @relation(fields: [interviewerId], references: [id], onDelete: Cascade)
+  recommendation ScorecardRecommendation
+  overallNotes   String                  @db.Text
+  submittedAt    DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  ratings        ScorecardRating[]
+  @@unique([applicationId, interviewerId])
+}
+
+model ScorecardRating {
+  id          String    @id @default(uuid())
+  scorecardId String
+  scorecard   Scorecard @relation(fields: [scorecardId], references: [id], onDelete: Cascade)
+  competency  String
+  score       Int
+  notes       String?   @db.Text
+  @@index([scorecardId])
+}
+
+enum OfferStatus {
+  SENT
+  ACCEPTED
+  DECLINED
+  WITHDRAWN
+}
+
+/// Formal job offer; the candidate accepts in the app with a typed-name signature (audited).
+model Offer {
+  id               String       @id @default(uuid())
+  applicationId    String
+  application      Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  createdById      String?
+  createdBy        User?        @relation("OfferCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  jobTitle         String
+  baseSalary       Int
+  salaryCurrency   String
+  salaryPeriod     SalaryPeriod
+  bonusAmount      Int?
+  equityPercentage Float?
+  startDate        DateTime
+  expiresAt        DateTime
+  benefits         String[]     @default([])
+  message          String?      @db.Text
+  status           OfferStatus  @default(SENT)
+  signatureName    String?
+  signedAt         DateTime?
+  signedIp         String?
+  declineReason    String?      @db.Text
+  respondedAt      DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  @@index([applicationId, status])
+}
+
+/// A seeker hides their profile from a company's talent search (and its outreach).
+model CompanyBlock {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@unique([userId, companyId])
+}
+
+enum ExternalStage {
+  BOOKMARKED
+  APPLIED
+  INTERVIEWING
+  OFFER
+  REJECTED
+}
+
+/// A job the seeker tracks outside Hyrr (LinkedIn, company sites…), shown next to Hyrr applications.
+model ExternalApplication {
+  id        String        @id @default(uuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company   String
+  title     String
+  url       String?
+  location  String?
+  stage     ExternalStage @default(APPLIED)
+  notes     String?       @db.Text
+  appliedAt DateTime?
+  /// Set when the seeker applied to a job from the web through Hyrr (auto-tracked)
+  externalJobId String?
+  externalJob   ExternalJob? @relation(fields: [externalJobId], references: [id], onDelete: SetNull)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  @@index([userId, stage])
+}
+
+enum ExternalJobSource {
+  ADZUNA
+  JOOBLE
+  REMOTIVE
+  ARBEITNOW
+}
+
+/// Job aggregated from a licensed job API; applying opens the original posting.
+model ExternalJob {
+  id             String            @id @default(uuid())
+  source         ExternalJobSource
+  sourceId       String
+  title          String
+  company        String
+  /// Company logo URL supplied by the provider (https only; null when the provider has none)
+  companyLogo    String?
+  location       String?
+  remote         Boolean           @default(false)
+  description    String?           @db.Text
+  url            String
+  salaryMin      Int?
+  salaryMax      Int?
+  salaryCurrency String?
+  employmentType String?
+  category       String?
+  postedAt       DateTime?
+  fetchedAt      DateTime          @default(now())
+  /// Hidden after this (refreshed on every sync while the source still lists it)
+  expiresAt      DateTime
+  active         Boolean           @default(true)
+  applies        ExternalJobApply[]
+  tracked        ExternalApplication[]
+  @@unique([source, sourceId])
+  @@index([active, postedAt])
+}
+
+/// A seeker paid to open an external job (once per job; reopening is free).
+model ExternalJobApply {
+  id            String      @id @default(uuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  externalJobId String
+  externalJob   ExternalJob @relation(fields: [externalJobId], references: [id], onDelete: Cascade)
+  credits       Int
+  createdAt     DateTime    @default(now())
+  @@unique([userId, externalJobId])
+}
+
+/// AI comparison of the seeker's CV/profile with one Hyrr job (kept so reopening is free).
+model ResumeTailoring {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  result    Json
+  model     String?
+  cvUsed    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([userId, jobId])
+}
+
+enum MockInterviewStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+/// AI practice interview for a job: 5 questions, STAR feedback per answer, final summary.
+model MockInterview {
+  id        String              @id @default(uuid())
+  userId    String
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId     String?
+  jobTitle  String
+  company   String?
+  questions Json
+  answers   Json                @default("[]")
+  summary   Json?
+  status    MockInterviewStatus @default(IN_PROGRESS)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  @@index([userId, createdAt])
+}
+
+/// Multiple-choice question bank per skill (answers never leave the server).
+enum SkillLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+model SkillQuestion {
+  id           String   @id @default(uuid())
+  skill        String
+  /// Shared bank per skill and level; existing questions were written at intermediate level
+  difficulty   SkillLevel @default(INTERMEDIATE)
+  question     String   @db.Text
+  options      String[]
+  correctIndex Int
+  explanation  String?  @db.Text
+  active       Boolean  @default(true)
+  /// Seeker reports; at 3 the question is deactivated and never sampled again
+  reportCount  Int      @default(0)
+  reports      SkillQuestionReport[]
+  createdAt    DateTime @default(now())
+  @@index([skill, active])
+  @@index([skill, difficulty, active])
+}
+
+/// One report per seeker per question ("Report this question" in a test).
+model SkillQuestionReport {
+  id         String        @id @default(uuid())
+  questionId String
+  question   SkillQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  userId     String
+  reason     String?
+  createdAt  DateTime      @default(now())
+  @@unique([questionId, userId])
+}
+
+/// Whether a skill can be assessed (cached once per skill for everyone; key = lower-case name).
+model SkillEligibility {
+  skill     String   @id
+  label     String
+  testable  Boolean
+  reason    String?
+  checkedAt DateTime @default(now())
+}
+
+/// One timed attempt; passing (>= 80%) is a "Verified" badge until validUntil.
+model SkillAssessment {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill       String
+  difficulty  SkillLevel @default(INTERMEDIATE)
+  questionIds String[]
+  answers     Int[]     @default([])
+  score       Int?
+  passed      Boolean   @default(false)
+  startedAt   DateTime  @default(now())
+  expiresAt   DateTime
+  submittedAt DateTime?
+  validUntil  DateTime?
+  @@index([userId, skill])
+}
+
+/// Nightly responsiveness stats (last 30 days) behind the "Fast Responder" badge.
+model CompanyStats {
+  companyId                String   @id
+  company                  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  applications30d          Int      @default(0)
+  medianFirstResponseHours Float?
+  reviewRate30d            Float?
+  ghostRate30d             Float?
+  fastResponder            Boolean  @default(false)
+  computedAt               DateTime @default(now())
+  @@index([fastResponder])
+}
+
+/// One AI call (all features). Tokens and cost are estimates from text length and the price table.
+model AiUsage {
+  id           String   @id @default(uuid())
+  provider     String
+  model        String
+  feature      String
+  ok           Boolean
+  latencyMs    Int
+  inputTokens  Int
+  outputTokens Int
+  costUsd      Float?
+  createdAt    DateTime @default(now())
+  @@index([createdAt])
+}
+
+/// Recruiter thumbs up/down on an AI candidate analysis (drift signal for admins).
+model AiFeedback {
+  id            String      @id @default(uuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  helpful       Boolean
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  @@unique([applicationId, userId])
+  @@index([createdAt])
+}
+
 model ScreeningQuestion {
   id        String   @id @default(uuid())
   jobId     String
@@ -737,6 +1099,9 @@ enum CreditTransactionType {
   JOB_FEATURE
   AI_ANALYSIS
   APPLICATION
+  OUTREACH
+  EXTERNAL_APPLY
+  AI_SEEKER_TOOL
   REFUND
   ADJUSTMENT
 }

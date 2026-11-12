@@ -14,6 +14,7 @@ import {
   UseGuards,
 } from "@nestjs/common"
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from "@nestjs/swagger"
+import { IsBoolean } from "class-validator"
 import { Roles } from "../auth/decorators/roles.decorator"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { OptionalJwtAuthGuard } from "../auth/guards/optional-jwt-auth.guard"
@@ -27,6 +28,11 @@ import { BulkApplicationsDto } from "./dtos/bulk-applications.dto"
 import { CreateApplicationDto } from "./dtos/create-application.dto"
 import { CreateCandidateDto } from "./dtos/create-candidate.dto"
 import { UpdateApplicationDto } from "./dtos/update-application.dto"
+
+export class AiFeedbackDto {
+  @IsBoolean({ message: "Choose helpful or not helpful" })
+  helpful: boolean
+}
 
 @ApiTags("Applications")
 @Controller("applications")
@@ -81,31 +87,6 @@ export class ApplicationsController {
   @ApiResponse({ status: 200, description: "Returns seeker application board" })
   getMyApplications(@Req() req: any) {
     return this.applicationsService.getSeekerApplications(req.user.userId)
-  }
-
-  // ─── Recruiter: get Kanban board for a specific job ───────────────
-  @Get("jobs/:jobId/candidates")
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("RECRUITER", "ADMIN")
-  @ApiBearerAuth()
-  @ApiOperation({ summary: "Get all candidates in Kanban pipeline for a job (Recruiter only)" })
-  @ApiQuery({ name: "take", required: false, description: "Page size (default 200, max 500)" })
-  @ApiQuery({ name: "skip", required: false })
-  @ApiQuery({ name: "labelId", required: false, description: "Only candidates with this label" })
-  @ApiResponse({ status: 200, description: "Returns candidate pipeline columns" })
-  getCandidatesForJob(
-    @Param("jobId") jobId: string,
-    @Req() req: any,
-    @Query("take") take?: string,
-    @Query("skip") skip?: string,
-    @Query("labelId") labelId?: string
-  ) {
-    return this.applicationsService.getCandidatesForJob(
-      jobId,
-      req.user,
-      { take: take as any, skip: skip as any },
-      typeof labelId === "string" && labelId ? labelId : undefined
-    )
   }
 
   // ─── Recruiter: get all company candidates ────────────────────────
@@ -202,6 +183,13 @@ export class ApplicationsController {
   @ApiResponse({ status: 200, description: "[{ status, label, at, actor?: { name } }]" })
   timeline(@Param("id") id: string, @Req() req: any) {
     return this.applicationsService.getTimeline(id, req.user)
+  }
+
+  // ─── Recruiter: was the AI analysis helpful? (admin drift signal) ──
+  @Post(":id/ai-feedback")
+  @ApiOperation({ summary: "Thumbs up/down on the AI candidate analysis (one per recruiter)" })
+  aiFeedback(@Param("id") id: string, @Body() body: AiFeedbackDto, @Req() req: any) {
+    return this.applicationsService.aiFeedback(id, body.helpful, req.user)
   }
 
   // ─── Shared: update application status / move Kanban ─────────────

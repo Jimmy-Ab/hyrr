@@ -116,3 +116,93 @@ export async function detachFromCompany(email: string) {
   await prisma.companyMember.deleteMany({ where: { userId: user.id } })
   await prisma.user.update({ where: { id: user.id }, data: { companyId: null } })
 }
+
+export async function setSeekerProfile(
+  email: string,
+  data: { title: string; skills: string[]; location?: string; languages?: string[] }
+) {
+  const user = await prisma.user.findUniqueOrThrow({ where: { email } })
+  await prisma.seekerProfile.update({
+    where: { userId: user.id },
+    data: {
+      title: data.title,
+      skills: data.skills,
+      location: data.location ?? "Nairobi",
+      ...(data.languages ? { languages: data.languages } : {}),
+    },
+  })
+}
+
+export async function companyBalance(email: string) {
+  const user = await prisma.user.findUniqueOrThrow({ where: { email } })
+  const wallet = await prisma.creditWallet.findUniqueOrThrow({
+    where: { companyId: user.companyId! },
+  })
+  return wallet.balance
+}
+
+export async function createWebJob(title: string, url: string) {
+  return prisma.externalJob.create({
+    data: {
+      source: "REMOTIVE",
+      sourceId: `e2e-${Date.now()}-${Math.random()}`,
+      title,
+      company: "Globex",
+      location: "Remote",
+      remote: true,
+      description: "Build delightful things for a global team.",
+      url,
+      postedAt: new Date(),
+      expiresAt: new Date(Date.now() + 7 * 86_400_000),
+    },
+  })
+}
+
+export async function trackedJobs(email: string) {
+  const user = await prisma.user.findUniqueOrThrow({ where: { email } })
+  return prisma.externalApplication.findMany({ where: { userId: user.id } })
+}
+
+/** A 15-question bank for a skill; returns question text → correct option text. */
+export async function seedSkillQuestions(skill: string) {
+  await prisma.skillQuestion.deleteMany({ where: { skill } })
+  const key = new Map<string, string>()
+  for (let i = 0; i < 15; i++) {
+    const options = ["A", "B", "C", "D"].map((l) => `${l}-${skill}-${i}`)
+    const question = `E2E ${skill} question number ${i}?`
+    await prisma.skillQuestion.create({
+      data: { skill, question, options, correctIndex: i % 4, explanation: "seeded" },
+    })
+    key.set(question, options[i % 4])
+  }
+  return key
+}
+
+/** Inserts `count` ACTIVE jobs for the recruiter's company (no credits spent), dated in the past, newest last. */
+export async function createActiveJobs(
+  recruiterEmail: string,
+  count: number,
+  prefix: string,
+  overrides: Record<string, unknown> = {}
+) {
+  const user = await prisma.user.findUniqueOrThrow({ where: { email: recruiterEmail } })
+  const category = overrides.categoryId
+    ? { id: overrides.categoryId as string }
+    : await prisma.jobCategory.findFirstOrThrow()
+  const now = Date.now()
+  await prisma.job.createMany({
+    data: Array.from({ length: count }, (_, i) => ({
+      companyId: user.companyId!,
+      recruiterId: user.id,
+      categoryId: category.id,
+      title: `${prefix} ${String(i + 1).padStart(2, "0")}`,
+      location: "Remote",
+      type: "FULL_TIME" as const,
+      description: "<p>Scroll test.</p>",
+      status: "ACTIVE" as const,
+      createdAt: new Date(now - (count - i) * 1000),
+      publishedAt: new Date(now - (count - i) * 1000),
+      ...overrides,
+    })),
+  })
+}

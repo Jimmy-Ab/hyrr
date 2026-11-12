@@ -689,3 +689,34 @@
   opacity: 0.9;
   transform: scale(1.15);
 }
+
+/* Hire celebration (recruiter app, offer accepted): drifting confetti dots, no library. */
+.hire-celebration {
+  animation: rise 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.hire-confetti {
+  position: absolute;
+  inset: -40% 0 auto 0;
+  height: 180%;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle, #7c5cfc 2px, transparent 3px),
+    radial-gradient(circle, #ffb547 2px, transparent 3px),
+    radial-gradient(circle, #34c759 2px, transparent 3px),
+    radial-gradient(circle, #4f8ef7 2px, transparent 3px);
+  background-size: 90px 70px, 120px 90px, 70px 110px, 100px 60px;
+  background-position: 0 0, 40px 20px, 20px 50px, 60px 10px;
+  animation: confetti-fall 2.4s linear infinite;
+  opacity: 0.8;
+}
+@keyframes confetti-fall {
+  to {
+    background-position: 0 140px, 40px 200px, 20px 160px, 60px 130px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hire-celebration,
+  .hire-confetti {
+    animation: none;
+  }
+}

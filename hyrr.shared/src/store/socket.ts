@@ -12,6 +12,7 @@ import {
   formatDateTime,
   isVisible,
   mapAiAnalysis,
+  mapCandidate,
   mapMessage,
   mapNotification,
   upsertMessage,
@@ -84,9 +85,178 @@ export function initializeSocket(set: StoreSet, get: StoreGet) {
     if (/auth|token|jwt|unauthor/i.test(err?.message || "")) recoverAuth()
   })
 
+  socket.on("candidate_applied", (data: any) => {
+    const raw = data?.candidate
+    if (!raw?.id || get().user?.role !== "RECRUITER") return
+    // The recruiter who added it already has it (optimistic add).
+    if (data.actorId && data.actorId === get().user?.id) return
+    const candidate = mapCandidate(raw)
+    const known = get().candidates.some((c) => c.id === candidate.id)
+    set((state) => ({
+      candidates: known
+        ? state.candidates.map((c) => (c.id === candidate.id ? { ...c, ...candidate } : c))
+        : [candidate, ...state.candidates],
+      ...(known
+        ? {}
+        : {
+            liveEvent: {
+              kind: "applicant" as const,
+              id: candidate.id,
+              name: candidate.name,
+              jobTitle: state.jobs.find((j) => j.id === candidate.jobId)?.title ?? "",
+              at: Date.now(),
+            },
+          }),
+    }))
+  })
+
+  socket.on("interview_invite_received", (data: any) => {
+    if (!data?.id) return
+    get().upsertInterviewInvite(data)
+    set({
+      liveEvent: {
+        kind: "interview_invite",
+        id: data.id,
+        jobTitle: data.jobTitle ?? "",
+        companyName: data.companyName ?? undefined,
+        at: Date.now(),
+      },
+    })
+  })
+
+  socket.on("outreach_received", (data: any) => {
+    if (!data?.applicationId) return
+    void get()
+      .fetchApplications()
+      .catch(() => undefined)
+    void get()
+      .fetchConversations()
+      .catch(() => undefined)
+    set({
+      liveEvent: {
+        kind: "outreach",
+        applicationId: data.applicationId,
+        companyName: data.companyName ?? "A company",
+        jobTitle: data.jobTitle ?? "",
+        at: Date.now(),
+      },
+    })
+  })
+
+  socket.on("offer_extended", (data: any) => {
+    if (!data?.id) return
+    get().upsertOffer(data)
+    set({
+      liveEvent: {
+        kind: "offer",
+        id: data.id,
+        jobTitle: data.jobTitle ?? "",
+        companyName: data.companyName ?? undefined,
+        at: Date.now(),
+      },
+    })
+  })
+
+  socket.on("offer_updated", (data: any) => {
+    if (data?.id) get().upsertOffer(data)
+  })
+
+  for (const [event, accepted] of [
+    ["offer_accepted", true],
+    ["offer_declined", false],
+  ] as const)
+    socket.on(event, (data: any) => {
+      if (!data?.id) return
+      get().upsertOffer(data)
+      set({
+        liveEvent: {
+          kind: "offer_answered",
+          id: data.id,
+          accepted,
+          name: data.candidateName ?? "The candidate",
+          jobTitle: data.jobTitle ?? "",
+          at: Date.now(),
+        },
+      })
+    })
+
+  socket.on("scorecard_submitted", (data: any) => {
+    if (!data?.applicationId || data.interviewerId === get().user?.id) return
+    set({ liveEvent: { kind: "scorecard", applicationId: data.applicationId, at: Date.now() } })
+  })
+
+  socket.on("interview_invite_updated", (data: any) => {
+    if (data?.id) get().upsertInterviewInvite(data)
+  })
+
+  socket.on("calendar_event_confirmed", (data: any) => {
+    if (!data?.invite?.id) return
+    const known = get().events.some((e) => e.id === data.event?.id)
+    get().upsertInterviewInvite(data.invite, data.event)
+    if (!known && data.event?.startTime)
+      set({
+        liveEvent: {
+          kind: "interview_booked",
+          id: data.invite.id,
+          title: data.invite.title,
+          who:
+            get().user?.role === "RECRUITER"
+              ? (data.invite.candidateName ?? "The candidate")
+              : (data.invite.companyName ?? "The hiring team"),
+          startTime: data.event.startTime,
+          at: Date.now(),
+        },
+      })
+  })
+
+  socket.on("job_moderated", (data: any) => {
+    if (!data?.jobId) return
+    set((state) => ({
+      jobs: state.jobs.map((j) =>
+        j.id === data.jobId
+          ? {
+              ...j,
+              removedAt: data.removedAt ?? null,
+              removedReason: data.removedReason ?? null,
+              ...(data.removedAt ? { status: "Closed" as const } : {}),
+            }
+          : j
+      ),
+    }))
+  })
+
+  socket.on("job_removed", (data: any) => {
+    if (!data?.jobId) return
+    const title =
+      get().jobApplications.find((a) => a.publicJobId === data.jobId)?.title ??
+      get().publicJobs.find((j) => j.id === data.jobId)?.title ??
+      "A job"
+    set((state) => ({
+      publicJobs: state.publicJobs.filter((j) => j.id !== data.jobId),
+      recommendedJobs: state.recommendedJobs.filter((j) => j.id !== data.jobId),
+      jobApplications: state.jobApplications.map((a) =>
+        a.publicJobId === data.jobId ? { ...a, jobRemoved: true } : a
+      ),
+      liveEvent: { kind: "job_removed" as const, jobId: data.jobId, title, at: Date.now() },
+    }))
+  })
+
   socket.on("application_status_updated", (data: any) => {
     if (!isApplicationStatus(data?.status)) return
+    // Our own move was applied optimistically; a late echo must not undo a newer move.
+    if (data.actorId && data.actorId === get().user?.id) return
     const status = data.status as ApplicationStatusCode
+    const mine = get().jobApplications.find((a) => a.id === data.applicationId)
+    if (mine && mine.status !== status)
+      set({
+        liveEvent: {
+          kind: "status",
+          id: mine.id,
+          status,
+          title: mine.title,
+          at: Date.now(),
+        },
+      })
     set((state) => ({
       jobApplications: state.jobApplications.map((app) =>
         app.id === data.applicationId
@@ -263,6 +433,13 @@ export function initializeSocket(set: StoreSet, get: StoreGet) {
   socket.on("wallet_updated", () => {
     get()
       .fetchWallet()
+      .catch(() => undefined)
+  })
+  // Admin edited prices, packs or plans (admins refetch their own queries in hyrr.admin).
+  socket.on("pricing_updated", () => {
+    if (get().user?.role === "ADMIN") return
+    get()
+      .fetchBillingCatalog()
       .catch(() => undefined)
   })
 
