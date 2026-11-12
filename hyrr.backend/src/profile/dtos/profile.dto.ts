@@ -27,6 +27,8 @@ import {
   SALARY_PERIODS,
 } from "../../core/validation/structured"
 
+const LINK_MESSAGE = "Enter a valid link, e.g. https://example.com"
+
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/
 const THIS_YEAR = new Date().getUTCFullYear()
 const trimString = ({ value }: { value: any }) => (typeof value === "string" ? value.trim() : value)
@@ -133,34 +135,37 @@ export class UpdateProfileDto {
   @MaxLength(120, { message: "Name must be at most 120 characters" })
   name?: string
 
-  @IsOptional()
+  // Empty clears the field (Settings saves it blank); a value needs at least 2 characters.
+  @ValidateIf((_, v) => v != null && v !== "")
   @Transform(trimString)
   @IsString()
+  @MinLength(2, { message: "Add a headline, e.g. Frontend Developer" })
   @MaxLength(120, { message: "Headline must be at most 120 characters" })
   title?: string
 
-  @IsOptional()
+  @ValidateIf((_, v) => v != null && v !== "")
   @Transform(trimString)
   @IsString()
+  @MinLength(2, { message: "Add your city or region" })
   @MaxLength(160, { message: "Location must be at most 160 characters" })
   location?: string
 
   @Transform(sanitizeUrl)
   @IfPresent()
-  @IsUrl({ require_tld: false, protocols: ["http", "https"] })
-  @MaxLength(500)
+  @IsUrl({ require_tld: false, protocols: ["http", "https"] }, { message: LINK_MESSAGE })
+  @MaxLength(500, { message: "Link must be at most 500 characters" })
   website?: string | null
 
   @Transform(sanitizeUrl)
   @IfPresent()
-  @IsUrl({ require_tld: false, protocols: ["http", "https"] })
-  @MaxLength(500)
+  @IsUrl({ require_tld: false, protocols: ["http", "https"] }, { message: LINK_MESSAGE })
+  @MaxLength(500, { message: "Link must be at most 500 characters" })
   github?: string | null
 
   @Transform(sanitizeUrl)
   @IfPresent()
-  @IsUrl({ require_tld: false, protocols: ["http", "https"] })
-  @MaxLength(500)
+  @IsUrl({ require_tld: false, protocols: ["http", "https"] }, { message: LINK_MESSAGE })
+  @MaxLength(500, { message: "Link must be at most 500 characters" })
   linkedin?: string | null
 
   @IsOptional()

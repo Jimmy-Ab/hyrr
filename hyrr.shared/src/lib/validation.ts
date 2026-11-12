@@ -299,7 +299,7 @@ export type EducationInput = z.infer<typeof educationSchema>
 const optionalUrl = z
   .string()
   .trim()
-  .max(500, "At most 500 characters")
+  .max(500, "Link must be at most 500 characters")
   .refine((v) => !v || /^(https?:\/\/)?[\w.-]+\.[a-z]{2,}(\/\S*)?$/i.test(v), {
     message: "Enter a valid link, e.g. https://example.com",
   })
@@ -311,13 +311,17 @@ export const profileBasicsSchema = z.object({
     .string()
     .trim()
     .min(2, "Name must be at least 2 characters")
-    .max(120, "At most 120 characters"),
+    .max(120, "Name must be at most 120 characters"),
   title: z
     .string()
     .trim()
     .min(2, "Add a headline, e.g. Frontend Developer")
-    .max(120, "At most 120 characters"),
-  location: z.string().trim().min(2, "Add your city or region").max(160, "At most 160 characters"),
+    .max(120, "Headline must be at most 120 characters"),
+  location: z
+    .string()
+    .trim()
+    .min(2, "Add your city or region")
+    .max(160, "Location must be at most 160 characters"),
   phone: z
     .string()
     .trim()
@@ -403,12 +407,12 @@ export const reasonSchema = z.object({
   reason: z
     .string()
     .trim()
-    .min(3, "Give a reason of at least 3 characters")
-    .max(500, "Keep the reason under 500 characters"),
+    .min(3, "Reason must be at least 3 characters")
+    .max(500, "Reason can be at most 500 characters"),
 })
 
 export const noteSchema = z.object({
-  note: z.string().trim().max(500, "Keep the note under 500 characters").optional(),
+  note: z.string().trim().max(500, "Note can be at most 500 characters").optional(),
 })
 
 export const creditAdjustmentSchema = z.object({
