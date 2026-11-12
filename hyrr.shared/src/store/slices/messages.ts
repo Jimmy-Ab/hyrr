@@ -38,12 +38,10 @@ export type MessagesSlice = Pick<
   | "fetchConversations"
   | "openConversation"
   | "leaveConversation"
-  | "fetchMessages"
   | "markConversationRead"
   | "sendMessage"
   | "retryMessage"
   | "sendTyping"
-  | "setActiveConversation"
   | "deleteConversation"
   | "fetchUnreadCount"
 >
@@ -326,8 +324,6 @@ export const createMessagesSlice: StateCreator<JobState, [], [], MessagesSlice> 
     })
   },
 
-  fetchMessages: (applicationId) => get().openConversation(applicationId),
-
   markConversationRead: async (applicationId) => {
     try {
       const res = await apiFetch(`/messages/${applicationId}/read`, { method: "POST" })
@@ -404,16 +400,6 @@ export const createMessagesSlice: StateCreator<JobState, [], [], MessagesSlice> 
       () => get().sendTyping(applicationId, false),
       TYPING_IDLE_MS
     )
-  },
-
-  setActiveConversation: (id) => {
-    if (id) {
-      void get()
-        .openConversation(id)
-        .catch((e) => console.warn("Failed to open conversation.", e))
-    } else {
-      get().leaveConversation()
-    }
   },
 
   deleteConversation: async (applicationId) => {

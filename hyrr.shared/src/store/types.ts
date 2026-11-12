@@ -1204,7 +1204,6 @@ export interface JobState {
   /** Why the user was signed out (e.g. suspension), shown on the sign-in page. */
   signedOutReason: string | null
   signOutWithReason: (reason: string) => Promise<void>
-  clearSignedOutReason: () => void
   /** Reloads company status + support e-mail from /auth/me. */
   loadAccount: () => Promise<void>
   /** Swaps the access token (login, restore, silent refresh). Never loads workspace data. */
@@ -1248,14 +1247,11 @@ export interface JobState {
   clearNotifications: () => Promise<void>
   deleteCandidate: (candidateId: string) => Promise<void>
   setActiveView: (view: RecruiterView) => void
-  setCareerSelectedJobId: (jobId: string) => void
   applyToJob: (jobId: string, input?: ApplyInput) => Promise<void>
-  setWorkspaceName: (name: string) => void
   setAddCandidateOpen: (open: boolean, col?: Candidate["status"]) => void
   setAddJobOpen: (open: boolean) => void
   setSelectedCandidateId: (id: string | null) => void
   fetchInitialData: (options?: { force?: boolean }) => Promise<void>
-  fetchSeekerDashboard: () => Promise<void>
 
   // ── Team ─────────────────────────────────────────────────────────────────
   fetchTeam: () => Promise<void>
@@ -1298,7 +1294,6 @@ export interface JobState {
   seekerProfile: SeekerProfileData | null
   setCandidateActiveView: (view: SeekerView) => void
   fetchApplications: () => Promise<void>
-  toggleJobBookmark: (id: string) => Promise<void>
   applyFromDiscover: (publicJobId: string, input?: ApplyInput) => Promise<void>
   saveJobFromDiscover: (publicJobId: string) => Promise<void>
   withdrawApplication: (applicationId: string) => Promise<void>
@@ -1390,7 +1385,6 @@ export interface JobState {
   // ── Scorecards (hiring team only) ────────────────────────────────────────
   fetchScorecards: (applicationId: string) => Promise<ScorecardView>
   submitScorecard: (applicationId: string, input: ScorecardInput) => Promise<ScorecardView>
-  setScorecardCompetencies: (jobId: string, competencies: string[]) => Promise<string[]>
 
   // ── Documents ────────────────────────────────────────────────────────────
   documents: Document[]
@@ -1414,14 +1408,10 @@ export interface JobState {
   openConversation: (applicationId: string) => Promise<void>
   /** Closes the open thread and leaves its room. */
   leaveConversation: () => void
-  /** @deprecated alias of openConversation */
-  fetchMessages: (applicationId: string) => Promise<void>
   sendMessage: (applicationId: string, text: string) => Promise<void>
   retryMessage: (applicationId: string, clientId: string) => Promise<void>
   sendTyping: (applicationId: string, isTyping: boolean) => void
   markConversationRead: (applicationId: string) => Promise<void>
-  /** @deprecated thin alias: id → openConversation, null → leaveConversation */
-  setActiveConversation: (id: string | null) => void
   deleteConversation: (applicationId: string) => Promise<void>
   unreadMessageCount: number
   fetchUnreadCount: () => Promise<void>
@@ -1475,7 +1465,6 @@ export interface JobState {
   savedSearches: SavedSearchItem[]
   fetchSavedSearches: () => Promise<void>
   createSavedSearch: (input: SavedSearchInput) => Promise<SavedSearchItem>
-  updateSavedSearch: (id: string, patch: Partial<SavedSearchInput>) => Promise<void>
   deleteSavedSearch: (id: string) => Promise<void>
   /** Never writes the profile: returns suggestions for the seeker to review. */
   importProfileFromCv: (input: { documentId?: string; url?: string }) => Promise<CvSuggestions>

@@ -254,6 +254,12 @@ export const SYNC_SOCKET_EVENTS = {
   ACCOUNT_SUSPENDED: "account_suspended",
   // Admin live counters (admins with 2FA only)
   ADMIN_METRIC: "admin_metric",
+  // Messaging and notifications
+  NEW_MESSAGE: "new_message",
+  MESSAGES_READ: "messages_read",
+  UNREAD_UPDATE: "unread_update",
+  USER_TYPING: "user_typing",
+  NOTIFICATION: "notification",
 } as const
 
 export type SyncSocketEvent = (typeof SYNC_SOCKET_EVENTS)[keyof typeof SYNC_SOCKET_EVENTS]

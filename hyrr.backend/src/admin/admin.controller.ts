@@ -256,7 +256,7 @@ export class AdminController {
 
   // ─── AI & system ─────────────────────────────────────────────────
   @Get("ai")
-  @ApiOperation({ summary: "AI settings (same payload as GET /ai/settings)" })
+  @ApiOperation({ summary: "AI settings: stored values plus what is used at runtime" })
   aiSettings() {
     return this.ai.getSettingsView()
   }

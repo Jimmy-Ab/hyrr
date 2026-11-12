@@ -14,8 +14,8 @@ import {
   UseGuards,
 } from "@nestjs/common"
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from "@nestjs/swagger"
-import { Roles } from "../auth/decorators/roles.decorator"
 import { IsBoolean } from "class-validator"
+import { Roles } from "../auth/decorators/roles.decorator"
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard"
 import { OptionalJwtAuthGuard } from "../auth/guards/optional-jwt-auth.guard"
 import { RolesGuard } from "../auth/guards/roles.guard"
@@ -87,31 +87,6 @@ export class ApplicationsController {
   @ApiResponse({ status: 200, description: "Returns seeker application board" })
   getMyApplications(@Req() req: any) {
     return this.applicationsService.getSeekerApplications(req.user.userId)
-  }
-
-  // ─── Recruiter: get Kanban board for a specific job ───────────────
-  @Get("jobs/:jobId/candidates")
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("RECRUITER", "ADMIN")
-  @ApiBearerAuth()
-  @ApiOperation({ summary: "Get all candidates in Kanban pipeline for a job (Recruiter only)" })
-  @ApiQuery({ name: "take", required: false, description: "Page size (default 200, max 500)" })
-  @ApiQuery({ name: "skip", required: false })
-  @ApiQuery({ name: "labelId", required: false, description: "Only candidates with this label" })
-  @ApiResponse({ status: 200, description: "Returns candidate pipeline columns" })
-  getCandidatesForJob(
-    @Param("jobId") jobId: string,
-    @Req() req: any,
-    @Query("take") take?: string,
-    @Query("skip") skip?: string,
-    @Query("labelId") labelId?: string
-  ) {
-    return this.applicationsService.getCandidatesForJob(
-      jobId,
-      req.user,
-      { take: take as any, skip: skip as any },
-      typeof labelId === "string" && labelId ? labelId : undefined
-    )
   }
 
   // ─── Recruiter: get all company candidates ────────────────────────

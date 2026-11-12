@@ -469,7 +469,7 @@ export class AiService implements OnModuleInit {
     return settings
   }
 
-  /** GET /ai/settings: stored settings plus what is actually used at runtime. */
+  /** GET /admin/ai: stored settings plus what is actually used at runtime. */
   async getSettingsView() {
     const settings = await this.getSettings()
     const resolved = resolveActiveModel(settings.activeModel)

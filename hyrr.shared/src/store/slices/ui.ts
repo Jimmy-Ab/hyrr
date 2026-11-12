@@ -6,9 +6,7 @@ export type UiSlice = Pick<
   | "activeView"
   | "setActiveView"
   | "careerSelectedJobId"
-  | "setCareerSelectedJobId"
   | "workspaceName"
-  | "setWorkspaceName"
   | "isAddCandidateOpen"
   | "addCandidateColumn"
   | "setAddCandidateOpen"
@@ -27,7 +25,6 @@ export const createUiSlice: StateCreator<JobState, [], [], UiSlice> = (set) => (
   activeView: "Applications",
   setActiveView: (view) => set({ activeView: view, searchQuery: "" }),
   careerSelectedJobId: "",
-  setCareerSelectedJobId: (jobId) => set({ careerSelectedJobId: jobId }),
   workspaceName: "",
   isAddCandidateOpen: false,
   addCandidateColumn: "Applied",
@@ -40,7 +37,6 @@ export const createUiSlice: StateCreator<JobState, [], [], UiSlice> = (set) => (
 
   setSearchQuery: (query) => set({ searchQuery: query }),
 
-  setWorkspaceName: (name) => set({ workspaceName: name }),
   setAddCandidateOpen: (open, col = "Applied") =>
     set({ isAddCandidateOpen: open, addCandidateColumn: col }),
   setAddJobOpen: (open) => set({ isAddJobOpen: open }),

@@ -55,7 +55,6 @@ export type AuthSlice = Pick<
   | "logout"
   | "signedOutReason"
   | "signOutWithReason"
-  | "clearSignedOutReason"
   | "loadAccount"
   | "deleteAccount"
   | "setAccessToken"
@@ -161,8 +160,6 @@ export const createAuthSlice: StateCreator<JobState, [], [], AuthSlice> = (set, 
     await get().logout()
     set({ signedOutReason: reason })
   },
-  clearSignedOutReason: () => set({ signedOutReason: null }),
-
   loadAccount: async () => {
     const me = await apiFetch("/auth/me")
     if (!me) return

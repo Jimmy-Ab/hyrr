@@ -45,7 +45,6 @@ export type SeekerToolsSlice = Pick<
   | "savedSearches"
   | "fetchSavedSearches"
   | "createSavedSearch"
-  | "updateSavedSearch"
   | "deleteSavedSearch"
   | "importProfileFromCv"
   | "fetchScreeningQuestions"
@@ -234,38 +233,6 @@ export const createSeekerToolsSlice: StateCreator<JobState, [], [], SeekerToolsS
       savedSearches: [created, ...state.savedSearches.filter((s) => s.id !== created.id)],
     }))
     return created
-  },
-
-  updateSavedSearch: async (id, patch) => {
-    const previous = get().savedSearches.find((s) => s.id === id)
-    if (previous) {
-      set((state) => ({
-        savedSearches: state.savedSearches.map((s) =>
-          s.id === id ? { ...s, ...patch, query: patch.query ?? s.query } : s
-        ),
-      }))
-    }
-    try {
-      const updated = await apiFetch(`/saved-searches/${encodeURIComponent(id)}`, {
-        method: "PATCH",
-        body: JSON.stringify(
-          patch.filters ? { ...patch, filters: toApiFilters(patch.filters) } : patch
-        ),
-      })
-      if (updated?.id) {
-        const mapped = mapSavedSearch(updated)
-        set((state) => ({
-          savedSearches: state.savedSearches.map((s) => (s.id === id ? mapped : s)),
-        }))
-      }
-    } catch (err) {
-      if (previous) {
-        set((state) => ({
-          savedSearches: state.savedSearches.map((s) => (s.id === id ? previous : s)),
-        }))
-      }
-      throw toError(err, "Failed to update saved search")
-    }
   },
 
   deleteSavedSearch: async (id) => {
