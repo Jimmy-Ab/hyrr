@@ -10,6 +10,7 @@ import { DocType, JobStatus } from "@prisma/client"
 import { CacheService } from "../cache/cache.service"
 import { AppException } from "../core/exceptions/app-exception"
 import { PUBLIC_COMPANY_SELECT } from "../jobs/public-company"
+import { toPublicJob } from "../jobs/public-job"
 import { MessagesGateway } from "../messages/messages.gateway"
 import { PrismaService } from "../prisma/prisma.service"
 import { CvTextService } from "../uploads/cv-text.service"
@@ -344,7 +345,8 @@ export class AiService implements OnModuleInit {
   async getFeaturedJobsForSeeker(userId: string): Promise<any[]> {
     const cacheKey = `ai:featured-jobs:${userId}`
     const cached = await this.cache.get<any[]>(cacheKey)
-    if (cached) return cached
+    // Seekers get the public job shape only (no risk, billing or recruiter columns).
+    if (cached) return cached.map((job) => toPublicJob(job))
 
     const profile = await this.prisma.seekerProfile.findUnique({
       where: { userId },
@@ -369,8 +371,9 @@ export class AiService implements OnModuleInit {
         include: { company: { select: PUBLIC_COMPANY_SELECT }, category: true },
         take: FEATURED_RESULT_COUNT,
       })
-      await this.cache.set(cacheKey, featured, FEATURED_CACHE_TTL_SECONDS)
-      return featured
+      const publicFeatured = featured.map((job) => toPublicJob(job))
+      await this.cache.set(cacheKey, publicFeatured, FEATURED_CACHE_TTL_SECONDS)
+      return publicFeatured
     }
 
     // Cheap local pre-rank by skill overlap so only the most promising jobs hit the LLM.
@@ -393,7 +396,7 @@ export class AiService implements OnModuleInit {
       // AI disabled: skill-overlap ranking only.
       const result = ranked
         .slice(0, FEATURED_RESULT_COUNT)
-        .map((job) => ({ ...job, aiMatchScore: null, aiMatchSummary: null }))
+        .map((job) => toPublicJob({ ...job, aiMatchScore: null, aiMatchSummary: null }))
       await this.cache.set(cacheKey, result, FEATURED_FAILURE_TTL_SECONDS)
       return result
     }
@@ -432,7 +435,9 @@ export class AiService implements OnModuleInit {
     const result = [
       ...scored.sort((a, b) => (b.aiMatchScore ?? -1) - (a.aiMatchScore ?? -1)),
       ...unscored.map((job) => ({ ...job, aiMatchScore: null, aiMatchSummary: null })),
-    ].slice(0, FEATURED_RESULT_COUNT)
+    ]
+      .slice(0, FEATURED_RESULT_COUNT)
+      .map((job) => toPublicJob(job))
 
     await this.cache.set(
       cacheKey,

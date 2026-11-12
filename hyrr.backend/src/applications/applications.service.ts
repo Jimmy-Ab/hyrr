@@ -29,7 +29,7 @@ import {
 } from "../core/exceptions/app-exception"
 import { CaptchaService } from "../core/security/captcha.service"
 import { PUBLIC_COMPANY_SELECT } from "../jobs/public-company"
-import { PUBLIC_JOB_WHERE } from "../jobs/public-job"
+import { PUBLIC_JOB_OMIT, PUBLIC_JOB_WHERE } from "../jobs/public-job"
 import { MessagesGateway } from "../messages/messages.gateway"
 import { MessagesService } from "../messages/messages.service"
 import { NotificationsService } from "../notifications/notifications.service"
@@ -72,6 +72,7 @@ export const SEEKER_APPLICATION_FIELDS = {
 } satisfies Prisma.ApplicationSelect
 
 const SEEKER_JOB_INCLUDE = {
+  omit: PUBLIC_JOB_OMIT,
   include: {
     company: { select: PUBLIC_COMPANY_SELECT },
     category: true,

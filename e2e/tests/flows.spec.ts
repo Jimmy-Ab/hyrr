@@ -1626,6 +1626,43 @@ test("scam signals: a risky posting goes to moderation instead of going live", a
   expect(items.some((j) => j.id === job.id)).toBe(false)
 })
 
+test("public and seeker job payloads never carry internal job fields", async () => {
+  const rec = await createUser("RECRUITER", "Hirut")
+  const seeker = await createUser("SEEKER", "Dawit")
+  const job = await api(
+    "POST",
+    "/jobs",
+    {
+      title: `E2E Clean Job ${uid()}`,
+      location: "Remote",
+      type: "FULL_TIME",
+      description: "<p>Keep the books of a growing team and close each month on time.</p>",
+      requirements: ["Excel"],
+      skills: ["Excel"],
+      categoryId: await firstCategoryId(),
+    },
+    rec.token
+  )
+  const internal = [
+    "recruiterId",
+    "riskScore",
+    "riskReasons",
+    "momentumCost",
+    "removedAt",
+    "removedReason",
+    "scorecardCompetencies",
+  ]
+  const clean = (j: any) => internal.forEach((key) => expect(j).not.toHaveProperty(key))
+  const list = await api<any>("GET", "/jobs/public")
+  const items: any[] = Array.isArray(list) ? list : (list.items ?? [])
+  expect(items.length).toBeGreaterThan(0)
+  items.forEach(clean)
+  clean(await api<any>("GET", `/jobs/public/${job.id}`))
+  const matches = await api<any>("GET", "/matching/jobs", undefined, seeker.token)
+  const matchItems: any[] = Array.isArray(matches) ? matches : (matches.items ?? [])
+  matchItems.forEach(clean)
+})
+
 test("reject kindly: the candidate gets a respectful message and is archived", async ({ page }) => {
   const rec = await createUser("RECRUITER", "Mahlet")
   const seeker = await createUser("SEEKER", "Bereket")

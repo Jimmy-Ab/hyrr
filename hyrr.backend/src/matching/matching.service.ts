@@ -6,6 +6,7 @@ import { jobFiltersKey, type JobFilters } from "../jobs/dtos/job-filters.dto"
 import { hyrrJobFilterWhere } from "../jobs/job-filters"
 import { seekerLanguageKeys } from "../jobs/job-languages"
 import { PUBLIC_COMPANY_SELECT } from "../jobs/public-company"
+import { toPublicJob } from "../jobs/public-job"
 import { PrismaService } from "../prisma/prisma.service"
 import { MatchTab } from "./dtos/matching-query.dto"
 import { decodeMatchCursor, encodeMatchCursor } from "./match-cursor"
@@ -187,11 +188,14 @@ export class MatchingService {
       userId,
       jobs.map((job) => job.id)
     )
-    return jobs.map((job) => ({
-      ...job,
-      requirements: job.requirements ?? [],
-      match: blendMatch(scoreJobForProfile(job as any, profile || {}), similarity.get(job.id)),
-    }))
+    // Seekers only ever get the public job shape (no risk, billing or recruiter columns).
+    return jobs.map((job) =>
+      toPublicJob({
+        ...job,
+        requirements: job.requirements ?? [],
+        match: blendMatch(scoreJobForProfile(job as any, profile || {}), similarity.get(job.id)),
+      })
+    )
   }
 
   /** Never lets an embeddings problem break matching: falls back to rule-only scores. */

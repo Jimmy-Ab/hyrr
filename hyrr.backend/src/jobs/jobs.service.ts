@@ -28,7 +28,7 @@ import { evaluateJobContent, JobContent } from "./job-content-policy"
 import { normalizeJobLanguages } from "./job-languages"
 import { assessJobRisk, type RiskInput } from "./job-risk"
 import { PUBLIC_COMPANY_SELECT } from "./public-company"
-import { PUBLIC_JOB_WHERE } from "./public-job"
+import { PUBLIC_JOB_WHERE, toPublicJob } from "./public-job"
 
 const JOB_COLORS = ["purple", "blue", "green", "orange"] as const
 const PUBLIC_JOBS_CACHE_KEY = "jobs:public"
@@ -585,7 +585,11 @@ export class JobsService {
     const cacheKey = `${PUBLIC_JOBS_CACHE_KEY}:${q}:${type || ""}:${categorySlug || ""}:${remote ?? ""}:${limit}:${offset}`
 
     const cached = await this.cache.get<PublicJobsPage>(cacheKey)
-    if (cached && Array.isArray(cached.items)) return cached
+    if (cached && Array.isArray(cached.items))
+      return {
+        ...cached,
+        items: cached.items.map((job) => toPublicJob(job)) as typeof cached.items,
+      }
 
     const include = { company: { select: PUBLIC_COMPANY_SELECT }, category: true }
     let result: PublicJobsPage | null = null
@@ -618,6 +622,11 @@ export class JobsService {
     if (!result)
       result = await this.searchPublicJobsPostgres(q, type, categorySlug, remote, limit, offset)
 
+    // Public listing: internal columns (risk, billing, recruiter) never leave the server.
+    result = {
+      ...result,
+      items: result.items.map((job) => toPublicJob(job)) as typeof result.items,
+    }
     await this.cache.set(cacheKey, result, 120) // 2-minute TTL
     return result
   }
@@ -696,7 +705,7 @@ export class JobsService {
       },
     })
     if (!job) throw new NotFoundAppException("Job not found", "JOB_NOT_FOUND")
-    return this.withRequirements(job)
+    return toPublicJob(this.withRequirements(job))
   }
 
   // ─── Shared: get all categories ──────────────────────────────────
